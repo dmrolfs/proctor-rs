@@ -51,6 +51,7 @@ where
     predicate: P,
     inlet: Inlet<T>,
     outlet: Outlet<T>,
+    log_blocks: bool,
 }
 
 impl<P, T> Filter<P, T>
@@ -67,7 +68,12 @@ where
             predicate,
             inlet,
             outlet,
+            log_blocks: false,
         }
+    }
+
+    pub fn with_block_logging(self) -> Self {
+        Self { log_blocks: true, ..self }
     }
 }
 
@@ -127,13 +133,15 @@ where
         level="info",
         name="run filter through",
         skip(self),
-        fields(name=%self.name),
+        fields(stage=%self.name),
     )]
     async fn run(&mut self) -> GraphResult<()> {
         let outlet = &self.outlet;
         while let Some(item) = self.inlet.recv().await {
             if (self.predicate)(&item) {
                 outlet.send(item).await?;
+            } else if self.log_blocks {
+                tracing::error!(stage=%self.name, ?item, "filter blocking item." );
             }
         }
 

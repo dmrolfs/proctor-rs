@@ -20,7 +20,7 @@ impl Node {
     level="info",
     name="run node",
     skip(self),
-    fields(name=%self.name),
+    fields(node=%self.name),
     )]
     pub fn run(mut self) -> JoinHandle<GraphResult<()>> {
         tokio::spawn(
@@ -41,7 +41,7 @@ impl Node {
     //     level="info",
     //     name="complete node",
     //     skip(self),
-    //     fields(name=%self.name),
+    //     fields(stage=%self.name),
     // )]
     // pub async fn complete(mut self) -> GraphResult<()> {
     //     match self.handle.take() {

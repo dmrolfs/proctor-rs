@@ -113,7 +113,7 @@ where
         level="info",
         name="run foreach sink",
         skip(self),
-        fields(name=%self.name),
+        fields(stage=%self.name),
     )]
     async fn run(&mut self) -> GraphResult<()> {
         let op = &self.operation;

@@ -118,11 +118,11 @@ impl<T: AppData> Port for Inlet<T> {
         let mut rx = self.1.lock().await;
         match rx.as_mut() {
             Some(r) => {
-                tracing::trace!(inlet_name=%self.0, "closing Inlet");
+                tracing::trace!(inlet=%self.0, "closing Inlet");
                 r.close()
             }
             None => {
-                tracing::trace!(inlet_name=%self.0, "Inlet close ignored - not attached");
+                tracing::trace!(inlet=%self.0, "Inlet close ignored - not attached");
                 ()
             }
         }
@@ -203,21 +203,21 @@ impl<T: AppData> Inlet<T> {
     ///     assert_eq!(Some("world"), port.recv().await);
     /// }
     /// ```
-    #[tracing::instrument(level = "trace", skip(self), fields(inlet_name=%self.0))]
+    #[tracing::instrument(level = "trace", skip(self), fields(inlet=%self.0))]
     pub async fn recv(&mut self) -> Option<T> {
         if self.is_attached().await {
             let mut rx = self.1.lock().await;
-            tracing::trace!(inlet_name=%self.0, "Inlet receiving...");
+            tracing::trace!(inlet=%self.0, "Inlet receiving...");
             let item = (*rx).as_mut()?.recv().await;
-            tracing::trace!(inlet_name=%self.0, ?item, "Inlet ...received");
+            tracing::trace!(inlet=%self.0, ?item, "Inlet ...received");
             if item.is_none() && rx.is_some() {
-                tracing::warn!(inlet_name=%self.0, "Inlet depleted - closing receiver");
+                tracing::info!(inlet=%self.0, "Inlet depleted - closing receiver");
                 rx.as_mut().unwrap().close();
             }
 
             item
         } else {
-            tracing::trace!(inlet_name=%self.0, "Inlet not attached");
+            tracing::trace!(inlet=%self.0, "Inlet not attached");
             None
         }
     }
@@ -249,7 +249,7 @@ impl<T: AppData> Port for Outlet<T> {
     }
 
     async fn close(&mut self) {
-        tracing::trace!(inlet_name=%self.name(), "closing Outlet");
+        tracing::trace!(inlet=%self.name(), "closing Outlet");
         self.1.lock().await.take();
     }
 }
@@ -259,14 +259,6 @@ impl<T: AppData> Clone for Outlet<T> {
         Self(self.0.clone(), self.1.clone())
     }
 }
-
-// impl<T: AppData> Drop for Outlet<T> {
-//     fn drop(&mut self) {
-//         let strong_count = Arc::strong_count(&self.1);
-//         let weak_count = Arc::weak_count(&self.1);
-//         tracing::trace!(inlet_name=%self.0, %strong_count, %weak_count, "Outlet dropped")
-//     }
-// }
 
 impl<T: AppData> Outlet<T> {
     pub async fn attach(&mut self, tx: mpsc::Sender<T>) {

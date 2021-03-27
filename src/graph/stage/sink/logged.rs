@@ -42,7 +42,7 @@ where
         level="info",
         name="run logging sink",
         skip(self),
-        fields(name=%self.name),
+        fields(stage=%self.name),
     )]
     async fn run(&mut self) -> GraphResult<()> {
         while let Some(input) = self.inlet.recv().await {

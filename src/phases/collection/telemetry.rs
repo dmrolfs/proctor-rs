@@ -23,11 +23,6 @@ impl TelemetryData {
         Self(data)
     }
 
-    // #[inline]
-    // pub fn is_empty(&self) -> bool { self.0.is_empty() }
-    // #[inline]
-    // pub fn capacity(&self) -> usize { self.0.capacity() }
-
     pub fn try_into<'de, T: de::Deserialize<'de>>(self) -> GraphResult<T> {
         // let mut c = config::Config::default();
         // c.merge(self.0)?;

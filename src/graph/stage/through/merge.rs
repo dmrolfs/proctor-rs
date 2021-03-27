@@ -98,7 +98,7 @@ impl<T: AppData> Stage for Merge<T> {
         level="info",
         name="run merge through",
         skip(self),
-        fields(name=%self.name),
+        fields(stage=%self.name),
     )]
     async fn run(&mut self) -> GraphResult<()> {
         let outlet = &self.outlet;

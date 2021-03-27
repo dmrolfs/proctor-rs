@@ -215,7 +215,7 @@ impl Stage for Collect {
         level="info",
         name="run collect source",
         skip(self),
-        fields(name=%self.name),
+        fields(stage=%self.name),
     )]
     async fn run(&mut self) -> GraphResult<()> {
         let foo = match self.graph.take() {

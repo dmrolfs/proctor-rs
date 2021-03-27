@@ -123,7 +123,7 @@ where
         level="info",
         name="do run fold sink",
         skip(self),
-        fields(name=%self.name),
+        fields(stage=%self.name),
     )]
     async fn do_run(&mut self) {
         let inlet = &mut self.inlet;
@@ -166,7 +166,7 @@ where
     #[tracing::instrument(
         level="info",
         skip(self),
-        fields(name=%self.name),
+        fields(stage=%self.name),
     )]
     fn complete_fold(&mut self) -> GraphResult<()> {
         if let Some(tx_final) = self.tx_final.take() {
@@ -217,7 +217,7 @@ where
         level="info",
         name="run fold sink",
         skip(self),
-        fields(name=%self.name),
+        fields(stage=%self.name),
     )]
     async fn run(&mut self) -> GraphResult<()> {
         self.do_run().await;

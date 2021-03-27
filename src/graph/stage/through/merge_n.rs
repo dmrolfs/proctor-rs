@@ -199,7 +199,7 @@ where
         level="info",
         name="run merge through",
         skip(self),
-        fields(name=%self.name),
+        fields(stage=%self.name),
     )]
     async fn run(&mut self) -> GraphResult<()> {
         let mut active_inlets = MergeN::initialize_active_inlets(self.inlets()).await;
@@ -248,7 +248,7 @@ where
         level="info",
         name="close MergeN through",
         skip(self),
-        fields(name=%self.name),
+        fields(stage=%self.name),
     )]
     async fn close(mut self: Box<Self>) -> GraphResult<()> {
         self.inlets.close().await;

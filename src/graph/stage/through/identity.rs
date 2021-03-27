@@ -58,7 +58,7 @@ impl<T: AppData + 'static> Stage for Identity<T> {
         level="info",
         name="run identity through",
         skip(self),
-        fields(name=%self.name),
+        fields(stage=%self.name),
     )]
     async fn run(&mut self) -> GraphResult<()> {
         while let Some(value) = self.inlet.recv().await {

@@ -190,7 +190,7 @@ impl<Out: AppData> Stage for CompositeSource<Out> {
         level="info",
         name="run composite source",
         skip(self),
-        fields(name=%self.name),
+        fields(stage=%self.name),
     )]
     async fn run(&mut self) -> GraphResult<()> {
         match self.graph.take() {

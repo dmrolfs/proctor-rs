@@ -119,7 +119,7 @@ impl Clearinghouse {
 
     pub async fn add_subscription<S: Into<String>>(&mut self, name: S, fields: HashSet<String>, receiver: &Inlet<TelemetryData>) {
         let name = name.into();
-        tracing::info!(name=%self.name, subscription=%name, ?fields, "adding clearinghouse subscription.");
+        tracing::info!(stage=%self.name, subscription=%name, ?fields, "adding clearinghouse subscription.");
         let outlet_to_subscription = Outlet::new(format!("outlet_to_subscription_{}", name));
         (&outlet_to_subscription, receiver).connect().await;
         let subscription = TelemetrySubscription {
@@ -366,7 +366,7 @@ impl Stage for Clearinghouse {
         level="info",
         name="run clearinghouse",
         skip(self),
-        fields(name=%self.name,),
+        fields(stage=%self.name,),
     )]
     async fn run(&mut self) -> GraphResult<()> {
         let mut inlet = self.inlet.clone();
