@@ -1,0 +1,23 @@
+[sources.httpbin_local]
+type = "RestApi"
+interval_secs = 10
+method = "GET"
+url = "https://httpbin.org/get?task_in_failure=false"
+headers = [
+    [ "authorization", "Basic Zm9vOmJhcg==" ],
+    [ "host", "example.com" ]
+]
+
+[sources.httpbin_cluster]
+type = "RestApi"
+interval_secs = 10
+method = "GET"
+url = "https://httpbin.org/get?is_redeploying=false?last_deployment%3D1979-05-27%2007%3A32%3A00Z"
+headers = [
+    [ "authorization", "Basic Zm9vOmJhcg==" ],
+    [ "host", "example.com" ]
+]
+
+[sources.local]
+type = "Csv"
+path = "tests/resources/base.csv"
