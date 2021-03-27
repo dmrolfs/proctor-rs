@@ -167,6 +167,7 @@ where
     T: AppData,
 {
     type In = T;
+    #[inline]
     fn inlets(&mut self) -> InletsShape<T> {
         self.inlets.clone()
     }
@@ -177,6 +178,7 @@ where
     T: AppData,
 {
     type Out = T;
+    #[inline]
     fn outlet(&mut self) -> &mut Outlet<Self::Out> {
         &mut self.outlet
     }
@@ -188,6 +190,7 @@ impl<T> Stage for MergeN<T>
 where
     T: AppData,
 {
+    #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -322,6 +325,7 @@ where
 {
     type Sender = MergeApi;
 
+    #[inline]
     fn tx_api(&self) -> Self::Sender {
         self.tx_api.clone()
     }

@@ -67,9 +67,12 @@ impl<T: AppData> FanInShape2 for Merge<T> {
     type In0 = T;
     type In1 = T;
 
+    #[inline]
     fn inlet_0(&mut self) -> &mut Inlet<Self::In0> {
         &mut self.inlet_0
     }
+
+    #[inline]
     fn inlet_1(&mut self) -> &mut Inlet<Self::In1> {
         &mut self.inlet_1
     }
@@ -77,6 +80,7 @@ impl<T: AppData> FanInShape2 for Merge<T> {
 
 impl<T: AppData> SourceShape for Merge<T> {
     type Out = T;
+    #[inline]
     fn outlet(&mut self) -> &mut Outlet<Self::Out> {
         &mut self.outlet
     }
@@ -85,6 +89,7 @@ impl<T: AppData> SourceShape for Merge<T> {
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData> Stage for Merge<T> {
+    #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
     }

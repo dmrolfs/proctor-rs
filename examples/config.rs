@@ -1,11 +1,11 @@
 use anyhow::Result;
 use clap::Clap;
 use config::Config;
-use reqwest::Url;
 use proctor::error::ConfigError;
 use proctor::settings::{HttpQuery, Settings, SourceSetting};
 use proctor::telemetry::{get_subscriber, init_subscriber};
 use proctor::ProctorResult;
+use reqwest::Url;
 use std::convert::{TryFrom, TryInto};
 use std::path::PathBuf;
 

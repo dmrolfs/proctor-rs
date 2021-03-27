@@ -1,13 +1,13 @@
 use anyhow::Result;
 use cast_trait_object::DynCastExt;
 use chrono::{DateTime, TimeZone, Utc};
-use serde::Deserialize;
 use proctor::graph::stage::{self, tick, Stage};
 use proctor::graph::{Connect, Graph};
 use proctor::graph::{SinkShape, SourceShape, UniformFanInShape};
 use proctor::phases::collection;
 use proctor::settings::{HttpQuery, SourceSetting};
 use proctor::telemetry::{get_subscriber, init_subscriber};
+use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::Duration;

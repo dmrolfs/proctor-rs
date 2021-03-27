@@ -123,6 +123,7 @@ where
     Op: FnMut(In) -> Fut + Send + Sync,
 {
     type Out = Out;
+    #[inline]
     fn outlet(&mut self) -> &mut Outlet<Self::Out> {
         &mut self.outlet
     }
@@ -136,6 +137,7 @@ where
     Op: FnMut(In) -> Fut + Send + Sync,
 {
     type In = In;
+    #[inline]
     fn inlet(&mut self) -> &mut Inlet<Self::In> {
         &mut self.inlet
     }
@@ -150,6 +152,7 @@ where
     Fut: Future<Output = Out> + Send + 'static,
     Op: FnMut(In) -> Fut + Send + Sync + 'static,
 {
+    #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
     }

@@ -33,6 +33,7 @@ impl<In> Stage for LoggedSink<In>
 where
     In: AppData + 'static,
 {
+    #[inline]
     fn name(&self) -> &str {
         self.name.as_ref()
     }
@@ -65,6 +66,7 @@ where
 {
     type In = In;
 
+    #[inline]
     fn inlet(&mut self) -> &mut Inlet<Self::In> {
         &mut self.inlet
     }

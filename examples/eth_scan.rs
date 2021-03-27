@@ -3,11 +3,11 @@ extern crate enum_display_derive;
 
 use anyhow::anyhow;
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
-use reqwest::Url;
-use serde::de;
 use proctor::elements::{Collect, MetricCatalog};
 use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use proctor::telemetry::{get_subscriber, init_subscriber};
+use reqwest::Url;
+use serde::de;
 use std::collections::HashMap;
 use std::fmt::{self, Display};
 use std::time::Duration;

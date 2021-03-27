@@ -44,28 +44,25 @@ use std::fmt;
 ///     }
 /// }
 /// ```
-pub struct Map<O, In, Out>
+pub struct Map<F, In, Out>
 where
+    F: FnMut(In) -> Out + Send + 'static,
     In: AppData,
     Out: AppData,
-    O: FnMut(In) -> Out + Send,
 {
     name: String,
-    operation: O,
+    operation: F,
     inlet: Inlet<In>,
     outlet: Outlet<Out>,
 }
 
-impl<O, In, Out> Map<O, In, Out>
+impl<F, In, Out> Map<F, In, Out>
 where
+    F: FnMut(In) -> Out + Send + 'static,
     In: AppData,
     Out: AppData,
-    O: FnMut(In) -> Out + Send,
 {
-    pub fn new<S>(name: S, operation: O) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn new<S: Into<String>>(name: S, operation: F) -> Self {
         let name = name.into();
         let inlet = Inlet::new(name.clone());
         let outlet = Outlet::new(name.clone());
@@ -78,41 +75,43 @@ where
     }
 }
 
-impl<O, In, Out> Shape for Map<O, In, Out>
+impl<F, In, Out> Shape for Map<F, In, Out>
 where
+    F: FnMut(In) -> Out + Send + 'static,
     In: AppData,
     Out: AppData,
-    O: FnMut(In) -> Out + Send,
 {
 }
 
-impl<O, In, Out> ThroughShape for Map<O, In, Out>
+impl<F, In, Out> ThroughShape for Map<F, In, Out>
 where
+    F: FnMut(In) -> Out + Send + 'static,
     In: AppData,
     Out: AppData,
-    O: FnMut(In) -> Out + Send,
 {
 }
 
-impl<O, In, Out> SourceShape for Map<O, In, Out>
+impl<F, In, Out> SourceShape for Map<F, In, Out>
 where
+    F: FnMut(In) -> Out + Send + 'static,
     In: AppData,
     Out: AppData,
-    O: FnMut(In) -> Out + Send,
 {
     type Out = Out;
+    #[inline]
     fn outlet(&mut self) -> &mut Outlet<Self::Out> {
         &mut self.outlet
     }
 }
 
-impl<O, In, Out> SinkShape for Map<O, In, Out>
+impl<F, In, Out> SinkShape for Map<F, In, Out>
 where
+    F: FnMut(In) -> Out + Send + 'static,
     In: AppData,
     Out: AppData,
-    O: FnMut(In) -> Out + Send,
 {
     type In = In;
+    #[inline]
     fn inlet(&mut self) -> &mut Inlet<Self::In> {
         &mut self.inlet
     }
@@ -120,12 +119,13 @@ where
 
 #[dyn_upcast]
 #[async_trait]
-impl<O, In, Out> Stage for Map<O, In, Out>
+impl<F, In, Out> Stage for Map<F, In, Out>
 where
+    F: FnMut(In) -> Out + Send + 'static,
     In: AppData,
     Out: AppData,
-    O: FnMut(In) -> Out + Send + 'static, // + Sync,
 {
+    #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -155,11 +155,11 @@ where
     }
 }
 
-impl<O, In, Out> fmt::Debug for Map<O, In, Out>
+impl<F, In, Out> fmt::Debug for Map<F, In, Out>
 where
+    F: FnMut(In) -> Out + Send,
     In: AppData,
     Out: AppData,
-    O: FnMut(In) -> Out + Send,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Map")

@@ -18,6 +18,7 @@ pub enum TickMsg {
 }
 
 impl TickMsg {
+    #[inline]
     pub fn stop() -> (Self, oneshot::Receiver<GraphResult<()>>) {
         let (tx, rx) = oneshot::channel();
         (Self::Stop { tx }, rx)
@@ -36,7 +37,6 @@ pub enum Constraint {
 }
 
 impl ContinueTicking for Constraint {
-    #[inline]
     fn next(&mut self) -> bool {
         match self {
             Constraint::None => true,
@@ -68,16 +68,19 @@ impl ContinueTicking for Constraint {
 impl Constraint {
     /// By default, Tick has no constraint and will produce ticks ongoing until it is stopped by
     /// either dropping the Tick source or sending it the [TickMsg::Stop] message.
+    #[inline]
     pub fn none() -> Constraint {
         Constraint::None
     }
 
     /// Tick can be set to stop after a predefined count of ticks.
+    #[inline]
     pub fn by_count(limit: usize) -> Constraint {
         Constraint::ByCount { count: 0, limit }
     }
 
     /// Tick can be set to stop after a predefined duration.
+    #[inline]
     pub fn by_time(limit: Duration) -> Constraint {
         Constraint::ByTime { stop: None, limit }
     }
@@ -166,6 +169,7 @@ where
     T: AppData + Clone + Unpin,
 {
     type Out = T;
+    #[inline]
     fn outlet(&mut self) -> &mut Outlet<Self::Out> {
         &mut self.outlet
     }
@@ -177,6 +181,7 @@ impl<T> Stage for Tick<T>
 where
     T: AppData + Clone + Unpin + 'static,
 {
+    #[inline]
     fn name(&self) -> &str {
         self.name.as_ref()
     }
@@ -259,6 +264,7 @@ where
 {
     type Sender = TickApi;
 
+    #[inline]
     fn tx_api(&self) -> Self::Sender {
         self.tx_api.clone()
     }

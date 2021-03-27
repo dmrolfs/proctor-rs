@@ -84,6 +84,7 @@ impl<T> Stage for Sequence<T>
 where
     T: AppData + 'static,
 {
+    #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -117,6 +118,7 @@ where
     T: AppData,
 {
     type Out = T;
+    #[inline]
     fn outlet(&mut self) -> &mut Outlet<Self::Out> {
         &mut self.outlet
     }

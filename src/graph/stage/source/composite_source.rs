@@ -172,6 +172,7 @@ impl<Out: AppData> Shape for CompositeSource<Out> {}
 
 impl<Out: AppData + 'static> SourceShape for CompositeSource<Out> {
     type Out = Out;
+    #[inline]
     fn outlet(&mut self) -> &mut Outlet<Self::Out> {
         &mut self.outlet
     }
@@ -180,6 +181,7 @@ impl<Out: AppData + 'static> SourceShape for CompositeSource<Out> {
 #[dyn_upcast]
 #[async_trait]
 impl<Out: AppData> Stage for CompositeSource<Out> {
+    #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
     }

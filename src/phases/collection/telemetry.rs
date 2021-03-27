@@ -11,9 +11,13 @@ use std::result::Result;
 pub struct TelemetryData(HashMap<String, String>);
 
 impl TelemetryData {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
-    pub fn with_capacity(capacity: usize) -> Self { Self(HashMap::with_capacity(capacity))}
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(HashMap::with_capacity(capacity))
+    }
 
     pub fn from_data(data: HashMap<String, String>) -> Self {
         Self(data)
@@ -26,6 +30,7 @@ impl TelemetryData {
 
     pub fn try_into<'de, T: de::Deserialize<'de>>(self) -> GraphResult<T> {
         // let mut c = config::Config::default();
+        // c.merge(self.0)?;
         let c = config::Config::try_from(&self.0)?;
         c.try_into().map_err(|err| err.into())
     }
@@ -419,7 +424,7 @@ mod tests {
         #[serde(default)]
         #[serde(
             serialize_with = "crate::serde::serialize_optional_datetime",
-            deserialize_with = "crate::serde::deserialize_optional_datetime",
+            deserialize_with = "crate::serde::deserialize_optional_datetime"
         )]
         pub last_failure: Option<DateTime<Utc>>,
         pub is_deploying: bool,
@@ -541,7 +546,11 @@ mod tests {
 
     #[test]
     fn test_keys() {
-        let vec = vec![("1".to_string(), "a".to_string()), ("2".to_string(), "b".to_string()), ("3".to_string(), "c".to_string())];
+        let vec = vec![
+            ("1".to_string(), "a".to_string()),
+            ("2".to_string(), "b".to_string()),
+            ("3".to_string(), "c".to_string()),
+        ];
         let map = TelemetryData(vec.into_iter().collect());
         let keys: Vec<_> = map.keys().cloned().collect();
         assert_eq!(keys.len(), 3);
@@ -552,7 +561,11 @@ mod tests {
 
     #[test]
     fn test_values() {
-        let vec = vec![("1".to_string(), "a".to_string()), ("2".to_string(), "b".to_string()), ("3".to_string(), "c".to_string())];
+        let vec = vec![
+            ("1".to_string(), "a".to_string()),
+            ("2".to_string(), "b".to_string()),
+            ("3".to_string(), "c".to_string()),
+        ];
         let map = TelemetryData(vec.into_iter().collect());
         let values: Vec<_> = map.values().cloned().collect();
         assert_eq!(values.len(), 3);
@@ -563,7 +576,11 @@ mod tests {
 
     #[test]
     fn test_values_mut() {
-        let vec = vec![("1".to_string(), "1".to_string()), ("2".to_string(), "2".to_string()), ("3".to_string(), "3".to_string())];
+        let vec = vec![
+            ("1".to_string(), "1".to_string()),
+            ("2".to_string(), "2".to_string()),
+            ("3".to_string(), "3".to_string()),
+        ];
         let mut map = TelemetryData(vec.into_iter().collect());
         for value in map.values_mut() {
             let val = i32::from_str((*value).as_str()).unwrap();
@@ -575,5 +592,4 @@ mod tests {
         assert!(values.contains(&"4".to_string()));
         assert!(values.contains(&"6".to_string()));
     }
-
 }

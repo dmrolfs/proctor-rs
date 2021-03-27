@@ -15,7 +15,7 @@ pub struct TaskStatus {
     #[serde(default)]
     #[serde(
         serialize_with = "crate::serde::serialize_optional_datetime",
-        deserialize_with = "crate::serde::deserialize_optional_datetime",
+        deserialize_with = "crate::serde::deserialize_optional_datetime"
     )]
     pub last_failure: Option<DateTime<Utc>>,
 }

@@ -114,6 +114,7 @@ where
         }
     }
 
+    #[inline]
     pub fn take_final_rx(&mut self) -> Option<oneshot::Receiver<Acc>> {
         self.rx_final.take()
     }
@@ -193,6 +194,7 @@ where
     Acc: AppData + Clone,
 {
     type In = In;
+    #[inline]
     fn inlet(&mut self) -> &mut Inlet<Self::In> {
         &mut self.inlet
     }
@@ -206,6 +208,7 @@ where
     In: AppData + 'static,
     Acc: AppData + Clone + 'static,
 {
+    #[inline]
     fn name(&self) -> &str {
         self.name.as_ref()
     }
@@ -237,6 +240,7 @@ where
 {
     type Sender = FoldApi<Acc>;
 
+    #[inline]
     fn tx_api(&self) -> Self::Sender {
         self.tx_api.clone()
     }

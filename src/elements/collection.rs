@@ -189,6 +189,7 @@ impl ThroughShape for Collect {}
 
 impl SourceShape for Collect {
     type Out = MetricCatalog;
+    #[inline]
     fn outlet(&mut self) -> &mut Outlet<Self::Out> {
         &mut self.outlet
     }
@@ -196,6 +197,7 @@ impl SourceShape for Collect {
 
 impl SinkShape for Collect {
     type In = ();
+    #[inline]
     fn inlet(&mut self) -> &mut Inlet<Self::In> {
         &mut self.trigger
     }
@@ -204,6 +206,7 @@ impl SinkShape for Collect {
 #[dyn_upcast]
 #[async_trait]
 impl Stage for Collect {
+    #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
     }

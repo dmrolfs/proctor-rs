@@ -31,6 +31,7 @@ pub enum ClearinghouseCmd {
 }
 
 impl ClearinghouseCmd {
+    #[inline]
     pub fn subscribe<S: Into<String>>(name: S, fields: HashSet<String>, receiver: Inlet<TelemetryData>) -> (Self, oneshot::Receiver<Ack>) {
         let (tx, rx) = oneshot::channel();
         (
@@ -44,16 +45,19 @@ impl ClearinghouseCmd {
         )
     }
 
+    #[inline]
     pub fn unsubscribe<S: Into<String>>(name: S) -> (Self, oneshot::Receiver<Ack>) {
         let (tx, rx) = oneshot::channel();
         (Self::Unsubscribe { name: name.into(), tx }, rx)
     }
 
+    #[inline]
     pub fn get_clearinghouse_snapshot() -> (Self, oneshot::Receiver<ClearinghouseResp>) {
         let (tx, rx) = oneshot::channel();
         (Self::GetSnapshot { name: None, tx }, rx)
     }
 
+    #[inline]
     pub fn get_subscription_snapshot<S: Into<String>>(name: S) -> (Self, oneshot::Receiver<ClearinghouseResp>) {
         let (tx, rx) = oneshot::channel();
         (Self::GetSnapshot { name: Some(name.into()), tx }, rx)
@@ -336,6 +340,7 @@ impl Shape for Clearinghouse {}
 
 impl SinkShape for Clearinghouse {
     type In = TelemetryData;
+    #[inline]
     fn inlet(&mut self) -> &mut Inlet<Self::In> {
         &mut self.inlet
     }
@@ -343,6 +348,7 @@ impl SinkShape for Clearinghouse {
 
 impl UniformFanOutShape for Clearinghouse {
     type Out = TelemetryData;
+    #[inline]
     fn outlets(&mut self) -> &mut [Outlet<Self::Out>] {
         &mut self.outlets
     }
@@ -351,6 +357,7 @@ impl UniformFanOutShape for Clearinghouse {
 #[dyn_upcast]
 #[async_trait]
 impl Stage for Clearinghouse {
+    #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -421,6 +428,7 @@ impl Stage for Clearinghouse {
 impl stage::WithApi for Clearinghouse {
     type Sender = ClearinghouseApi;
 
+    #[inline]
     fn tx_api(&self) -> Self::Sender {
         self.tx_api.clone()
     }

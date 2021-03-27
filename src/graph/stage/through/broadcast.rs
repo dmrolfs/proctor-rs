@@ -90,6 +90,7 @@ impl<T: AppData + Clone> Shape for Broadcast<T> {}
 
 impl<T: AppData + Clone> UniformFanOutShape for Broadcast<T> {
     type Out = T;
+    #[inline]
     fn outlets(&mut self) -> &mut [Outlet<Self::Out>] {
         self.outlets.as_mut_slice()
     }
@@ -97,6 +98,7 @@ impl<T: AppData + Clone> UniformFanOutShape for Broadcast<T> {
 
 impl<T: AppData + Clone> SinkShape for Broadcast<T> {
     type In = T;
+    #[inline]
     fn inlet(&mut self) -> &mut Inlet<Self::In> {
         &mut self.inlet
     }
@@ -105,6 +107,7 @@ impl<T: AppData + Clone> SinkShape for Broadcast<T> {
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData + Clone> Stage for Broadcast<T> {
+    #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
     }

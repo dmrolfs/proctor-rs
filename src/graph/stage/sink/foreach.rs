@@ -91,6 +91,7 @@ where
 {
     type In = In;
 
+    #[inline]
     fn inlet(&mut self) -> &mut Inlet<Self::In> {
         &mut self.inlet
     }
@@ -103,6 +104,7 @@ where
     F: Fn(In) -> () + Send + Sync + 'static,
     In: AppData + 'static,
 {
+    #[inline]
     fn name(&self) -> &str {
         self.name.as_ref()
     }

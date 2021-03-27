@@ -131,6 +131,7 @@ impl<In: AppData, Out: AppData> ThroughShape for CompositeThrough<In, Out> {}
 
 impl<In: AppData, Out: AppData> SourceShape for CompositeThrough<In, Out> {
     type Out = Out;
+    #[inline]
     fn outlet(&mut self) -> &mut Outlet<Self::Out> {
         &mut self.outlet
     }
@@ -138,6 +139,7 @@ impl<In: AppData, Out: AppData> SourceShape for CompositeThrough<In, Out> {
 
 impl<In: AppData, Out: AppData> SinkShape for CompositeThrough<In, Out> {
     type In = In;
+    #[inline]
     fn inlet(&mut self) -> &mut Inlet<Self::In> {
         &mut self.inlet
     }
@@ -146,6 +148,7 @@ impl<In: AppData, Out: AppData> SinkShape for CompositeThrough<In, Out> {
 #[dyn_upcast]
 #[async_trait]
 impl<In: AppData, Out: AppData> Stage for CompositeThrough<In, Out> {
+    #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
     }

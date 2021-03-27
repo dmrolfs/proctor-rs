@@ -20,6 +20,7 @@ impl<T: AppData> Identity<T> {
         }
     }
 
+    #[inline]
     pub fn inlet(&mut self) -> &mut Inlet<T> {
         &mut self.inlet
     }
@@ -31,6 +32,7 @@ impl<T: AppData> ThroughShape for Identity<T> {}
 
 impl<T: AppData> SourceShape for Identity<T> {
     type Out = T;
+    #[inline]
     fn outlet(&mut self) -> &mut Outlet<Self::Out> {
         &mut self.outlet
     }
@@ -38,6 +40,7 @@ impl<T: AppData> SourceShape for Identity<T> {
 
 impl<T: AppData> SinkShape for Identity<T> {
     type In = T;
+    #[inline]
     fn inlet(&mut self) -> &mut Inlet<Self::In> {
         &mut self.inlet
     }
@@ -46,6 +49,7 @@ impl<T: AppData> SinkShape for Identity<T> {
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData + 'static> Stage for Identity<T> {
+    #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
     }

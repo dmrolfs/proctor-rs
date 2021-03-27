@@ -109,6 +109,7 @@ impl<T: AppData> Inlet<T> {
 
 #[async_trait]
 impl<T: AppData> Port for Inlet<T> {
+    #[inline]
     fn name(&self) -> &str {
         self.0.as_str()
     }
@@ -129,18 +130,11 @@ impl<T: AppData> Port for Inlet<T> {
 }
 
 impl<T: AppData> Clone for Inlet<T> {
+    #[inline]
     fn clone(&self) -> Self {
         Self(self.0.clone(), self.1.clone())
     }
 }
-
-// impl<T: AppData> Drop for Inlet<T> {
-//     fn drop(&mut self) {
-//         let strong_count = Arc::strong_count(&self.1);
-//         let weak_count = Arc::weak_count(&self.1);
-//         tracing::trace!(inlet_name=%self.0, %strong_count, %weak_count, "Inlet dropped")
-//     }
-// }
 
 impl<T: AppData> Inlet<T> {
     pub async fn attach(&mut self, rx: mpsc::Receiver<T>) {
@@ -249,6 +243,7 @@ impl<T: AppData> Outlet<T> {
 
 #[async_trait]
 impl<T: AppData> Port for Outlet<T> {
+    #[inline]
     fn name(&self) -> &str {
         self.0.as_str()
     }
