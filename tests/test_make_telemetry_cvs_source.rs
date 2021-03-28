@@ -103,7 +103,7 @@ async fn test_make_telemetry_cvs_source() -> Result<()> {
         Ok((actual, _)) => {
             let expected = Data {
                 last_failure: Some(DateTime::parse_from_str("2014-11-28T12:45:59.324310806Z", "%+")?.with_timezone(&Utc)),
-                is_deploying: false,
+                is_deploying: true,
                 latest_deployment: DateTime::parse_from_str("2021-03-08T23:57:12.918473937Z", "%+")?.with_timezone(&Utc),
             };
 

@@ -6,7 +6,7 @@ pub mod elements;
 pub mod error;
 pub mod graph;
 pub mod phases;
-pub(crate) mod serde;
+pub mod serde;
 pub mod settings;
 pub mod telemetry;
 

@@ -5,7 +5,6 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt;
 
-
 /// The FilterMap stage both filters and maps on items.
 ///
 /// The stage passes only the values for which the supplied closure returns Some(value).
@@ -208,16 +207,7 @@ mod tests {
         let (tx_in, rx_in) = mpsc::channel(8);
         let (tx_out, mut rx_out) = mpsc::channel(8);
 
-        let mut filter_map = FilterMap::new(
-            "odd values",
-            |x| {
-                if x % 2 == 1 {
-                    Some(x * x)
-                } else {
-                    None
-                }
-            }
-        );
+        let mut filter_map = FilterMap::new("odd values", |x| if x % 2 == 1 { Some(x * x) } else { None });
 
         let mut actual = Vec::with_capacity(3);
 

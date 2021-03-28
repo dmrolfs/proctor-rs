@@ -2,11 +2,11 @@ mod and_then;
 mod broadcast;
 mod composite_through;
 mod filter;
+mod filter_map;
 mod identity;
 mod map;
 mod merge;
 mod merge_n;
-mod filter_map;
 
 pub use self::and_then::AndThen;
 pub use self::broadcast::Broadcast;

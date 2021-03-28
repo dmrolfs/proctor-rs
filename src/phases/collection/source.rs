@@ -9,6 +9,7 @@ use serde::de::DeserializeOwned;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
+//todo api access should follow new convention rt via returned tuple
 pub type TelemetrySource = Box<dyn TelemetrySourceStage>;
 pub trait TelemetrySourceStage: Stage + SourceShape<Out = TelemetryData> + 'static {}
 impl<T: 'static + Stage + SourceShape<Out = TelemetryData>> TelemetrySourceStage for T {}
@@ -120,18 +121,3 @@ where
         ))
     }
 }
-
-////////////////
-// pub enum Source {
-//     Local(PathBuf),
-//     RestApi(HttpQuery),
-// }
-//
-// impl Source {
-//     pub fn new(setting: SourceSetting) -> Self {
-//         match setting {
-//             SourceSetting::Local { path } => Source::Local(path),
-//             SourceSetting::RestApi(query) => Source::RestApi(query),
-//         }
-//     }
-// }
