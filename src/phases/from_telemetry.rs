@@ -1,4 +1,3 @@
-use crate::error::ProctorError;
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape, ThroughShape};
 use crate::phases::collection::TelemetryData;

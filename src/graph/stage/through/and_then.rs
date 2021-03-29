@@ -20,7 +20,7 @@ use std::fmt;
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
-///     let mut source = stage::Sequence::new("src", (4..=10).collect());
+///     let mut source = stage::Sequence::new("src", (4..=10));
 ///     let bar = "17".to_string();
 ///
 ///     let mut sq_plus = stage::AndThen::new(
@@ -235,7 +235,7 @@ mod tests {
         use crate::graph::stage;
         use crate::graph::{Connect, Graph};
 
-        let mut source = stage::Sequence::new("src", (4..=10).collect());
+        let mut source = stage::Sequence::new("src", (4..=10));
 
         let bar = "17".to_string(); // important to type check closing over non-copy value
         let mut calc = AndThen::new("square values", move |x| {

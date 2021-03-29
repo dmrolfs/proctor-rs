@@ -53,36 +53,39 @@ use std::fmt;
 ///     }
 /// }
 /// ```
-pub struct Sequence<T>
+pub struct Sequence<T, I>
 where
     T: AppData,
+    I: Iterator<Item = T> + Send + 'static,
 {
     name: String,
-    //todo can I make this `&'a [T]`? First attempt resulted in requiring `T: 'static`, which has
-    // huge downstream implications requiring `T: 'static` across the graph package.
-    data: Vec<T>,
+    items: Option<I>,
     outlet: Outlet<T>,
 }
 
-impl<T> Sequence<T>
+impl<T, I> Sequence<T, I>
 where
     T: AppData,
+    I: Iterator<Item = T> + Send + 'static,
 {
-    pub fn new<S>(name: S, data: Vec<T>) -> Self
+    pub fn new<S, I0>(name: S, data: I0) -> Self
     where
         S: Into<String>,
+        I0: IntoIterator<Item = T, IntoIter = I>,
     {
         let name = name.into();
         let outlet = Outlet::new(name.clone());
-        Self { name, data, outlet }
+        let items = data.into_iter();
+        Self { name, items: Some(items), outlet }
     }
 }
 
 #[dyn_upcast]
 #[async_trait]
-impl<T> Stage for Sequence<T>
+impl<T, I> Stage for Sequence<T, I>
 where
-    T: AppData + 'static,
+    T: AppData,
+    I: Iterator<Item = T> + Send + 'static,
 {
     #[inline]
     fn name(&self) -> &str {
@@ -96,9 +99,11 @@ where
         fields(stage=%self.name),
     )]
     async fn run(&mut self) -> GraphResult<()> {
-        for d in self.data.drain(..) {
-            tracing::trace!(item=?d, "sending item");
-            self.outlet.send(d).await?
+        if let Some(items) = self.items.take() {
+            for (count, item) in items.enumerate() {
+                tracing::trace!(?item, %count, "sending item");
+                self.outlet.send(item).await?
+            }
         }
 
         Ok(())
@@ -111,11 +116,16 @@ where
     }
 }
 
-impl<T> Shape for Sequence<T> where T: AppData {}
-
-impl<T> SourceShape for Sequence<T>
+impl<T, I> Shape for Sequence<T, I>
 where
     T: AppData,
+    I: Iterator<Item = T> + Send + 'static,
+{}
+
+impl<T, I> SourceShape for Sequence<T, I>
+where
+    T: AppData,
+    I: Iterator<Item = T> + Send + 'static,
 {
     type Out = T;
     #[inline]
@@ -124,14 +134,14 @@ where
     }
 }
 
-impl<T> fmt::Debug for Sequence<T>
+impl<T, I> fmt::Debug for Sequence<T, I>
 where
     T: AppData,
+    I: Iterator<Item = T> + Send + 'static,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Sequence")
             .field("name", &self.name)
-            .field("nr_data_items", &self.data.len())
             .field("outlet", &self.outlet)
             .finish()
     }

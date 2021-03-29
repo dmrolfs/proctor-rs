@@ -25,7 +25,7 @@ use cast_trait_object::dyn_upcast;
 ///
 ///     tracing::info!("Nr CPUS:{}", num_cpus::get());
 ///
-///     let mut source = stage::Sequence::new("I. Sequence Source", (4..=10).collect());
+///     let mut source = stage::Sequence::new("I. Sequence Source", (4..=10));
 ///
 ///     let bar = "17".to_string();
 ///     let mut sq_plus = stage::AndThen::new("II.a. AndThen-sq_plus", move |x| {

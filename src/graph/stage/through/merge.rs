@@ -15,8 +15,8 @@ use std::fmt;
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
-///     let mut source_0 = stage::Sequence::new("first", (1..=3).collect());
-///     let mut source_1 = stage::Sequence::new("second", (10..=30).step_by(10).collect());
+///     let mut source_0 = stage::Sequence::new("first", (1..=3));
+///     let mut source_1 = stage::Sequence::new("second", (10..=30).step_by(10));
 ///     let mut merge = stage::Merge::new("merge_streams");
 ///     let mut sum = stage::Fold::new("sum", 0, |acc, x| acc + x );
 ///     let rx_sum = sum.take_final_rx().unwrap();
