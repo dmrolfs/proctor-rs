@@ -5,7 +5,7 @@ use crate::AppData;
 use crate::ProctorResult;
 use serde::Deserialize;
 
-pub type FromTelemetryShape<'de, Out: AppData + Deserialize<'de>> = Box<dyn FromTelemetryStage<'de, Out>>;
+pub type FromTelemetryShape<'de, Out> = Box<dyn FromTelemetryStage<'de, Out>>;
 pub trait FromTelemetryStage<'de, Out: AppData + Deserialize<'de>>: Stage + ThroughShape<In = TelemetryData, Out = Out> + 'static {}
 impl<'de, Out: AppData + Deserialize<'de>, T: 'static + Stage + ThroughShape<In = TelemetryData, Out = Out>> FromTelemetryStage<'de, Out> for T {}
 

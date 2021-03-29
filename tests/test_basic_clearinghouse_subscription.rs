@@ -1,11 +1,9 @@
 mod fixtures;
 
 use cast_trait_object::DynCastExt;
-use proctor::graph::stage::WithApi;
 use proctor::graph::{stage, Connect, Graph, SinkShape};
 use proctor::phases::collection;
 use proctor::settings::SourceSetting;
-use proctor::telemetry::{get_subscriber, init_subscriber};
 use std::collections::HashSet;
 use std::path::PathBuf;
 

@@ -6,7 +6,6 @@ use chrono::{DateTime, TimeZone, Utc};
 use proctor::graph::{stage, Connect, Graph, SinkShape};
 use proctor::phases::collection::{make_telemetry_cvs_source, TelemetryData};
 use proctor::settings::SourceSetting;
-use stage::WithApi;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq)]
