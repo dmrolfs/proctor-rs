@@ -5,6 +5,7 @@ use proctor::graph::stage::{self, tick, Stage};
 use proctor::graph::{Connect, Graph};
 use proctor::graph::{SinkShape, SourceShape, UniformFanInShape};
 use proctor::phases::collection;
+use proctor::elements;
 use proctor::settings::{HttpQuery, SourceSetting};
 use proctor::telemetry::{get_subscriber, init_subscriber};
 use serde::Deserialize;
@@ -50,7 +51,7 @@ async fn main() -> Result<()> {
     let mut clearinghouse = collection::Clearinghouse::new("clearinghouse");
 
     let pos_stats_fields = maplit::hashset! { POS_FIELD.to_string() };
-    let mut pos_stats = stage::Fold::<_, collection::TelemetryData, (usize, usize)>::new("pos_stats", (0, 0), move |(count, sum), data| {
+    let mut pos_stats = stage::Fold::<_, elements::TelemetryData, (usize, usize)>::new("pos_stats", (0, 0), move |(count, sum), data| {
         let delivered = data.keys().cloned().collect::<HashSet<_>>();
         let allowed = &pos_stats_fields;
         let unexpected = delivered.difference(allowed);

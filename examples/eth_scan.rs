@@ -3,7 +3,7 @@ extern crate enum_display_derive;
 
 use anyhow::anyhow;
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
-use proctor::elements::{Collect, MetricCatalog};
+use proctor::elements::{Collect, TelemetryData};
 use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use proctor::telemetry::{get_subscriber, init_subscriber};
 use reqwest::Url;
@@ -289,7 +289,7 @@ async fn main() -> anyhow::Result<()> {
         );
         // data.insert("currency".to_string(), ex.from_currency.name);
         // data.insert("value".to_string(), ex.rate.to_string());
-        MetricCatalog::new(data)
+        TelemetryData::from_data(data)
     };
 
     let mut collect = Collect::new("collect", url, default_headers, to_metric_group).await;

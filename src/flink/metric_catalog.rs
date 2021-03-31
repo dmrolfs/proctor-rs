@@ -1,34 +1,49 @@
+use oso::PolarClass;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::ops::Add;
 use std::str::FromStr;
 
-#[derive(Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(PolarClass, Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
 pub struct MetricCatalog {
+    #[polar(attribute)]
     pub flow: FlowMetrics,
+    #[polar(attribute)]
     pub utilization: UtilizationMetrics,
+    #[polar(attribute)]
     pub custom: HashMap<String, String>,
 }
 
-#[derive(Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(PolarClass, Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
 pub struct FlowMetrics {
     // this will need to be in context:  historical_input_messages_per_sec: VecDeque<(f32, DateTime<Utc>)>,
+    #[polar(attribute)]
     input_messages_per_sec: f32,
+    #[polar(attribute)]
     input_consumer_lag: f32,
+    #[polar(attribute)]
     records_out_per_sec: f32,
+    #[polar(attribute)]
     max_message_latency: f32,
+    #[polar(attribute)]
     net_in_utilization: f32,
+    #[polar(attribute)]
     net_out_utilization: f32,
+    #[polar(attribute)]
     sink_health_metrics: f32,
 
+    #[polar(attribute)]
     pub task_nr_records_in_per_sec: f32,
+    #[polar(attribute)]
     pub task_nr_records_out_per_sec: f32,
 }
 
-#[derive(Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(PolarClass, Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
 pub struct UtilizationMetrics {
+    #[polar(attribute)]
     task_cpu_load: f32,
+    #[polar(attribute)]
     network_io_utilization: f32,
 }
 

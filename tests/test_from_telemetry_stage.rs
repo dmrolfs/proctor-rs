@@ -5,7 +5,7 @@ use cast_trait_object::DynCastExt;
 use chrono::{DateTime, TimeZone, Utc};
 use proctor::graph::{stage, Connect, Graph, SinkShape};
 use proctor::phases::collection::make_telemetry_cvs_source;
-use proctor::phases::make_from_telemetry;
+use proctor::elements::make_from_telemetry;
 use proctor::settings::SourceSetting;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;

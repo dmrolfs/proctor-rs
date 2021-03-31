@@ -1,4 +1,4 @@
-use super::MetricCatalog;
+use super::TelemetryData;
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Connect, Graph, GraphResult, Inlet, Outlet, Port, Shape, SinkShape, SourceShape, ThroughShape};
 use crate::AppData;
@@ -59,7 +59,7 @@ use std::fmt;
 ///         for (k, v) in &r.args {
 ///             data.insert(format!("args.{}.{}", cnt, k), v.to_string());
 ///         }
-///         elements::MetricCatalog::new(data)
+///         elements::TelemetryData::from_data(data)
 ///     };
 ///
 ///     let mut collect = elements::Collect::new(
@@ -70,10 +70,13 @@ use std::fmt;
 ///     )
 ///     .await;
 ///
-///     let mut fold =
-///         stage::Fold::<_, elements::MetricCatalog, _>::new("gather latest", None, |acc: Option<elements::MetricCatalog>, mg| {
-///             acc.map_or(Some(mg.clone()), move |a| Some(a + mg.clone()))
-///         });
+///     let mut fold = stage::Fold::<_, elements::TelemetryData, _>::new(
+///         "gather latest",
+///         None,
+///         |acc: Option<elements::TelemetryData>, data| {
+///             acc.map_or(Some(data.clone()), move |a| Some(a + data.clone()))
+///         }
+///     );
 ///     let rx_gather = fold.take_final_rx().unwrap();
 ///
 ///     (tick.outlet(), collect.inlet()).connect().await;
@@ -92,7 +95,7 @@ use std::fmt;
 ///                 exp.insert(format!("args.{}.f", i), "foo".to_string());
 ///                 exp.insert(format!("args.{}.b", i), "bar".to_string());
 ///             }
-///             let exp = elements::MetricCatalog::new(exp);
+///             let exp = elements::TelemetryData::from_data(exp);
 ///             assert_eq!(resp, exp);
 ///         }
 ///         None => panic!("did not expect no response"),
@@ -106,14 +109,14 @@ pub struct Collect {
     target: Url,
     graph: Option<Graph>,
     trigger: Inlet<()>,
-    outlet: Outlet<MetricCatalog>,
+    outlet: Outlet<TelemetryData>,
 }
 
 impl Collect {
     pub async fn new<T, F, S, U>(name: S, url: U, default_headers: HeaderMap, transform: F) -> Self
     where
         T: AppData + DeserializeOwned + 'static,
-        F: FnMut(T) -> MetricCatalog + Send + 'static,
+        F: FnMut(T) -> TelemetryData + Send + 'static,
         S: Into<String>,
         U: IntoUrl,
     {
@@ -130,17 +133,17 @@ impl Collect {
         }
     }
 
-    async fn make_graph<T, F>(name: String, url: Url, default_headers: HeaderMap, transform: F) -> (Graph, Inlet<()>, Outlet<MetricCatalog>)
+    async fn make_graph<T, F>(name: String, url: Url, default_headers: HeaderMap, transform: F) -> (Graph, Inlet<()>, Outlet<TelemetryData>)
     where
         T: AppData + DeserializeOwned + 'static,
-        F: FnMut(T) -> MetricCatalog + Send + 'static,
+        F: FnMut(T) -> TelemetryData + Send + 'static,
     {
         let mut query = stage::AndThen::new(format!("{}-query", name), move |_| {
             let client = reqwest::Client::builder().default_headers(default_headers.clone()).build().unwrap();
             let query_url = url.clone();
             async move { Collect::do_query::<T>(&client, query_url).await.expect("failed to query") }
         });
-        let mut transform = stage::Map::<_, T, MetricCatalog>::new(format!("{}-transform", name), transform);
+        let mut transform = stage::Map::<_, T, TelemetryData>::new(format!("{}-transform", name), transform);
 
         let bridge_inlet = Inlet::new("into_collection_graph");
 
@@ -188,7 +191,7 @@ impl Shape for Collect {}
 impl ThroughShape for Collect {}
 
 impl SourceShape for Collect {
-    type Out = MetricCatalog;
+    type Out = TelemetryData;
     #[inline]
     fn outlet(&mut self) -> &mut Outlet<Self::Out> {
         &mut self.outlet

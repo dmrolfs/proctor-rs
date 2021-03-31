@@ -167,11 +167,7 @@ where
         Ok(oso)
     }
 
-    #[tracing::instrument(
-        level="info",
-        skip(oso, outlet),
-        fields()
-    )]
+    #[tracing::instrument(level = "info", skip(oso, outlet), fields())]
     async fn handle_item(
         item: T, environment: &E, context: &Box<dyn PolicyContext<Item = T, Environment = E>>, oso: &Oso, outlet: &Outlet<T>,
     ) -> GraphResult<()> {
@@ -230,7 +226,7 @@ where
 mod tests {
     use super::*;
     use crate::error::GraphError;
-    use crate::phases::collection::TelemetryData;
+    use crate::elements::TelemetryData;
     use std::collections::HashMap;
     use tokio::sync::mpsc;
     use tokio_test::block_on;
@@ -295,8 +291,8 @@ mod tests {
 
     #[test]
     fn test_handle_item() -> anyhow::Result<()> {
-        let subscriber = crate::telemetry::get_subscriber("proctor", "trace");
-        crate::telemetry::init_subscriber(subscriber);
+        // let subscriber = crate::telemetry::get_subscriber("proctor", "trace");
+        // crate::telemetry::init_subscriber(subscriber);
 
         let main_span = tracing::info_span!("policy_filter::test_handle_item");
         let _main_span_guard = main_span.enter();

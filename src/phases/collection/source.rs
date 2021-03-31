@@ -1,4 +1,4 @@
-use super::TelemetryData;
+use crate::elements::TelemetryData;
 use crate::error::{ConfigError, GraphError, ProctorError};
 use crate::graph::stage::{tick, Stage, WithApi};
 use crate::graph::{stage, Connect, Graph, GraphResult, SinkShape, SourceShape};

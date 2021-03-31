@@ -4,6 +4,7 @@ extern crate app_data_derive;
 pub mod app_data;
 pub mod elements;
 pub mod error;
+pub mod flink;
 pub mod graph;
 pub mod phases;
 pub mod serde;

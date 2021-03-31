@@ -12,7 +12,7 @@ use cast_trait_object::dyn_upcast;
 /// #[macro_use]
 /// extern crate app_data_derive;
 ///
-/// use proctor::elements::MetricCatalog;
+/// use proctor::elements::TelemetryData;
 /// use proctor::error::GraphError;
 /// use proctor::graph::stage::{self, tick, Stage};
 /// use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
@@ -58,7 +58,7 @@ use cast_trait_object::dyn_upcast;
 ///     let gen = move |_| {
 ///         let cc = count.clone();
 ///
-///         let to_metric_catalog = move |r: HttpBinResponse| async move {
+///         let to_telemetry_data = move |r: HttpBinResponse| async move {
 ///             let mine = cc.clone();
 ///             let mut cnt = mine.lock().await;
 ///             *cnt += 1;
@@ -66,7 +66,7 @@ use cast_trait_object::dyn_upcast;
 ///             for (k, v) in &r.args {
 ///                 data.insert(format!("args.{}.{}", cnt, k), v.to_string());
 ///             }
-///             MetricCatalog::new(data)
+///             TelemetryData::from_data(data)
 ///         };
 ///
 ///         async move {
@@ -82,14 +82,14 @@ use cast_trait_object::dyn_upcast;
 ///                 .await
 ///                 .map_err::<GraphError, _>(|err| err.into())?;
 ///
-///             let result: GraphResult<MetricCatalog> = Ok(to_metric_catalog(resp).await);
+///             let result: GraphResult<TelemetryData> = Ok(to_telemetry_data(resp).await);
 ///             result
 ///         }
 ///         .map(|r| r.unwrap())
 ///     };
 ///
 ///     let mut generator = stage::TriggeredGenerator::new("generator", gen);
-///     let mut distill = stage::Map::<_, MetricCatalog,_>::new("distill", |mc| mc.custom);
+///     let mut distill = stage::Map::<_, TelemetryData,_>::new("distill", |mc| mc.0);
 ///
 ///     // let generator_outlet = generator.outlet().clone();
 ///     let composite_outlet = distill.outlet().clone();

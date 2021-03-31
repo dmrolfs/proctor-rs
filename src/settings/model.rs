@@ -62,7 +62,7 @@ pub struct EligibilitySettings {
     pub policy_path: PathBuf,
 }
 
-impl crate::phases::PolicySettings for EligibilitySettings {
+impl crate::elements::PolicySettings for EligibilitySettings {
     fn specification_path(&self) -> PathBuf {
         self.policy_path.clone()
     }

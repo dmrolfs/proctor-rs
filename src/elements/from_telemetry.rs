@@ -1,6 +1,6 @@
+use super::TelemetryData;
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape, ThroughShape};
-use crate::phases::collection::TelemetryData;
 use crate::AppData;
 use crate::ProctorResult;
 use serde::de::DeserializeOwned;

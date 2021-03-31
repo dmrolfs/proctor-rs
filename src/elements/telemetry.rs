@@ -32,6 +32,15 @@ impl TelemetryData {
     }
 }
 
+impl std::ops::Add for TelemetryData {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self::Output {
+        let mut lhs = self.0;
+        lhs.extend(rhs.0);
+        TelemetryData::from_data(lhs)
+    }
+}
+
 impl FromIterator<(String, String)> for TelemetryData {
     fn from_iter<T: IntoIterator<Item = (String, String)>>(iter: T) -> Self {
         let mut data = TelemetryData::default();

@@ -8,7 +8,7 @@
 /// #[macro_use]
 /// extern crate app_data_derive;
 ///
-/// use proctor::elements::MetricCatalog;
+/// use proctor::elements::TelemetryData;
 /// use proctor::error::GraphError;
 /// use proctor::graph::stage::{self, tick, Stage};
 /// use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
@@ -76,7 +76,7 @@
 ///                 data.insert(format!("args.{}.{}", my_count, k), v.to_string());
 ///             }
 ///
-///             let result: GraphResult<MetricCatalog> = Ok(MetricCatalog::new(data));
+///             let result: GraphResult<TelemetryData> = Ok(TelemetryData::from_data(data));
 ///             result
 ///         }
 ///         .map(|r| r.unwrap())
@@ -84,8 +84,8 @@
 ///
 ///     let mut httpbin_collection = stage::TriggeredGenerator::new("httpbin_collection", gen);
 ///
-///     let mut fold = stage::Fold::new("gather latest", None, |acc: Option<MetricCatalog>, mg: MetricCatalog| {
-///         acc.map_or(Some(mg.clone()), move |a| Some(a + mg.clone()))
+///     let mut fold = stage::Fold::new("gather latest", None, |acc: Option<TelemetryData>, data: TelemetryData| {
+///         acc.map_or(Some(data.clone()), move |a| Some(a + data.clone()))
 ///     });
 ///     let rx_gather = fold.take_final_rx().unwrap();
 ///
@@ -105,7 +105,7 @@
 ///                 exp.insert(format!("args.{}.f", i), "foo".to_string());
 ///                 exp.insert(format!("args.{}.b", i), "bar".to_string());
 ///             }
-///             let exp = MetricCatalog::new(exp);
+///             let exp = TelemetryData::from_data(exp);
 ///             tracing::warn!(actual=?resp,expected=?exp, "validating results");
 ///             assert_eq!(resp, exp);
 ///         }

@@ -2,6 +2,7 @@ mod fixtures;
 
 use cast_trait_object::DynCastExt;
 use proctor::graph::{stage, Connect, Graph, SinkShape};
+use proctor::elements;
 use proctor::phases::collection;
 use proctor::settings::SourceSetting;
 use std::collections::HashSet;
@@ -69,7 +70,7 @@ async fn test_scenario(focus: HashSet<String>) -> anyhow::Result<(usize, usize)>
     let mut clearinghouse = collection::Clearinghouse::new("clearinghouse");
 
     let pos_stats_fields = focus.clone();
-    let mut pos_stats = stage::Fold::<_, collection::TelemetryData, (usize, usize)>::new("pos_stats", (0, 0), move |(count, sum), data| {
+    let mut pos_stats = stage::Fold::<_, elements::TelemetryData, (usize, usize)>::new("pos_stats", (0, 0), move |(count, sum), data| {
         let delivered = data.keys().cloned().collect::<HashSet<_>>();
         let unexpected = delivered.difference(&pos_stats_fields).collect::<HashSet<_>>();
         assert!(unexpected.is_empty());
