@@ -1,6 +1,7 @@
 use crate::graph::stage::Stage;
 use crate::graph::{GraphResult, Inlet, Outlet, Port};
 use crate::graph::{Shape, SinkShape, SourceShape, ThroughShape};
+use crate::Ack;
 use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
@@ -10,7 +11,6 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use tokio::sync::oneshot;
-use crate::Ack;
 
 pub trait PolicySettings: fmt::Debug {
     fn specification_path(&self) -> PathBuf;
@@ -27,8 +27,8 @@ pub trait PolicyContext: fmt::Debug + Send + Sync {
 
 #[derive(Debug)]
 pub enum PolicyCmd {
-    ReplacePolicy {new_policy: PolicySource, tx: oneshot::Sender<Ack>,},
-    AppendPolicy { policy: PolicySource, tx: oneshot::Sender<Ack>,},
+    ReplacePolicy { new_policy: PolicySource, tx: oneshot::Sender<Ack> },
+    AppendPolicy { policy: PolicySource, tx: oneshot::Sender<Ack> },
     ResetPolicy(oneshot::Sender<Ack>),
 }
 
@@ -240,8 +240,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::GraphError;
     use crate::elements::TelemetryData;
+    use crate::error::GraphError;
     use std::collections::HashMap;
     use tokio::sync::mpsc;
     use tokio_test::block_on;

@@ -1,8 +1,8 @@
 mod fixtures;
 
 use cast_trait_object::DynCastExt;
-use proctor::graph::{stage, Connect, Graph, SinkShape};
 use proctor::elements;
+use proctor::graph::{stage, Connect, Graph, SinkShape};
 use proctor::phases::collection;
 use proctor::settings::SourceSetting;
 use std::collections::HashSet;
@@ -35,7 +35,7 @@ const CAT_FIELD: &str = "cat";
 async fn test_basic_1_clearinghouse_subscription() -> anyhow::Result<()> {
     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
     // fixtures::init_tracing("test_basic_1_clearinghouse_subscription");
-    let main_span = tracing::info_span!("main");
+    let main_span = tracing::info_span!("test_basic_1_clearinghouse_subscription");
     let _main_span_guard = main_span.enter();
 
     let test_focus = maplit::hashset! { POS_FIELD.to_string() };
@@ -52,7 +52,7 @@ async fn test_basic_1_clearinghouse_subscription() -> anyhow::Result<()> {
 async fn test_basic_2_clearinghouse_subscription() -> anyhow::Result<()> {
     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
     // fixtures::init_tracing("test_basic_2_clearinghouse_subscription");
-    let main_span = tracing::info_span!("main");
+    let main_span = tracing::info_span!("test_basic_2_clearinghouse_subscription");
     let _main_span_guard = main_span.enter();
 
     let test_focus = maplit::hashset! { POS_FIELD.to_string(), CAT_FIELD.to_string() };

@@ -3,9 +3,9 @@ mod fixtures;
 use anyhow::Result;
 use cast_trait_object::DynCastExt;
 use chrono::{DateTime, TimeZone, Utc};
+use proctor::elements::TelemetryData;
 use proctor::graph::{stage, Connect, Graph, SinkShape};
 use proctor::phases::collection::make_telemetry_cvs_source;
-use proctor::elements::TelemetryData;
 use proctor::settings::SourceSetting;
 use std::path::PathBuf;
 

@@ -1,11 +1,11 @@
 use anyhow::Result;
 use cast_trait_object::DynCastExt;
 use chrono::{DateTime, TimeZone, Utc};
+use proctor::elements;
 use proctor::graph::stage::{self, tick, Stage};
 use proctor::graph::{Connect, Graph};
 use proctor::graph::{SinkShape, SourceShape, UniformFanInShape};
 use proctor::phases::collection;
-use proctor::elements;
 use proctor::settings::{HttpQuery, SourceSetting};
 use proctor::telemetry::{get_subscriber, init_subscriber};
 use serde::Deserialize;
