@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
+use tokio::sync::oneshot;
+use crate::Ack;
 
 pub trait PolicySettings: fmt::Debug {
     fn specification_path(&self) -> PathBuf;
@@ -21,6 +23,19 @@ pub trait PolicyContext: fmt::Debug + Send + Sync {
     fn load_policy(&self, engine: &mut oso::Oso) -> GraphResult<()>;
     fn initialize(&self, engine: &mut oso::Oso) -> GraphResult<()>;
     fn do_query_rule(&self, engine: &oso::Oso, item_env: (Self::Item, Self::Environment)) -> GraphResult<oso::Query>;
+}
+
+#[derive(Debug)]
+pub enum PolicyCmd {
+    ReplacePolicy {new_policy: PolicySource, tx: oneshot::Sender<Ack>,},
+    AppendPolicy { policy: PolicySource, tx: oneshot::Sender<Ack>,},
+    ResetPolicy(oneshot::Sender<Ack>),
+}
+
+#[derive(Debug)]
+pub enum PolicySource {
+    String(String),
+    File(std::path::PathBuf),
 }
 
 pub struct PolicyFilter<T, E>
@@ -291,9 +306,7 @@ mod tests {
 
     #[test]
     fn test_handle_item() -> anyhow::Result<()> {
-        // let subscriber = crate::telemetry::get_subscriber("proctor", "trace");
-        // crate::telemetry::init_subscriber(subscriber);
-
+        lazy_static::initialize(&crate::telemetry::TEST_TRACING);
         let main_span = tracing::info_span!("policy_filter::test_handle_item");
         let _main_span_guard = main_span.enter();
 

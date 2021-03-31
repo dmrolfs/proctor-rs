@@ -3,6 +3,14 @@ use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
 use tracing_log::LogTracer;
 use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
 
+lazy_static::lazy_static! {
+    pub static ref TEST_TRACING: () = {
+        let filter = if std::env::var("TEST_LOG").is_ok() { "debug" } else { "" };
+        let subscriber = get_subscriber("test", filter);
+        init_subscriber(subscriber);
+    };
+}
+
 /// Compose multiple layers into a `tracing`'s subscriber.
 ///
 /// # Implementation Notes

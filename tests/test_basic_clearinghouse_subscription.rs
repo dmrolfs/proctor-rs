@@ -33,6 +33,7 @@ const CAT_FIELD: &str = "cat";
 /// subscriber only care about `pos` which is not included.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_basic_1_clearinghouse_subscription() -> anyhow::Result<()> {
+    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
     // fixtures::init_tracing("test_basic_1_clearinghouse_subscription");
     let main_span = tracing::info_span!("main");
     let _main_span_guard = main_span.enter();
@@ -49,6 +50,7 @@ async fn test_basic_1_clearinghouse_subscription() -> anyhow::Result<()> {
 /// count and sum are greater as a result.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_basic_2_clearinghouse_subscription() -> anyhow::Result<()> {
+    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
     // fixtures::init_tracing("test_basic_2_clearinghouse_subscription");
     let main_span = tracing::info_span!("main");
     let _main_span_guard = main_span.enter();

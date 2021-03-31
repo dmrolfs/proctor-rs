@@ -499,10 +499,8 @@ mod tests {
 
     #[test]
     fn test_create_with_subscriptions() -> anyhow::Result<()> {
-        // let subscriber = crate::telemetry::get_subscriber("test_create_with_subscriptions", "trace");
-        // crate::telemetry::init_subscriber(subscriber);
-
-        let main_span = tracing::info_span!("test_api_add_subscriptions");
+        lazy_static::initialize(&crate::telemetry::TEST_TRACING);
+        let main_span = tracing::info_span!("test_create_with_subscriptions");
         let _main_span_guard = main_span.enter();
 
         let mut clearinghouse = Clearinghouse::new("test");
@@ -529,9 +527,7 @@ mod tests {
 
     #[test]
     fn test_api_add_subscriptions() -> anyhow::Result<()> {
-        // let subscriber = crate::telemetry::get_subscriber("test_api_add_subscriptions", "trace");
-        // crate::telemetry::init_subscriber(subscriber);
-
+        lazy_static::initialize(&crate::telemetry::TEST_TRACING);
         let main_span = tracing::info_span!("test_api_add_subscriptions");
         let _main_span_guard = main_span.enter();
 
@@ -597,9 +593,7 @@ mod tests {
 
     #[test]
     fn test_api_remove_subscriptions() -> anyhow::Result<()> {
-        // let subscriber = crate::telemetry::get_subscriber("test_api_remove_subscriptions", "trace");
-        // crate::telemetry::init_subscriber(subscriber);
-
+        lazy_static::initialize(&crate::telemetry::TEST_TRACING);
         let main_span = tracing::info_span!("test_api_remove_subscriptions");
         let _main_span_guard = main_span.enter();
 
@@ -655,6 +649,10 @@ mod tests {
 
     #[test]
     fn test_find_interested_subscriptions() {
+        lazy_static::initialize(&crate::telemetry::TEST_TRACING);
+        let main_span = tracing::info_span!("test_find_interested_subscriptions");
+        let _main_span_guard = main_span.enter();
+
         let actual = Clearinghouse::find_interested_subscriptions(&SUBSCRIPTIONS, HashSet::default());
         assert_eq!(actual, Vec::<&TelemetrySubscription>::default());
 
@@ -685,10 +683,8 @@ mod tests {
 
     #[test]
     fn test_fulfill_subscription() {
-        // let subscriber = crate::telemetry::get_subscriber("test_api_remove_subscriptions", "trace");
-        // crate::telemetry::init_subscriber(subscriber);
-
-        let main_span = tracing::info_span!("test_api_remove_subscriptions");
+        lazy_static::initialize(&crate::telemetry::TEST_TRACING);
+        let main_span = tracing::info_span!("test_fulfill_subscription");
         let _main_span_guard = main_span.enter();
 
         for subscriber in 0..=2 {
@@ -704,9 +700,7 @@ mod tests {
 
     #[test]
     fn test_push_to_subscribers() {
-        // let subscriber = crate::telemetry::get_subscriber("test_push_to_subscribers", "trace");
-        // crate::telemetry::init_subscriber(subscriber);
-
+        lazy_static::initialize(&crate::telemetry::TEST_TRACING);
         let main_span = tracing::info_span!("test_push_to_subscribers");
         let _main_span_guard = main_span.enter();
 
