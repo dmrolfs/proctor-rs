@@ -76,7 +76,11 @@ where
         let name = name.into();
         let outlet = Outlet::new(name.clone());
         let items = data.into_iter();
-        Self { name, items: Some(items), outlet }
+        Self {
+            name,
+            items: Some(items),
+            outlet,
+        }
     }
 }
 
@@ -120,7 +124,8 @@ impl<T, I> Shape for Sequence<T, I>
 where
     T: AppData,
     I: Iterator<Item = T> + Send + 'static,
-{}
+{
+}
 
 impl<T, I> SourceShape for Sequence<T, I>
 where

@@ -147,7 +147,7 @@ impl Collect {
         let mut in_bridge = stage::Identity::new(
             format!("{}-trigger-bridge", name),
             bridge_inlet.clone(),
-            Outlet::new("from_collectin_graph"),
+            Outlet::new("from_collection_graph"),
         );
 
         let bridge_outlet = Outlet::new("collection-outlet");

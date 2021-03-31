@@ -1,5 +1,5 @@
-use crate::graph::shape::{Shape, SinkShape, SourceShape, ThroughShape};
 use crate::graph::{GraphResult, Inlet, Outlet, Port, Stage};
+use crate::graph::{Shape, SinkShape, SourceShape, ThroughShape};
 use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;

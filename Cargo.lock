@@ -1526,6 +1526,7 @@ dependencies = [
  "serde_json",
  "serde_test 1.0.125",
  "sonyflake",
+ "static_assertions",
  "thiserror",
  "tokio",
  "tokio-stream",

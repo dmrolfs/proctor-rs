@@ -1,16 +1,17 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::ops::Add;
 use std::str::FromStr;
 
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
 pub struct MetricCatalog {
     pub flow: FlowMetrics,
     pub utilization: UtilizationMetrics,
     pub custom: HashMap<String, String>,
 }
 
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
 pub struct FlowMetrics {
     // this will need to be in context:  historical_input_messages_per_sec: VecDeque<(f32, DateTime<Utc>)>,
     input_messages_per_sec: f32,
@@ -25,7 +26,7 @@ pub struct FlowMetrics {
     pub task_nr_records_out_per_sec: f32,
 }
 
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
 pub struct UtilizationMetrics {
     task_cpu_load: f32,
     network_io_utilization: f32,

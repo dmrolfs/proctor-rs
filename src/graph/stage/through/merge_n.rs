@@ -209,7 +209,7 @@ where
 
         while !active_inlets.is_empty() {
             let available_inlets = active_inlets;
-            tracing::info!(nr_available_inlets=%available_inlets.len(), "1.selecting from active inlets");
+            tracing::info!(nr_available_inlets=%available_inlets.len(), "selecting from active inlets");
 
             tokio::select! {
                 ((inlet_idx, value), target_idx, remaining) = future::select_all(available_inlets) => {

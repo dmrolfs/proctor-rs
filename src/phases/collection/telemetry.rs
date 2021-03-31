@@ -1,4 +1,5 @@
 use crate::graph::GraphResult;
+use oso::PolarClass;
 use serde::ser::SerializeMap;
 use serde::{de, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
@@ -7,8 +8,8 @@ use std::iter::{FromIterator, IntoIterator};
 use std::marker::PhantomData;
 use std::result::Result;
 
-#[derive(Debug, Default, Clone, PartialEq)]
-pub struct TelemetryData(HashMap<String, String>);
+#[derive(PolarClass, Debug, Default, Clone, PartialEq)]
+pub struct TelemetryData(#[polar(attribute)] pub HashMap<String, String>);
 
 impl TelemetryData {
     pub fn new() -> Self {
@@ -71,6 +72,7 @@ impl IntoIterator for TelemetryData {
 
 impl std::ops::Deref for TelemetryData {
     type Target = HashMap<String, String>;
+
     fn deref(&self) -> &Self::Target {
         let inner = &self.0;
         &*inner

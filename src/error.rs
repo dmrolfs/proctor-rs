@@ -223,3 +223,9 @@ impl From<serde_json::Error> for GraphError {
         GraphError::Task(that.into())
     }
 }
+
+impl From<oso::OsoError> for GraphError {
+    fn from(that: oso::OsoError) -> Self {
+        GraphError::Task(that.into())
+    }
+}

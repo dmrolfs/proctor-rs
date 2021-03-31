@@ -27,13 +27,19 @@ pub enum SourceSetting {
 pub struct HttpQuery {
     #[serde(
         rename = "interval_secs",
-        serialize_with = "serialize_duration_secs",
-        deserialize_with = "deserialize_duration_secs"
+        serialize_with = "crate::serde::serialize_duration_secs",
+        deserialize_with = "crate::serde::deserialize_duration_secs"
     )]
     pub interval: Duration,
-    #[serde(serialize_with = "serialize_to_str", deserialize_with = "deserialize_from_str")]
+    #[serde(
+        serialize_with = "crate::serde::serialize_to_str",
+        deserialize_with = "crate::serde::deserialize_from_str"
+    )]
     pub method: Method,
-    #[serde(serialize_with = "serialize_to_str", deserialize_with = "deserialize_from_str")]
+    #[serde(
+        serialize_with = "crate::serde::serialize_to_str",
+        deserialize_with = "crate::serde::deserialize_from_str"
+    )]
     pub url: Url,
     #[serde(default)]
     pub headers: Vec<(String, String)>,
@@ -51,15 +57,20 @@ impl HttpQuery {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EligibilitySettings {
+    pub policy_path: PathBuf,
+}
+
+impl crate::phases::PolicySettings for EligibilitySettings {
+    fn specification_path(&self) -> PathBuf {
+        self.policy_path.clone()
+    }
+}
+
 // #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 // pub struct Settings {
 //     pub eligibility: EligibilitySettings,
-// }
-//
-// #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-// pub struct EligibilitySettings {
-//     pub task_status: GatherSettings,
-//     pub cluster_status: GatherSettings,
 // }
 //
 // #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -96,33 +107,6 @@ impl HttpQuery {
 //         Ok(map)
 //     }
 // }
-
-fn serialize_to_str<T, S>(that: T, serializer: S) -> Result<S::Ok, S::Error>
-where
-    T: AsRef<str>,
-    S: Serializer,
-{
-    serializer.serialize_str(that.as_ref())
-}
-
-fn deserialize_from_str<'de, S, D>(deserializer: D) -> Result<S, D::Error>
-where
-    S: FromStr,
-    S::Err: fmt::Display,
-    D: Deserializer<'de>,
-{
-    let s: String = Deserialize::deserialize(deserializer)?;
-    S::from_str(&s).map_err(de::Error::custom)
-}
-
-fn serialize_duration_secs<S: Serializer>(that: &Duration, serializer: S) -> Result<S::Ok, S::Error> {
-    serializer.serialize_u64(that.as_secs())
-}
-
-fn deserialize_duration_secs<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Duration, D::Error> {
-    let secs: u64 = Deserialize::deserialize(deserializer)?;
-    Ok(Duration::from_secs(secs))
-}
 
 // #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 // #[serde(remote = "HeaderName")]

@@ -3,20 +3,20 @@ use crate::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape, ThroughS
 use crate::phases::collection::TelemetryData;
 use crate::AppData;
 use crate::ProctorResult;
-use serde::Deserialize;
+use serde::de::DeserializeOwned;
 
-pub type FromTelemetryShape<'de, Out> = Box<dyn FromTelemetryStage<'de, Out>>;
-pub trait FromTelemetryStage<'de, Out: AppData + Deserialize<'de>>: Stage + ThroughShape<In = TelemetryData, Out = Out> + 'static {}
-impl<'de, Out: AppData + Deserialize<'de>, T: 'static + Stage + ThroughShape<In = TelemetryData, Out = Out>> FromTelemetryStage<'de, Out> for T {}
+pub type FromTelemetryShape<Out> = Box<dyn FromTelemetryStage<Out>>;
+pub trait FromTelemetryStage<Out: AppData + DeserializeOwned>: Stage + ThroughShape<In = TelemetryData, Out = Out> + 'static {}
+impl<Out: AppData + DeserializeOwned, T: 'static + Stage + ThroughShape<In = TelemetryData, Out = Out>> FromTelemetryStage<Out> for T {}
 
 #[tracing::instrument(
     level="info",
     skip(name),
     fields(stage=%name.as_ref()),
 )]
-pub async fn make_from_telemetry<'de, Out, S>(name: S) -> ProctorResult<FromTelemetryShape<'de, Out>>
+pub async fn make_from_telemetry<Out, S>(name: S) -> ProctorResult<FromTelemetryShape<Out>>
 where
-    Out: AppData + Deserialize<'de>,
+    Out: AppData + DeserializeOwned,
     S: AsRef<str>,
 {
     let mut from_telemetry =
@@ -32,6 +32,6 @@ where
     cg.push_back(Box::new(filter_failures)).await;
     let composite = stage::CompositeThrough::<TelemetryData, Out>::new(name.as_ref(), cg, cg_inlet, cg_outlet).await;
 
-    let result: FromTelemetryShape<'de, Out> = Box::new(composite);
+    let result: FromTelemetryShape<Out> = Box::new(composite);
     Ok(result)
 }

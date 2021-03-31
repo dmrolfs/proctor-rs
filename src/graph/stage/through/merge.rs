@@ -110,17 +110,17 @@ impl<T: AppData> Stage for Merge<T> {
                 Some(t) = rx_0.recv() => {
                     tracing::info!(item=?t, "inlet_0 receiving");
                     let _ = outlet.send(t).await?;
-                }
+                },
 
                 Some(t) = rx_1.recv() => {
                     tracing::info!(item=?t, "inlet_1 receiving");
                     let _ = outlet.send(t).await?;
-                }
+                },
 
                 else => {
                     tracing::warn!("merge done - breaking...");
                     break;
-                }
+                },
             }
         }
 

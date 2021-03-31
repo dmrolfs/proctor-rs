@@ -5,24 +5,23 @@ use cast_trait_object::DynCastExt;
 use chrono::{DateTime, TimeZone, Utc};
 use proctor::graph::{stage, Connect, Graph, SinkShape};
 use proctor::phases::collection::make_telemetry_cvs_source;
-use proctor::settings::SourceSetting;
-use std::path::PathBuf;
-use serde::{Serialize, Deserialize};
 use proctor::phases::make_from_telemetry;
+use proctor::settings::SourceSetting;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Data {
     #[serde(default)]
     #[serde(
-    serialize_with = "proctor::serde::serialize_optional_datetime",
-    deserialize_with = "proctor::serde::deserialize_optional_datetime"
+        serialize_with = "proctor::serde::serialize_optional_datetime",
+        deserialize_with = "proctor::serde::deserialize_optional_datetime"
     )]
     pub last_failure: Option<DateTime<Utc>>,
     pub is_deploying: bool,
     #[serde(with = "proctor::serde")]
     pub last_deployment: DateTime<Utc>,
 }
-
 
 impl Default for Data {
     fn default() -> Self {
