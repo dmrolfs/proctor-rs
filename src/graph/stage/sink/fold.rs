@@ -7,10 +7,18 @@ use cast_trait_object::dyn_upcast;
 use std::fmt;
 use tokio::sync::{mpsc, oneshot};
 
-pub type FoldApi<Acc> = mpsc::UnboundedSender<FoldMsg<Acc>>;
+pub type FoldApi<Acc> = mpsc::UnboundedSender<FoldCmd<Acc>>;
 
-pub enum FoldMsg<Acc: AppData + Clone> {
-    GetAcc { tx: oneshot::Sender<Acc> },
+#[derive(Debug)]
+pub enum FoldCmd<Acc: AppData + Clone> {
+    GetAcc(oneshot::Sender<Acc>),
+}
+
+impl<Acc: AppData + Clone> FoldCmd<Acc> {
+    pub fn get_accumulation() -> (FoldCmd<Acc>, oneshot::Receiver<Acc>) {
+        let (tx, rx) = oneshot::channel();
+        (Self::GetAcc(tx), rx)
+    }
 }
 
 /// A Sink that will invoke the given function for every received element, giving it its previous
@@ -82,7 +90,7 @@ where
     operation: F,
     inlet: Inlet<In>,
     tx_api: FoldApi<Acc>,
-    rx_api: mpsc::UnboundedReceiver<FoldMsg<Acc>>,
+    rx_api: mpsc::UnboundedReceiver<FoldCmd<Acc>>,
     tx_final: Option<oneshot::Sender<Acc>>,
     rx_final: Option<oneshot::Receiver<Acc>>,
 }
@@ -145,13 +153,15 @@ where
                     }
                 },
 
-                Some(msg) = rx_api.recv() => match msg {
-                    FoldMsg::GetAcc { tx } => {
+                Some(cmd) = rx_api.recv() => match cmd {
+                    FoldCmd::GetAcc(tx) => {
                         tracing::info!("handling request for current accumulation...");
                         let resp = &self.acc;
                         tracing::info!(accumulation=?resp,"sending accumulation to sender...");
-                        let result = tx.send(resp.clone());
-                        tracing::info!(send_status=?result,"sent accumulation");
+                        match tx.send(resp.clone()) {
+                            Ok(foo) => tracing::info!(accumulation=?self.acc, "sent accumulation"),
+                            Err(resp) => tracing::warn!(accumulation=?resp, "failed to send accumulation"),
+                        }
                     },
                 },
 
@@ -172,7 +182,11 @@ where
         if let Some(tx_final) = self.tx_final.take() {
             tx_final
                 .send(self.acc.clone())
-                .map_err(|_err| GraphError::Channel("Fold sink final receiver detached. Failed to send accumulation.".to_string()))?;
+                .map_err(|_err| {
+                    GraphError::Channel(
+                        format!("Fold sink final receiver detached. Failed to send accumulation: {:?}", self.acc)
+                    )
+                })?;
         }
 
         Ok(())
@@ -220,6 +234,8 @@ where
         fields(stage=%self.name),
     )]
     async fn run(&mut self) -> GraphResult<()> {
+        let is_attached = self.inlet.is_attached().await;
+        tracing::info!(?self.inlet, %is_attached, "DMR: FOLD INLET INFO");
         self.do_run().await;
         self.complete_fold()
     }
@@ -227,6 +243,7 @@ where
     async fn close(mut self: Box<Self>) -> GraphResult<()> {
         tracing::trace!("closing fold-sink inlet.");
         self.inlet.close().await;
+        self.complete_fold();
         self.rx_api.close();
         Ok(())
     }

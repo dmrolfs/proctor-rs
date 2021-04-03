@@ -27,3 +27,8 @@ pub trait WithApi {
     type Sender;
     fn tx_api(&self) -> Self::Sender;
 }
+
+pub trait WithMonitor {
+    type Receiver;
+    fn rx_monitor(&self) -> Self::Receiver;
+}

@@ -19,19 +19,19 @@ pub struct MetricCatalog {
 pub struct FlowMetrics {
     // this will need to be in context:  historical_input_messages_per_sec: VecDeque<(f32, DateTime<Utc>)>,
     #[polar(attribute)]
-    input_messages_per_sec: f32,
+    pub input_messages_per_sec: f32,
     #[polar(attribute)]
-    input_consumer_lag: f32,
+    pub input_consumer_lag: f32,
     #[polar(attribute)]
-    records_out_per_sec: f32,
+    pub records_out_per_sec: f32,
     #[polar(attribute)]
-    max_message_latency: f32,
+    pub max_message_latency: f32,
     #[polar(attribute)]
-    net_in_utilization: f32,
+    pub net_in_utilization: f32,
     #[polar(attribute)]
-    net_out_utilization: f32,
+    pub net_out_utilization: f32,
     #[polar(attribute)]
-    sink_health_metrics: f32,
+    pub sink_health_metrics: f32,
 
     #[polar(attribute)]
     pub task_nr_records_in_per_sec: f32,
@@ -42,9 +42,9 @@ pub struct FlowMetrics {
 #[derive(PolarClass, Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
 pub struct UtilizationMetrics {
     #[polar(attribute)]
-    task_cpu_load: f32,
+    pub task_cpu_load: f32,
     #[polar(attribute)]
-    network_io_utilization: f32,
+    pub network_io_utilization: f32,
 }
 
 impl MetricCatalog {

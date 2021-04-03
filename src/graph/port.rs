@@ -213,6 +213,7 @@ impl<T: AppData> Inlet<T> {
             if item.is_none() && rx.is_some() {
                 tracing::info!(inlet=%self.0, "Inlet depleted - closing receiver");
                 rx.as_mut().unwrap().close();
+                let _ = rx.take();
             }
 
             item

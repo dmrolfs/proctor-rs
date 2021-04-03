@@ -190,8 +190,27 @@ impl From<tokio::sync::oneshot::error::RecvError> for GraphError {
     }
 }
 
+impl From<tokio::sync::mpsc::error::RecvError> for GraphError {
+    fn from(that: tokio::sync::mpsc::error::RecvError) -> Self {
+        GraphError::Channel(format!("failed to receive mpsc message: {:?}", that))
+    }
+}
+
+impl From<tokio::sync::broadcast::error::RecvError> for GraphError {
+    fn from(that: tokio::sync::broadcast::error::RecvError) -> Self {
+        GraphError::Channel(format!("failed to receive broadcast message: {:?}", that))
+    }
+}
+
 impl<T> From<tokio::sync::mpsc::error::SendError<T>> for GraphError {
     fn from(that: tokio::sync::mpsc::error::SendError<T>) -> Self {
+        //todo: can I make this into anyhow::Error while avoid `T: 'static` requirement?
+        GraphError::Channel(format!("failed to send: {}", that))
+    }
+}
+
+impl<T> From<tokio::sync::broadcast::error::SendError<T>> for GraphError {
+    fn from(that: tokio::sync::broadcast::error::SendError<T>) -> Self {
         //todo: can I make this into anyhow::Error while avoid `T: 'static` requirement?
         GraphError::Channel(format!("failed to send: {}", that))
     }

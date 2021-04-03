@@ -7,7 +7,7 @@ use std::fmt;
 use tokio::sync::{mpsc, oneshot};
 use tracing::Instrument;
 
-pub type ActorSourceApi<T: AppData> = mpsc::UnboundedSender<ActorSourceCmd<T>>;
+pub type ActorSourceApi<T> = mpsc::UnboundedSender<ActorSourceCmd<T>>;
 
 #[derive(Debug)]
 pub enum ActorSourceCmd<T: AppData> {
@@ -85,7 +85,7 @@ impl<T: AppData> Stage for ActorSource<T> {
                     let _ = send_span.enter();
                     match self.outlet().send(item).await {
                         Ok(()) => {
-                            let _ = tx.send(()); // don't care about ack errors
+                            let _ignore_failure = tx.send(());
                             ()
                         }
 
@@ -98,7 +98,7 @@ impl<T: AppData> Stage for ActorSource<T> {
 
                 ActorSourceCmd::Stop(tx) => {
                     tracing::info!("stopping actor source.");
-                    let _ = tx.send(()); // don't care about ack errors
+                    let _ignore_failure = tx.send(());
                     break;
                 }
             }
