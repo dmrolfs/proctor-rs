@@ -130,12 +130,7 @@ where
         self.name.as_str()
     }
 
-    #[tracing::instrument(
-        level="info",
-        name="run map through",
-        skip(self),
-        fields(stage=%self.name),
-    )]
+    #[tracing::instrument(level="info", name="run map through", skip(self),)]
     async fn run(&mut self) -> GraphResult<()> {
         let outlet = &self.outlet;
         // let op = &self.operation;

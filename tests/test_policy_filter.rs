@@ -1,15 +1,13 @@
 mod fixtures;
 
 use oso::{Oso, PolarClass};
-use proctor::elements::{self, PolicyContext, TelemetryData, PolicyFilterEvent};
+use proctor::elements::{self, Policy};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
-use proctor::graph::{Connect, Graph, GraphResult, Port, SinkShape, SourceShape};
+use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
-use std::any::{Any, TypeId};
-
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct TestItem {
@@ -22,13 +20,13 @@ struct TestItem {
 impl TestItem {
     pub fn new(input_messages_per_sec: f64, inbox_lag: u32) -> Self {
         Self {
-            flow: TestFlowMetrics { input_messages_per_sec, },
+            flow: TestFlowMetrics { input_messages_per_sec },
             inbox_lag,
         }
     }
 
-    pub fn input_messages_per_sec(&self) -> f64 {
-        self.flow.input_messages_per_sec
+    pub fn input_messages_per_sec(&self, lag: u32) -> f64 {
+        self.flow.input_messages_per_sec * lag as f64
     }
 }
 
@@ -48,43 +46,40 @@ struct TestEnvironment {
 
 impl TestEnvironment {
     pub fn new(location_code: u32) -> Self {
-        Self { location_code, custom: HashMap::default() }
+        Self {
+            location_code,
+            custom: HashMap::default(),
+        }
     }
 
-    pub fn with_custom(mut self, custom: HashMap<String, String>) -> Self {
+    pub fn with_custom(self, custom: HashMap<String, String>) -> Self {
         Self { custom, ..self }
     }
 }
 
 #[derive(Debug)]
 struct TestPolicy {
-    description: String,
     policy: String,
 }
 
 impl TestPolicy {
-    pub fn new<S0: Into<String>, S1: Into<String>>(description: S0, policy: S1) -> Self {
-        Self {
-            description: description.into(),
-            policy: policy.into(),
-        }
+    pub fn new<S: AsRef<str>>(policy: S) -> Self {
+        let polar = polar_core::polar::Polar::new();
+        polar.load_str(policy.as_ref()).expect("failed to parse policy");
+        Self { policy: policy.as_ref().to_string(), }
     }
 }
 
-impl PolicyContext for TestPolicy {
+impl Policy for TestPolicy {
     type Item = TestItem;
     type Environment = TestEnvironment;
 
-    #[inline]
-    fn description(&self) -> &str {
-        self.description.as_str()
-    }
 
-    fn load_policy(&self, oso: &mut Oso) -> GraphResult<()> {
+    fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
         oso.load_str(self.policy.as_str()).map_err(|err| err.into())
     }
 
-    fn initialize(&self, oso: &mut Oso) -> GraphResult<()> {
+    fn initialize_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
         oso.register_class(
             TestItem::get_polar_class_builder()
                 .name("TestMetricCatalog")
@@ -95,7 +90,7 @@ impl PolicyContext for TestPolicy {
         Ok(())
     }
 
-    fn do_query_rule(&self, oso: &Oso, item_env: (Self::Item, Self::Environment)) -> GraphResult<oso::Query> {
+    fn query_knowledge_base(&self, oso: &Oso, item_env: (Self::Item, Self::Environment)) -> GraphResult<oso::Query> {
         oso.query_rule("eligible", item_env).map_err(|err| err.into())
     }
 }
@@ -111,14 +106,14 @@ struct TestFlow {
 }
 
 impl TestFlow {
-    pub async fn new<S0: Into<String>, S1: Into<String>>(description: S0, policy: S1) -> Self {
+    pub async fn new<S: AsRef<str>>(policy: S) -> Self {
         let mut item_source = stage::ActorSource::<TestItem>::new("item_source");
         let tx_item_source_api = item_source.tx_api();
 
         let mut env_source = stage::ActorSource::<TestEnvironment>::new("env_source");
         let tx_env_source_api = env_source.tx_api();
 
-        let policy = Box::new(TestPolicy::new(description, policy));
+        let policy = Box::new(TestPolicy::new(policy));
         let mut policy_filter = elements::PolicyFilter::new("eligibility", policy);
         let tx_policy_api = policy_filter.tx_api();
         let rx_policy_monitor = policy_filter.rx_monitor();
@@ -139,7 +134,16 @@ impl TestFlow {
         graph.push_back(Box::new(env_source)).await;
         graph.push_back(Box::new(policy_filter)).await;
         graph.push_back(Box::new(sink)).await;
-        let graph_handle = tokio::spawn(async move { graph.run().await.expect("graph run failed") });
+        let graph_handle = tokio::spawn(async move {
+            graph
+                .run()
+                .await
+                .map_err(|err| {
+                    tracing::error!(error=?err, "graph run failed!!");
+                    err
+                })
+                .expect("graph run failed")
+        });
 
         Self {
             graph_handle,
@@ -164,11 +168,19 @@ impl TestFlow {
         ack.await.map_err(|err| err.into())
     }
 
+    pub async fn tell_policy(
+        &self,
+        command_rx: (elements::PolicyFilterCmd<TestEnvironment>, oneshot::Receiver<proctor::Ack>),
+    ) -> GraphResult<proctor::Ack> {
+        self.tx_policy_api.send(command_rx.0)?;
+        command_rx.1.await.map_err(|err| err.into())
+    }
+
     pub async fn recv_policy_event(&mut self) -> GraphResult<elements::PolicyFilterEvent<TestItem, TestEnvironment>> {
         self.rx_policy_monitor.recv().await.map_err(|err| err.into())
     }
 
-    pub async fn inspect_policy(&self) -> GraphResult<elements::PolicyFilterDetail<TestEnvironment>> {
+    pub async fn inspect_filter_environment(&self) -> GraphResult<elements::PolicyFilterDetail<TestEnvironment>> {
         let (cmd, detail) = elements::PolicyFilterCmd::inspect();
         self.tx_policy_api.send(cmd)?;
         detail
@@ -183,8 +195,7 @@ impl TestFlow {
     pub async fn inspect_sink(&self) -> GraphResult<Vec<TestItem>> {
         let (cmd, acc) = stage::FoldCmd::get_accumulation();
         self.tx_sink_api.send(cmd)?;
-        acc
-            .await
+        acc.await
             .map(|a| {
                 tracing::info!(accumulation=?a, "inspected sink accumulation");
                 a
@@ -206,17 +217,37 @@ impl TestFlow {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_policy_filter_before_environment_baseline() -> anyhow::Result<()> {
+    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
+    let main_span = tracing::info_span!("test_before_environment_baseline");
+    let _ = main_span.enter();
+
+    let flow = TestFlow::new(r#"eligible(item, environment) if environment.location_code == 33;"#).await;
+    let item = TestItem {
+        flow: TestFlowMetrics {
+            input_messages_per_sec: 3.1415926535,
+        },
+        inbox_lag: 3,
+    };
+    flow.push_item(item).await?;
+    let actual = flow.inspect_sink().await?;
+    assert!(actual.is_empty());
+
+    flow.close().await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_policy_filter_happy_environment() -> anyhow::Result<()> {
     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
     let main_span = tracing::info_span!("test_policy_filter_w_pass_and_blocks");
     let _ = main_span.enter();
 
-    // -- set up tests
-    let flow = TestFlow::new("by_location", r#"eligible(item, environment) if environment.location_code == 33;"#).await;
+    let flow = TestFlow::new(r#"eligible(item, environment) if environment.location_code == 33;"#).await;
 
     tracing::info!("DMR: 01. Make sure empty env...");
 
-    let detail = flow.inspect_policy().await?;
+    let detail = flow.inspect_filter_environment().await?;
     assert!(detail.environment.is_none());
 
     tracing::info!("DMR: 02. Push environment...");
@@ -226,12 +257,12 @@ async fn test_policy_filter_happy_environment() -> anyhow::Result<()> {
     tracing::info!("DMR: 03. Verify environment set...");
 
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    let detail = flow.inspect_policy().await?;
+    let detail = flow.inspect_filter_environment().await?;
     assert!(detail.environment.is_some());
 
     tracing::info!("DMR: 04. Push Item...");
 
-    let item = TestItem::new(std::f64::consts::PI, 1,);
+    let item = TestItem::new(std::f64::consts::PI, 1);
     flow.push_item(item).await?;
 
     tracing::info!("DMR: 05. Look for Item in sink...");
@@ -253,10 +284,7 @@ async fn test_policy_filter_happy_environment() -> anyhow::Result<()> {
 
     assert_eq!(
         actual,
-        vec![
-            TestItem::new(std::f64::consts::PI, 1),
-            TestItem::new(std::f64::consts::TAU, 2),
-        ]
+        vec![TestItem::new(std::f64::consts::PI, 1), TestItem::new(std::f64::consts::TAU, 2),]
     );
     Ok(())
 }
@@ -267,13 +295,13 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_policy_filter_happy_environment");
     let _ = main_span.enter();
 
-    let mut flow = TestFlow::new("by_location", r#"eligible(item, environment) if environment.location_code == 33;"#).await;
+    let mut flow = TestFlow::new(r#"eligible(item, environment) if environment.location_code == 33;"#).await;
     flow.push_environment(TestEnvironment::new(33)).await?;
     let event = flow.recv_policy_event().await?;
     assert!(matches!(event, elements::PolicyFilterEvent::EnvironmentChanged(_)));
     tracing::info!(?event, "DMR-A: environment changed confirmed");
 
-    let item = TestItem::new(std::f64::consts::PI, 1,);
+    let item = TestItem::new(std::f64::consts::PI, 1);
     flow.push_item(item).await?;
 
     flow.push_environment(TestEnvironment::new(19)).await?;
@@ -299,7 +327,6 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     assert!(matches!(event, elements::PolicyFilterEvent::ItemBlocked(_)));
     tracing::info!(?event, "DMR-E: item dropped confirmed");
 
-
     flow.push_environment(TestEnvironment::new(33)).await?;
     let event = flow.recv_policy_event().await?;
     assert!(matches!(event, elements::PolicyFilterEvent::EnvironmentChanged(_)));
@@ -313,32 +340,163 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     tracing::info!(?actual, "DMR: 08. Verify final accumulation...");
     assert_eq!(
         actual,
+        vec![TestItem::new(std::f64::consts::PI, 1), TestItem::new(std::f64::consts::LN_2, 5),]
+    );
+    Ok(())
+}
+
+// #[tokio::test(flavor="multi_thread", worker_threads = 4)]
+#[tokio::test]
+async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
+    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
+    let main_span = tracing::info_span!("test_policy_w_custom_fields");
+    let _ = main_span.enter();
+
+    let mut flow = TestFlow::new(
+        r#"eligible(item, environment) if
+            c = environment.custom and
+            c.cat = "Otis";"#,
+    )
+        .await;
+
+    flow.push_environment(TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
+        .await?;
+    let event = flow.recv_policy_event().await?;
+    tracing::info!(?event, "verifying environment update...");
+    assert!(matches!(event, elements::PolicyFilterEvent::EnvironmentChanged(_)));
+
+    let item = TestItem::new(std::f64::consts::PI, 1);
+    flow.push_item(item).await?;
+
+    let item = TestItem::new(std::f64::consts::TAU, 2);
+    flow.push_item(item).await?;
+
+    let actual = flow.close().await?;
+    tracing::info!(?actual, "verifying actual result...");
+    assert_eq!(
+        actual,
         vec![
             TestItem::new(std::f64::consts::PI, 1),
-            TestItem::new(std::f64::consts::LN_2, 5),
+            TestItem::new(std::f64::consts::TAU, 2),
+        ],
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_policy_w_item_n_env() -> anyhow::Result<()> {
+    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
+    let main_span = tracing::info_span!("test_policy_w_custom_fields");
+    let _ = main_span.enter();
+
+    tracing::info!("DMR-A:create flow...");
+    // another form for policy that works
+    // r#"
+    //     eligible(item, env) if proper_cat(item, env) and lag_2(item, env);
+    //     proper_cat(_, env) if env.custom.cat = "Otis";
+    //     lag_2(item, _) if item.inbox_lag = 2;
+    // "#,
+    let flow = TestFlow::new(
+        r#"eligible(item, env) if proper_cat(item, env) and lag_2(item, env);
+proper_cat(_, env: TestEnvironment{ custom: { cat: "Otis"} });
+lag_2(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
+    )
+        .await;
+
+    tracing::info!("DMR-B:push env...");
+    flow.push_environment(TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
+        .await?;
+    tracing::info!("DMR-C:verify enviornment...");
+
+    let item = TestItem::new(std::f64::consts::PI, 1);
+    flow.push_item(item).await?;
+
+    let item = TestItem::new(std::f64::consts::TAU, 2);
+    flow.push_item(item).await?;
+
+    let actual = flow.close().await?;
+    tracing::info!(?actual, "verifying actual result...");
+    assert_eq!(
+        actual,
+        vec![TestItem::new(std::f64::consts::TAU, 2),]
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_policy_w_method() -> anyhow::Result<()> {
+    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
+    let main_span = tracing::info_span!("test_policy_w_custom_fields");
+    let _ = main_span.enter();
+
+    let flow = TestFlow::new(
+        r#"eligible(item, env) if
+34 < item.input_messages_per_sec(item.inbox_lag)
+and item.input_messages_per_sec(item.inbox_lag) < 36;"#
+    )
+        .await;
+
+    flow.push_environment(TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
+        .await?;
+
+    let item = TestItem::new(std::f64::consts::PI, 1);
+    flow.push_item(item).await?;
+
+    let item = TestItem::new(17.327, 2);
+    flow.push_item(item).await?;
+
+    let actual = flow.close().await?;
+    tracing::info!(?actual, "verifying actual result...");
+    assert_eq!(
+        actual,
+        vec![TestItem::new(17.327, 2),]
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_replace_policy() -> anyhow::Result<()> {
+    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
+    let main_span = tracing::info_span!("test_policy_w_custom_fields");
+    let _ = main_span.enter();
+
+    let policy_1 = r#"eligible(_, env: TestEnvironment { custom: { cat: "Otis" } });"#;
+    let policy_2 = r#"eligible(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#;
+
+    let flow = TestFlow::new(policy_1).await;
+
+    flow.push_environment(TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
+        .await?;
+
+    let item = TestItem::new(std::f64::consts::PI, 1);
+    flow.push_item(item).await?;
+
+    let item = TestItem::new(17.327, 2);
+    flow.push_item(item).await?;
+
+    tracing::info!("replace policy and re-send");
+    let cmd_rx = elements::PolicyFilterCmd::replace_policy(elements::PolicySource::String(policy_2.to_string()));
+    flow.tell_policy(cmd_rx).await?;
+
+    let item = TestItem::new(std::f64::consts::PI, 1);
+    flow.push_item(item).await?;
+
+    let item = TestItem::new(17.327, 2);
+    flow.push_item(item).await?;
+
+    let actual = flow.close().await?;
+    tracing::info!(?actual, "verifying actual result...");
+    assert_eq!(
+        actual,
+        vec![
+            TestItem::new(std::f64::consts::PI, 1),
+            TestItem::new(17.327, 2),
+            TestItem::new(17.327, 2),
         ]
     );
     Ok(())
 }
 
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn test_policy_filter_before_environment_baseline() -> anyhow::Result<()> {
-    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
-    let main_span = tracing::info_span!("test_before_environment_baseline");
-    let _ = main_span.enter();
-
-    let flow = TestFlow::new("by_location", r#"eligible(item, environment) if environment.location_code == 33;"#).await;
-    let item = TestItem {
-        flow: TestFlowMetrics {
-            input_messages_per_sec: 3.1415926535,
-        },
-        inbox_lag: 3,
-    };
-    flow.push_item(item).await?;
-    let actual = flow.inspect_sink().await?;
-    assert!(actual.is_empty());
-
-    flow.close().await?;
-    Ok(())
-}
+// replace policy
+// add to policy
+// reset policy

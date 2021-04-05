@@ -109,12 +109,7 @@ where
         self.name.as_ref()
     }
 
-    #[tracing::instrument(
-        level="info",
-        name="run foreach sink",
-        skip(self),
-        fields(stage=%self.name),
-    )]
+    #[tracing::instrument(level="info", name="run foreach sink", skip(self),)]
     async fn run(&mut self) -> GraphResult<()> {
         let op = &self.operation;
         while let Some(input) = self.inlet.recv().await {

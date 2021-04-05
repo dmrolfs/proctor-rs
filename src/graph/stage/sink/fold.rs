@@ -127,12 +127,7 @@ where
         self.rx_final.take()
     }
 
-    #[tracing::instrument(
-        level="info",
-        name="do run fold sink",
-        skip(self),
-        fields(stage=%self.name),
-    )]
+    #[tracing::instrument(level="info", name="do run fold sink", skip(self),)]
     async fn do_run(&mut self) {
         let inlet = &mut self.inlet;
         let rx_api = &mut self.rx_api;
@@ -159,7 +154,7 @@ where
                         let resp = &self.acc;
                         tracing::info!(accumulation=?resp,"sending accumulation to sender...");
                         match tx.send(resp.clone()) {
-                            Ok(foo) => tracing::info!(accumulation=?self.acc, "sent accumulation"),
+                            Ok(_) => tracing::info!(accumulation=?self.acc, "sent accumulation"),
                             Err(resp) => tracing::warn!(accumulation=?resp, "failed to send accumulation"),
                         }
                     },
@@ -173,20 +168,12 @@ where
         }
     }
 
-    #[tracing::instrument(
-        level="info",
-        skip(self),
-        fields(stage=%self.name),
-    )]
+    #[tracing::instrument(level="info", skip(self),)]
     fn complete_fold(&mut self) -> GraphResult<()> {
         if let Some(tx_final) = self.tx_final.take() {
             tx_final
                 .send(self.acc.clone())
-                .map_err(|_err| {
-                    GraphError::Channel(
-                        format!("Fold sink final receiver detached. Failed to send accumulation: {:?}", self.acc)
-                    )
-                })?;
+                .map_err(|_err| GraphError::Channel(format!("Fold sink final receiver detached. Failed to send accumulation: {:?}", self.acc)))?;
         }
 
         Ok(())
@@ -227,15 +214,8 @@ where
         self.name.as_ref()
     }
 
-    #[tracing::instrument(
-        level="info",
-        name="run fold sink",
-        skip(self),
-        fields(stage=%self.name),
-    )]
+    #[tracing::instrument(level="info", name="run fold sink", skip(self),)]
     async fn run(&mut self) -> GraphResult<()> {
-        let is_attached = self.inlet.is_attached().await;
-        tracing::info!(?self.inlet, %is_attached, "DMR: FOLD INLET INFO");
         self.do_run().await;
         self.complete_fold()
     }
@@ -243,7 +223,7 @@ where
     async fn close(mut self: Box<Self>) -> GraphResult<()> {
         tracing::trace!("closing fold-sink inlet.");
         self.inlet.close().await;
-        self.complete_fold();
+        self.complete_fold()?;
         self.rx_api.close();
         Ok(())
     }

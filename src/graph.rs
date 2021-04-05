@@ -89,9 +89,11 @@ impl Graph {
 
         futures::future::try_join_all(tasks)
             .instrument(tracing::info_span!("graph_join_all"))
-            .await?
-            .into_iter()
-            .find(|h| h.is_err())
-            .unwrap_or(Ok(()))
+            .await
+            .map_err(|err| {
+                tracing::error!(error=?err, "at least one graph node run failed.");
+                err.into()
+            })
+            .map(|_| ())
     }
 }

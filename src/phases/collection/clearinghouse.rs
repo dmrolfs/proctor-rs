@@ -362,12 +362,7 @@ impl Stage for Clearinghouse {
         self.name.as_str()
     }
 
-    #[tracing::instrument(
-        level="info",
-        name="run clearinghouse",
-        skip(self),
-        fields(stage=%self.name,),
-    )]
+    #[tracing::instrument(level="info", name="run clearinghouse", skip(self),)]
     async fn run(&mut self) -> GraphResult<()> {
         let mut inlet = self.inlet.clone();
         let rx_api = &mut self.rx_api;

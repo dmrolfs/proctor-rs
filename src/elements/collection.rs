@@ -214,12 +214,7 @@ impl Stage for Collect {
         self.name.as_str()
     }
 
-    #[tracing::instrument(
-        level="info",
-        name="run collect source",
-        skip(self),
-        fields(stage=%self.name),
-    )]
+    #[tracing::instrument(level="info", name="run collect source", skip(self),)]
     async fn run(&mut self) -> GraphResult<()> {
         let foo = match self.graph.take() {
             None => Ok(()),

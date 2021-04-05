@@ -5,7 +5,6 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt;
 use tokio::sync::{mpsc, oneshot};
-use tracing::Instrument;
 
 pub type ActorSourceApi<T> = mpsc::UnboundedSender<ActorSourceCmd<T>>;
 
@@ -70,12 +69,7 @@ impl<T: AppData> Stage for ActorSource<T> {
         self.name.as_ref()
     }
 
-    #[tracing::instrument(
-        level="info",
-        name="run actor source",
-        skip(self),
-        fields(stage=%self.name,),
-    )]
+    #[tracing::instrument(level="info", name="run actor source", skip(self),)]
     async fn run(&mut self) -> GraphResult<()> {
         while let Some(command) = self.rx_api.recv().await {
             tracing::info!(?command, "handling command");
@@ -138,8 +132,7 @@ impl<T: AppData> fmt::Debug for ActorSource<T> {
 mod tests {
     use super::*;
     use crate::graph::stage::WithApi;
-    use std::time::Duration;
-    use tokio::sync::{mpsc, oneshot};
+    use tokio::sync::mpsc;
     use tokio_test::block_on;
 
     #[test]
@@ -202,7 +195,7 @@ mod tests {
             let actual = rx.recv().await;
             assert_eq!(actual, None);
 
-            let (cmd, ack) = ActorSourceCmd::push(13_i32);
+            let (cmd, _ack) = ActorSourceCmd::push(13_i32);
             let actual = tx_api.send(cmd);
             assert!(actual.is_err());
         })

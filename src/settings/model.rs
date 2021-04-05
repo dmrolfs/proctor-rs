@@ -4,9 +4,8 @@ use reqwest::{
     header::{HeaderMap, HeaderName, HeaderValue},
     Method, Url,
 };
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;

@@ -5,7 +5,7 @@ use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
 
 lazy_static::lazy_static! {
     pub static ref TEST_TRACING: () = {
-        let filter = if std::env::var("TEST_LOG").is_ok() { "debug" } else { "" };
+        let filter = if std::env::var("TEST_LOG").is_ok() { "trace" } else { "" };
         let subscriber = get_subscriber("test", filter);
         init_subscriber(subscriber);
     };

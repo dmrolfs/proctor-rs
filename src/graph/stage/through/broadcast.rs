@@ -112,12 +112,7 @@ impl<T: AppData + Clone> Stage for Broadcast<T> {
         self.name.as_str()
     }
 
-    #[tracing::instrument(
-        level="info",
-        name="run broadcast through",
-        skip(self),
-        fields(stage=%self.name),
-    )]
+    #[tracing::instrument(level="info", name="run broadcast through", skip(self),)]
     async fn run(&mut self) -> GraphResult<()> {
         let outlets = &self.outlets;
         while let Some(item) = self.inlet.recv().await {

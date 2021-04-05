@@ -186,12 +186,7 @@ where
         self.name.as_ref()
     }
 
-    #[tracing::instrument(
-        level="info",
-        name="run tick source",
-        skip(self),
-        fields(stage=%self.name),
-    )]
+    #[tracing::instrument(level="info", name="run tick source", skip(self),)]
     async fn run(&mut self) -> GraphResult<()> {
         let start = tokio::time::Instant::now() + self.initial_delay;
         let interval = tokio::time::interval_at(start, self.interval);

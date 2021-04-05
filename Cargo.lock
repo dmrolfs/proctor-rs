@@ -1519,6 +1519,7 @@ dependencies = [
  "oso",
  "pin-project",
  "pin-project-lite",
+ "polar-core",
  "rand",
  "reqwest",
  "serde 1.0.125",

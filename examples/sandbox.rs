@@ -1,18 +1,14 @@
 use anyhow::Result;
 use cast_trait_object::DynCastExt;
-use chrono::{DateTime, TimeZone, Utc};
 use proctor::elements;
-use proctor::graph::stage::{self, tick, Stage};
+use proctor::graph::stage;
 use proctor::graph::{Connect, Graph};
-use proctor::graph::{SinkShape, SourceShape, UniformFanInShape};
+use proctor::graph::{SinkShape};
 use proctor::phases::collection;
-use proctor::settings::{HttpQuery, SourceSetting};
+use proctor::settings::SourceSetting;
 use proctor::telemetry::{get_subscriber, init_subscriber};
-use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::PathBuf;
-use std::time::Duration;
-use tokio::sync::oneshot;
 
 #[derive(Debug, Clone, PartialEq)]
 struct Data {
@@ -32,8 +28,8 @@ impl Default for Data {
 }
 
 const POS_FIELD: &str = "pos";
-const VALUE_FIELD: &str = "value";
-const CAT_FIELD: &str = "cat";
+const _VALUE_FIELD: &str = "value";
+const _CAT_FIELD: &str = "cat";
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 16)]
 async fn main() -> Result<()> {
@@ -54,7 +50,11 @@ async fn main() -> Result<()> {
     let mut pos_stats = stage::Fold::<_, elements::TelemetryData, (usize, usize)>::new("pos_stats", (0, 0), move |(count, sum), data| {
         let delivered = data.keys().cloned().collect::<HashSet<_>>();
         let allowed = &pos_stats_fields;
-        let unexpected = delivered.difference(allowed);
+        let unexpected = delivered.difference(allowed).collect::<HashSet<_>>();
+        if !unexpected.is_empty() {
+            tracing::error!(?unexpected, "fields delivered beyond allowed.");
+            panic!("fields fields beyond allowed: {:?}", unexpected);
+        }
         let pos = data.get(POS_FIELD).unwrap().parse::<usize>().expect("failed to parse pos field");
         (count + 1, sum + pos)
     });

@@ -82,12 +82,7 @@ where
         self.name.as_ref()
     }
 
-    #[tracing::instrument(
-        level="info",
-        name="run refreshable source",
-        skip(self),
-        fields(stage=%self.name),
-    )]
+    #[tracing::instrument(level="info", name="run refreshable source", skip(self),)]
     async fn run(&mut self) -> GraphResult<()> {
         let mut done = false;
 

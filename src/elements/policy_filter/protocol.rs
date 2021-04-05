@@ -1,5 +1,5 @@
-use tokio::sync::{mpsc, oneshot, broadcast};
-use crate::{AppData, Ack};
+use crate::{Ack, AppData};
+use tokio::sync::{broadcast, mpsc, oneshot};
 
 pub type PolicyFilterApi<E> = mpsc::UnboundedSender<PolicyFilterCmd<E>>;
 pub type PolicyFilterMonitor<T, E> = broadcast::Receiver<PolicyFilterEvent<T, E>>;
@@ -9,7 +9,7 @@ pub enum PolicyFilterCmd<E> {
     ReplacePolicy { new_policy: PolicySource, tx: oneshot::Sender<Ack> },
     AppendPolicy { policy: PolicySource, tx: oneshot::Sender<Ack> },
     ResetPolicy(oneshot::Sender<Ack>),
-    Inspect(oneshot::Sender<PolicyFilterDetail<E>>)
+    Inspect(oneshot::Sender<PolicyFilterDetail<E>>),
 }
 
 impl<E> PolicyFilterCmd<E> {
@@ -36,7 +36,7 @@ impl<E> PolicyFilterCmd<E> {
 
 #[derive(Debug)]
 pub struct PolicyFilterDetail<E> {
-    pub description: String,
+    pub name: String,
     pub environment: Option<E>,
 }
 
@@ -51,4 +51,3 @@ pub enum PolicySource {
     String(String),
     File(std::path::PathBuf),
 }
-

@@ -129,19 +129,17 @@ where
         self.name.as_str()
     }
 
-    #[tracing::instrument(
-        level="info",
-        name="run filter through",
-        skip(self),
-        fields(stage=%self.name),
-    )]
+    #[tracing::instrument(level="info", name="run filter through", skip(self),)]
     async fn run(&mut self) -> GraphResult<()> {
         let outlet = &self.outlet;
         while let Some(item) = self.inlet.recv().await {
+            let filter_span = tracing::info_span!("filter on item", ?item);
+            let _filter_span_guard = filter_span.enter();
+
             if (self.predicate)(&item) {
                 outlet.send(item).await?;
             } else if self.log_blocks {
-                tracing::error!(stage=%self.name, ?item, "filter blocking item." );
+                tracing::error!(?item, "filter blocking item." );
             }
         }
 
