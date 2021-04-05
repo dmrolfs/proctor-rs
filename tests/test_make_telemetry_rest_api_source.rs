@@ -129,7 +129,7 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
 
     let (tx_stop, rx_stop) = oneshot::channel();
     let stop_handle = tokio::spawn(async move {
-        let run_duration = Duration::from_millis(55);
+        let run_duration = Duration::from_millis(60);
         tracing::info!("tick-stop: waiting {:?} to stop...", run_duration);
         tokio::time::sleep(run_duration).await;
 

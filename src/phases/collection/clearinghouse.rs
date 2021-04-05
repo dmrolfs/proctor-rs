@@ -1,6 +1,6 @@
 use crate::elements::TelemetryData;
 use crate::graph::stage::Stage;
-use crate::graph::{stage, Connect, GraphResult, Inlet, Outlet, Port, Shape, SinkShape, UniformFanOutShape};
+use crate::graph::{stage, Connect, GraphResult, Inlet, Outlet, OutletsShape, Port, Shape, SinkShape, UniformFanOutShape};
 use crate::Ack;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
@@ -80,6 +80,12 @@ pub struct TelemetrySubscription {
     pub outlet_to_subscription: Outlet<TelemetryData>,
 }
 
+impl TelemetrySubscription {
+    pub async fn close(mut self) {
+        self.outlet_to_subscription.close().await;
+    }
+}
+
 impl PartialEq for TelemetrySubscription {
     fn eq(&self, other: &Self) -> bool {
         (self.name == other.name) && (self.fields == other.fields)
@@ -93,7 +99,6 @@ impl PartialEq for TelemetrySubscription {
 pub struct Clearinghouse {
     name: String,
     subscriptions: Vec<TelemetrySubscription>,
-    outlets: Vec<Outlet<TelemetryData>>, // only needed to support UniformFanOutShape::outlets()
     database: TelemetryData,
     inlet: Inlet<TelemetryData>,
     tx_api: ClearinghouseApi,
@@ -109,7 +114,6 @@ impl Clearinghouse {
         Self {
             name,
             subscriptions: Vec::default(),
-            outlets: Vec::default(),
             database: TelemetryData::default(),
             inlet,
             tx_api,
@@ -127,11 +131,8 @@ impl Clearinghouse {
             fields,
             outlet_to_subscription,
         };
-        let nr_outlets = self.outlets.len();
         let nr_subs = self.subscriptions.len();
-        self.outlets.push(subscription.outlet_to_subscription.clone());
         self.subscriptions.push(subscription);
-        assert_eq!(self.outlets.len(), nr_outlets + 1);
         assert_eq!(self.subscriptions.len(), nr_subs + 1);
     }
 
@@ -237,9 +238,9 @@ impl Clearinghouse {
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(subscriptions, database, outlets))]
+    #[tracing::instrument(level = "trace", skip(subscriptions, database))]
     async fn handle_command(
-        command: ClearinghouseCmd, subscriptions: &mut Vec<TelemetrySubscription>, database: &TelemetryData, outlets: &mut Vec<Outlet<TelemetryData>>,
+        command: ClearinghouseCmd, subscriptions: &mut Vec<TelemetrySubscription>, database: &TelemetryData,
     ) -> GraphResult<bool> {
         match command {
             ClearinghouseCmd::GetSnapshot { name, tx } => {
@@ -304,10 +305,6 @@ impl Clearinghouse {
                 };
 
                 tracing::info!(subscriber=?s, "adding telemetry subscriber.");
-
-                // let mut outlets = outlets.lock().await;
-                outlets.push(s.outlet_to_subscription.clone());
-                // let mut subs = subscriptions.lock().await;
                 subscriptions.push(s);
 
                 let _ = tx.send(());
@@ -348,9 +345,10 @@ impl SinkShape for Clearinghouse {
 
 impl UniformFanOutShape for Clearinghouse {
     type Out = TelemetryData;
+
     #[inline]
-    fn outlets(&mut self) -> &mut [Outlet<Self::Out>] {
-        &mut self.outlets
+    fn outlets(&mut self) -> OutletsShape<Self::Out> {
+        self.subscriptions.iter().map(|s| s.outlet_to_subscription.clone()).collect()
     }
 }
 
@@ -362,19 +360,17 @@ impl Stage for Clearinghouse {
         self.name.as_str()
     }
 
-    #[tracing::instrument(level="info", name="run clearinghouse", skip(self),)]
+    #[tracing::instrument(level = "info", name = "run clearinghouse", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
         let mut inlet = self.inlet.clone();
         let rx_api = &mut self.rx_api;
         let database = &mut self.database;
         let subscriptions = &mut self.subscriptions;
-        let outlets = &mut self.outlets;
 
         loop {
             tracing::trace!(
                 nr_subscriptions=%subscriptions.len(),
                 subscriptions=?subscriptions,
-                nr_outlets=%outlets.len(),
                 database=?database,
                 "handling next item.."
             );
@@ -393,7 +389,6 @@ impl Stage for Clearinghouse {
                         command,
                         subscriptions,
                         database,
-                        outlets,
                     )
                     .await?;
 
@@ -415,6 +410,9 @@ impl Stage for Clearinghouse {
     async fn close(mut self: Box<Self>) -> GraphResult<()> {
         tracing::trace!("closing clearinghouse.");
         self.inlet.close().await;
+        for s in self.subscriptions {
+            s.close().await;
+        }
         self.rx_api.close();
         Ok(())
     }
@@ -501,7 +499,6 @@ mod tests {
         let mut clearinghouse = Clearinghouse::new("test");
         assert!(clearinghouse.database.is_empty());
         assert!(clearinghouse.subscriptions.is_empty());
-        assert!(clearinghouse.outlets.is_empty());
         assert_eq!(clearinghouse.name, "test");
 
         let sub1_inlet = Inlet::new("sub1");
@@ -513,7 +510,6 @@ mod tests {
                 .await;
         });
         assert_eq!(clearinghouse.subscriptions.len(), 1);
-        assert_eq!(clearinghouse.outlets.len(), 1);
         block_on(async {
             assert!(sub1_inlet.is_attached().await);
         });

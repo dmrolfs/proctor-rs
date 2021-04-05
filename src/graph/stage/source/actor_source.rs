@@ -69,7 +69,7 @@ impl<T: AppData> Stage for ActorSource<T> {
         self.name.as_ref()
     }
 
-    #[tracing::instrument(level="info", name="run actor source", skip(self),)]
+    #[tracing::instrument(level = "info", name = "run actor source", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
         while let Some(command) = self.rx_api.recv().await {
             tracing::info!(?command, "handling command");

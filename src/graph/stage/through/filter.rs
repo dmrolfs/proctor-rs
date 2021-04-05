@@ -129,7 +129,7 @@ where
         self.name.as_str()
     }
 
-    #[tracing::instrument(level="info", name="run filter through", skip(self),)]
+    #[tracing::instrument(level = "info", name = "run filter through", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
         let outlet = &self.outlet;
         while let Some(item) = self.inlet.recv().await {
@@ -139,7 +139,7 @@ where
             if (self.predicate)(&item) {
                 outlet.send(item).await?;
             } else if self.log_blocks {
-                tracing::error!(?item, "filter blocking item." );
+                tracing::error!(?item, "filter blocking item.");
             }
         }
 

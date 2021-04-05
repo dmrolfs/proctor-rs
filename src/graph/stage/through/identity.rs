@@ -54,7 +54,7 @@ impl<T: AppData + 'static> Stage for Identity<T> {
         self.name.as_str()
     }
 
-    #[tracing::instrument(level="info", name="run identity through", skip(self),)]
+    #[tracing::instrument(level = "info", name = "run identity through", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
         while let Some(value) = self.inlet.recv().await {
             self.outlet.send(value).await?;

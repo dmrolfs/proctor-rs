@@ -1,4 +1,4 @@
-use crate::graph::{GraphResult, Inlet, Outlet, Port, Shape, SinkShape, Stage, UniformFanOutShape};
+use crate::graph::{GraphResult, Inlet, Outlet, OutletsShape, Port, Shape, SinkShape, Stage, UniformFanOutShape};
 use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
@@ -90,9 +90,10 @@ impl<T: AppData + Clone> Shape for Broadcast<T> {}
 
 impl<T: AppData + Clone> UniformFanOutShape for Broadcast<T> {
     type Out = T;
+
     #[inline]
-    fn outlets(&mut self) -> &mut [Outlet<Self::Out>] {
-        self.outlets.as_mut_slice()
+    fn outlets(&mut self) -> OutletsShape<Self::Out> {
+        self.outlets.clone()
     }
 }
 
@@ -112,7 +113,7 @@ impl<T: AppData + Clone> Stage for Broadcast<T> {
         self.name.as_str()
     }
 
-    #[tracing::instrument(level="info", name="run broadcast through", skip(self),)]
+    #[tracing::instrument(level = "info", name = "run broadcast through", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
         let outlets = &self.outlets;
         while let Some(item) = self.inlet.recv().await {

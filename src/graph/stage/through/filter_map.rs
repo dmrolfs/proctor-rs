@@ -150,7 +150,7 @@ where
         self.name.as_str()
     }
 
-    #[tracing::instrument(level="info", name="run filter_map through", skip(self),)]
+    #[tracing::instrument(level = "info", name = "run filter_map through", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
         let outlet = &self.outlet;
         while let Some(item) = self.inlet.recv().await {
@@ -159,7 +159,7 @@ where
             if let Some(value) = (self.filter_map)(item) {
                 outlet.send(value).await?;
             } else if self.log_blocks {
-                tracing::error!("filter_map blocking item." );
+                tracing::error!("filter_map blocking item.");
             }
         }
 

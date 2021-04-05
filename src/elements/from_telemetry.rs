@@ -9,7 +9,7 @@ pub type FromTelemetryShape<Out> = Box<dyn FromTelemetryStage<Out>>;
 pub trait FromTelemetryStage<Out: AppData + DeserializeOwned>: Stage + ThroughShape<In = TelemetryData, Out = Out> + 'static {}
 impl<Out: AppData + DeserializeOwned, T: 'static + Stage + ThroughShape<In = TelemetryData, Out = Out>> FromTelemetryStage<Out> for T {}
 
-#[tracing::instrument(level="info", skip(name),)]
+#[tracing::instrument(level = "info", skip(name))]
 pub async fn make_from_telemetry<Out, S>(name: S) -> ProctorResult<FromTelemetryShape<Out>>
 where
     Out: AppData + DeserializeOwned,

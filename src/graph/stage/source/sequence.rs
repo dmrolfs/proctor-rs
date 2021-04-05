@@ -96,7 +96,7 @@ where
         self.name.as_str()
     }
 
-    #[tracing::instrument(level="info", name="run sequence source", skip(self),)]
+    #[tracing::instrument(level = "info", name = "run sequence source", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
         if let Some(items) = self.items.take() {
             for (count, item) in items.enumerate() {

@@ -38,7 +38,7 @@ where
         self.name.as_ref()
     }
 
-    #[tracing::instrument(level="info", name="run logging sink", skip(self),)]
+    #[tracing::instrument(level = "info", name = "run logging sink", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
         while let Some(input) = self.inlet.recv().await {
             tracing::warn!("in graph sink: {:?}", input);

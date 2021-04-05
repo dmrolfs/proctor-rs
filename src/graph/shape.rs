@@ -87,7 +87,9 @@ pub trait UniformFanInShape: Shape + SourceShape {
     fn inlets(&mut self) -> InletsShape<Self::In>;
 }
 
+pub type OutletsShape<T> = Vec<Outlet<T>>;
+
 pub trait UniformFanOutShape: Shape + SinkShape {
     type Out: AppData;
-    fn outlets(&mut self) -> &mut [Outlet<Self::Out>];
+    fn outlets(&mut self) -> OutletsShape<Self::Out>;
 }

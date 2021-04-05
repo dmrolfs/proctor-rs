@@ -127,7 +127,7 @@ where
         self.rx_final.take()
     }
 
-    #[tracing::instrument(level="info", name="do run fold sink", skip(self),)]
+    #[tracing::instrument(level = "info", name = "do run fold sink", skip(self))]
     async fn do_run(&mut self) {
         let inlet = &mut self.inlet;
         let rx_api = &mut self.rx_api;
@@ -168,7 +168,7 @@ where
         }
     }
 
-    #[tracing::instrument(level="info", skip(self),)]
+    #[tracing::instrument(level = "info", skip(self))]
     fn complete_fold(&mut self) -> GraphResult<()> {
         if let Some(tx_final) = self.tx_final.take() {
             tx_final
@@ -214,7 +214,7 @@ where
         self.name.as_ref()
     }
 
-    #[tracing::instrument(level="info", name="run fold sink", skip(self),)]
+    #[tracing::instrument(level = "info", name = "run fold sink", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
         self.do_run().await;
         self.complete_fold()

@@ -200,23 +200,19 @@ where
     T: AppData + Clone,
     E: AppData + Clone,
 {
-    #[tracing::instrument(level="info", name="make policy knowledge base", skip(self))]
+    #[tracing::instrument(level = "info", name = "make policy knowledge base", skip(self))]
     fn oso(&self) -> GraphResult<Oso> {
         let mut oso = Oso::new();
 
-        self.policy_context.
-            load_knowledge_base(&mut oso)
-            .map_err(|err| {
-                tracing::error!(error=?err, "failed to load policy into knowledge base.");
-                err
-            })?;
+        self.policy_context.load_knowledge_base(&mut oso).map_err(|err| {
+            tracing::error!(error=?err, "failed to load policy into knowledge base.");
+            err
+        })?;
 
-        self.policy_context
-            .initialize_knowledge_base(&mut oso)
-            .map_err(|err| {
-                tracing::error!(error=?err, "failed to initialize policy knowledge base.");
-                err
-            })?;
+        self.policy_context.initialize_knowledge_base(&mut oso).map_err(|err| {
+            tracing::error!(error=?err, "failed to initialize policy knowledge base.");
+            err
+        })?;
 
         Ok(oso)
     }
@@ -228,7 +224,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name="policy_filter handle item", skip(oso, outlet), fields())]
+    #[tracing::instrument(level = "info", name = "policy_filter handle item", skip(oso, outlet), fields())]
     async fn handle_item(
         item: T, environment: &E, context: &Box<dyn Policy<Item = T, Environment = E>>, oso: &Oso, outlet: &Outlet<T>,
         tx: &broadcast::Sender<PolicyFilterEvent<T, E>>,
@@ -243,7 +239,12 @@ where
 
         match result {
             Some(Ok(result_set)) => {
-                tracing::info!(?result_set, ?item, ?environment, "item passed policy review. sending via outlet...");
+                tracing::info!(
+                    ?result_set,
+                    ?item,
+                    ?environment,
+                    "item and environment passed policy review - sending via outlet."
+                );
                 outlet
                     .send(item.clone())
                     .instrument(tracing::info_span!("PolicyFilter.outlet send", ?item))
@@ -252,27 +253,27 @@ where
             }
 
             Some(Err(err)) => {
-                tracing::warn!(?item, ?environment, "error in policy review - skipping item.");
+                tracing::warn!(error=?err, ?item, ?environment, "error in policy review - skipping item.");
                 PolicyFilter::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
                 Err(err.into())
             }
 
             None => {
-                tracing::info!(?item, ?environment, "empty result from policy review - skipping item.");
+                tracing::info!(?item, ?environment, "item and environment did not pass policy review - skipping item.");
                 PolicyFilter::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
                 Ok(())
             }
         }
     }
 
-    #[tracing::instrument(level = "info", name="policy_filter handle item before env set", skip(tx), fields())]
+    #[tracing::instrument(level = "info", name = "policy_filter handle item before env set", skip(tx), fields())]
     fn handle_item_before_env(item: T, tx: &broadcast::Sender<PolicyFilterEvent<T, E>>) -> GraphResult<()> {
         tracing::info!(?item, "dropping item received before policy environment set.");
         PolicyFilter::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name="policy_filter handle environment", skip(tx), fields())]
+    #[tracing::instrument(level = "info", name = "policy_filter handle environment", skip(tx), fields())]
     async fn handle_environment(environment: Arc<Mutex<Option<E>>>, recv_env: E, tx: &broadcast::Sender<PolicyFilterEvent<T, E>>) -> GraphResult<()> {
         tracing::trace!(recv_environment=?recv_env, "handling policy environment update...");
         let mut env = environment.lock().await;
@@ -282,7 +283,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name="policy_filter handle command", skip(oso, policy_context,), fields())]
+    #[tracing::instrument(level = "info", name = "policy_filter handle command", skip(oso, policy_context,), fields())]
     async fn handle_command(
         command: PolicyFilterCmd<E>, oso: &mut Oso, name: &str, policy_context: &Box<dyn Policy<Item = T, Environment = E>>,
         environment: std::sync::Arc<tokio::sync::Mutex<Option<E>>>,
@@ -377,11 +378,11 @@ where
 mod tests {
     use super::*;
     use crate::error::GraphError;
+    use oso::PolarClass;
+    use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
     use tokio::sync::mpsc;
     use tokio_test::block_on;
-    use oso::PolarClass;
-    use serde::{Serialize, Deserialize};
 
     // Make sure the `PolicyFilter` object is threadsafe
     // #[test]
@@ -408,9 +409,7 @@ mod tests {
 
     impl TestPolicy {
         pub fn new<S: Into<String>>(policy: S) -> Self {
-            Self {
-                policy: policy.into(),
-            }
+            Self { policy: policy.into() }
         }
     }
 

@@ -195,7 +195,7 @@ where
         self.name.as_str()
     }
 
-    #[tracing::instrument(level="info", name="run merge through", skip(self),)]
+    #[tracing::instrument(level = "info", name = "run merge through", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
         let mut active_inlets = MergeN::initialize_active_inlets(self.inlets()).await;
         let outlet = &self.outlet;
@@ -239,7 +239,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level="info", name="close MergeN through", skip(self),)]
+    #[tracing::instrument(level = "info", name = "close MergeN through", skip(self))]
     async fn close(mut self: Box<Self>) -> GraphResult<()> {
         self.inlets.close().await;
         self.outlet.close().await;
