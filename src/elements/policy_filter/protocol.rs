@@ -51,3 +51,13 @@ pub enum PolicySource {
     String(String),
     File(std::path::PathBuf),
 }
+
+impl PolicySource {
+    pub fn load_into(&self, oso: &oso::Oso) -> crate::graph::GraphResult<()> {
+        let result = match self {
+            PolicySource::String(policy) => oso.load_str(policy.as_str()),
+            PolicySource::File(policy) => oso.load_file(policy),
+        };
+        result.map_err(|err| err.into())
+    }
+}

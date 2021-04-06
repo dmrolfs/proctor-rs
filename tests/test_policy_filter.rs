@@ -1,15 +1,16 @@
 mod fixtures;
 
+use chrono::*;
 use oso::{Oso, PolarClass};
 use proctor::elements::{self, Policy};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::ops::{Add, Sub};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
-use chrono::*;
-use std::ops::{Add, Sub};
+use proctor::ProctorContext;
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct TestItem {
@@ -53,8 +54,7 @@ struct TestFlowMetrics {
 struct TestEnvironment {
     #[polar(attribute)]
     pub location_code: u32,
-    #[polar(attribute)]
-    pub custom: HashMap<String, String>,
+    custom: HashMap<String, String>,
 }
 
 impl TestEnvironment {
@@ -68,6 +68,10 @@ impl TestEnvironment {
     pub fn with_custom(self, custom: HashMap<String, String>) -> Self {
         Self { custom, ..self }
     }
+}
+
+impl proctor::ProctorContext for TestEnvironment {
+    fn custom(&self) -> HashMap<String, String> { self.custom.clone() }
 }
 
 #[derive(Debug)]
@@ -99,6 +103,14 @@ impl Policy for TestPolicy {
                 .name("TestMetricCatalog")
                 .add_method("input_messages_per_sec", TestItem::input_messages_per_sec)
                 .add_method("within_seconds", TestItem::within_seconds)
+                .build(),
+        )?;
+
+        oso.register_class(
+            TestEnvironment::get_polar_class_builder()
+                .name("TestEnvironment")
+                .add_method("custom", ProctorContext::custom)
+                // .add_method("custom", |env: &TestEnvironment| env.custom() )
                 .build(),
         )?;
 
@@ -285,7 +297,7 @@ async fn test_policy_filter_happy_environment() -> anyhow::Result<()> {
 
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     let actual = flow.inspect_sink().await?;
-    assert_eq!(actual, vec![TestItem::new(std::f64::consts::PI, ts,1),]);
+    assert_eq!(actual, vec![TestItem::new(std::f64::consts::PI, ts, 1),]);
 
     tracing::info!("DMR: 06. Push another Item...");
 
@@ -371,7 +383,7 @@ async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
 
     let mut flow = TestFlow::new(
         r#"eligible(item, environment) if
-            c = environment.custom and
+            c = environment.custom() and
             c.cat = "Otis";"#,
     )
     .await;
@@ -413,7 +425,7 @@ async fn test_policy_w_item_n_env() -> anyhow::Result<()> {
     // "#,
     let flow = TestFlow::new(
         r#"eligible(item, env) if proper_cat(item, env) and lag_2(item, env);
-proper_cat(_, env: TestEnvironment{ custom: { cat: "Otis"} });
+proper_cat(_, env) if env.custom().cat = "Otis";
 lag_2(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
     )
     .await;
@@ -471,16 +483,11 @@ async fn test_replace_policy() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_policy_w_custom_fields");
     let _ = main_span.enter();
 
-    let boundary_naive = chrono::NaiveDateTime::new(
-        chrono::NaiveDate::from_ymd(2021,04,05),
-        chrono::NaiveTime::from_hms(22,39,00)
-    );
-
     let boundary_age_secs = 60 * 60;
     let good_ts = Utc::now();
     let too_old_ts = Utc::now() - chrono::Duration::seconds(boundary_age_secs + 5);
 
-    let policy_1 = r#"eligible(_, env: TestEnvironment { custom: { cat: "Otis" } });"#;
+    let policy_1 = r#"eligible(_, env: TestEnvironment) if env.custom().cat = "Otis";"#;
     let policy_2 = format!("eligible(item, _) if item.within_seconds({});", boundary_age_secs);
     tracing::info!(?policy_2, "DMR: policy with timestamp");
 
@@ -506,7 +513,11 @@ async fn test_replace_policy() -> anyhow::Result<()> {
     tracing::info!(?actual, "verifying actual result...");
     assert_eq!(
         actual,
-        vec![TestItem::new(std::f64::consts::PI, too_old_ts, 1), TestItem::new(17.327, good_ts, 2), TestItem::new(17.327, good_ts, 2),]
+        vec![
+            TestItem::new(std::f64::consts::PI, too_old_ts, 1),
+            TestItem::new(17.327, good_ts, 2),
+            TestItem::new(17.327, good_ts, 2),
+        ]
     );
     Ok(())
 }
@@ -518,7 +529,7 @@ async fn test_append_policy() -> anyhow::Result<()> {
     let _ = main_span.enter();
 
     let policy_1 = r#"eligible(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#;
-    let policy_2 = r#"eligible(_, env: TestEnvironment { custom: { cat: "Otis" } });"#;
+    let policy_2 = r#"eligible(_, env: TestEnvironment) if env.custom().cat = "Otis";"#;
 
     let flow = TestFlow::new(policy_1).await;
 
@@ -546,7 +557,11 @@ async fn test_append_policy() -> anyhow::Result<()> {
     tracing::info!(?actual, "verifying actual result...");
     assert_eq!(
         actual,
-        vec![TestItem::new(17.327, ts, 2), TestItem::new(std::f64::consts::PI, ts, 1), TestItem::new(17.327, ts, 2),]
+        vec![
+            TestItem::new(17.327, ts, 2),
+            TestItem::new(std::f64::consts::PI, ts, 1),
+            TestItem::new(17.327, ts, 2),
+        ]
     );
     Ok(())
 }
@@ -558,7 +573,7 @@ async fn test_reset_policy() -> anyhow::Result<()> {
     let _ = main_span.enter();
 
     let policy_1 = r#"eligible(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#;
-    let policy_2 = r#"eligible(_, env: TestEnvironment { custom: { cat: "Otis" } });"#;
+    let policy_2 = r#"eligible(_, env) if env.custom().cat = "Otis";"#;
 
     let flow = TestFlow::new(policy_1).await;
 

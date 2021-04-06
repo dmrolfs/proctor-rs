@@ -61,7 +61,7 @@ enum-display-derive = "0.1"
 rand = "0.8"
 oso = "0.11"
 polar-core = "0.11"
-app_data_derive = { path = "app_data_derive" }
+proctor_derive = { path = "proctor_derive" }
 clap = { version = "3.0.0-beta.2", features = ["yaml"] }
 csv = "1.1"
 toml = "0.5.8"

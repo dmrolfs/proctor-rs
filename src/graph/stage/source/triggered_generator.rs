@@ -6,7 +6,7 @@
 ///
 /// ```rust
 /// #[macro_use]
-/// extern crate app_data_derive;
+/// extern crate proctor_derive;
 ///
 /// use proctor::elements::TelemetryData;
 /// use proctor::error::GraphError;

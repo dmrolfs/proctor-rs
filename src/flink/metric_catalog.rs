@@ -88,7 +88,7 @@ impl Add<&Self> for MetricCatalog {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::elements::Metric;
+    // use crate::elements::Metric;
 
     #[derive(PartialEq, Debug)]
     struct Bar(String);
@@ -138,12 +138,12 @@ mod tests {
         assert_eq!(d2.custom, exp2);
     }
 
-    #[test]
-    fn test_metric_to_f32() {
-        let expected = 3.14159_f32;
-        let m: Metric<f32> = Metric::new("pi", expected);
-
-        let actual: f32 = m.into();
-        assert_eq!(actual, expected);
-    }
+    // #[test]
+    // fn test_metric_to_f32() {
+    //     let expected = 3.14159_f32;
+    //     let m: Metric<f32> = Metric::new("pi", expected);
+    //
+    //     let actual: f32 = m.into();
+    //     assert_eq!(actual, expected);
+    // }
 }

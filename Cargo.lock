@@ -25,14 +25,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28b2cd92db5cbd74e8e5028f7e27dd7aa3090e89e4f2a197cc7c8dfb69c7063b"
 
 [[package]]
-name = "app_data_derive"
-version = "0.1.0"
-dependencies = [
- "quote",
- "syn",
-]
-
-[[package]]
 name = "arrayref"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1499,7 +1491,6 @@ name = "proctor"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "app_data_derive",
  "async-stream",
  "async-trait",
  "cast_trait_object",
@@ -1520,6 +1511,7 @@ dependencies = [
  "pin-project",
  "pin-project-lite",
  "polar-core",
+ "proctor_derive",
  "rand",
  "reqwest",
  "serde 1.0.125",
@@ -1539,6 +1531,14 @@ dependencies = [
  "tracing-log",
  "tracing-subscriber",
  "uuid",
+]
+
+[[package]]
+name = "proctor_derive"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn",
 ]
 
 [[package]]

@@ -1,5 +1,5 @@
 [package]
-name = "app_data_derive"
+name = "proctor_derive"
 version = "0.1.0"
 authors = ["Damon Rolfs <drolfs@gmail.com>"]
 edition = "2018"

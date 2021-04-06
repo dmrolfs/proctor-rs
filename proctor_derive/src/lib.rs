@@ -17,3 +17,17 @@ fn impl_app_data_macro(ast: &syn::DeriveInput) -> TokenStream {
     };
     gen.into()
 }
+
+#[proc_macro_derive(ProctorContext)]
+pub fn proctor_context_derive(input: TokenStream) -> TokenStream {
+    let ast = syn::parse(input).unwrap();
+    impl_proctor_context_macro(&ast)
+}
+
+fn impl_proctor_context_macro(ast: &syn::DeriveInput) -> TokenStream {
+    let name = &ast.ident;
+    let gen = quote! {
+        impl ProctorContext for #name {}
+    };
+    gen.into()
+}

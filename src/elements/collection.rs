@@ -17,7 +17,7 @@ use std::fmt;
 ///
 /// ```
 /// #[macro_use]
-/// extern crate app_data_derive;
+/// extern crate proctor_derive;
 ///
 /// use proctor::AppData;
 /// use proctor::elements;

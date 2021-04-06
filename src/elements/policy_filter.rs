@@ -33,7 +33,7 @@ where
     E: AppData + Clone,
 {
     name: String,
-    policy_context: Box<dyn Policy<Item = T, Environment = E> + 'static>,
+    policy: Box<dyn Policy<Item = T, Environment = E> + 'static>,
     environment_inlet: Inlet<E>,
     inlet: Inlet<T>,
     outlet: Outlet<T>,
@@ -59,7 +59,7 @@ where
         let (tx_monitor, _) = broadcast::channel(num_cpus::get() * 2);
         Self {
             name,
-            policy_context: policy,
+            policy: policy,
             environment_inlet,
             inlet,
             outlet,
@@ -137,9 +137,9 @@ where
         let outlet = &self.outlet;
         let item_inlet = &mut self.inlet;
         let env_inlet = &mut self.environment_inlet;
-        let context = &self.policy_context;
+        let context = &self.policy;
         let environment: Arc<Mutex<Option<E>>> = Arc::new(Mutex::new(None));
-        let policy_context = &self.policy_context;
+        let policy_context = &self.policy;
         let rx_api = &mut self.rx_api;
         let tx_monitor = &self.tx_monitor;
 
@@ -204,12 +204,12 @@ where
     fn oso(&self) -> GraphResult<Oso> {
         let mut oso = Oso::new();
 
-        self.policy_context.load_knowledge_base(&mut oso).map_err(|err| {
+        self.policy.load_knowledge_base(&mut oso).map_err(|err| {
             tracing::error!(error=?err, "failed to load policy into knowledge base.");
             err
         })?;
 
-        self.policy_context.initialize_knowledge_base(&mut oso).map_err(|err| {
+        self.policy.initialize_knowledge_base(&mut oso).map_err(|err| {
             tracing::error!(error=?err, "failed to initialize policy knowledge base.");
             err
         })?;
@@ -360,10 +360,10 @@ where
     T: AppData + Clone,
     E: AppData + Clone,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("PolicyFilter")
             .field("name", &self.name)
-            .field("policy_context", &self.policy_context)
+            .field("policy_context", &self.policy)
             .field("environment_inlet", &self.environment_inlet)
             .field("inlet", &self.inlet)
             .field("outlet", &self.outlet)
@@ -465,7 +465,7 @@ mod tests {
                 },
             };
 
-            PolicyFilter::handle_item(item, &env, &policy_filter.policy_context, &oso, &outlet, &tx_monitor)
+            PolicyFilter::handle_item(item, &env, &policy_filter.policy, &oso, &outlet, &tx_monitor)
                 .await
                 .expect("handle_item failed");
 
