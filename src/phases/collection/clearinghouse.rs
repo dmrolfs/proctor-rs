@@ -143,10 +143,10 @@ impl Clearinghouse {
         match data {
             Some(d) => {
                 let updated_fields = d.iter().map(|(k, _)| k.to_string()).collect::<HashSet<_>>();
-                let interested = Clearinghouse::find_interested_subscriptions(subscriptions, updated_fields);
+                let interested = Self::find_interested_subscriptions(subscriptions, updated_fields);
 
                 database.extend(d);
-                Clearinghouse::push_to_subscribers(database, interested).await?;
+                Self::push_to_subscribers(database, interested).await?;
 
                 Ok(true)
             }
@@ -185,7 +185,7 @@ impl Clearinghouse {
         let nr_subscribers = subscribers.len();
         let fulfilled = subscribers
             .into_iter()
-            .map(|s| Clearinghouse::fulfill_subscription(&s.name, &s.fields, database).map(|fulfillment| (s, fulfillment)))
+            .map(|s| Self::fulfill_subscription(&s.name, &s.fields, database).map(|fulfillment| (s, fulfillment)))
             .flatten()
             .map(|(s, fulfillment)| {
                 let o = &s.outlet_to_subscription;
@@ -338,8 +338,8 @@ impl Shape for Clearinghouse {}
 impl SinkShape for Clearinghouse {
     type In = TelemetryData;
     #[inline]
-    fn inlet(&mut self) -> &mut Inlet<Self::In> {
-        &mut self.inlet
+    fn inlet(&self) -> Inlet<Self::In> {
+        self.inlet.clone()
     }
 }
 
@@ -347,7 +347,7 @@ impl UniformFanOutShape for Clearinghouse {
     type Out = TelemetryData;
 
     #[inline]
-    fn outlets(&mut self) -> OutletsShape<Self::Out> {
+    fn outlets(&self) -> OutletsShape<Self::Out> {
         self.subscriptions.iter().map(|s| s.outlet_to_subscription.clone()).collect()
     }
 }
@@ -377,7 +377,7 @@ impl Stage for Clearinghouse {
 
             tokio::select! {
                 data = inlet.recv() => {
-                    let cont_loop = Clearinghouse::handle_telemetry_data(data, subscriptions, database).await?;
+                    let cont_loop = Self::handle_telemetry_data(data, subscriptions, database).await?;
 
                     if !cont_loop {
                         break;
@@ -385,7 +385,7 @@ impl Stage for Clearinghouse {
                 },
 
                 Some(command) = rx_api.recv() => {
-                    let cont_loop = Clearinghouse::handle_command(
+                    let cont_loop = Self::handle_command(
                         command,
                         subscriptions,
                         database,

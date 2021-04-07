@@ -22,74 +22,113 @@ pub trait Port: fmt::Debug + Send {
 
 #[async_trait]
 pub trait Connect<T: AppData> {
-    async fn connect(&mut self);
+    async fn connect(self);
 }
 
+// #[async_trait]
+// impl<T: AppData> Connect<T> for (&mut Outlet<T>, &mut Inlet<T>) {
+//     async fn connect(&mut self) {
+//         connect_out_to_in(self.0, self.1).await
+//     }
+// }
+//
+// #[async_trait]
+// impl<T: AppData> Connect<T> for (&mut Outlet<T>, &Inlet<T>) {
+//     async fn connect(&mut self) {
+//         let mut inlet = self.1.clone();
+//         connect_out_to_in(self.0, &mut inlet).await
+//     }
+// }
+//
+// #[async_trait]
+// impl<T: AppData> Connect<T> for (&Outlet<T>, &mut Inlet<T>) {
+//     async fn connect(&mut self) {
+//         let mut outlet = self.0.clone();
+//         connect_out_to_in(&mut outlet, self.1).await
+//     }
+// }
+//
+// #[async_trait]
+// impl<T: AppData> Connect<T> for (&mut Inlet<T>, &Outlet<T>) {
+//     async fn connect(&mut self) {
+//         let mut outlet = self.1.clone();
+//         connect_out_to_in(&mut outlet, self.0).await
+//     }
+// }
+//
+// #[async_trait]
+// impl<T: AppData> Connect<T> for (&Inlet<T>, &mut Outlet<T>) {
+//     async fn connect(&mut self) {
+//         let mut inlet = self.0.clone();
+//         connect_out_to_in(self.1, &mut inlet).await
+//     }
+// }
+//
+// #[async_trait]
+// impl<T: AppData> Connect<T> for (&mut Inlet<T>, &mut Outlet<T>) {
+//     async fn connect(&mut self) {
+//         connect_out_to_in(self.1, self.0).await
+//     }
+// }
+//
+// #[async_trait]
+// impl<T: AppData> Connect<T> for (&Inlet<T>, &Outlet<T>) {
+//     async fn connect(&mut self) {
+//         let mut outlet = self.1.clone();
+//         let mut inlet = self.0.clone();
+//         connect_out_to_in(&mut outlet, &mut inlet).await
+//     }
+// }
+//
+// #[async_trait]
+// impl<T: AppData> Connect<T> for (&Outlet<T>, &Inlet<T>) {
+//     async fn connect(&mut self) {
+//         let mut outlet = self.0.clone();
+//         let mut inlet = self.1.clone();
+//         connect_out_to_in(&mut outlet, &mut inlet).await
+//     }
+// }
+
+
 #[async_trait]
-impl<T: AppData> Connect<T> for (&mut Outlet<T>, &mut Inlet<T>) {
-    async fn connect(&mut self) {
-        connect_out_to_in(self.0, self.1).await
+impl<T: AppData> Connect<T> for (Outlet<T>, Inlet<T>) {
+    async fn connect(mut self) {
+        let mut outlet = self.0;
+        let mut inlet = self.1;
+        connect_out_to_in(outlet, inlet).await
     }
 }
 
 #[async_trait]
-impl<T: AppData> Connect<T> for (&mut Outlet<T>, &Inlet<T>) {
-    async fn connect(&mut self) {
-        let mut inlet = self.1.clone();
-        connect_out_to_in(self.0, &mut inlet).await
-    }
-}
-
 #[async_trait]
-impl<T: AppData> Connect<T> for (&Outlet<T>, &mut Inlet<T>) {
-    async fn connect(&mut self) {
+impl<T: AppData> Connect<T> for (&Outlet<T>, &Inlet<T>) {
+    async fn connect(mut self) {
         let mut outlet = self.0.clone();
-        connect_out_to_in(&mut outlet, self.1).await
+        let mut inlet = self.1.clone();
+        connect_out_to_in(outlet, inlet).await
     }
 }
 
 #[async_trait]
-impl<T: AppData> Connect<T> for (&mut Inlet<T>, &Outlet<T>) {
-    async fn connect(&mut self) {
-        let mut outlet = self.1.clone();
-        connect_out_to_in(&mut outlet, self.0).await
+impl<T: AppData> Connect<T> for (Inlet<T>, Outlet<T>) {
+    async fn connect(mut self) {
+        let mut outlet = self.1;
+        let mut inlet = self.0;
+        connect_out_to_in(outlet, inlet).await
     }
 }
 
-#[async_trait]
-impl<T: AppData> Connect<T> for (&Inlet<T>, &mut Outlet<T>) {
-    async fn connect(&mut self) {
-        let mut inlet = self.0.clone();
-        connect_out_to_in(self.1, &mut inlet).await
-    }
-}
-
-#[async_trait]
-impl<T: AppData> Connect<T> for (&mut Inlet<T>, &mut Outlet<T>) {
-    async fn connect(&mut self) {
-        connect_out_to_in(self.1, self.0).await
-    }
-}
 
 #[async_trait]
 impl<T: AppData> Connect<T> for (&Inlet<T>, &Outlet<T>) {
-    async fn connect(&mut self) {
+    async fn connect(mut self) {
         let mut outlet = self.1.clone();
         let mut inlet = self.0.clone();
-        connect_out_to_in(&mut outlet, &mut inlet).await
+        connect_out_to_in(outlet, inlet).await
     }
 }
 
-#[async_trait]
-impl<T: AppData> Connect<T> for (&Outlet<T>, &Inlet<T>) {
-    async fn connect(&mut self) {
-        let mut outlet = self.0.clone();
-        let mut inlet = self.1.clone();
-        connect_out_to_in(&mut outlet, &mut inlet).await
-    }
-}
-
-pub async fn connect_out_to_in<T: AppData>(lhs: &mut Outlet<T>, rhs: &mut Inlet<T>) {
+pub async fn connect_out_to_in<T: AppData>(mut lhs: Outlet<T>, mut rhs: Inlet<T>) {
     let (tx, rx) = mpsc::channel(num_cpus::get());
     lhs.attach(tx).await;
     rhs.attach(rx).await;

@@ -56,8 +56,8 @@ impl<T: AppData> Shape for ActorSource<T> {}
 impl<T: AppData> SourceShape for ActorSource<T> {
     type Out = T;
     #[inline]
-    fn outlet(&mut self) -> &mut Outlet<Self::Out> {
-        &mut self.outlet
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.outlet.clone()
     }
 }
 

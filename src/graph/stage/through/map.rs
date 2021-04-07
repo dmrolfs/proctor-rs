@@ -99,8 +99,8 @@ where
 {
     type Out = Out;
     #[inline]
-    fn outlet(&mut self) -> &mut Outlet<Self::Out> {
-        &mut self.outlet
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.outlet.clone()
     }
 }
 
@@ -112,8 +112,8 @@ where
 {
     type In = In;
     #[inline]
-    fn inlet(&mut self) -> &mut Inlet<Self::In> {
-        &mut self.inlet
+    fn inlet(&self) -> Inlet<Self::In> {
+        self.inlet.clone()
     }
 }
 
@@ -133,7 +133,6 @@ where
     #[tracing::instrument(level = "info", name = "run map through", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
         let outlet = &self.outlet;
-        // let op = &self.operation;
         while let Some(input) = self.inlet.recv().await {
             let value = (self.operation)(input);
             outlet.send(value).await?;

@@ -97,7 +97,7 @@ impl<In: AppData + 'static, Out: AppData + 'static> CompositeThrough<In, Out> {
         S: Into<String>,
     {
         let name = name.into();
-        let (graph, inlet, outlet) = CompositeThrough::extend_graph(name.clone(), graph, graph_inlet, graph_outlet).await;
+        let (graph, inlet, outlet) = Self::extend_graph(name.clone(), graph, graph_inlet, graph_outlet).await;
         Self {
             name,
             graph: Some(graph),
@@ -132,16 +132,16 @@ impl<In: AppData, Out: AppData> ThroughShape for CompositeThrough<In, Out> {}
 impl<In: AppData, Out: AppData> SourceShape for CompositeThrough<In, Out> {
     type Out = Out;
     #[inline]
-    fn outlet(&mut self) -> &mut Outlet<Self::Out> {
-        &mut self.outlet
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.outlet.clone()
     }
 }
 
 impl<In: AppData, Out: AppData> SinkShape for CompositeThrough<In, Out> {
     type In = In;
     #[inline]
-    fn inlet(&mut self) -> &mut Inlet<Self::In> {
-        &mut self.inlet
+    fn inlet(&self) -> Inlet<Self::In> {
+        self.inlet.clone()
     }
 }
 

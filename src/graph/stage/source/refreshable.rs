@@ -63,8 +63,8 @@ where
 {
     type Out = Out;
     #[inline]
-    fn outlet(&mut self) -> &mut Outlet<Self::Out> {
-        &mut self.outlet
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.outlet.clone()
     }
 }
 

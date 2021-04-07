@@ -68,21 +68,21 @@ impl<T: AppData> FanInShape2 for Merge<T> {
     type In1 = T;
 
     #[inline]
-    fn inlet_0(&mut self) -> &mut Inlet<Self::In0> {
-        &mut self.inlet_0
+    fn inlet_0(&self) -> Inlet<Self::In0> {
+        self.inlet_0.clone()
     }
 
     #[inline]
-    fn inlet_1(&mut self) -> &mut Inlet<Self::In1> {
-        &mut self.inlet_1
+    fn inlet_1(&self) -> Inlet<Self::In1> {
+        self.inlet_1.clone()
     }
 }
 
 impl<T: AppData> SourceShape for Merge<T> {
     type Out = T;
     #[inline]
-    fn outlet(&mut self) -> &mut Outlet<Self::Out> {
-        &mut self.outlet
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.outlet.clone()
     }
 }
 

@@ -92,7 +92,7 @@ impl<T: AppData + Clone> UniformFanOutShape for Broadcast<T> {
     type Out = T;
 
     #[inline]
-    fn outlets(&mut self) -> OutletsShape<Self::Out> {
+    fn outlets(&self) -> OutletsShape<Self::Out> {
         self.outlets.clone()
     }
 }
@@ -100,8 +100,8 @@ impl<T: AppData + Clone> UniformFanOutShape for Broadcast<T> {
 impl<T: AppData + Clone> SinkShape for Broadcast<T> {
     type In = T;
     #[inline]
-    fn inlet(&mut self) -> &mut Inlet<Self::In> {
-        &mut self.inlet
+    fn inlet(&self) -> Inlet<Self::In> {
+        self.inlet.clone()
     }
 }
 

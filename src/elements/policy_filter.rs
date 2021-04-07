@@ -14,14 +14,17 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::{broadcast, mpsc};
 use tracing::Instrument;
+use std::collections::HashSet;
 
 pub trait PolicySettings: fmt::Debug {
+    fn subscription_fields(&self) -> HashSet<String>;
     fn specification_path(&self) -> PathBuf;
 }
 
 pub trait Policy: fmt::Debug + Send + Sync {
     type Item;
     type Environment;
+    fn subscription_fields(&self) -> HashSet<String>;
     fn load_knowledge_base(&self, oso: &mut oso::Oso) -> GraphResult<()>;
     fn initialize_knowledge_base(&self, oso: &mut oso::Oso) -> GraphResult<()>;
     fn query_knowledge_base(&self, oso: &oso::Oso, item_env: (Self::Item, Self::Environment)) -> GraphResult<oso::Query>;
@@ -96,9 +99,7 @@ where
 {
     type In = T;
     #[inline]
-    fn inlet(&mut self) -> &mut Inlet<Self::In> {
-        &mut self.inlet
-    }
+    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
 }
 
 impl<T, E> SourceShape for PolicyFilter<T, E>
@@ -108,9 +109,7 @@ where
 {
     type Out = T;
     #[inline]
-    fn outlet(&mut self) -> &mut Outlet<Self::Out> {
-        &mut self.outlet
-    }
+    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
 }
 
 #[dyn_upcast]
@@ -150,8 +149,8 @@ where
                         tracing::trace!(?item, ?environment, "handling next item...");
 
                         match environment.lock().await.as_ref() {
-                            Some(env) => PolicyFilter::handle_item(item, env, &context, &oso, outlet, tx_monitor).await?,
-                            None => PolicyFilter::<T, E>::handle_item_before_env(item, tx_monitor)?,
+                            Some(env) => Self::handle_item(item, env, &context, &oso, outlet, tx_monitor).await?,
+                            None => Self::<T, E>::handle_item_before_env(item, tx_monitor)?,
                         }
                     },
                     None => {
@@ -160,10 +159,10 @@ where
                     }
                 },
 
-                Some(env) = env_inlet.recv() => PolicyFilter::handle_environment(environment.clone(), env, tx_monitor).await?,
+                Some(env) = env_inlet.recv() => Self::handle_environment(environment.clone(), env, tx_monitor).await?,
 
                 Some(command) = rx_api.recv() => {
-                    let cont_loop = PolicyFilter::handle_command(
+                    let cont_loop = Self::handle_command(
                         command,
                         &mut oso,
                         name.as_str(),
@@ -254,13 +253,13 @@ where
 
             Some(Err(err)) => {
                 tracing::warn!(error=?err, ?item, ?environment, "error in policy review - skipping item.");
-                PolicyFilter::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
+                Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
                 Err(err.into())
             }
 
             None => {
                 tracing::info!(?item, ?environment, "item and environment did not pass policy review - skipping item.");
-                PolicyFilter::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
+                Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
                 Ok(())
             }
         }
@@ -269,7 +268,7 @@ where
     #[tracing::instrument(level = "info", name = "policy_filter handle item before env set", skip(tx), fields())]
     fn handle_item_before_env(item: T, tx: &broadcast::Sender<PolicyFilterEvent<T, E>>) -> GraphResult<()> {
         tracing::info!(?item, "dropping item received before policy environment set.");
-        PolicyFilter::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
+        Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
         Ok(())
     }
 
@@ -279,7 +278,7 @@ where
         let mut env = environment.lock().await;
         *env = Some(recv_env);
 
-        PolicyFilter::publish_event(PolicyFilterEvent::EnvironmentChanged(env.clone()), tx)?;
+        Self::publish_event(PolicyFilterEvent::EnvironmentChanged(env.clone()), tx)?;
         Ok(())
     }
 

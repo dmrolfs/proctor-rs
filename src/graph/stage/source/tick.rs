@@ -140,7 +140,7 @@ where
     T: AppData + Clone + Unpin,
 {
     pub fn new<S: Into<String>>(name: S, initial_delay: Duration, interval: Duration, tick: T) -> Self {
-        Tick::with_constraint(name, initial_delay, interval, tick, Constraint::None)
+        Self::with_constraint(name, initial_delay, interval, tick, Constraint::None)
     }
 
     pub fn with_constraint<S: Into<String>>(name: S, initial_delay: Duration, interval: Duration, tick: T, constraint: Constraint) -> Self {
@@ -170,8 +170,8 @@ where
 {
     type Out = T;
     #[inline]
-    fn outlet(&mut self) -> &mut Outlet<Self::Out> {
-        &mut self.outlet
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.outlet.clone()
     }
 }
 

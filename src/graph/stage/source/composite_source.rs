@@ -149,7 +149,7 @@ impl<Out: AppData + 'static> CompositeSource<Out> {
         S: Into<String>,
     {
         let name = name.into();
-        let (graph, outlet) = CompositeSource::extend_graph(name.clone(), graph, graph_outlet).await;
+        let (graph, outlet) = Self::extend_graph(name.clone(), graph, graph_outlet).await;
         Self {
             name,
             graph: Some(graph),
@@ -173,8 +173,8 @@ impl<Out: AppData> Shape for CompositeSource<Out> {}
 impl<Out: AppData + 'static> SourceShape for CompositeSource<Out> {
     type Out = Out;
     #[inline]
-    fn outlet(&mut self) -> &mut Outlet<Self::Out> {
-        &mut self.outlet
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.outlet.clone()
     }
 }
 

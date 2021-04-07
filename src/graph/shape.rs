@@ -8,12 +8,12 @@ pub trait Shape: fmt::Debug {}
 
 pub trait SourceShape: Shape {
     type Out: AppData;
-    fn outlet(&mut self) -> &mut Outlet<Self::Out>;
+    fn outlet(&self) -> Outlet<Self::Out>;
 }
 
 pub trait SinkShape: Shape {
     type In: AppData;
-    fn inlet(&mut self) -> &mut Inlet<Self::In>;
+    fn inlet(&self) -> Inlet<Self::In>;
 }
 
 pub trait ThroughShape: SourceShape + SinkShape {}
@@ -34,18 +34,18 @@ pub trait BidiShape: Shape {
     type In2: AppData;
     type Out2: AppData;
 
-    fn inlet_1(&mut self) -> &mut Inlet<Self::In1>;
-    fn outlet_1(&mut self) -> &mut Outlet<Self::Out1>;
-    fn inlet_2(&mut self) -> &mut Inlet<Self::In2>;
-    fn outlet_2(&mut self) -> &mut Outlet<Self::Out2>;
+    fn inlet_1(&self) -> Inlet<Self::In1>;
+    fn outlet_1(&self) -> Outlet<Self::Out1>;
+    fn inlet_2(&self) -> Inlet<Self::In2>;
+    fn outlet_2(&self) -> Outlet<Self::Out2>;
 }
 
 pub trait FanInShape2: Shape + SourceShape {
     type In0: AppData;
     type In1: AppData;
 
-    fn inlet_0(&mut self) -> &mut Inlet<Self::In0>;
-    fn inlet_1(&mut self) -> &mut Inlet<Self::In1>;
+    fn inlet_0(&self) -> Inlet<Self::In0>;
+    fn inlet_1(&self) -> Inlet<Self::In1>;
 }
 
 pub struct InletsShape<T: AppData>(pub Arc<Mutex<Vec<Inlet<T>>>>);
@@ -84,12 +84,12 @@ pub trait UniformFanInShape: Shape + SourceShape {
     // type InletShape = Arc<Mutex<Inlet<Self::In>>>;
     // type InletsShape = Arc<Mutex<Vec<Self::InletShape>>>;
 
-    fn inlets(&mut self) -> InletsShape<Self::In>;
+    fn inlets(&self) -> InletsShape<Self::In>;
 }
 
 pub type OutletsShape<T> = Vec<Outlet<T>>;
 
 pub trait UniformFanOutShape: Shape + SinkShape {
     type Out: AppData;
-    fn outlets(&mut self) -> OutletsShape<Self::Out>;
+    fn outlets(&self) -> OutletsShape<Self::Out>;
 }

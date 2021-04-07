@@ -99,8 +99,8 @@ where
     type Out = T;
 
     #[inline]
-    fn outlet(&mut self) -> &mut Outlet<Self::Out> {
-        &mut self.outlet
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.outlet.clone()
     }
 }
 
@@ -112,8 +112,8 @@ where
     type In = T;
 
     #[inline]
-    fn inlet(&mut self) -> &mut Inlet<Self::In> {
-        &mut self.inlet
+    fn inlet(&self) -> Inlet<Self::In> {
+        self.inlet.clone()
     }
 }
 

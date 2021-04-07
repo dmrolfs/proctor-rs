@@ -168,7 +168,7 @@ where
 {
     type In = T;
     #[inline]
-    fn inlets(&mut self) -> InletsShape<T> {
+    fn inlets(&self) -> InletsShape<T> {
         self.inlets.clone()
     }
 }
@@ -179,8 +179,8 @@ where
 {
     type Out = T;
     #[inline]
-    fn outlet(&mut self) -> &mut Outlet<Self::Out> {
-        &mut self.outlet
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.outlet.clone()
     }
 }
 
@@ -197,7 +197,7 @@ where
 
     #[tracing::instrument(level = "info", name = "run merge through", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
-        let mut active_inlets = MergeN::initialize_active_inlets(self.inlets()).await;
+        let mut active_inlets = Self::initialize_active_inlets(self.inlets()).await;
         let outlet = &self.outlet;
         let inlets = self.inlets.clone();
         let rx_api = &mut self.rx_api;
@@ -208,7 +208,7 @@ where
 
             tokio::select! {
                 ((inlet_idx, value), target_idx, remaining) = future::select_all(available_inlets) => {
-                    let remaining_inlets = MergeN::handle_selected_pull(
+                    let remaining_inlets = Self::handle_selected_pull(
                         value,
                         inlet_idx,
                         target_idx,
@@ -258,7 +258,7 @@ where
 
         for (idx, inlet) in inlets.iter().enumerate() {
             if inlet.is_attached().await {
-                let rep = MergeN::replenish_inlet_pull(idx, inlet.clone()).boxed();
+                let rep = Self::replenish_inlet_pull(idx, inlet.clone()).boxed();
                 active_inlets.push(rep);
             }
         }
@@ -299,7 +299,7 @@ where
             let _run_active_guard = run_active_span.enter();
 
             if let Some(inlet) = inlets.get(inlet_idx).await {
-                let rep = MergeN::replenish_inlet_pull(inlet_idx, inlet.clone()).boxed();
+                let rep = Self::replenish_inlet_pull(inlet_idx, inlet.clone()).boxed();
                 remaining_inlets.push(rep);
                 tracing::info!(nr_available_inlets=%remaining_inlets.len(), "4.1.active_inlets replenished.");
             }
