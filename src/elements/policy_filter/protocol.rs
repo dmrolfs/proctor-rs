@@ -6,8 +6,14 @@ pub type PolicyFilterMonitor<T, E> = broadcast::Receiver<PolicyFilterEvent<T, E>
 
 #[derive(Debug)]
 pub enum PolicyFilterCmd<E> {
-    ReplacePolicy { new_policy: PolicySource, tx: oneshot::Sender<Ack> },
-    AppendPolicy { policy: PolicySource, tx: oneshot::Sender<Ack> },
+    ReplacePolicy {
+        new_policy: PolicySource,
+        tx: oneshot::Sender<Ack>,
+    },
+    AppendPolicy {
+        policy: PolicySource,
+        tx: oneshot::Sender<Ack>,
+    },
     ResetPolicy(oneshot::Sender<Ack>),
     Inspect(oneshot::Sender<PolicyFilterDetail<E>>),
 }

@@ -106,7 +106,9 @@ impl<In: AppData + 'static, Out: AppData + 'static> CompositeThrough<In, Out> {
         }
     }
 
-    async fn extend_graph(name: String, mut graph: Graph, graph_inlet: Inlet<In>, graph_outlet: Outlet<Out>) -> (Graph, Inlet<In>, Outlet<Out>) {
+    async fn extend_graph(
+        name: String, mut graph: Graph, graph_inlet: Inlet<In>, graph_outlet: Outlet<Out>,
+    ) -> (Graph, Inlet<In>, Outlet<Out>) {
         let composite_inlet = Inlet::new(format!("{}_inlet", name));
         let into_graph = Outlet::new(format!("into_{}_graph", name));
         let from_graph = Inlet::new(format!("from_{}_graph", name));
@@ -115,8 +117,16 @@ impl<In: AppData + 'static, Out: AppData + 'static> CompositeThrough<In, Out> {
         (&into_graph, &graph_inlet).connect().await;
         (&graph_outlet, &from_graph).connect().await;
 
-        let in_bridge = stage::Identity::new(format!("{}-bridge-into-graph", name), composite_inlet.clone(), into_graph);
-        let out_bridge = stage::Identity::new(format!("{}-bridge-from-graph", name), from_graph, composite_outlet.clone());
+        let in_bridge = stage::Identity::new(
+            format!("{}-bridge-into-graph", name),
+            composite_inlet.clone(),
+            into_graph,
+        );
+        let out_bridge = stage::Identity::new(
+            format!("{}-bridge-from-graph", name),
+            from_graph,
+            composite_outlet.clone(),
+        );
 
         graph.push_front(Box::new(in_bridge)).await;
         graph.push_back(Box::new(out_bridge)).await;

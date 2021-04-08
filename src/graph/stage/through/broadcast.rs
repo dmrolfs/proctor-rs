@@ -80,7 +80,9 @@ impl<T: AppData + Clone> Broadcast<T> {
     pub fn new<S: Into<String>>(name: S, output_ports: usize) -> Self {
         let name = name.into();
         let inlet = Inlet::new(name.clone());
-        let outlets = (0..output_ports).map(|pos| Outlet::new(format!("{}_{}", name, pos))).collect();
+        let outlets = (0..output_ports)
+            .map(|pos| Outlet::new(format!("{}_{}", name, pos)))
+            .collect();
 
         Self { name, inlet, outlets }
     }

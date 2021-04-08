@@ -171,9 +171,12 @@ where
     #[tracing::instrument(level = "info", skip(self))]
     fn complete_fold(&mut self) -> GraphResult<()> {
         if let Some(tx_final) = self.tx_final.take() {
-            tx_final
-                .send(self.acc.clone())
-                .map_err(|_err| GraphError::Channel(format!("Fold sink final receiver detached. Failed to send accumulation: {:?}", self.acc)))?;
+            tx_final.send(self.acc.clone()).map_err(|_err| {
+                GraphError::Channel(format!(
+                    "Fold sink final receiver detached. Failed to send accumulation: {:?}",
+                    self.acc
+                ))
+            })?;
         }
 
         Ok(())
@@ -196,7 +199,9 @@ where
 {
     type In = In;
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
+    fn inlet(&self) -> Inlet<Self::In> {
+        self.inlet.clone()
+    }
 }
 
 #[dyn_upcast]

@@ -122,7 +122,8 @@ impl Collect {
     {
         let name = name.into();
         let target = url.into_url().expect("failed to parse url");
-        let (graph, trigger, outlet) = Self::make_graph::<T, _>(name.clone(), target.clone(), default_headers, transform).await;
+        let (graph, trigger, outlet) =
+            Self::make_graph::<T, _>(name.clone(), target.clone(), default_headers, transform).await;
 
         Self {
             name,
@@ -133,13 +134,18 @@ impl Collect {
         }
     }
 
-    async fn make_graph<T, F>(name: String, url: Url, default_headers: HeaderMap, transform: F) -> (Graph, Inlet<()>, Outlet<TelemetryData>)
+    async fn make_graph<T, F>(
+        name: String, url: Url, default_headers: HeaderMap, transform: F,
+    ) -> (Graph, Inlet<()>, Outlet<TelemetryData>)
     where
         T: AppData + DeserializeOwned + 'static,
         F: FnMut(T) -> TelemetryData + Send + 'static,
     {
         let query = stage::AndThen::new(format!("{}-query", name), move |_| {
-            let client = reqwest::Client::builder().default_headers(default_headers.clone()).build().unwrap();
+            let client = reqwest::Client::builder()
+                .default_headers(default_headers.clone())
+                .build()
+                .unwrap();
             let query_url = url.clone();
             async move { Self::do_query::<T>(&client, query_url).await.expect("failed to query") }
         });
@@ -193,13 +199,17 @@ impl ThroughShape for Collect {}
 impl SourceShape for Collect {
     type Out = TelemetryData;
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.outlet.clone()
+    }
 }
 
 impl SinkShape for Collect {
     type In = ();
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> { self.trigger.clone() }
+    fn inlet(&self) -> Inlet<Self::In> {
+        self.trigger.clone()
+    }
 }
 
 #[dyn_upcast]

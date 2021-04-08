@@ -9,12 +9,11 @@ mod performance_history;
 mod policy_filter;
 mod telemetry;
 
-use oso::PolarClass;
-use serde::{Serialize, de::DeserializeOwned};
-use std::collections::HashMap;
 use crate::AppData;
+use oso::PolarClass;
+use serde::{de::DeserializeOwned, Serialize};
+use std::collections::HashMap;
 
 pub trait ProctorContext: AppData + PolarClass + Clone + PartialEq + Serialize + DeserializeOwned {
     fn custom(&self) -> HashMap<String, String>;
 }
-

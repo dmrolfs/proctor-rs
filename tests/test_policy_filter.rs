@@ -5,11 +5,11 @@ use oso::{Oso, PolarClass};
 use proctor::elements::{self, Policy};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
+use proctor::ProctorContext;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
-use proctor::ProctorContext;
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct TestItem {
@@ -70,7 +70,9 @@ impl TestEnvironment {
 }
 
 impl proctor::ProctorContext for TestEnvironment {
-    fn custom(&self) -> HashMap<String, String> { self.custom.clone() }
+    fn custom(&self) -> HashMap<String, String> {
+        self.custom.clone()
+    }
 }
 
 #[derive(Debug)]
@@ -199,7 +201,11 @@ impl TestFlow {
     }
 
     pub async fn tell_policy(
-        &self, command_rx: (elements::PolicyFilterCmd<TestEnvironment>, oneshot::Receiver<proctor::Ack>),
+        &self,
+        command_rx: (
+            elements::PolicyFilterCmd<TestEnvironment>,
+            oneshot::Receiver<proctor::Ack>,
+        ),
     ) -> GraphResult<proctor::Ack> {
         self.tx_policy_api.send(command_rx.0)?;
         command_rx.1.await.map_err(|err| err.into())
@@ -315,7 +321,10 @@ async fn test_policy_filter_happy_environment() -> anyhow::Result<()> {
 
     assert_eq!(
         actual,
-        vec![TestItem::new(std::f64::consts::PI, ts, 1), TestItem::new(std::f64::consts::TAU, ts, 2),]
+        vec![
+            TestItem::new(std::f64::consts::PI, ts, 1),
+            TestItem::new(std::f64::consts::TAU, ts, 2),
+        ]
     );
     Ok(())
 }
@@ -372,7 +381,10 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     tracing::info!(?actual, "DMR: 08. Verify final accumulation...");
     assert_eq!(
         actual,
-        vec![TestItem::new(std::f64::consts::PI, ts, 1), TestItem::new(std::f64::consts::LN_2, ts, 5),]
+        vec![
+            TestItem::new(std::f64::consts::PI, ts, 1),
+            TestItem::new(std::f64::consts::LN_2, ts, 5),
+        ]
     );
     Ok(())
 }
@@ -391,8 +403,10 @@ async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
     )
     .await;
 
-    flow.push_environment(TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
-        .await?;
+    flow.push_environment(
+        TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
+    )
+    .await?;
     let event = flow.recv_policy_event().await?;
     tracing::info!(?event, "verifying environment update...");
     assert!(matches!(event, elements::PolicyFilterEvent::EnvironmentChanged(_)));
@@ -408,7 +422,10 @@ async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
     tracing::info!(?actual, "verifying actual result...");
     assert_eq!(
         actual,
-        vec![TestItem::new(std::f64::consts::PI, ts, 1), TestItem::new(std::f64::consts::TAU, ts, 2),],
+        vec![
+            TestItem::new(std::f64::consts::PI, ts, 1),
+            TestItem::new(std::f64::consts::TAU, ts, 2),
+        ],
     );
     Ok(())
 }
@@ -434,8 +451,10 @@ lag_2(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
     .await;
 
     tracing::info!("DMR-B:push env...");
-    flow.push_environment(TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
-        .await?;
+    flow.push_environment(
+        TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
+    )
+    .await?;
     tracing::info!("DMR-C:verify enviornment...");
 
     let ts = Utc::now().into();
@@ -464,8 +483,10 @@ and item.input_messages_per_sec(item.inbox_lag) < 36;"#,
     )
     .await;
 
-    flow.push_environment(TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
-        .await?;
+    flow.push_environment(
+        TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
+    )
+    .await?;
 
     let ts = Utc::now().into();
     let item = TestItem::new(std::f64::consts::PI, ts, 1);
@@ -496,8 +517,10 @@ async fn test_replace_policy() -> anyhow::Result<()> {
 
     let flow = TestFlow::new(policy_1).await;
 
-    flow.push_environment(TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
-        .await?;
+    flow.push_environment(
+        TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
+    )
+    .await?;
 
     let item_1 = TestItem::new(std::f64::consts::PI, too_old_ts, 1);
     flow.push_item(item_1.clone()).await?;
@@ -536,8 +559,10 @@ async fn test_append_policy() -> anyhow::Result<()> {
 
     let flow = TestFlow::new(policy_1).await;
 
-    flow.push_environment(TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
-        .await?;
+    flow.push_environment(
+        TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
+    )
+    .await?;
 
     let ts = Utc::now().into();
     let item = TestItem::new(std::f64::consts::PI, ts, 1);
@@ -580,8 +605,10 @@ async fn test_reset_policy() -> anyhow::Result<()> {
 
     let flow = TestFlow::new(policy_1).await;
 
-    flow.push_environment(TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
-        .await?;
+    flow.push_environment(
+        TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
+    )
+    .await?;
 
     let ts = Utc::now().into();
     let item = TestItem::new(std::f64::consts::PI, ts, 1);

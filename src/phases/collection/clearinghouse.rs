@@ -1,6 +1,8 @@
 use crate::elements::TelemetryData;
 use crate::graph::stage::Stage;
-use crate::graph::{stage, Connect, GraphResult, Inlet, Outlet, OutletsShape, Port, Shape, SinkShape, UniformFanOutShape};
+use crate::graph::{
+    stage, Connect, GraphResult, Inlet, Outlet, OutletsShape, Port, Shape, SinkShape, UniformFanOutShape,
+};
 use crate::Ack;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
@@ -32,14 +34,24 @@ pub enum ClearinghouseCmd {
 
 impl ClearinghouseCmd {
     #[inline]
-    pub fn subscribe<S0, S1>(name: S0, fields: HashSet<S1>, receiver: Inlet<TelemetryData>) -> (Self, oneshot::Receiver<Ack>)
+    pub fn subscribe<S0, S1>(
+        name: S0, fields: HashSet<S1>, receiver: Inlet<TelemetryData>,
+    ) -> (Self, oneshot::Receiver<Ack>)
     where
         S0: Into<String>,
         S1: Into<String>,
     {
         let (tx, rx) = oneshot::channel();
         let fields = fields.into_iter().map(|f| f.into()).collect();
-        ( Self::Subscribe { name: name.into(), fields, receiver, tx, }, rx, )
+        (
+            Self::Subscribe {
+                name: name.into(),
+                fields,
+                receiver,
+                tx,
+            },
+            rx,
+        )
     }
 
     #[inline]
@@ -57,7 +69,13 @@ impl ClearinghouseCmd {
     #[inline]
     pub fn get_subscription_snapshot<S: Into<String>>(name: S) -> (Self, oneshot::Receiver<ClearinghouseResp>) {
         let (tx, rx) = oneshot::channel();
-        (Self::GetSnapshot { name: Some(name.into()), tx }, rx)
+        (
+            Self::GetSnapshot {
+                name: Some(name.into()),
+                tx,
+            },
+            rx,
+        )
     }
 }
 
@@ -128,7 +146,11 @@ impl Clearinghouse {
         tracing::info!(stage=%self.name, subscription=%name, ?fields, "adding clearinghouse subscription.");
         let outlet_to_subscription = Outlet::new(format!("outlet_to_subscription_{}", name));
         (&outlet_to_subscription, receiver).connect().await;
-        let subscription = TelemetrySubscription { name, fields, outlet_to_subscription, };
+        let subscription = TelemetrySubscription {
+            name,
+            fields,
+            outlet_to_subscription,
+        };
         let nr_subs = self.subscriptions.len();
         self.subscriptions.push(subscription);
         assert_eq!(self.subscriptions.len(), nr_subs + 1);
@@ -150,14 +172,18 @@ impl Clearinghouse {
             }
 
             None => {
-                tracing::info!("telemetry sources dried up - stopping since subscribers have data they're going to get.");
+                tracing::info!(
+                    "telemetry sources dried up - stopping since subscribers have data they're going to get."
+                );
                 Ok(false)
             }
         }
     }
 
     #[tracing::instrument(level = "trace", skip(subscriptions,))]
-    fn find_interested_subscriptions(subscriptions: &Vec<TelemetrySubscription>, changed: HashSet<String>) -> Vec<&TelemetrySubscription> {
+    fn find_interested_subscriptions(
+        subscriptions: &Vec<TelemetrySubscription>, changed: HashSet<String>,
+    ) -> Vec<&TelemetrySubscription> {
         let interested = subscriptions
             .iter()
             .filter(|s| !s.fields.intersection(&changed).collect::<HashSet<_>>().is_empty())
@@ -174,7 +200,9 @@ impl Clearinghouse {
     }
 
     #[tracing::instrument(level = "trace", skip(database, subscribers))]
-    async fn push_to_subscribers(database: &TelemetryData, subscribers: Vec<&TelemetrySubscription>) -> GraphResult<()> {
+    async fn push_to_subscribers(
+        database: &TelemetryData, subscribers: Vec<&TelemetrySubscription>,
+    ) -> GraphResult<()> {
         if subscribers.is_empty() {
             tracing::info!("not publishing - no clearinghouse subscribers");
             return Ok(());
@@ -212,7 +240,9 @@ impl Clearinghouse {
         result
     }
 
-    fn fulfill_subscription(subscription_name: &str, pick_list: &HashSet<String>, database: &TelemetryData) -> Option<TelemetryData> {
+    fn fulfill_subscription(
+        subscription_name: &str, pick_list: &HashSet<String>, database: &TelemetryData,
+    ) -> Option<TelemetryData> {
         let mut ready = Vec::new();
         let mut unfilled = Vec::new();
 
@@ -238,9 +268,7 @@ impl Clearinghouse {
 
     #[tracing::instrument(level = "trace", skip(subscriptions, database))]
     async fn handle_command(
-        command: ClearinghouseCmd,
-        subscriptions: &mut Vec<TelemetrySubscription>,
-        database: &TelemetryData,
+        command: ClearinghouseCmd, subscriptions: &mut Vec<TelemetrySubscription>, database: &TelemetryData,
     ) -> GraphResult<bool> {
         match command {
             ClearinghouseCmd::GetSnapshot { name, tx } => {
@@ -295,13 +323,22 @@ impl Clearinghouse {
                 Ok(true)
             }
 
-            ClearinghouseCmd::Subscribe { name, fields, receiver, tx } => {
+            ClearinghouseCmd::Subscribe {
+                name,
+                fields,
+                receiver,
+                tx,
+            } => {
                 let outlet_to_subscription = Outlet::new(format!("outlet_to_subscription_{}", name));
                 (&outlet_to_subscription, &receiver).connect().await;
 
                 // let fields= fields.iter().cloned().collect::<HashSet<&'a str>>();
                 let fields = fields.iter().map(|f| (*f).clone()).collect();
-                let s: TelemetrySubscription = TelemetrySubscription { name, fields, outlet_to_subscription, };
+                let s: TelemetrySubscription = TelemetrySubscription {
+                    name,
+                    fields,
+                    outlet_to_subscription,
+                };
 
                 tracing::info!(subscriber=?s, "adding telemetry subscriber.");
                 subscriptions.push(s);
@@ -312,7 +349,10 @@ impl Clearinghouse {
 
             ClearinghouseCmd::Unsubscribe { name, tx } => {
                 // let mut subs = subscriptions.lock().await;
-                let dropped = subscriptions.iter().position(|s| s.name == name).map(|pos| subscriptions.remove(pos));
+                let dropped = subscriptions
+                    .iter()
+                    .position(|s| s.name == name)
+                    .map(|pos| subscriptions.remove(pos));
 
                 tracing::info!(?dropped, "subscription dropped");
                 let _ = tx.send(());
@@ -347,7 +387,10 @@ impl UniformFanOutShape for Clearinghouse {
 
     #[inline]
     fn outlets(&self) -> OutletsShape<Self::Out> {
-        self.subscriptions.iter().map(|s| s.outlet_to_subscription.clone()).collect()
+        self.subscriptions
+            .iter()
+            .map(|s| s.outlet_to_subscription.clone())
+            .collect()
     }
 }
 
@@ -505,7 +548,11 @@ mod tests {
             assert!(!clearinghouse.inlet.is_attached().await);
 
             clearinghouse
-                .add_subscription("sub1", maplit::hashset! {"aaa".to_string(), "bbb".to_string()}, &sub1_inlet)
+                .add_subscription(
+                    "sub1",
+                    maplit::hashset! {"aaa".to_string(), "bbb".to_string()},
+                    &sub1_inlet,
+                )
                 .await;
         });
         assert_eq!(clearinghouse.subscriptions.len(), 1);
@@ -530,7 +577,9 @@ mod tests {
             (tick.outlet(), clearinghouse.inlet()).connect().await;
 
             let tick_handle = tokio::spawn(async move { tick.run().await });
-            let clear_handle = tokio::spawn(async move { clearinghouse.run().await }.instrument(tracing::info_span!("spawn clearinghouse")));
+            let clear_handle = tokio::spawn(
+                async move { clearinghouse.run().await }.instrument(tracing::info_span!("spawn clearinghouse")),
+            );
 
             let nr_0_span = tracing::info_span!("nr_subscriptions is 0");
             let _ = nr_0_span.enter();
@@ -548,7 +597,8 @@ mod tests {
 
             tracing::info!("sending add subscriber command to clearinghouse...");
             let sub1_inlet = Inlet::new("sub1");
-            let (add_cmd, rx_add) = ClearinghouseCmd::subscribe("sub1", maplit::hashset! {"aaa", "bbb"}, sub1_inlet.clone());
+            let (add_cmd, rx_add) =
+                ClearinghouseCmd::subscribe("sub1", maplit::hashset! {"aaa", "bbb"}, sub1_inlet.clone());
             tx_api.send(add_cmd)?;
             tracing::info!("waiting for api confirmation...");
             rx_add.await?;
@@ -599,7 +649,8 @@ mod tests {
             let clear_handle = tokio::spawn(async move { clearinghouse.run().await });
 
             let inlet_1 = Inlet::new("inlet_1");
-            let (add, rx_add) = ClearinghouseCmd::subscribe("sub1", maplit::hashset! { "dr".to_string() }, inlet_1.clone());
+            let (add, rx_add) =
+                ClearinghouseCmd::subscribe("sub1", maplit::hashset! { "dr".to_string() }, inlet_1.clone());
             tx_api.send(add)?;
 
             let (get_1, rx_get_1) = ClearinghouseCmd::get_clearinghouse_snapshot();
@@ -646,16 +697,21 @@ mod tests {
         let actual = Clearinghouse::find_interested_subscriptions(&SUBSCRIPTIONS, HashSet::default());
         assert_eq!(actual, Vec::<&TelemetrySubscription>::default());
 
-        let actual = Clearinghouse::find_interested_subscriptions(&SUBSCRIPTIONS, maplit::hashset! {"extra".to_string()});
+        let actual =
+            Clearinghouse::find_interested_subscriptions(&SUBSCRIPTIONS, maplit::hashset! {"extra".to_string()});
         assert_eq!(actual, Vec::<&TelemetrySubscription>::default());
 
         let actual = Clearinghouse::find_interested_subscriptions(&SUBSCRIPTIONS, maplit::hashset! {"pos".to_string()});
         assert_eq!(actual, vec![&SUBSCRIPTIONS[1], &SUBSCRIPTIONS[2]]);
 
-        let actual = Clearinghouse::find_interested_subscriptions(&SUBSCRIPTIONS, maplit::hashset! {"value".to_string()});
+        let actual =
+            Clearinghouse::find_interested_subscriptions(&SUBSCRIPTIONS, maplit::hashset! {"value".to_string()});
         assert_eq!(actual, vec![&SUBSCRIPTIONS[2]]);
 
-        let actual = Clearinghouse::find_interested_subscriptions(&SUBSCRIPTIONS, maplit::hashset! {"pos".to_string(), "cat".to_string()});
+        let actual = Clearinghouse::find_interested_subscriptions(
+            &SUBSCRIPTIONS,
+            maplit::hashset! {"pos".to_string(), "cat".to_string()},
+        );
         assert_eq!(actual, vec![&SUBSCRIPTIONS[1], &SUBSCRIPTIONS[2]]);
 
         let actual = Clearinghouse::find_interested_subscriptions(

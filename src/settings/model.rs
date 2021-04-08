@@ -63,8 +63,12 @@ pub struct EligibilitySettings {
 }
 
 impl crate::elements::PolicySettings for EligibilitySettings {
-    fn subscription_fields(&self) -> &HashSet<String> { &self.subscription_fields }
-    fn specification_path(&self) -> &PathBuf { &self.policy_path }
+    fn subscription_fields(&self) -> &HashSet<String> {
+        &self.subscription_fields
+    }
+    fn specification_path(&self) -> &PathBuf {
+        &self.policy_path
+    }
 }
 
 // #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -279,19 +283,28 @@ mod tests {
         let mut header_map = HeaderMap::new();
         header_map.insert(header::AUTHORIZATION, "Basic Zm9vOmJhcg==".parse().unwrap());
         header_map.insert(header::HOST, "example.com".parse().unwrap());
-        let header_vec = header_map.iter().map(|(k, v)| (k.to_string(), v.to_str().unwrap().to_string())).collect();
+        let header_vec = header_map
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_str().unwrap().to_string()))
+            .collect();
 
         let endpoint = HttpQuery {
             interval: Duration::from_secs(33),
             method: Method::GET,
-            url: Url::parse("https://httpbin.org/get?is_redeploying=false?last_deployment%3D1979-05-27%2007%3A32%3A00Z").unwrap(),
+            url: Url::parse(
+                "https://httpbin.org/get?is_redeploying=false?last_deployment%3D1979-05-27%2007%3A32%3A00Z",
+            )
+            .unwrap(),
             headers: header_vec,
         };
 
         assert_tokens(
             &endpoint,
             &[
-                Token::Struct { name: "HttpQuery", len: 4 },
+                Token::Struct {
+                    name: "HttpQuery",
+                    len: 4,
+                },
                 Token::Str("interval_secs"),
                 Token::U64(33),
                 Token::Str("method"),
@@ -442,14 +455,20 @@ mod tests {
         let cluster = SourceSetting::RestApi(HttpQuery {
             interval: Duration::from_secs(37),
             method: Method::POST,
-            url: Url::parse("https://httpbin.org/post?is_redeploying=false?last_deployment%3D1979-05-27%2007%3A32%3A00Z").unwrap(),
+            url: Url::parse(
+                "https://httpbin.org/post?is_redeploying=false?last_deployment%3D1979-05-27%2007%3A32%3A00Z",
+            )
+            .unwrap(),
             headers: vec![],
         });
 
         assert_tokens(
             &cluster,
             &[
-                Token::Struct { name: "HttpQuery", len: 5 },
+                Token::Struct {
+                    name: "HttpQuery",
+                    len: 5,
+                },
                 Token::Str("type"),
                 Token::Str("RestApi"),
                 Token::Str("interval_secs"),
@@ -457,7 +476,9 @@ mod tests {
                 Token::Str("method"),
                 Token::Str("POST"),
                 Token::Str("url"),
-                Token::Str("https://httpbin.org/post?is_redeploying=false?last_deployment%3D1979-05-27%2007%3A32%3A00Z"),
+                Token::Str(
+                    "https://httpbin.org/post?is_redeploying=false?last_deployment%3D1979-05-27%2007%3A32%3A00Z",
+                ),
                 Token::Str("headers"),
                 Token::Seq { len: Some(0) },
                 Token::SeqEnd,
@@ -471,7 +492,10 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert(header::AUTHORIZATION, "Basic Zm9vOmJhcg==".parse().unwrap());
         headers.insert(header::HOST, "example.com".parse().unwrap());
-        let _headers: Vec<(String, String)> = headers.iter().map(|(k, v)| (k.to_string(), v.to_str().unwrap().to_string())).collect();
+        let _headers: Vec<(String, String)> = headers
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_str().unwrap().to_string()))
+            .collect();
 
         let settings = Settings {
             sources: maplit::btreemap! {
@@ -491,12 +515,18 @@ mod tests {
         assert_tokens(
             &settings,
             &[
-                Token::Struct { name: "Settings", len: 1 },
+                Token::Struct {
+                    name: "Settings",
+                    len: 1,
+                },
                 Token::Str("sources"),
                 Token::Map { len: Some(2) },
                 // "httpbin" => RestApi
                 Token::Str("httpbin"),
-                Token::Struct { name: "HttpQuery", len: 5 },
+                Token::Struct {
+                    name: "HttpQuery",
+                    len: 5,
+                },
                 Token::Str("type"),
                 Token::Str("RestApi"),
                 Token::Str("interval_secs"),
@@ -504,7 +534,9 @@ mod tests {
                 Token::Str("method"),
                 Token::Str("HEAD"),
                 Token::Str("url"),
-                Token::Str("https://httpbin.org/head?is_redeploying=false?last_deployment%3D1979-05-27%2007%3A32%3A00Z"),
+                Token::Str(
+                    "https://httpbin.org/head?is_redeploying=false?last_deployment%3D1979-05-27%2007%3A32%3A00Z",
+                ),
                 Token::Str("headers"),
                 Token::Seq { len: Some(2) },
                 Token::Tuple { len: 2 },

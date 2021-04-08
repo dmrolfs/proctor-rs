@@ -35,7 +35,10 @@ impl Into<TelemetryData> for HttpBinResponse {
 
         data.insert(
             "last_deployment".to_string(),
-            self.args.get("last_deployment").unwrap_or(&"1970-08-30 11:32:09".to_string()).to_owned(),
+            self.args
+                .get("last_deployment")
+                .unwrap_or(&"1970-08-30 11:32:09".to_string())
+                .to_owned(),
         );
 
         data
@@ -54,7 +57,9 @@ impl Default for Data {
         Self {
             last_failure: None,
             is_deploying: true,
-            latest_deployment: Utc.datetime_from_str("1970-08-30 11:32:09", "%Y-%m-%d %H:%M:%S").unwrap(),
+            latest_deployment: Utc
+                .datetime_from_str("1970-08-30 11:32:09", "%Y-%m-%d %H:%M:%S")
+                .unwrap(),
         }
     }
 }
@@ -69,7 +74,9 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
     let setting = SourceSetting::RestApi(HttpQuery {
         interval: Duration::from_millis(25),
         method: reqwest::Method::GET,
-        url: reqwest::Url::parse("https://httpbin.org/get?is_redeploying=false&last_deployment=1979-05-27T07%3A32%3A00Z")?,
+        url: reqwest::Url::parse(
+            "https://httpbin.org/get?is_redeploying=false&last_deployment=1979-05-27T07%3A32%3A00Z",
+        )?,
         headers: vec![
             ("authorization".to_string(), "Basic Zm9vOmJhcg==".to_string()),
             ("host".to_string(), "httpbin.org".to_string()),
@@ -78,46 +85,53 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
 
     let (source, tx_tick) = make_telemetry_rest_api_source::<HttpBinResponse, _>("httpbin", &setting).await?;
 
-    let mut sink = stage::Fold::<_, TelemetryData, (Data, usize)>::new("sink", (Data::default(), 0), |(acc, count), rec: TelemetryData| {
-        let dt_format = "%+";
-        let rec_last_failure = rec.get("last_failure").and_then(|r| {
-            if r.is_empty() {
-                None
+    let mut sink = stage::Fold::<_, TelemetryData, (Data, usize)>::new(
+        "sink",
+        (Data::default(), 0),
+        |(acc, count), rec: TelemetryData| {
+            let dt_format = "%+";
+            let rec_last_failure = rec.get("last_failure").and_then(|r| {
+                if r.is_empty() {
+                    None
+                } else {
+                    let lf = DateTime::parse_from_str(r.as_str(), dt_format)
+                        .unwrap()
+                        .with_timezone(&Utc);
+                    Some(lf)
+                }
+            });
+
+            let is_deploying = rec.get("is_deploying").unwrap().as_str().parse::<bool>().unwrap();
+
+            let rec_latest_deployment =
+                DateTime::parse_from_str(rec.get("last_deployment").unwrap().as_str(), dt_format)
+                    .unwrap()
+                    .with_timezone(&Utc);
+
+            let last_failure = match (acc.last_failure, rec_last_failure) {
+                (None, None) => None,
+                (Some(a), None) => Some(a),
+                (None, Some(r)) => Some(r),
+                (Some(a), Some(r)) if a < r => Some(r),
+                (Some(a), _) => Some(a),
+            };
+
+            let latest_deployment = if acc.latest_deployment < rec_latest_deployment {
+                rec_latest_deployment
             } else {
-                let lf = DateTime::parse_from_str(r.as_str(), dt_format).unwrap().with_timezone(&Utc);
-                Some(lf)
-            }
-        });
+                acc.latest_deployment
+            };
 
-        let is_deploying = rec.get("is_deploying").unwrap().as_str().parse::<bool>().unwrap();
-
-        let rec_latest_deployment = DateTime::parse_from_str(rec.get("last_deployment").unwrap().as_str(), dt_format)
-            .unwrap()
-            .with_timezone(&Utc);
-
-        let last_failure = match (acc.last_failure, rec_last_failure) {
-            (None, None) => None,
-            (Some(a), None) => Some(a),
-            (None, Some(r)) => Some(r),
-            (Some(a), Some(r)) if a < r => Some(r),
-            (Some(a), _) => Some(a),
-        };
-
-        let latest_deployment = if acc.latest_deployment < rec_latest_deployment {
-            rec_latest_deployment
-        } else {
-            acc.latest_deployment
-        };
-
-        (
-            Data {
-                last_failure,
-                is_deploying,
-                latest_deployment,
-            },
-            count + 1,
-        )
-    });
+            (
+                Data {
+                    last_failure,
+                    is_deploying,
+                    latest_deployment,
+                },
+                count + 1,
+            )
+        },
+    );
 
     let rx_acc = sink.take_final_rx().unwrap();
 
@@ -134,7 +148,9 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
         tokio::time::sleep(run_duration).await;
 
         tracing::info!("tick-stop: stopping tick source...");
-        tx_tick.send(tick::TickMsg::Stop { tx: tx_stop }).expect("failed to send tick stop cmd.");
+        tx_tick
+            .send(tick::TickMsg::Stop { tx: tx_stop })
+            .expect("failed to send tick stop cmd.");
     });
 
     g.run().await?;

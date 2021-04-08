@@ -3,7 +3,7 @@ edition = "2018"
 
 comment_width = 100
 fn_args_layout = "Compressed"
-max_width = 150
+max_width = 120
 use_small_heuristics = "Default"
 use_try_shorthand = true
 

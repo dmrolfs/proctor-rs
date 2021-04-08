@@ -1,9 +1,9 @@
+use crate::ProctorContext;
 use chrono::{DateTime, Utc};
 use oso::PolarClass;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
-use crate::ProctorContext;
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FlinkEligibilityContext {
@@ -19,7 +19,9 @@ pub struct FlinkEligibilityContext {
 }
 
 impl ProctorContext for FlinkEligibilityContext {
-    fn custom(&self) -> HashMap<String, String> { self.custom.clone() }
+    fn custom(&self) -> HashMap<String, String> {
+        self.custom.clone()
+    }
 }
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]

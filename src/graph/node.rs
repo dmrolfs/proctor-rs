@@ -30,7 +30,11 @@ impl Node {
                     tracing::error!(error=?err, "node run failed.");
                 }
 
-                let close_result = self.stage.close().instrument(tracing::info_span!("close graph node")).await;
+                let close_result = self
+                    .stage
+                    .close()
+                    .instrument(tracing::info_span!("close graph node"))
+                    .await;
                 if let Err(err) = &close_result {
                     tracing::error!(error=?err, "node close failed.");
                 }

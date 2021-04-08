@@ -23,7 +23,9 @@ pub fn get_settings() -> ProctorResult<Settings> {
         }
 
         None => {
-            let environment: Environment = std::env::var("APP_ENVIRONMENT").unwrap_or_else(|_| "local".into()).try_into()?;
+            let environment: Environment = std::env::var("APP_ENVIRONMENT")
+                .unwrap_or_else(|_| "local".into())
+                .try_into()?;
             settings.merge(config::File::from(configuration_directory.join(environment.as_ref())).required(true))?;
         }
     };
@@ -74,7 +76,10 @@ impl TryFrom<String> for Environment {
         match s.to_lowercase().as_str() {
             "local" => Ok(Self::Local),
             "production" => Ok(Self::Production),
-            other => Err(ConfigError::Environment(format!("do not recognize {} environment.", other))),
+            other => Err(ConfigError::Environment(format!(
+                "do not recognize {} environment.",
+                other
+            ))),
         }
     }
 }

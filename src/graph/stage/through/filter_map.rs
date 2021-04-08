@@ -89,7 +89,10 @@ where
     }
 
     pub fn with_block_logging(self) -> Self {
-        Self { log_blocks: true, ..self }
+        Self {
+            log_blocks: true,
+            ..self
+        }
     }
 }
 

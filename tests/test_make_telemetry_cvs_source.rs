@@ -21,7 +21,9 @@ impl Default for Data {
         Self {
             last_failure: None,
             is_deploying: true,
-            latest_deployment: Utc.datetime_from_str("1970-08-30 11:32:09", "%Y-%m-%d %H:%M:%S").unwrap(),
+            latest_deployment: Utc
+                .datetime_from_str("1970-08-30 11:32:09", "%Y-%m-%d %H:%M:%S")
+                .unwrap(),
         }
     }
 }
@@ -39,56 +41,63 @@ async fn test_make_telemetry_cvs_source() -> Result<()> {
 
     let source = make_telemetry_cvs_source("local", &setting)?;
 
-    let mut sink = stage::Fold::<_, TelemetryData, (Data, bool)>::new("sink", (Data::default(), true), |(acc, mut is_first), rec: TelemetryData| {
-        let dt_format = "%+";
-        let rec_last_failure = rec.get("last_failure").and_then(|r| {
-            if r.is_empty() {
-                None
+    let mut sink = stage::Fold::<_, TelemetryData, (Data, bool)>::new(
+        "sink",
+        (Data::default(), true),
+        |(acc, mut is_first), rec: TelemetryData| {
+            let dt_format = "%+";
+            let rec_last_failure = rec.get("last_failure").and_then(|r| {
+                if r.is_empty() {
+                    None
+                } else {
+                    let lf = DateTime::parse_from_str(r.as_str(), dt_format)
+                        .unwrap()
+                        .with_timezone(&Utc);
+                    Some(lf)
+                }
+            });
+
+            let rec_is_deploying = if is_first {
+                tracing::info!("first record - set is_deploying.");
+                is_first = false;
+                let is_deploying = rec.get("is_deploying").unwrap().as_str().parse::<bool>().unwrap();
+                Some(is_deploying)
             } else {
-                let lf = DateTime::parse_from_str(r.as_str(), dt_format).unwrap().with_timezone(&Utc);
-                Some(lf)
-            }
-        });
+                tracing::info!("not first record - skip parsing is_deploying.");
+                None
+            };
 
-        let rec_is_deploying = if is_first {
-            tracing::info!("first record - set is_deploying.");
-            is_first = false;
-            let is_deploying = rec.get("is_deploying").unwrap().as_str().parse::<bool>().unwrap();
-            Some(is_deploying)
-        } else {
-            tracing::info!("not first record - skip parsing is_deploying.");
-            None
-        };
+            let rec_latest_deployment =
+                DateTime::parse_from_str(rec.get("last_deployment").unwrap().as_str(), dt_format)
+                    .unwrap()
+                    .with_timezone(&Utc);
 
-        let rec_latest_deployment = DateTime::parse_from_str(rec.get("last_deployment").unwrap().as_str(), dt_format)
-            .unwrap()
-            .with_timezone(&Utc);
+            let last_failure = match (acc.last_failure, rec_last_failure) {
+                (None, None) => None,
+                (Some(a), None) => Some(a),
+                (None, Some(r)) => Some(r),
+                (Some(a), Some(r)) if a < r => Some(r),
+                (Some(a), _) => Some(a),
+            };
 
-        let last_failure = match (acc.last_failure, rec_last_failure) {
-            (None, None) => None,
-            (Some(a), None) => Some(a),
-            (None, Some(r)) => Some(r),
-            (Some(a), Some(r)) if a < r => Some(r),
-            (Some(a), _) => Some(a),
-        };
+            let is_deploying = rec_is_deploying.unwrap_or(acc.is_deploying);
 
-        let is_deploying = rec_is_deploying.unwrap_or(acc.is_deploying);
+            let latest_deployment = if acc.latest_deployment < rec_latest_deployment {
+                rec_latest_deployment
+            } else {
+                acc.latest_deployment
+            };
 
-        let latest_deployment = if acc.latest_deployment < rec_latest_deployment {
-            rec_latest_deployment
-        } else {
-            acc.latest_deployment
-        };
-
-        (
-            Data {
-                last_failure,
-                is_deploying,
-                latest_deployment,
-            },
-            is_first,
-        )
-    });
+            (
+                Data {
+                    last_failure,
+                    is_deploying,
+                    latest_deployment,
+                },
+                is_first,
+            )
+        },
+    );
 
     let rx_acc = sink.take_final_rx().unwrap();
 
@@ -103,9 +112,12 @@ async fn test_make_telemetry_cvs_source() -> Result<()> {
     match rx_acc.await {
         Ok((actual, _)) => {
             let expected = Data {
-                last_failure: Some(DateTime::parse_from_str("2014-11-28T12:45:59.324310806Z", "%+")?.with_timezone(&Utc)),
+                last_failure: Some(
+                    DateTime::parse_from_str("2014-11-28T12:45:59.324310806Z", "%+")?.with_timezone(&Utc),
+                ),
                 is_deploying: true,
-                latest_deployment: DateTime::parse_from_str("2021-03-08T23:57:12.918473937Z", "%+")?.with_timezone(&Utc),
+                latest_deployment: DateTime::parse_from_str("2021-03-08T23:57:12.918473937Z", "%+")?
+                    .with_timezone(&Utc),
             };
 
             assert_eq!(actual, expected);

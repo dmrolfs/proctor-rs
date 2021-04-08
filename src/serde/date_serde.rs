@@ -74,7 +74,9 @@ impl<'de> de::Visitor<'de> for OptionalDateTimeFromIso8601Rfc339FormatVisitor {
     where
         D: de::Deserializer<'de>,
     {
-        Ok(Some(deserializer.deserialize_str(DateTimeFromIso8601Rfc3339FormatVisitor)?))
+        Ok(Some(
+            deserializer.deserialize_str(DateTimeFromIso8601Rfc3339FormatVisitor)?,
+        ))
     }
 }
 

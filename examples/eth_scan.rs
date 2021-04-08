@@ -49,7 +49,10 @@ impl Currency {
     where
         S: Into<String>,
     {
-        Self { code, name: name.into() }
+        Self {
+            code,
+            name: name.into(),
+        }
     }
 }
 
@@ -199,8 +202,10 @@ impl<'de> de::Deserialize<'de> for ExchangeRate {
                     }
                 }
 
-                let from_currency_code = from_currency_code.ok_or_else(|| de::Error::missing_field("from_currency_code"))?;
-                let from_currency_name = from_currency_name.ok_or_else(|| de::Error::missing_field("from_currency_name"))?;
+                let from_currency_code =
+                    from_currency_code.ok_or_else(|| de::Error::missing_field("from_currency_code"))?;
+                let from_currency_name =
+                    from_currency_name.ok_or_else(|| de::Error::missing_field("from_currency_name"))?;
                 let to_currency_code = to_currency_code.ok_or_else(|| de::Error::missing_field("to_currency_code"))?;
                 let to_currency_name = to_currency_name.ok_or_else(|| de::Error::missing_field("to_currency_name"))?;
                 let rate = rate.ok_or_else(|| de::Error::missing_field("exchange rate"))?;
@@ -260,7 +265,11 @@ async fn main() -> anyhow::Result<()> {
 
     let url = Url::parse_with_params(
         "https://alpha-vantage.p.rapidapi.com/query",
-        &[("from_currency", "ETH"), ("to_currency", "USD"), ("function", "CURRENCY_EXCHANGE_RATE")],
+        &[
+            ("from_currency", "ETH"),
+            ("to_currency", "USD"),
+            ("function", "CURRENCY_EXCHANGE_RATE"),
+        ],
     )
     .expect("failed to create valid ETH query URL.");
 
@@ -274,7 +283,10 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let mut default_headers = reqwest::header::HeaderMap::new();
-    default_headers.insert("x-rapidapi-key", "fe37af1e07mshd1763d86e5f2a8cp1714cfjsnb6145a35e7ca".parse()?);
+    default_headers.insert(
+        "x-rapidapi-key",
+        "fe37af1e07mshd1763d86e5f2a8cp1714cfjsnb6145a35e7ca".parse()?,
+    );
 
     let to_metric_group = |base: HashMap<String, ExchangeRate>| {
         let (_, rate) = base.into_iter().next().unwrap();

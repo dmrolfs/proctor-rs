@@ -47,17 +47,25 @@ async fn main() -> Result<()> {
     let mut clearinghouse = collection::Clearinghouse::new("clearinghouse");
 
     let pos_stats_fields = maplit::hashset! { POS_FIELD.to_string() };
-    let mut pos_stats = stage::Fold::<_, elements::TelemetryData, (usize, usize)>::new("pos_stats", (0, 0), move |(count, sum), data| {
-        let delivered = data.keys().cloned().collect::<HashSet<_>>();
-        let allowed = &pos_stats_fields;
-        let unexpected = delivered.difference(allowed).collect::<HashSet<_>>();
-        if !unexpected.is_empty() {
-            tracing::error!(?unexpected, "fields delivered beyond allowed.");
-            panic!("fields fields beyond allowed: {:?}", unexpected);
-        }
-        let pos = data.get(POS_FIELD).unwrap().parse::<usize>().expect("failed to parse pos field");
-        (count + 1, sum + pos)
-    });
+    let mut pos_stats = stage::Fold::<_, elements::TelemetryData, (usize, usize)>::new(
+        "pos_stats",
+        (0, 0),
+        move |(count, sum), data| {
+            let delivered = data.keys().cloned().collect::<HashSet<_>>();
+            let allowed = &pos_stats_fields;
+            let unexpected = delivered.difference(allowed).collect::<HashSet<_>>();
+            if !unexpected.is_empty() {
+                tracing::error!(?unexpected, "fields delivered beyond allowed.");
+                panic!("fields fields beyond allowed: {:?}", unexpected);
+            }
+            let pos = data
+                .get(POS_FIELD)
+                .unwrap()
+                .parse::<usize>()
+                .expect("failed to parse pos field");
+            (count + 1, sum + pos)
+        },
+    );
     let rx_pos_stats = pos_stats.take_final_rx().unwrap();
 
     clearinghouse

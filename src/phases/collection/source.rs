@@ -67,7 +67,12 @@ where
 {
     if let SourceSetting::RestApi(query) = setting {
         // scheduler
-        let tick = stage::Tick::new(format!("telemetry_{}_tick", name.as_ref()), Duration::from_nanos(0), query.interval, ());
+        let tick = stage::Tick::new(
+            format!("telemetry_{}_tick", name.as_ref()),
+            Duration::from_nanos(0),
+            query.interval,
+            (),
+        );
         let tx_tick_api = tick.tx_api();
 
         // generator via rest api
@@ -102,7 +107,8 @@ where
             .map(|d| d.unwrap())
         };
 
-        let collect_telemetry = stage::TriggeredGenerator::<_, _, TelemetryData>::new(format!("telemetry_{}_gen", name.as_ref()), gen);
+        let collect_telemetry =
+            stage::TriggeredGenerator::<_, _, TelemetryData>::new(format!("telemetry_{}_gen", name.as_ref()), gen);
 
         // compose tick & generator into a source shape
         let composite_outlet = collect_telemetry.outlet().clone();

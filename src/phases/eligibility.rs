@@ -1,103 +1,139 @@
-use crate::elements::{PolicyFilter, PolicyFilterApi, PolicyFilterMonitor, TelemetryData, Policy};
-use crate::graph::{Graph, Inlet, Outlet, Shape, SourceShape, SinkShape, ThroughShape, GraphResult, Port};
-use crate::{ProctorContext, ProctorResult};
-use crate::graph::stage::{Stage, WithApi, WithMonitor};
-use cast_trait_object::dyn_upcast;
-use async_trait::async_trait;
-use std::fmt;
 use super::collection::{ClearinghouseApi, ClearinghouseCmd};
-use crate::elements::FromTelemetryShape;
+use crate::elements::{Policy, PolicyFilter, PolicyFilterApi, PolicyFilterMonitor, TelemetryData, PolicyFilterEvent};
+use crate::graph::stage::{self, Stage, WithApi, WithMonitor};
+use crate::graph::{Connect, Graph, GraphResult, Inlet, Outlet, Port, Shape, SinkShape, SourceShape, ThroughShape};
+use crate::{ProctorContext, ProctorResult};
+use async_trait::async_trait;
+use cast_trait_object::{dyn_upcast, DynCastExt};
+use std::collections::HashSet;
+use std::fmt;
+use tokio::sync::broadcast;
 
 mod context;
 mod policy;
 
-
 pub struct Eligibility<E: ProctorContext> {
     name: String,
-    policy_filter: Box<PolicyFilter<TelemetryData, E>>,
+    inner: Box<dyn InnerStage>,
+    environment_inlet: Inlet<E>,
     inlet: Inlet<TelemetryData>,
     outlet: Outlet<TelemetryData>,
+    tx_policy_api: PolicyFilterApi<E>,
+    tx_policy_monitor: broadcast::Sender<PolicyFilterEvent<TelemetryData, E>>,
 }
 
 impl<E: ProctorContext> Eligibility<E> {
-    pub fn new<S: Into<String>>(
-        name: S,
-        policy: impl Policy<Item = TelemetryData, Environment = E> + 'static
-    ) -> Self {
+    pub async fn new<S: Into<String>>(
+        name: S, policy: impl Policy<Item = TelemetryData, Environment = E> + 'static,
+        tx_clearinghouse: ClearinghouseApi,
+    ) -> ProctorResult<Self> {
         let name = name.into();
-        let policy_filter = Box::new(PolicyFilter::new(format!("eligibility_{}", name), Box::new(policy)));
-        let inlet = Inlet::new(name.clone());
-        let outlet = Outlet::new(name.clone());
-
-        Self { name, policy_filter, inlet, outlet, }
+        let (environment_source, es_outlet) =
+            Self::subscribe_to_environment(name.as_str(), tx_clearinghouse, policy.subscription_fields()).await?;
+        let policy_filter = PolicyFilter::new(format!("eligibility_{}", name), Box::new(policy));
+        let tx_policy_api = policy_filter.tx_api();
+        let tx_policy_monitor= policy_filter.tx_monitor.clone();
+        let environment_inlet = policy_filter.environment_inlet();
+        let inner = Self::make_inner(name.as_str(), environment_source, es_outlet, policy_filter).await?;
+        let inlet = inner.inlet(); //Inlet::new(name.clone());
+        let outlet = inner.outlet(); //Outlet::new(name.clone());
+        Ok(Self {
+            name,
+            inner,
+            environment_inlet,
+            inlet,
+            outlet,
+            tx_policy_api,
+            tx_policy_monitor,
+        })
     }
 
     #[inline]
-    pub fn environment_inlet(&self) -> Inlet<E> { self.policy_filter.environment_inlet() }
-
-    // #[inline]
-    // pub fn tx_policy_api(&self) -> PolicyFilterApi<E> { self.policy_filter.tx_api() }
-    //
-    // #[inline]
-    // pub fn rx_policy_monitor(&self) -> P:525olicyFilterMonitor<TelemetryData, E> { self.policy_filter.rx_monitor() }
+    pub fn environment_inlet(&self) -> Inlet<E> {
+        self.environment_inlet.clone()
+    }
 }
+
+trait InnerStage: Stage + ThroughShape<In = TelemetryData, Out = TelemetryData> + 'static {}
+impl<T: 'static + Stage + ThroughShape<In = TelemetryData, Out = TelemetryData>> InnerStage for T {}
 
 impl<E: ProctorContext> Eligibility<E> {
-    async fn make_graph<S: AsRef<str>>(
+    async fn make_inner<S: AsRef<str>>(
         name: S,
-        tx_clearinghouse: ClearinghouseApi,
-        policy: Box<dyn Policy<Item = TelemetryData, Environment = E>>,
-    ) -> ProctorResult<Graph> {
-        let environment_channel = Self::subscribe_to_environment(name, tx_clearinghouse, policy).await?;
-todo!()
+        environment_source: Box<dyn Stage>,
+        es_outlet: Outlet<E>,
+        policy_filter: PolicyFilter<TelemetryData, E>,
+    ) -> ProctorResult<Box<dyn InnerStage>> {
+        let name = name.as_ref();
+
+        let graph_inlet = policy_filter.inlet();
+        (es_outlet, policy_filter.environment_inlet()).connect().await;
+        let graph_outlet = policy_filter.outlet();
+
+        let mut graph = Graph::default();
+        graph.push_back(environment_source).await;
+        graph.push_back(Box::new(policy_filter)).await;
+        let composite = stage::CompositeThrough::new(
+            format!("eligibility_composite_{}", name),
+            graph,
+            graph_inlet,
+            graph_outlet,
+        )
+        .await;
+        Ok(Box::new(composite))
     }
 
-    async fn subscribe_to_environment<S: AsRef<str>>(
-        name: S,
-        tx_clearinghouse: ClearinghouseApi,
-        policy: Box<dyn Policy<Item = TelemetryData, Environment = E>>,
-    ) -> ProctorResult<FromTelemetryShape<E>> {
+    //todo: simplify return to a Stage + SourceShape<E> once upcasting is better support wrt type constraints and/or auto trait support is expanded.
+    // but until then settled on this approach to return outlet to be connected with stage.
+    async fn subscribe_to_environment(
+        name: &str, tx_clearinghouse: ClearinghouseApi, subscription_fields: HashSet<String>,
+    ) -> ProctorResult<(Box<dyn Stage>, Outlet<E>)> {
         let convert_telemetry = crate::elements::make_from_telemetry::<E, _>(name).await?;
-        let (cmd, ack) = ClearinghouseCmd::subscribe(
-            convert_telemetry.name(),
-           policy.subscription_fields(),
-            convert_telemetry.inlet()
-        );
+        let outlet = convert_telemetry.outlet();
+        let (cmd, ack) =
+            ClearinghouseCmd::subscribe(convert_telemetry.name(), subscription_fields, convert_telemetry.inlet());
         tx_clearinghouse.send(cmd)?;
         ack.await?;
-        Ok(convert_telemetry)
+        Ok((convert_telemetry.dyn_upcast(), outlet))
     }
 }
 
-impl<E: ProctorContext> Shape for Eligibility<E> { }
-impl<E: ProctorContext> ThroughShape for Eligibility<E> { }
+impl<E: ProctorContext> Shape for Eligibility<E> {}
+impl<E: ProctorContext> ThroughShape for Eligibility<E> {}
 impl<E: ProctorContext> SinkShape for Eligibility<E> {
     type In = TelemetryData;
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
+    fn inlet(&self) -> Inlet<Self::In> {
+        self.inner.inlet()
+    }
 }
 
 impl<E: ProctorContext> SourceShape for Eligibility<E> {
     type Out = TelemetryData;
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.inner.outlet()
+    }
 }
 
 #[dyn_upcast]
 #[async_trait]
 impl<E: ProctorContext> Stage for Eligibility<E> {
     #[inline]
-    fn name(&self) -> &str { self.name.as_ref() }
+    fn name(&self) -> &str {
+        self.name.as_ref()
+    }
 
-    #[tracing::instrument(level="info", name="run eligibility through", skip(self))]
+    #[tracing::instrument(level = "info", name = "run eligibility through", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
-        todo!()
+        self.inner.run().await
     }
 
     async fn close(mut self: Box<Self>) -> GraphResult<()> {
         tracing::trace!("closing eligibility ports.");
         self.inlet.close().await;
-        self.policy_filter.close().await?;
+        self.environment_inlet.close().await;
+        self.inner.close().await?;
         self.outlet.close().await;
         Ok(())
     }
@@ -106,23 +142,22 @@ impl<E: ProctorContext> Stage for Eligibility<E> {
 impl<E: ProctorContext> WithApi for Eligibility<E> {
     type Sender = PolicyFilterApi<E>;
     #[inline]
-    fn tx_api(&self) -> Self::Sender { self.policy_filter.tx_api() }
+    fn tx_api(&self) -> Self::Sender { self.tx_policy_api.clone() }
 }
 
 impl<E: ProctorContext> WithMonitor for Eligibility<E> {
     type Receiver = PolicyFilterMonitor<TelemetryData, E>;
     #[inline]
-    fn rx_monitor(&self) -> Self::Receiver { self.policy_filter.rx_monitor() }
+    fn rx_monitor(&self) -> Self::Receiver { self.tx_policy_monitor.subscribe() }
 }
 
 impl<E: ProctorContext> fmt::Debug for Eligibility<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Eligibility")
             .field("name", &self.name)
-            .field("policy_filter", &self.policy_filter)
+            .field("inner", &self.inner)
             .field("inlet", &self.inlet)
             .field("outlet", &self.outlet)
             .finish()
     }
 }
-

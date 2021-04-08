@@ -8,13 +8,13 @@ use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use oso::Oso;
+use std::collections::HashSet;
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::{broadcast, mpsc};
 use tracing::Instrument;
-use std::collections::HashSet;
 
 pub trait PolicySettings: fmt::Debug {
     fn subscription_fields(&self) -> &HashSet<String>;
@@ -27,7 +27,9 @@ pub trait Policy: fmt::Debug + Send + Sync {
     fn subscription_fields(&self) -> HashSet<String>;
     fn load_knowledge_base(&self, oso: &mut oso::Oso) -> GraphResult<()>;
     fn initialize_knowledge_base(&self, oso: &mut oso::Oso) -> GraphResult<()>;
-    fn query_knowledge_base(&self, oso: &oso::Oso, item_env: (Self::Item, Self::Environment)) -> GraphResult<oso::Query>;
+    fn query_knowledge_base(
+        &self, oso: &oso::Oso, item_env: (Self::Item, Self::Environment),
+    ) -> GraphResult<oso::Query>;
 }
 
 pub struct PolicyFilter<T, E>
@@ -42,7 +44,7 @@ where
     outlet: Outlet<T>,
     tx_api: PolicyFilterApi<E>,
     rx_api: mpsc::UnboundedReceiver<PolicyFilterCmd<E>>,
-    tx_monitor: broadcast::Sender<PolicyFilterEvent<T, E>>,
+    pub tx_monitor: broadcast::Sender<PolicyFilterEvent<T, E>>,
 }
 
 impl<T, E> PolicyFilter<T, E>
@@ -62,7 +64,7 @@ where
         let (tx_monitor, _) = broadcast::channel(num_cpus::get() * 2);
         Self {
             name,
-            policy: policy,
+            policy,
             environment_inlet,
             inlet,
             outlet,
@@ -73,7 +75,9 @@ where
     }
 
     #[inline]
-    pub fn environment_inlet(&self) -> Inlet<E> { self.environment_inlet.clone() }
+    pub fn environment_inlet(&self) -> Inlet<E> {
+        self.environment_inlet.clone()
+    }
 }
 
 impl<T, E> Shape for PolicyFilter<T, E>
@@ -97,7 +101,9 @@ where
 {
     type In = T;
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
+    fn inlet(&self) -> Inlet<Self::In> {
+        self.inlet.clone()
+    }
 }
 
 impl<T, E> SourceShape for PolicyFilter<T, E>
@@ -107,7 +113,9 @@ where
 {
     type Out = T;
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.outlet.clone()
+    }
 }
 
 #[dyn_upcast]
@@ -215,8 +223,12 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip(tx))]
-    fn publish_event(event: PolicyFilterEvent<T, E>, tx: &broadcast::Sender<PolicyFilterEvent<T, E>>) -> GraphResult<()> {
-        let nr_notified = tx.send(event.clone()).map_err::<crate::error::GraphError, _>(|err| err.into())?;
+    fn publish_event(
+        event: PolicyFilterEvent<T, E>, tx: &broadcast::Sender<PolicyFilterEvent<T, E>>,
+    ) -> GraphResult<()> {
+        let nr_notified = tx
+            .send(event.clone())
+            .map_err::<crate::error::GraphError, _>(|err| err.into())?;
         tracing::trace!(%nr_notified, ?event, "notified subscribers of policy filter event.");
         Ok(())
     }
@@ -256,14 +268,23 @@ where
             }
 
             None => {
-                tracing::info!(?item, ?environment, "item and environment did not pass policy review - skipping item.");
+                tracing::info!(
+                    ?item,
+                    ?environment,
+                    "item and environment did not pass policy review - skipping item."
+                );
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
                 Ok(())
             }
         }
     }
 
-    #[tracing::instrument(level = "info", name = "policy_filter handle item before env set", skip(tx), fields())]
+    #[tracing::instrument(
+        level = "info",
+        name = "policy_filter handle item before env set",
+        skip(tx),
+        fields()
+    )]
     fn handle_item_before_env(item: T, tx: &broadcast::Sender<PolicyFilterEvent<T, E>>) -> GraphResult<()> {
         tracing::info!(?item, "dropping item received before policy environment set.");
         Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
@@ -271,7 +292,9 @@ where
     }
 
     #[tracing::instrument(level = "info", name = "policy_filter handle environment", skip(tx), fields())]
-    async fn handle_environment(environment: Arc<Mutex<Option<E>>>, recv_env: E, tx: &broadcast::Sender<PolicyFilterEvent<T, E>>) -> GraphResult<()> {
+    async fn handle_environment(
+        environment: Arc<Mutex<Option<E>>>, recv_env: E, tx: &broadcast::Sender<PolicyFilterEvent<T, E>>,
+    ) -> GraphResult<()> {
         tracing::trace!(recv_environment=?recv_env, "handling policy environment update...");
         let mut env = environment.lock().await;
         *env = Some(recv_env);
@@ -280,9 +303,15 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "policy_filter handle command", skip(oso, policy_context,), fields())]
+    #[tracing::instrument(
+        level = "info",
+        name = "policy_filter handle command",
+        skip(oso, policy_context,),
+        fields()
+    )]
     async fn handle_command(
-        command: PolicyFilterCmd<E>, oso: &mut Oso, name: &str, policy_context: &Box<dyn Policy<Item = T, Environment = E>>,
+        command: PolicyFilterCmd<E>, oso: &mut Oso, name: &str,
+        policy_context: &Box<dyn Policy<Item = T, Environment = E>>,
         environment: std::sync::Arc<tokio::sync::Mutex<Option<E>>>,
     ) -> GraphResult<bool> {
         tracing::trace!(?command, ?environment, "handling policy filter command...");
@@ -424,14 +453,18 @@ mod tests {
         }
 
         fn initialize_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
-            oso.register_class(User::get_polar_class()).map_err::<GraphError, _>(|err| err.into())?;
+            oso.register_class(User::get_polar_class())
+                .map_err::<GraphError, _>(|err| err.into())?;
             oso.register_class(TestEnvironment::get_polar_class())
                 .map_err::<GraphError, _>(|err| err.into())?;
             Ok(())
         }
 
-        fn query_knowledge_base(&self, oso: &Oso, item_env: (Self::Item, Self::Environment)) -> GraphResult<oso::Query> {
-            oso.query_rule("allow", (item_env.0, "foo", "bar")).map_err(|err| err.into())
+        fn query_knowledge_base(
+            &self, oso: &Oso, item_env: (Self::Item, Self::Environment),
+        ) -> GraphResult<oso::Query> {
+            oso.query_rule("allow", (item_env.0, "foo", "bar"))
+                .map_err(|err| err.into())
         }
     }
 

@@ -32,8 +32,14 @@ pub trait ContinueTicking: Send {
 #[derive(fmt::Debug, Clone, Copy, PartialEq)]
 pub enum Constraint {
     None,
-    ByCount { count: usize, limit: usize },
-    ByTime { stop: Option<tokio::time::Instant>, limit: Duration },
+    ByCount {
+        count: usize,
+        limit: usize,
+    },
+    ByTime {
+        stop: Option<tokio::time::Instant>,
+        limit: Duration,
+    },
 }
 
 impl ContinueTicking for Constraint {
@@ -143,7 +149,9 @@ where
         Self::with_constraint(name, initial_delay, interval, tick, Constraint::None)
     }
 
-    pub fn with_constraint<S: Into<String>>(name: S, initial_delay: Duration, interval: Duration, tick: T, constraint: Constraint) -> Self {
+    pub fn with_constraint<S: Into<String>>(
+        name: S, initial_delay: Duration, interval: Duration, tick: T, constraint: Constraint,
+    ) -> Self {
         assert!(interval > Duration::new(0, 0), "`interval` must be non-zero.");
         let name = name.into();
         let outlet = Outlet::new(name.clone());

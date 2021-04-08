@@ -72,16 +72,20 @@ async fn test_scenario(focus: HashSet<String>) -> anyhow::Result<(usize, usize)>
     let mut clearinghouse = collection::Clearinghouse::new("clearinghouse");
 
     let pos_stats_fields = focus.clone();
-    let mut pos_stats = stage::Fold::<_, elements::TelemetryData, (usize, usize)>::new("pos_stats", (0, 0), move |(count, sum), data| {
-        let delivered = data.keys().cloned().collect::<HashSet<_>>();
-        let unexpected = delivered.difference(&pos_stats_fields).collect::<HashSet<_>>();
-        assert!(unexpected.is_empty());
-        let pos = data.get(POS_FIELD).map_or(0, |pos| {
-            tracing::warn!(?pos, "parsing pos...");
-            pos.parse::<usize>().expect("failed to parse pos field")
-        });
-        (count + 1, sum + pos)
-    });
+    let mut pos_stats = stage::Fold::<_, elements::TelemetryData, (usize, usize)>::new(
+        "pos_stats",
+        (0, 0),
+        move |(count, sum), data| {
+            let delivered = data.keys().cloned().collect::<HashSet<_>>();
+            let unexpected = delivered.difference(&pos_stats_fields).collect::<HashSet<_>>();
+            assert!(unexpected.is_empty());
+            let pos = data.get(POS_FIELD).map_or(0, |pos| {
+                tracing::warn!(?pos, "parsing pos...");
+                pos.parse::<usize>().expect("failed to parse pos field")
+            });
+            (count + 1, sum + pos)
+        },
+    );
     let rx_pos_stats = pos_stats.take_final_rx().unwrap();
 
     clearinghouse.add_subscription("pos", focus, &pos_stats.inlet()).await;

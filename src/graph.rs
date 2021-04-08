@@ -83,7 +83,8 @@ impl Graph {
             .into_iter()
             .map(|node| {
                 let name = node.name.clone();
-                node.run().instrument(tracing::info_span!("graph_node_run", graph=%name))
+                node.run()
+                    .instrument(tracing::info_span!("graph_node_run", graph=%name))
             })
             .collect::<Vec<_>>();
 

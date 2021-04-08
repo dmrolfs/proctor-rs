@@ -1,4 +1,6 @@
-use crate::graph::{stage, GraphResult, Inlet, InletsShape, Outlet, Port, Shape, SourceShape, Stage, UniformFanInShape};
+use crate::graph::{
+    stage, GraphResult, Inlet, InletsShape, Outlet, Port, Shape, SourceShape, Stage, UniformFanInShape,
+};
 use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
@@ -148,7 +150,11 @@ where
         let name = name.into();
         let outlet = Outlet::new(name.clone());
         let (tx_api, rx_api) = mpsc::unbounded_channel();
-        let inlets = InletsShape::new((0..input_ports).map(|pos| Inlet::new(format!("{}_{}", name, pos))).collect());
+        let inlets = InletsShape::new(
+            (0..input_ports)
+                .map(|pos| Inlet::new(format!("{}_{}", name, pos)))
+                .collect(),
+        );
 
         Self {
             name,
@@ -277,8 +283,8 @@ where
         fields(nr_remaining=%remaining.len(),),
     )]
     async fn handle_selected_pull<'a>(
-        value: Option<T>, inlet_idx: usize, pulled_idx: usize, remaining: Vec<BoxFuture<'a, (usize, Option<T>)>>, inlets: InletsShape<T>,
-        outlet: &Outlet<T>,
+        value: Option<T>, inlet_idx: usize, pulled_idx: usize, remaining: Vec<BoxFuture<'a, (usize, Option<T>)>>,
+        inlets: InletsShape<T>, outlet: &Outlet<T>,
     ) -> GraphResult<Vec<BoxFuture<'a, (usize, Option<T>)>>> {
         let mut remaining_inlets = remaining;
         let is_active = value.is_some();

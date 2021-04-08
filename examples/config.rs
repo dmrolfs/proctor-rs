@@ -133,7 +133,9 @@ fn load_configuration(mut c: Config, dir: &PathBuf, opts: &CliOptions) -> Procto
             c.merge(config::File::from(config_path).required(true))?;
         }
         None => {
-            let environment: Environment = std::env::var("APP_ENVIRONMENT").unwrap_or_else(|_| "local".into()).try_into()?;
+            let environment: Environment = std::env::var("APP_ENVIRONMENT")
+                .unwrap_or_else(|_| "local".into())
+                .try_into()?;
             c.merge(config::File::from(dir.join(environment.as_ref())).required(true))?;
         }
     };
@@ -192,7 +194,10 @@ impl TryFrom<String> for Environment {
         match s.to_lowercase().as_str() {
             "local" => Ok(Self::Local),
             "production" => Ok(Self::Production),
-            other => Err(ConfigError::Environment(format!("do not recognize {} environment.", other))),
+            other => Err(ConfigError::Environment(format!(
+                "do not recognize {} environment.",
+                other
+            ))),
         }
     }
 }
