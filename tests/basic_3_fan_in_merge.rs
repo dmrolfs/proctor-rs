@@ -10,15 +10,15 @@ async fn test_basic_sequence_3_fan_in_merge() -> Result<()> {
     let main_span = tracing::info_span!("test_basic_sequence_3_fan_in_merge");
     let _main_span_guard = main_span.enter();
 
-    let mut src_0 = stage::Sequence::new("src_ONES", 1..=9);
-    let mut src_1 = stage::Sequence::new("src_TENS", 11..=99);
-    let mut src_2 = stage::Sequence::new("src_HUNDREDS", 101..=999);
+    let src_0 = stage::Sequence::new("src_ONES", 1..=9);
+    let src_1 = stage::Sequence::new("src_TENS", 11..=99);
+    let src_2 = stage::Sequence::new("src_HUNDREDS", 101..=999);
 
-    let mut merge = stage::MergeN::new("merge", 3);
+    let merge = stage::MergeN::new("merge", 3);
 
-    (src_0.outlet(), &merge.inlets().get(0).await.unwrap()).connect().await;
-    (src_1.outlet(), &merge.inlets().get(1).await.unwrap()).connect().await;
-    (src_2.outlet(), &merge.inlets().get(2).await.unwrap()).connect().await;
+    (&src_0.outlet(), &merge.inlets().get(0).await.unwrap()).connect().await;
+    (&src_1.outlet(), &merge.inlets().get(1).await.unwrap()).connect().await;
+    (&src_2.outlet(), &merge.inlets().get(2).await.unwrap()).connect().await;
 
     let mut sum = stage::Fold::new("sum", 0, |acc, x| acc + x);
     let rx_sum = sum.take_final_rx().unwrap();

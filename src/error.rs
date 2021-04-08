@@ -1,6 +1,7 @@
 use std::fmt;
 use thiserror::Error;
 use tokio::task::JoinError;
+use tokio::sync::{mpsc, oneshot};
 
 /// A result type where the error variant is always a `ProctorError`.
 pub type ProctorResult<T> = std::result::Result<T, ProctorError>;
@@ -79,6 +80,19 @@ impl From<csv::Error> for ProctorError {
         ProctorError::Bootstrap(that.into())
     }
 }
+
+impl<T: fmt::Debug + Send + Sync + 'static> From<mpsc::error::SendError<T>> for ProctorError {
+    fn from(that: mpsc::error::SendError<T>) -> Self { ProctorError::Pipeline(that.into()) }
+}
+
+impl From<mpsc::error::RecvError> for ProctorError {
+    fn from(that: mpsc::error::RecvError) -> Self { ProctorError::Pipeline(that.into()) }
+}
+
+impl From<oneshot::error::RecvError> for ProctorError {
+    fn from(that: oneshot::error::RecvError) -> Self { ProctorError::Pipeline(that.into()) }
+}
+
 
 /// Error variants related to configuration.
 #[derive(Debug, Error)]

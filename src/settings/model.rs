@@ -5,7 +5,7 @@ use reqwest::{
     Method, Url,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
@@ -58,13 +58,13 @@ impl HttpQuery {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EligibilitySettings {
+    pub subscription_fields: HashSet<String>,
     pub policy_path: PathBuf,
 }
 
 impl crate::elements::PolicySettings for EligibilitySettings {
-    fn specification_path(&self) -> PathBuf {
-        self.policy_path.clone()
-    }
+    fn subscription_fields(&self) -> &HashSet<String> { &self.subscription_fields }
+    fn specification_path(&self) -> &PathBuf { &self.policy_path }
 }
 
 // #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

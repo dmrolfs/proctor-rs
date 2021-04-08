@@ -44,8 +44,8 @@ async fn test_make_from_telemetry_stage() -> Result<()> {
     let path = base_path.join(PathBuf::from("tests/data/eligibility.csv"));
     let setting = SourceSetting::Csv { path };
 
-    let mut source = make_telemetry_cvs_source("local", &setting)?;
-    let mut convert = make_from_telemetry("convert").await?;
+    let source = make_telemetry_cvs_source("local", &setting)?;
+    let convert = make_from_telemetry("convert").await?;
 
     let mut sink = stage::Fold::<_, Data, Vec<Data>>::new("sink", Vec::default(), |mut acc, item| {
         acc.push(item);

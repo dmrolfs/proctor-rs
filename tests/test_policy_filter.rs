@@ -6,8 +6,7 @@ use proctor::elements::{self, Policy};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::ops::{Add, Sub};
+use std::collections::{HashMap, HashSet};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use proctor::ProctorContext;
@@ -93,6 +92,10 @@ impl Policy for TestPolicy {
     type Item = TestItem;
     type Environment = TestEnvironment;
 
+    fn subscription_fields(&self) -> HashSet<String> {
+        maplit::hashset! { "location_code".to_string(), "input_messages_per_sec".to_string() }
+    }
+
     fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
         oso.load_str(self.policy.as_str()).map_err(|err| err.into())
     }
@@ -134,14 +137,14 @@ struct TestFlow {
 
 impl TestFlow {
     pub async fn new<S: AsRef<str>>(policy: S) -> Self {
-        let mut item_source = stage::ActorSource::<TestItem>::new("item_source");
+        let item_source = stage::ActorSource::<TestItem>::new("item_source");
         let tx_item_source_api = item_source.tx_api();
 
-        let mut env_source = stage::ActorSource::<TestEnvironment>::new("env_source");
+        let env_source = stage::ActorSource::<TestEnvironment>::new("env_source");
         let tx_env_source_api = env_source.tx_api();
 
         let policy = Box::new(TestPolicy::new(policy));
-        let mut policy_filter = elements::PolicyFilter::new("eligibility", policy);
+        let policy_filter = elements::PolicyFilter::new("eligibility", policy);
         let tx_policy_api = policy_filter.tx_api();
         let rx_policy_monitor = policy_filter.rx_monitor();
 

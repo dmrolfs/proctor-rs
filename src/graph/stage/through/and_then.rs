@@ -230,7 +230,7 @@ mod tests {
         use crate::graph::stage;
         use crate::graph::{Connect, Graph};
 
-        let mut source = stage::Sequence::new("src", 4..=10);
+        let source = stage::Sequence::new("src", 4..=10);
 
         let bar = "17".to_string(); // important to type check closing over non-copy value
         let mut calc = AndThen::new("square values", move |x| {

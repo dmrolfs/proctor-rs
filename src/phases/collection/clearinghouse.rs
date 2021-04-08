@@ -32,17 +32,14 @@ pub enum ClearinghouseCmd {
 
 impl ClearinghouseCmd {
     #[inline]
-    pub fn subscribe<S: Into<String>>(name: S, fields: HashSet<String>, receiver: Inlet<TelemetryData>) -> (Self, oneshot::Receiver<Ack>) {
+    pub fn subscribe<S0, S1>(name: S0, fields: HashSet<S1>, receiver: Inlet<TelemetryData>) -> (Self, oneshot::Receiver<Ack>)
+    where
+        S0: Into<String>,
+        S1: Into<String>,
+    {
         let (tx, rx) = oneshot::channel();
-        (
-            Self::Subscribe {
-                name: name.into(),
-                fields,
-                receiver,
-                tx,
-            },
-            rx,
-        )
+        let fields = fields.into_iter().map(|f| f.into()).collect();
+        ( Self::Subscribe { name: name.into(), fields, receiver, tx, }, rx, )
     }
 
     #[inline]
@@ -121,16 +118,17 @@ impl Clearinghouse {
         }
     }
 
-    pub async fn add_subscription<S: Into<String>>(&mut self, name: S, fields: HashSet<String>, receiver: &Inlet<TelemetryData>) {
+    pub async fn add_subscription<S0, S1>(&mut self, name: S0, fields: HashSet<S1>, receiver: &Inlet<TelemetryData>)
+    where
+        S0: Into<String>,
+        S1: Into<String>,
+    {
         let name = name.into();
+        let fields = fields.into_iter().map(|f| f.into()).collect();
         tracing::info!(stage=%self.name, subscription=%name, ?fields, "adding clearinghouse subscription.");
         let outlet_to_subscription = Outlet::new(format!("outlet_to_subscription_{}", name));
         (&outlet_to_subscription, receiver).connect().await;
-        let subscription = TelemetrySubscription {
-            name,
-            fields,
-            outlet_to_subscription,
-        };
+        let subscription = TelemetrySubscription { name, fields, outlet_to_subscription, };
         let nr_subs = self.subscriptions.len();
         self.subscriptions.push(subscription);
         assert_eq!(self.subscriptions.len(), nr_subs + 1);
@@ -142,7 +140,7 @@ impl Clearinghouse {
     ) -> GraphResult<bool> {
         match data {
             Some(d) => {
-                let updated_fields = d.iter().map(|(k, _)| k.to_string()).collect::<HashSet<_>>();
+                let updated_fields = d.keys().cloned().collect::<HashSet<_>>();
                 let interested = Self::find_interested_subscriptions(subscriptions, updated_fields);
 
                 database.extend(d);
@@ -240,7 +238,9 @@ impl Clearinghouse {
 
     #[tracing::instrument(level = "trace", skip(subscriptions, database))]
     async fn handle_command(
-        command: ClearinghouseCmd, subscriptions: &mut Vec<TelemetrySubscription>, database: &TelemetryData,
+        command: ClearinghouseCmd,
+        subscriptions: &mut Vec<TelemetrySubscription>,
+        database: &TelemetryData,
     ) -> GraphResult<bool> {
         match command {
             ClearinghouseCmd::GetSnapshot { name, tx } => {
@@ -257,7 +257,7 @@ impl Clearinghouse {
                     Some(name) => match subscriptions.iter().find(|s| s.name == name) {
                         Some(sub) => {
                             let mut db = database.clone();
-                            db.retain(|k, _| sub.fields.contains(k));
+                            db.retain(|k, _| sub.fields.contains(k.as_str()));
 
                             let mut missing: HashSet<String> = HashSet::default();
                             for field in db.keys() {
@@ -298,11 +298,10 @@ impl Clearinghouse {
             ClearinghouseCmd::Subscribe { name, fields, receiver, tx } => {
                 let outlet_to_subscription = Outlet::new(format!("outlet_to_subscription_{}", name));
                 (&outlet_to_subscription, &receiver).connect().await;
-                let s = TelemetrySubscription {
-                    name,
-                    fields,
-                    outlet_to_subscription,
-                };
+
+                // let fields= fields.iter().cloned().collect::<HashSet<&'a str>>();
+                let fields = fields.iter().map(|f| (*f).clone()).collect();
+                let s: TelemetrySubscription = TelemetrySubscription { name, fields, outlet_to_subscription, };
 
                 tracing::info!(subscriber=?s, "adding telemetry subscriber.");
                 subscriptions.push(s);
@@ -549,7 +548,7 @@ mod tests {
 
             tracing::info!("sending add subscriber command to clearinghouse...");
             let sub1_inlet = Inlet::new("sub1");
-            let (add_cmd, rx_add) = ClearinghouseCmd::subscribe("sub1", maplit::hashset! {"aaa".to_string(), "bbb".to_string()}, sub1_inlet.clone());
+            let (add_cmd, rx_add) = ClearinghouseCmd::subscribe("sub1", maplit::hashset! {"aaa", "bbb"}, sub1_inlet.clone());
             tx_api.send(add_cmd)?;
             tracing::info!("waiting for api confirmation...");
             rx_add.await?;

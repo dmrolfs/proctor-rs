@@ -17,8 +17,8 @@ use tracing::Instrument;
 use std::collections::HashSet;
 
 pub trait PolicySettings: fmt::Debug {
-    fn subscription_fields(&self) -> HashSet<String>;
-    fn specification_path(&self) -> PathBuf;
+    fn subscription_fields(&self) -> &HashSet<String>;
+    fn specification_path(&self) -> &PathBuf;
 }
 
 pub trait Policy: fmt::Debug + Send + Sync {
@@ -73,9 +73,7 @@ where
     }
 
     #[inline]
-    pub fn environment_inlet(&mut self) -> &mut Inlet<E> {
-        &mut self.environment_inlet
-    }
+    pub fn environment_inlet(&self) -> Inlet<E> { self.environment_inlet.clone() }
 }
 
 impl<T, E> Shape for PolicyFilter<T, E>
@@ -150,7 +148,7 @@ where
 
                         match environment.lock().await.as_ref() {
                             Some(env) => Self::handle_item(item, env, &context, &oso, outlet, tx_monitor).await?,
-                            None => Self::<T, E>::handle_item_before_env(item, tx_monitor)?,
+                            None => Self::handle_item_before_env(item, tx_monitor)?,
                         }
                     },
                     None => {
@@ -398,6 +396,7 @@ mod tests {
         #[polar(attribute)]
         pub location_code: u32,
         #[polar(attribute)]
+        #[serde(flatten)]
         pub qualities: HashMap<String, String>,
     }
 
@@ -415,6 +414,10 @@ mod tests {
     impl Policy for TestPolicy {
         type Item = User;
         type Environment = TestEnvironment;
+
+        fn subscription_fields(&self) -> HashSet<String> {
+            maplit::hashset! { "username".to_string(), "foo".to_string(), "score".to_string(), }
+        }
 
         fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
             oso.load_str(self.policy.as_str()).map_err(|err| err.into())

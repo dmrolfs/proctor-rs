@@ -264,7 +264,7 @@ async fn main() -> anyhow::Result<()> {
     )
     .expect("failed to create valid ETH query URL.");
 
-    let mut tick = stage::Tick::with_constraint(
+    let tick = stage::Tick::with_constraint(
         "tick",
         Duration::from_secs(10),
         Duration::from_secs(30),
@@ -292,9 +292,9 @@ async fn main() -> anyhow::Result<()> {
         TelemetryData::from_data(data)
     };
 
-    let mut collect = Collect::new("collect", url, default_headers, to_metric_group).await;
+    let collect = Collect::new("collect", url, default_headers, to_metric_group).await;
 
-    let mut sink = stage::LoggedSink::new("log");
+    let sink = stage::LoggedSink::new("log");
 
     (tick.outlet(), collect.inlet()).connect().await;
     (collect.outlet(), sink.inlet()).connect().await;

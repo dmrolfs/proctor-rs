@@ -1,18 +1,20 @@
-use crate::elements;
-use crate::elements::{Policy, TelemetryData, PolicySource};
+use crate::elements::{Policy, TelemetryData, PolicySource, PolicySettings};
 use crate::graph::GraphResult;
 use oso::{Oso, PolarClass};
 use super::context::*;
 use crate::settings::EligibilitySettings;
+use std::collections::HashSet;
 
 #[derive(Debug)]
 pub struct EligibilityPolicy {
+    subscription_fields: HashSet<String>,
     policy_source: PolicySource,
 }
 
 impl EligibilityPolicy {
     pub fn new(settings: &EligibilitySettings) -> Self {
         Self {
+            subscription_fields: settings.subscription_fields().clone(),
             policy_source: PolicySource::File(settings.policy_path.clone()),
         }
     }
@@ -21,6 +23,8 @@ impl EligibilityPolicy {
 impl Policy for EligibilityPolicy {
     type Item = TelemetryData;
     type Environment = FlinkEligibilityContext;
+
+    fn subscription_fields(&self) -> HashSet<String> { self.subscription_fields.clone() }
 
     fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
         self.policy_source.load_into(oso)

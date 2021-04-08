@@ -1,15 +1,12 @@
 use crate::elements::{PolicyFilter, PolicyFilterApi, PolicyFilterMonitor, TelemetryData, Policy};
 use crate::graph::{Graph, Inlet, Outlet, Shape, SourceShape, SinkShape, ThroughShape, GraphResult, Port};
-use crate::{AppData, ProctorContext, ProctorResult};
-use crate::graph::stage::{self, Stage, WithApi, WithMonitor};
+use crate::{ProctorContext, ProctorResult};
+use crate::graph::stage::{Stage, WithApi, WithMonitor};
 use cast_trait_object::dyn_upcast;
 use async_trait::async_trait;
 use std::fmt;
 use super::collection::{ClearinghouseApi, ClearinghouseCmd};
 use crate::elements::FromTelemetryShape;
-use serde::de::DeserializeOwned;
-use futures::future::FutureExt;
-use crate::error::ProctorError;
 
 mod context;
 mod policy;
@@ -36,7 +33,7 @@ impl<E: ProctorContext> Eligibility<E> {
     }
 
     #[inline]
-    pub fn environment_inlet(&mut self) -> &mut Inlet<E> { self.policy_filter.environment_inlet() }
+    pub fn environment_inlet(&self) -> Inlet<E> { self.policy_filter.environment_inlet() }
 
     // #[inline]
     // pub fn tx_policy_api(&self) -> PolicyFilterApi<E> { self.policy_filter.tx_api() }
@@ -52,7 +49,7 @@ impl<E: ProctorContext> Eligibility<E> {
         policy: Box<dyn Policy<Item = TelemetryData, Environment = E>>,
     ) -> ProctorResult<Graph> {
         let environment_channel = Self::subscribe_to_environment(name, tx_clearinghouse, policy).await?;
-
+todo!()
     }
 
     async fn subscribe_to_environment<S: AsRef<str>>(
@@ -100,7 +97,7 @@ impl<E: ProctorContext> Stage for Eligibility<E> {
     async fn close(mut self: Box<Self>) -> GraphResult<()> {
         tracing::trace!("closing eligibility ports.");
         self.inlet.close().await;
-        self.policy_filter.close().await;
+        self.policy_filter.close().await?;
         self.outlet.close().await;
         Ok(())
     }

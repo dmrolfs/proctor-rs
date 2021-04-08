@@ -93,8 +93,8 @@ pub trait Connect<T: AppData> {
 #[async_trait]
 impl<T: AppData> Connect<T> for (Outlet<T>, Inlet<T>) {
     async fn connect(mut self) {
-        let mut outlet = self.0;
-        let mut inlet = self.1;
+        let outlet = self.0;
+        let inlet = self.1;
         connect_out_to_in(outlet, inlet).await
     }
 }
@@ -103,8 +103,8 @@ impl<T: AppData> Connect<T> for (Outlet<T>, Inlet<T>) {
 #[async_trait]
 impl<T: AppData> Connect<T> for (&Outlet<T>, &Inlet<T>) {
     async fn connect(mut self) {
-        let mut outlet = self.0.clone();
-        let mut inlet = self.1.clone();
+        let outlet = self.0.clone();
+        let inlet = self.1.clone();
         connect_out_to_in(outlet, inlet).await
     }
 }
@@ -112,8 +112,8 @@ impl<T: AppData> Connect<T> for (&Outlet<T>, &Inlet<T>) {
 #[async_trait]
 impl<T: AppData> Connect<T> for (Inlet<T>, Outlet<T>) {
     async fn connect(mut self) {
-        let mut outlet = self.1;
-        let mut inlet = self.0;
+        let outlet = self.1;
+        let inlet = self.0;
         connect_out_to_in(outlet, inlet).await
     }
 }
@@ -122,8 +122,8 @@ impl<T: AppData> Connect<T> for (Inlet<T>, Outlet<T>) {
 #[async_trait]
 impl<T: AppData> Connect<T> for (&Inlet<T>, &Outlet<T>) {
     async fn connect(mut self) {
-        let mut outlet = self.1.clone();
-        let mut inlet = self.0.clone();
+        let outlet = self.1.clone();
+        let inlet = self.0.clone();
         connect_out_to_in(outlet, inlet).await
     }
 }

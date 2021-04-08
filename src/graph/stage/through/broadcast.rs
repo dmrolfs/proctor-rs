@@ -52,9 +52,9 @@ use std::fmt;
 ///     let mut broadcast = stage::Broadcast::new("broadcast", 3);
 ///
 ///     (tick.outlet(), broadcast.inlet()).connect().await;
-///     (broadcast.outlets().get_mut(0).unwrap(), count_0.inlet()).connect().await;
-///     (broadcast.outlets().get_mut(1).unwrap(), sum_1.inlet()).connect().await;
-///     (broadcast.outlets().get_mut(2).unwrap(), concatenate_2.inlet()).connect().await;
+///     (broadcast.outlets().get(0).unwrap(), &count_0.inlet()).connect().await;
+///     (broadcast.outlets().get(1).unwrap(), &sum_1.inlet()).connect().await;
+///     (broadcast.outlets().get(2).unwrap(), &concatenate_2.inlet()).connect().await;
 ///
 ///     let mut g = Graph::default();
 ///     g.push_back(Box::new(tick)).await;

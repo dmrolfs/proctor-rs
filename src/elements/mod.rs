@@ -10,11 +10,11 @@ mod policy_filter;
 mod telemetry;
 
 use oso::PolarClass;
-use std::fmt::Debug;
 use serde::{Serialize, de::DeserializeOwned};
 use std::collections::HashMap;
+use crate::AppData;
 
-pub trait ProctorContext: PolarClass + Debug + Clone + PartialEq + Serialize + DeserializeOwned {
+pub trait ProctorContext: AppData + PolarClass + Clone + PartialEq + Serialize + DeserializeOwned {
     fn custom(&self) -> HashMap<String, String>;
 }
 

@@ -8,11 +8,13 @@ use crate::ProctorContext;
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FlinkEligibilityContext {
     #[polar(attribute)]
+    #[serde(flatten)]
     pub task_status: TaskStatus,
     #[polar(attribute)]
     pub cluster_status: ClusterStatus,
 
     #[polar(attribute)]
+    #[serde(flatten)]
     pub custom: HashMap<String, String>,
 }
 

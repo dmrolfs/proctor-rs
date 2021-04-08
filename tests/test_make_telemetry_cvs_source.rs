@@ -37,7 +37,7 @@ async fn test_make_telemetry_cvs_source() -> Result<()> {
     let path = base_path.join(PathBuf::from("tests/data/eligibility.csv"));
     let setting = SourceSetting::Csv { path };
 
-    let mut source = make_telemetry_cvs_source("local", &setting)?;
+    let source = make_telemetry_cvs_source("local", &setting)?;
 
     let mut sink = stage::Fold::<_, TelemetryData, (Data, bool)>::new("sink", (Data::default(), true), |(acc, mut is_first), rec: TelemetryData| {
         let dt_format = "%+";

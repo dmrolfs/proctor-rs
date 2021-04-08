@@ -15,10 +15,10 @@ where
     Out: AppData + DeserializeOwned,
     S: AsRef<str>,
 {
-    let mut from_telemetry =
+    let from_telemetry =
         stage::Map::<_, TelemetryData, GraphResult<Out>>::new(format!("{}_from_telemetry", name.as_ref()), |data| data.try_into::<Out>());
 
-    let mut filter_failures = stage::FilterMap::new(format!("{}_filter_ok_items", name.as_ref()), |item: GraphResult<Out>| item.ok());
+    let filter_failures = stage::FilterMap::new(format!("{}_filter_ok_items", name.as_ref()), |item: GraphResult<Out>| item.ok());
 
     let cg_inlet = from_telemetry.inlet().clone();
     (from_telemetry.outlet(), filter_failures.inlet()).connect().await;

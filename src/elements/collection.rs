@@ -138,23 +138,23 @@ impl Collect {
         T: AppData + DeserializeOwned + 'static,
         F: FnMut(T) -> TelemetryData + Send + 'static,
     {
-        let mut query = stage::AndThen::new(format!("{}-query", name), move |_| {
+        let query = stage::AndThen::new(format!("{}-query", name), move |_| {
             let client = reqwest::Client::builder().default_headers(default_headers.clone()).build().unwrap();
             let query_url = url.clone();
             async move { Self::do_query::<T>(&client, query_url).await.expect("failed to query") }
         });
-        let mut transform = stage::Map::<_, T, TelemetryData>::new(format!("{}-transform", name), transform);
+        let transform = stage::Map::<_, T, TelemetryData>::new(format!("{}-transform", name), transform);
 
         let bridge_inlet = Inlet::new("into_collection_graph");
 
-        let mut in_bridge = stage::Identity::new(
+        let in_bridge = stage::Identity::new(
             format!("{}-trigger-bridge", name),
             bridge_inlet.clone(),
             Outlet::new("from_collection_graph"),
         );
 
         let bridge_outlet = Outlet::new("collection-outlet");
-        let mut out_bridge = stage::Identity::new(
+        let out_bridge = stage::Identity::new(
             format!("{}-output-bridge", name),
             Inlet::new("from_collection_graph"),
             bridge_outlet.clone(),

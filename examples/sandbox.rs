@@ -42,7 +42,7 @@ async fn main() -> Result<()> {
     let base_path = std::env::current_dir()?;
     let cvs_path = base_path.join(PathBuf::from("tests/data/cats.csv"));
     let cvs_setting = SourceSetting::Csv { path: cvs_path };
-    let mut cvs = collection::make_telemetry_cvs_source("cvs", &cvs_setting)?;
+    let cvs = collection::make_telemetry_cvs_source("cvs", &cvs_setting)?;
 
     let mut clearinghouse = collection::Clearinghouse::new("clearinghouse");
 
@@ -61,7 +61,7 @@ async fn main() -> Result<()> {
     let rx_pos_stats = pos_stats.take_final_rx().unwrap();
 
     clearinghouse
-        .add_subscription("pos", maplit::hashset! { POS_FIELD.to_string() }, pos_stats.inlet())
+        .add_subscription("pos", maplit::hashset! { POS_FIELD.to_string() }, &pos_stats.inlet())
         .await;
 
     // let (mut sink, _, rx_acc) =

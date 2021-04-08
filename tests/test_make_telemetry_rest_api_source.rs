@@ -76,7 +76,7 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
         ],
     });
 
-    let (mut source, tx_tick) = make_telemetry_rest_api_source::<HttpBinResponse, _>("httpbin", &setting).await?;
+    let (source, tx_tick) = make_telemetry_rest_api_source::<HttpBinResponse, _>("httpbin", &setting).await?;
 
     let mut sink = stage::Fold::<_, TelemetryData, (Data, usize)>::new("sink", (Data::default(), 0), |(acc, count), rec: TelemetryData| {
         let dt_format = "%+";

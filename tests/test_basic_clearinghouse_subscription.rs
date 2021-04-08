@@ -67,7 +67,7 @@ async fn test_scenario(focus: HashSet<String>) -> anyhow::Result<(usize, usize)>
     let base_path = std::env::current_dir()?;
     let cvs_path = base_path.join(PathBuf::from("tests/data/cats.csv"));
     let cvs_setting = SourceSetting::Csv { path: cvs_path };
-    let mut cvs = collection::make_telemetry_cvs_source("cvs", &cvs_setting)?;
+    let cvs = collection::make_telemetry_cvs_source("cvs", &cvs_setting)?;
 
     let mut clearinghouse = collection::Clearinghouse::new("clearinghouse");
 
@@ -84,7 +84,7 @@ async fn test_scenario(focus: HashSet<String>) -> anyhow::Result<(usize, usize)>
     });
     let rx_pos_stats = pos_stats.take_final_rx().unwrap();
 
-    clearinghouse.add_subscription("pos", focus, pos_stats.inlet()).await;
+    clearinghouse.add_subscription("pos", focus, &pos_stats.inlet()).await;
 
     (cvs.outlet(), clearinghouse.inlet()).connect().await;
 
