@@ -1,4 +1,4 @@
-use crate::graph::shape::{Shape, SinkShape, SourceShape, ThroughShape};
+use crate::graph::shape::{Shape, SinkShape, SourceShape};
 use crate::graph::{GraphResult, Inlet, Outlet, Port, Stage};
 use crate::AppData;
 use async_trait::async_trait;
@@ -76,14 +76,6 @@ where
 }
 
 impl<F, In, Out> Shape for Map<F, In, Out>
-where
-    F: FnMut(In) -> Out + Send + 'static,
-    In: AppData,
-    Out: AppData,
-{
-}
-
-impl<F, In, Out> ThroughShape for Map<F, In, Out>
 where
     F: FnMut(In) -> Out + Send + 'static,
     In: AppData,

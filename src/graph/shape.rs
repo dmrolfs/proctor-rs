@@ -17,6 +17,7 @@ pub trait SinkShape: Shape {
 }
 
 pub trait ThroughShape: SourceShape + SinkShape {}
+impl<T: SourceShape + SinkShape> ThroughShape for T {}
 
 /// A bidirectional flow of elements that consequently has two inputs and two outputs,
 /// arranged like this:

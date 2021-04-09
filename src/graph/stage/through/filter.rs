@@ -1,4 +1,4 @@
-use crate::graph::shape::{Shape, SinkShape, SourceShape, ThroughShape};
+use crate::graph::shape::{Shape, SinkShape, SourceShape};
 use crate::graph::{GraphResult, Inlet, Outlet, Port, Stage};
 use crate::AppData;
 use async_trait::async_trait;
@@ -81,13 +81,6 @@ where
 }
 
 impl<P, T> Shape for Filter<P, T>
-where
-    P: FnMut(&T) -> bool + Send + 'static,
-    T: AppData,
-{
-}
-
-impl<P, T> ThroughShape for Filter<P, T>
 where
     P: FnMut(&T) -> bool + Send + 'static,
     T: AppData,

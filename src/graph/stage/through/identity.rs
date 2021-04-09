@@ -1,4 +1,4 @@
-use crate::graph::shape::{Shape, SinkShape, SourceShape, ThroughShape};
+use crate::graph::shape::{Shape, SinkShape, SourceShape};
 use crate::graph::{GraphResult, Inlet, Outlet, Port, Stage};
 use crate::AppData;
 use async_trait::async_trait;
@@ -27,8 +27,6 @@ impl<T: AppData> Identity<T> {
 }
 
 impl<T: AppData> Shape for Identity<T> {}
-
-impl<T: AppData> ThroughShape for Identity<T> {}
 
 impl<T: AppData> SourceShape for Identity<T> {
     type Out = T;

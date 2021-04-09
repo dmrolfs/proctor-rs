@@ -1,4 +1,4 @@
-use crate::graph::shape::{Shape, SinkShape, SourceShape, ThroughShape};
+use crate::graph::shape::{Shape, SinkShape, SourceShape};
 use crate::graph::{stage, Connect, Graph, GraphResult, Inlet, Outlet, Port, Stage};
 use crate::AppData;
 use async_trait::async_trait;
@@ -136,8 +136,6 @@ impl<In: AppData + 'static, Out: AppData + 'static> CompositeThrough<In, Out> {
 }
 
 impl<In: AppData, Out: AppData> Shape for CompositeThrough<In, Out> {}
-
-impl<In: AppData, Out: AppData> ThroughShape for CompositeThrough<In, Out> {}
 
 impl<In: AppData, Out: AppData> SourceShape for CompositeThrough<In, Out> {
     type Out = Out;

@@ -1,4 +1,4 @@
-use crate::graph::shape::{Shape, SinkShape, SourceShape, ThroughShape};
+use crate::graph::shape::{Shape, SinkShape, SourceShape};
 use crate::graph::{GraphResult, Inlet, Outlet, Port, Stage};
 use crate::AppData;
 use async_trait::async_trait;
@@ -98,15 +98,6 @@ where
 }
 
 impl<Op, Fut, In, Out> Shape for AndThen<Op, Fut, In, Out>
-where
-    In: AppData,
-    Out: AppData,
-    Fut: Future<Output = Out> + Send,
-    Op: FnMut(In) -> Fut + Send + Sync,
-{
-}
-
-impl<Op, Fut, In, Out> ThroughShape for AndThen<Op, Fut, In, Out>
 where
     In: AppData,
     Out: AppData,

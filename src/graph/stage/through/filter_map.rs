@@ -1,5 +1,5 @@
 use crate::graph::{GraphResult, Inlet, Outlet, Port, Stage};
-use crate::graph::{Shape, SinkShape, SourceShape, ThroughShape};
+use crate::graph::{Shape, SinkShape, SourceShape};
 use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
@@ -97,14 +97,6 @@ where
 }
 
 impl<F, In, Out> Shape for FilterMap<F, In, Out>
-where
-    F: FnMut(In) -> Option<Out> + Send + 'static,
-    In: AppData,
-    Out: AppData,
-{
-}
-
-impl<F, In, Out> ThroughShape for FilterMap<F, In, Out>
 where
     F: FnMut(In) -> Option<Out> + Send + 'static,
     In: AppData,

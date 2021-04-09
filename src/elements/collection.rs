@@ -1,6 +1,6 @@
 use super::TelemetryData;
 use crate::graph::stage::{self, Stage};
-use crate::graph::{Connect, Graph, GraphResult, Inlet, Outlet, Port, Shape, SinkShape, SourceShape, ThroughShape};
+use crate::graph::{Connect, Graph, GraphResult, Inlet, Outlet, Port, Shape, SinkShape, SourceShape};
 use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
@@ -193,8 +193,6 @@ impl Collect {
 }
 
 impl Shape for Collect {}
-
-impl ThroughShape for Collect {}
 
 impl SourceShape for Collect {
     type Out = TelemetryData;

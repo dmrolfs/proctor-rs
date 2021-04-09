@@ -3,7 +3,7 @@ mod protocol;
 
 use crate::graph::stage::{self, Stage};
 use crate::graph::{GraphResult, Inlet, Outlet, Port};
-use crate::graph::{Shape, SinkShape, SourceShape, ThroughShape};
+use crate::graph::{Shape, SinkShape, SourceShape};
 use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
@@ -17,8 +17,8 @@ use tokio::sync::{broadcast, mpsc};
 use tracing::Instrument;
 
 pub trait PolicySettings: fmt::Debug {
-    fn subscription_fields(&self) -> &HashSet<String>;
-    fn specification_path(&self) -> &PathBuf;
+    fn custom_subscription_fields(&self) -> HashSet<String>;
+    fn specification_path(&self) -> PathBuf;
 }
 
 pub trait Policy: fmt::Debug + Send + Sync {
@@ -81,13 +81,6 @@ where
 }
 
 impl<T, E> Shape for PolicyFilter<T, E>
-where
-    T: AppData + Clone,
-    E: AppData + Clone,
-{
-}
-
-impl<T, E> ThroughShape for PolicyFilter<T, E>
 where
     T: AppData + Clone,
     E: AppData + Clone,
