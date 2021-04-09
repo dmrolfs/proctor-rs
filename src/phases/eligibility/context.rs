@@ -11,6 +11,7 @@ pub struct FlinkEligibilityContext {
     #[serde(flatten)]
     pub task_status: TaskStatus,
     #[polar(attribute)]
+    #[serde(flatten)]
     pub cluster_status: ClusterStatus,
 
     #[polar(attribute)]
@@ -28,6 +29,7 @@ impl ProctorContext for FlinkEligibilityContext {
 pub struct TaskStatus {
     #[serde(default)]
     #[serde(
+        rename="task_status.last_failure",
         serialize_with = "crate::serde::serialize_optional_datetime",
         deserialize_with = "crate::serde::deserialize_optional_datetime"
     )]
@@ -46,8 +48,12 @@ impl TaskStatus {
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClusterStatus {
     #[polar(attribute)]
+    #[serde(rename="cluster_status.is_deploying")]
     pub is_deploying: bool,
-    #[serde(with = "crate::serde")]
+    #[serde(
+        with = "crate::serde",
+        rename="cluster_status.last_deployment",
+    )]
     pub last_deployment: DateTime<Utc>,
 }
 
@@ -55,5 +61,61 @@ impl ClusterStatus {
     pub fn last_deployment_within_seconds(&self, seconds: i64) -> bool {
         let boundary = Utc::now() - chrono::Duration::seconds(seconds);
         boundary < self.last_deployment
+    }
+}
+// /////////////////////////////////////////////////////
+// // Unit Tests ///////////////////////////////////////
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use reqwest::header;
+    use serde_test::{assert_tokens, Token};
+    use chrono::{DateTime, TimeZone, Utc};
+    use lazy_static::lazy_static;
+
+    lazy_static! {
+        static ref DT_1: DateTime<Utc> = Utc::now();
+        static ref DT_1_STR: String = format!("{}", DT_1.format("%+"));
+        static ref DT_2: DateTime<Utc> = Utc::now() - chrono::Duration::hours(5);
+        static ref DT_2_STR: String = format!("{}", DT_2.format("%+"));
+    }
+
+    #[test]
+    fn test_serde_flink_eligibility_context() {
+        let context = FlinkEligibilityContext {
+            task_status: TaskStatus { last_failure: Some(DT_1.clone()), },
+            cluster_status: ClusterStatus { is_deploying: false, last_deployment: DT_2.clone(), },
+            custom: maplit::hashmap! {
+                "custom_foo".to_string() => "fred flintstone".to_string(),
+                "custom_bar".to_string() => "The Happy Barber".to_string(),
+            },
+        };
+
+        let mut expected = vec![
+            Token::Map { len: None },
+            Token::Str("task_status.last_failure"),
+            Token::Some,
+            Token::Str(&DT_1_STR),
+            Token::Str("cluster_status.is_deploying"),
+            Token::Bool(false),
+            Token::Str("cluster_status.last_deployment"),
+            Token::Str(&DT_2_STR),
+            Token::Str("custom_foo"),
+            Token::Str("fred flintstone"),
+            Token::Str("custom_bar"),
+            Token::Str("The Happy Barber"),
+            Token::MapEnd,
+        ];
+
+        let result = std::panic::catch_unwind(|| {
+            assert_tokens(&context, expected.as_slice());
+        });
+
+        if result.is_err() {
+            expected.swap(8, 10);
+            expected.swap(9, 11);
+            assert_tokens(&context, expected.as_slice());
+        }
     }
 }

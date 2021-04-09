@@ -1,5 +1,5 @@
 use super::collection::{ClearinghouseApi, ClearinghouseCmd};
-use crate::elements::{Policy, PolicyFilter, PolicyFilterApi, PolicyFilterMonitor, TelemetryData, PolicyFilterEvent};
+use crate::elements::{Policy, PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, TelemetryData};
 use crate::graph::stage::{self, Stage, WithApi, WithMonitor};
 use crate::graph::{Connect, Graph, GraphResult, Inlet, Outlet, Port, Shape, SinkShape, SourceShape, ThroughShape};
 use crate::{ProctorContext, ProctorResult};
@@ -32,7 +32,7 @@ impl<E: ProctorContext> Eligibility<E> {
             Self::subscribe_to_environment(name.as_str(), tx_clearinghouse, policy.subscription_fields()).await?;
         let policy_filter = PolicyFilter::new(format!("eligibility_{}", name), Box::new(policy));
         let tx_policy_api = policy_filter.tx_api();
-        let tx_policy_monitor= policy_filter.tx_monitor.clone();
+        let tx_policy_monitor = policy_filter.tx_monitor.clone();
         let environment_inlet = policy_filter.environment_inlet();
         let inner = Self::make_inner(name.as_str(), environment_source, es_outlet, policy_filter).await?;
         let inlet = inner.inlet(); //Inlet::new(name.clone());
@@ -59,9 +59,7 @@ impl<T: 'static + Stage + ThroughShape<In = TelemetryData, Out = TelemetryData>>
 
 impl<E: ProctorContext> Eligibility<E> {
     async fn make_inner<S: AsRef<str>>(
-        name: S,
-        environment_source: Box<dyn Stage>,
-        es_outlet: Outlet<E>,
+        name: S, environment_source: Box<dyn Stage>, es_outlet: Outlet<E>,
         policy_filter: PolicyFilter<TelemetryData, E>,
     ) -> ProctorResult<Box<dyn InnerStage>> {
         let name = name.as_ref();
@@ -99,7 +97,7 @@ impl<E: ProctorContext> Eligibility<E> {
 }
 
 impl<E: ProctorContext> Shape for Eligibility<E> {}
-impl<E: ProctorContext> ThroughShape for Eligibility<E> {}
+
 impl<E: ProctorContext> SinkShape for Eligibility<E> {
     type In = TelemetryData;
     #[inline]
@@ -142,13 +140,17 @@ impl<E: ProctorContext> Stage for Eligibility<E> {
 impl<E: ProctorContext> WithApi for Eligibility<E> {
     type Sender = PolicyFilterApi<E>;
     #[inline]
-    fn tx_api(&self) -> Self::Sender { self.tx_policy_api.clone() }
+    fn tx_api(&self) -> Self::Sender {
+        self.tx_policy_api.clone()
+    }
 }
 
 impl<E: ProctorContext> WithMonitor for Eligibility<E> {
     type Receiver = PolicyFilterMonitor<TelemetryData, E>;
     #[inline]
-    fn rx_monitor(&self) -> Self::Receiver { self.tx_policy_monitor.subscribe() }
+    fn rx_monitor(&self) -> Self::Receiver {
+        self.tx_policy_monitor.subscribe()
+    }
 }
 
 impl<E: ProctorContext> fmt::Debug for Eligibility<E> {

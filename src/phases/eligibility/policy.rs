@@ -13,10 +13,15 @@ pub struct EligibilityPolicy {
 
 impl EligibilityPolicy {
     pub fn new(settings: &EligibilitySettings) -> Self {
-        Self {
-            subscription_fields: settings.subscription_fields().clone(),
-            policy_source: PolicySource::File(settings.policy_path.clone()),
-        }
+        let mut subscription_fields = maplit::hashset! {
+            "task_status.last_failure".to_string(),
+            "cluster_status.is_deploying".to_string(),
+            "cluster_status.last_deployment".to_string(),
+        };
+        subscription_fields.extend(settings.custom_subscription_fields());
+
+        let policy_source = PolicySource::File(settings.policy_path.clone());
+        Self { subscription_fields, policy_source, }
     }
 }
 

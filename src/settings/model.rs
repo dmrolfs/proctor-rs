@@ -58,17 +58,15 @@ impl HttpQuery {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EligibilitySettings {
-    pub subscription_fields: HashSet<String>,
+    pub custom_subscription_fields: HashSet<String>,
     pub policy_path: PathBuf,
 }
 
 impl crate::elements::PolicySettings for EligibilitySettings {
-    fn subscription_fields(&self) -> &HashSet<String> {
-        &self.subscription_fields
-    }
-    fn specification_path(&self) -> &PathBuf {
-        &self.policy_path
-    }
+    #[inline]
+    fn custom_subscription_fields(&self) -> HashSet<String> { self.custom_subscription_fields.clone() }
+    #[inline]
+    fn specification_path(&self) -> PathBuf { self.policy_path.clone() }
 }
 
 // #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -269,6 +267,7 @@ impl crate::elements::PolicySettings for EligibilitySettings {
 //         map.end()
 //     }
 // }
+
 // /////////////////////////////////////////////////////
 // // Unit Tests ///////////////////////////////////////
 
@@ -277,6 +276,35 @@ mod tests {
     use super::*;
     use reqwest::header;
     use serde_test::{assert_tokens, Token};
+
+    #[test]
+    fn test_serde_eligibility_settings() {
+        let settings = EligibilitySettings {
+            custom_subscription_fields: maplit::hashset! { "foo".to_string(), "bar".to_string() },
+            policy_path: PathBuf::from("./tests/policies/eligibility.polar"),
+        };
+
+        let mut expected = vec![
+            Token::Struct { name: "EligibilitySettings", len: 2 },
+            Token::Str("custom_subscription_fields"),
+            Token::Seq { len: Some(2) },
+            Token::Str("foo"),
+            Token::Str("bar"),
+            Token::SeqEnd,
+            Token::Str("policy_path"),
+            Token::Str("./tests/policies/eligibility.polar"),
+            Token::StructEnd,
+        ];
+
+        let result = std::panic::catch_unwind(|| {
+            assert_tokens(&settings, expected.as_slice());
+        });
+
+        if result.is_err() {
+            expected.swap(3,4);
+            assert_tokens(&settings, expected.as_slice());
+        }
+    }
 
     #[test]
     fn test_serde_http_query() {
