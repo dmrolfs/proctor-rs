@@ -1,9 +1,9 @@
-use crate::graph::shape::{Shape, SinkShape, SourceShape};
+use crate::graph::shape::{SinkShape, SourceShape};
 use crate::graph::{GraphResult, Inlet, Outlet, Port, Stage};
 use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
-use std::fmt;
+use std::fmt::{self, Debug};
 
 /// Transform this stream by applying the given function to each of the elements as they pass
 /// through this processing step.
@@ -46,9 +46,7 @@ use std::fmt;
 /// ```
 pub struct Map<F, In, Out>
 where
-    F: FnMut(In) -> Out + Send + 'static,
-    In: AppData,
-    Out: AppData,
+    F: FnMut(In) -> Out,
 {
     name: String,
     operation: F,
@@ -58,9 +56,7 @@ where
 
 impl<F, In, Out> Map<F, In, Out>
 where
-    F: FnMut(In) -> Out + Send + 'static,
-    In: AppData,
-    Out: AppData,
+    F: FnMut(In) -> Out,
 {
     pub fn new<S: Into<String>>(name: S, operation: F) -> Self {
         let name = name.into();
@@ -75,19 +71,9 @@ where
     }
 }
 
-impl<F, In, Out> Shape for Map<F, In, Out>
-where
-    F: FnMut(In) -> Out + Send + 'static,
-    In: AppData,
-    Out: AppData,
-{
-}
-
 impl<F, In, Out> SourceShape for Map<F, In, Out>
 where
-    F: FnMut(In) -> Out + Send + 'static,
-    In: AppData,
-    Out: AppData,
+    F: FnMut(In) -> Out,
 {
     type Out = Out;
     #[inline]
@@ -98,9 +84,7 @@ where
 
 impl<F, In, Out> SinkShape for Map<F, In, Out>
 where
-    F: FnMut(In) -> Out + Send + 'static,
-    In: AppData,
-    Out: AppData,
+    F: FnMut(In) -> Out,
 {
     type In = In;
     #[inline]
@@ -141,11 +125,9 @@ where
     }
 }
 
-impl<F, In, Out> fmt::Debug for Map<F, In, Out>
+impl<F, In, Out> Debug for Map<F, In, Out>
 where
-    F: FnMut(In) -> Out + Send,
-    In: AppData,
-    Out: AppData,
+    F: FnMut(In) -> Out,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Map")

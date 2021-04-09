@@ -1,20 +1,20 @@
 use crate::graph::stage::{self, Stage};
-use crate::graph::{GraphResult, Outlet, Port, Shape, SourceShape};
+use crate::graph::{GraphResult, Outlet, Port, SourceShape};
 use crate::{Ack, AppData};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
-use std::fmt;
+use std::fmt::{self, Debug};
 use tokio::sync::{mpsc, oneshot};
 
 pub type ActorSourceApi<T> = mpsc::UnboundedSender<ActorSourceCmd<T>>;
 
 #[derive(Debug)]
-pub enum ActorSourceCmd<T: AppData> {
+pub enum ActorSourceCmd<T> {
     Push { item: T, tx: oneshot::Sender<Ack> },
     Stop(oneshot::Sender<Ack>),
 }
 
-impl<T: AppData> ActorSourceCmd<T> {
+impl<T> ActorSourceCmd<T> {
     #[inline]
     pub fn push(item: T) -> (Self, oneshot::Receiver<Ack>) {
         let (tx, rx) = oneshot::channel();
@@ -30,14 +30,14 @@ impl<T: AppData> ActorSourceCmd<T> {
 
 /// Actor-based protocol to source items into a graph flow.
 ///
-pub struct ActorSource<T: AppData> {
+pub struct ActorSource<T> {
     name: String,
     outlet: Outlet<T>,
     tx_api: ActorSourceApi<T>,
     rx_api: mpsc::UnboundedReceiver<ActorSourceCmd<T>>,
 }
 
-impl<T: AppData> ActorSource<T> {
+impl<T> ActorSource<T> {
     pub fn new<S: Into<String>>(name: S) -> Self {
         let name = name.into();
         let outlet = Outlet::new(name.clone());
@@ -51,9 +51,7 @@ impl<T: AppData> ActorSource<T> {
     }
 }
 
-impl<T: AppData> Shape for ActorSource<T> {}
-
-impl<T: AppData> SourceShape for ActorSource<T> {
+impl<T> SourceShape for ActorSource<T> {
     type Out = T;
     #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
@@ -108,7 +106,7 @@ impl<T: AppData> Stage for ActorSource<T> {
     }
 }
 
-impl<T: AppData> stage::WithApi for ActorSource<T> {
+impl<T> stage::WithApi for ActorSource<T> {
     type Sender = ActorSourceApi<T>;
     #[inline]
     fn tx_api(&self) -> Self::Sender {
@@ -116,7 +114,7 @@ impl<T: AppData> stage::WithApi for ActorSource<T> {
     }
 }
 
-impl<T: AppData> fmt::Debug for ActorSource<T> {
+impl<T> Debug for ActorSource<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ActorSource")
             .field("name", &self.name)

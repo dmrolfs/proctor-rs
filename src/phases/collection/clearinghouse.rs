@@ -1,14 +1,12 @@
 use crate::elements::TelemetryData;
 use crate::graph::stage::Stage;
-use crate::graph::{
-    stage, Connect, GraphResult, Inlet, Outlet, OutletsShape, Port, Shape, SinkShape, UniformFanOutShape,
-};
+use crate::graph::{stage, Connect, GraphResult, Inlet, Outlet, OutletsShape, Port, SinkShape, UniformFanOutShape};
 use crate::Ack;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use futures::future::FutureExt;
 use std::collections::HashSet;
-use std::fmt;
+use std::fmt::{self, Debug};
 use std::iter::FromIterator;
 use tokio::sync::{mpsc, oneshot};
 
@@ -362,7 +360,7 @@ impl Clearinghouse {
     }
 }
 
-impl fmt::Debug for Clearinghouse {
+impl Debug for Clearinghouse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Clearinghouse")
             .field("name", &self.name)
@@ -371,8 +369,6 @@ impl fmt::Debug for Clearinghouse {
             .finish()
     }
 }
-
-impl Shape for Clearinghouse {}
 
 impl SinkShape for Clearinghouse {
     type In = TelemetryData;

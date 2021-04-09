@@ -1,4 +1,4 @@
-use crate::{Ack, AppData};
+use crate::Ack;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
 pub type PolicyFilterApi<E> = mpsc::UnboundedSender<PolicyFilterCmd<E>>;
@@ -47,7 +47,7 @@ pub struct PolicyFilterDetail<E> {
 }
 
 #[derive(Debug, Clone)]
-pub enum PolicyFilterEvent<T: AppData, E: AppData> {
+pub enum PolicyFilterEvent<T, E> {
     EnvironmentChanged(Option<E>),
     ItemBlocked(T),
 }

@@ -1,17 +1,17 @@
-use crate::graph::shape::{Shape, SinkShape, SourceShape};
+use crate::graph::shape::{SinkShape, SourceShape};
 use crate::graph::{GraphResult, Inlet, Outlet, Port, Stage};
 use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
-use std::fmt;
+use std::fmt::{self, Debug};
 
-pub struct Identity<T: AppData> {
+pub struct Identity<T> {
     name: String,
     inlet: Inlet<T>,
     outlet: Outlet<T>,
 }
 
-impl<T: AppData> Identity<T> {
+impl<T> Identity<T> {
     pub fn new<S: Into<String>>(name: S, inlet: Inlet<T>, outlet: Outlet<T>) -> Self {
         Self {
             name: name.into(),
@@ -26,9 +26,7 @@ impl<T: AppData> Identity<T> {
     }
 }
 
-impl<T: AppData> Shape for Identity<T> {}
-
-impl<T: AppData> SourceShape for Identity<T> {
+impl<T> SourceShape for Identity<T> {
     type Out = T;
     #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
@@ -36,7 +34,7 @@ impl<T: AppData> SourceShape for Identity<T> {
     }
 }
 
-impl<T: AppData> SinkShape for Identity<T> {
+impl<T> SinkShape for Identity<T> {
     type In = T;
     #[inline]
     fn inlet(&self) -> Inlet<Self::In> {
@@ -46,7 +44,7 @@ impl<T: AppData> SinkShape for Identity<T> {
 
 #[dyn_upcast]
 #[async_trait]
-impl<T: AppData + 'static> Stage for Identity<T> {
+impl<T: AppData> Stage for Identity<T> {
     #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
@@ -69,7 +67,7 @@ impl<T: AppData + 'static> Stage for Identity<T> {
     }
 }
 
-impl<T: AppData> fmt::Debug for Identity<T> {
+impl<T> Debug for Identity<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Identity")
             .field("name", &self.name)

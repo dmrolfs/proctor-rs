@@ -1,11 +1,9 @@
-use crate::graph::{
-    stage, GraphResult, Inlet, InletsShape, Outlet, Port, Shape, SourceShape, Stage, UniformFanInShape,
-};
+use crate::graph::{stage, GraphResult, Inlet, InletsShape, Outlet, Port, SourceShape, Stage, UniformFanInShape};
 use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use futures::future::{self, BoxFuture, FutureExt};
-use std::fmt;
+use std::fmt::{self, Debug};
 use tokio::sync::{mpsc, oneshot};
 
 pub type MergeApi = mpsc::UnboundedSender<MergeMsg>;
@@ -128,10 +126,7 @@ pub enum MergeMsg {
 ///     })
 /// }
 /// ```
-pub struct MergeN<T>
-where
-    T: AppData,
-{
+pub struct MergeN<T> {
     name: String,
     inlets: InletsShape<T>,
     outlet: Outlet<T>,
@@ -139,14 +134,8 @@ where
     rx_api: mpsc::UnboundedReceiver<MergeMsg>,
 }
 
-impl<T> MergeN<T>
-where
-    T: AppData,
-{
-    pub fn new<S>(name: S, input_ports: usize) -> Self
-    where
-        S: Into<String>,
-    {
+impl<T: Send> MergeN<T> {
+    pub fn new<S: Into<String>>(name: S, input_ports: usize) -> Self {
         let name = name.into();
         let outlet = Outlet::new(name.clone());
         let (tx_api, rx_api) = mpsc::unbounded_channel();
@@ -166,12 +155,7 @@ where
     }
 }
 
-impl<T> Shape for MergeN<T> where T: AppData {}
-
-impl<T> UniformFanInShape for MergeN<T>
-where
-    T: AppData,
-{
+impl<T> UniformFanInShape for MergeN<T> {
     type In = T;
     #[inline]
     fn inlets(&self) -> InletsShape<T> {
@@ -179,10 +163,7 @@ where
     }
 }
 
-impl<T> SourceShape for MergeN<T>
-where
-    T: AppData,
-{
+impl<T> SourceShape for MergeN<T> {
     type Out = T;
     #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
@@ -192,10 +173,7 @@ where
 
 #[dyn_upcast]
 #[async_trait]
-impl<T> Stage for MergeN<T>
-where
-    T: AppData,
-{
+impl<T: AppData> Stage for MergeN<T> {
     #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
@@ -253,12 +231,9 @@ where
     }
 }
 
-impl<T> MergeN<T>
-where
-    T: AppData,
-{
+impl<'a, T: 'a + Debug + Send> MergeN<T> {
     #[tracing::instrument(level = "trace", skip(inlets))]
-    async fn initialize_active_inlets<'a>(inlets: InletsShape<T>) -> Vec<BoxFuture<'a, (usize, Option<T>)>> {
+    async fn initialize_active_inlets(inlets: InletsShape<T>) -> Vec<BoxFuture<'a, (usize, Option<T>)>> {
         let inlets = inlets.0.lock().await;
         let mut active_inlets = Vec::with_capacity(inlets.len());
 
@@ -282,7 +257,7 @@ where
         skip(remaining, inlets, outlet),
         fields(nr_remaining=%remaining.len(),),
     )]
-    async fn handle_selected_pull<'a>(
+    async fn handle_selected_pull(
         value: Option<T>, inlet_idx: usize, pulled_idx: usize, remaining: Vec<BoxFuture<'a, (usize, Option<T>)>>,
         inlets: InletsShape<T>, outlet: &Outlet<T>,
     ) -> GraphResult<Vec<BoxFuture<'a, (usize, Option<T>)>>> {
@@ -315,10 +290,7 @@ where
     }
 }
 
-impl<T> stage::WithApi for MergeN<T>
-where
-    T: AppData,
-{
+impl<T> stage::WithApi for MergeN<T> {
     type Sender = MergeApi;
 
     #[inline]
@@ -327,10 +299,7 @@ where
     }
 }
 
-impl<T> fmt::Debug for MergeN<T>
-where
-    T: AppData,
-{
+impl<T> Debug for MergeN<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("MergeN")
             .field("name", &self.name)

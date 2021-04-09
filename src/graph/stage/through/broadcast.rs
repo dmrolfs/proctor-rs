@@ -1,8 +1,8 @@
-use crate::graph::{GraphResult, Inlet, Outlet, OutletsShape, Port, Shape, SinkShape, Stage, UniformFanOutShape};
+use crate::graph::{GraphResult, Inlet, Outlet, OutletsShape, Port, SinkShape, Stage, UniformFanOutShape};
 use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
-use std::fmt;
+use std::fmt::{self, Debug};
 
 /// Fan-out the stream to several streams emitting each incoming upstream element to all downstream
 /// consumers.
@@ -70,13 +70,13 @@ use std::fmt;
 ///     Ok(())
 /// }
 /// ```
-pub struct Broadcast<T: AppData + Clone> {
+pub struct Broadcast<T> {
     name: String,
     inlet: Inlet<T>,
     outlets: Vec<Outlet<T>>,
 }
 
-impl<T: AppData + Clone> Broadcast<T> {
+impl<T> Broadcast<T> {
     pub fn new<S: Into<String>>(name: S, output_ports: usize) -> Self {
         let name = name.into();
         let inlet = Inlet::new(name.clone());
@@ -88,9 +88,7 @@ impl<T: AppData + Clone> Broadcast<T> {
     }
 }
 
-impl<T: AppData + Clone> Shape for Broadcast<T> {}
-
-impl<T: AppData + Clone> UniformFanOutShape for Broadcast<T> {
+impl<T> UniformFanOutShape for Broadcast<T> {
     type Out = T;
 
     #[inline]
@@ -99,7 +97,7 @@ impl<T: AppData + Clone> UniformFanOutShape for Broadcast<T> {
     }
 }
 
-impl<T: AppData + Clone> SinkShape for Broadcast<T> {
+impl<T> SinkShape for Broadcast<T> {
     type In = T;
     #[inline]
     fn inlet(&self) -> Inlet<Self::In> {
@@ -109,7 +107,7 @@ impl<T: AppData + Clone> SinkShape for Broadcast<T> {
 
 #[dyn_upcast]
 #[async_trait]
-impl<T: AppData + Clone> Stage for Broadcast<T> {
+impl<T: AppData + Clone + Sync> Stage for Broadcast<T> {
     #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
@@ -137,7 +135,7 @@ impl<T: AppData + Clone> Stage for Broadcast<T> {
     }
 }
 
-impl<T: AppData + Clone> fmt::Debug for Broadcast<T> {
+impl<T> Debug for Broadcast<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Broadcast")
             .field("name", &self.name)

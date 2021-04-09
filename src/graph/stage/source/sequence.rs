@@ -1,4 +1,4 @@
-use crate::graph::shape::{Shape, SourceShape};
+use crate::graph::shape::SourceShape;
 use crate::graph::{GraphResult, Outlet, Port, Stage};
 use crate::AppData;
 use async_trait::async_trait;
@@ -53,21 +53,13 @@ use std::fmt;
 ///     }
 /// }
 /// ```
-pub struct Sequence<T, I>
-where
-    T: AppData,
-    I: Iterator<Item = T> + Send + 'static,
-{
+pub struct Sequence<T, I> {
     name: String,
     items: Option<I>,
     outlet: Outlet<T>,
 }
 
-impl<T, I> Sequence<T, I>
-where
-    T: AppData,
-    I: Iterator<Item = T> + Send + 'static,
-{
+impl<T, I> Sequence<T, I> {
     pub fn new<S, I0>(name: S, data: I0) -> Self
     where
         S: Into<String>,
@@ -115,18 +107,7 @@ where
     }
 }
 
-impl<T, I> Shape for Sequence<T, I>
-where
-    T: AppData,
-    I: Iterator<Item = T> + Send + 'static,
-{
-}
-
-impl<T, I> SourceShape for Sequence<T, I>
-where
-    T: AppData,
-    I: Iterator<Item = T> + Send + 'static,
-{
+impl<T, I> SourceShape for Sequence<T, I> {
     type Out = T;
     #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
@@ -134,11 +115,7 @@ where
     }
 }
 
-impl<T, I> fmt::Debug for Sequence<T, I>
-where
-    T: AppData,
-    I: Iterator<Item = T> + Send + 'static,
-{
+impl<T, I> fmt::Debug for Sequence<T, I> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Sequence")
             .field("name", &self.name)

@@ -1,8 +1,9 @@
-use crate::graph::shape::{Shape, SourceShape};
+use crate::graph::shape::SourceShape;
 use crate::graph::{stage, Connect, Graph, GraphResult, Inlet, Outlet, Port, Stage};
 use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
+use std::fmt::Debug;
 
 /// Source shape that encapsulates externally created stages, supporting graph stage composition.
 ///
@@ -137,13 +138,13 @@ use cast_trait_object::dyn_upcast;
 /// }
 /// ```
 #[derive(Debug)]
-pub struct CompositeSource<Out: AppData + 'static> {
+pub struct CompositeSource<Out> {
     name: String,
     graph: Option<Graph>,
     outlet: Outlet<Out>,
 }
 
-impl<Out: AppData + 'static> CompositeSource<Out> {
+impl<Out: AppData + Sync> CompositeSource<Out> {
     pub async fn new<S>(name: S, graph: Graph, graph_outlet: Outlet<Out>) -> Self
     where
         S: Into<String>,
@@ -168,9 +169,7 @@ impl<Out: AppData + 'static> CompositeSource<Out> {
     }
 }
 
-impl<Out: AppData> Shape for CompositeSource<Out> {}
-
-impl<Out: AppData + 'static> SourceShape for CompositeSource<Out> {
+impl<Out> SourceShape for CompositeSource<Out> {
     type Out = Out;
     #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {

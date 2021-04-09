@@ -1,9 +1,9 @@
-use crate::graph::shape::{Shape, SinkShape, SourceShape};
+use crate::graph::shape::{SinkShape, SourceShape};
 use crate::graph::{GraphResult, Inlet, Outlet, Port, Stage};
 use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
-use std::fmt;
+use std::fmt::{self, Debug};
 
 /// Filter the incoming elements using a predicate.
 ///
@@ -44,8 +44,7 @@ use std::fmt;
 /// ```
 pub struct Filter<P, T>
 where
-    P: FnMut(&T) -> bool + Send + 'static,
-    T: AppData,
+    P: FnMut(&T) -> bool,
 {
     name: String,
     predicate: P,
@@ -56,8 +55,7 @@ where
 
 impl<P, T> Filter<P, T>
 where
-    P: FnMut(&T) -> bool + Send + 'static,
-    T: AppData,
+    P: FnMut(&T) -> bool,
 {
     pub fn new<S: Into<String>>(name: S, predicate: P) -> Self {
         let name = name.into();
@@ -80,17 +78,9 @@ where
     }
 }
 
-impl<P, T> Shape for Filter<P, T>
-where
-    P: FnMut(&T) -> bool + Send + 'static,
-    T: AppData,
-{
-}
-
 impl<P, T> SourceShape for Filter<P, T>
 where
-    P: FnMut(&T) -> bool + Send + 'static,
-    T: AppData,
+    P: FnMut(&T) -> bool,
 {
     type Out = T;
 
@@ -102,8 +92,7 @@ where
 
 impl<P, T> SinkShape for Filter<P, T>
 where
-    P: FnMut(&T) -> bool + Send + 'static,
-    T: AppData,
+    P: FnMut(&T) -> bool,
 {
     type In = T;
 
@@ -150,10 +139,9 @@ where
     }
 }
 
-impl<P, T> fmt::Debug for Filter<P, T>
+impl<P, T> Debug for Filter<P, T>
 where
-    P: FnMut(&T) -> bool + Send + 'static,
-    T: AppData,
+    P: FnMut(&T) -> bool,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("Filter")

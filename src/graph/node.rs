@@ -44,26 +44,4 @@ impl Node {
             .instrument(tracing::info_span!("spawn-run-graph-node",)),
         )
     }
-
-    // pub fn abort(&mut self) -> GraphResult<()> {
-    //     self.handle.take().map_or(Ok(()), |h| Ok(h.abort()))
-    // }
-
-    // #[tracing::instrument(
-    //     level="info",
-    //     name="complete node",
-    //     skip(self),
-    //     fields(stage=%self.name),
-    // )]
-    // pub async fn complete(mut self) -> GraphResult<()> {
-    //     match self.handle.take() {
-    //         None => Ok(()),
-    //         Some(h) => {
-    //             tracing::info!(handle=?h, "awaiting on JoinHandle...");
-    //             // drop(h);
-    //             h.await?; //.expect( format!( "failed to complete node: {}", self.name ).as_str(), )
-    //             self.stage.close().await
-    //         }
-    //     }
-    // }
 }

@@ -1,18 +1,18 @@
 use super::collection::{ClearinghouseApi, ClearinghouseCmd};
 use crate::elements::{Policy, PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, TelemetryData};
 use crate::graph::stage::{self, Stage, WithApi, WithMonitor};
-use crate::graph::{Connect, Graph, GraphResult, Inlet, Outlet, Port, Shape, SinkShape, SourceShape, ThroughShape};
+use crate::graph::{Connect, Graph, GraphResult, Inlet, Outlet, Port, SinkShape, SourceShape, ThroughShape};
 use crate::{ProctorContext, ProctorResult};
 use async_trait::async_trait;
 use cast_trait_object::{dyn_upcast, DynCastExt};
 use std::collections::HashSet;
-use std::fmt;
+use std::fmt::{self, Debug};
 use tokio::sync::broadcast;
 
 mod context;
 mod policy;
 
-pub struct Eligibility<E: ProctorContext> {
+pub struct Eligibility<E> {
     name: String,
     inner: Box<dyn InnerStage>,
     environment_inlet: Inlet<E>,
@@ -96,9 +96,7 @@ impl<E: ProctorContext> Eligibility<E> {
     }
 }
 
-impl<E: ProctorContext> Shape for Eligibility<E> {}
-
-impl<E: ProctorContext> SinkShape for Eligibility<E> {
+impl<E> SinkShape for Eligibility<E> {
     type In = TelemetryData;
     #[inline]
     fn inlet(&self) -> Inlet<Self::In> {
@@ -106,7 +104,7 @@ impl<E: ProctorContext> SinkShape for Eligibility<E> {
     }
 }
 
-impl<E: ProctorContext> SourceShape for Eligibility<E> {
+impl<E> SourceShape for Eligibility<E> {
     type Out = TelemetryData;
     #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
@@ -116,7 +114,7 @@ impl<E: ProctorContext> SourceShape for Eligibility<E> {
 
 #[dyn_upcast]
 #[async_trait]
-impl<E: ProctorContext> Stage for Eligibility<E> {
+impl<E: Send + 'static> Stage for Eligibility<E> {
     #[inline]
     fn name(&self) -> &str {
         self.name.as_ref()
@@ -137,7 +135,7 @@ impl<E: ProctorContext> Stage for Eligibility<E> {
     }
 }
 
-impl<E: ProctorContext> WithApi for Eligibility<E> {
+impl<E> WithApi for Eligibility<E> {
     type Sender = PolicyFilterApi<E>;
     #[inline]
     fn tx_api(&self) -> Self::Sender {
@@ -145,7 +143,7 @@ impl<E: ProctorContext> WithApi for Eligibility<E> {
     }
 }
 
-impl<E: ProctorContext> WithMonitor for Eligibility<E> {
+impl<E> WithMonitor for Eligibility<E> {
     type Receiver = PolicyFilterMonitor<TelemetryData, E>;
     #[inline]
     fn rx_monitor(&self) -> Self::Receiver {
@@ -153,7 +151,7 @@ impl<E: ProctorContext> WithMonitor for Eligibility<E> {
     }
 }
 
-impl<E: ProctorContext> fmt::Debug for Eligibility<E> {
+impl<E> Debug for Eligibility<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Eligibility")
             .field("name", &self.name)

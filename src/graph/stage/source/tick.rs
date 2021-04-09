@@ -1,11 +1,11 @@
-use crate::graph::shape::{Shape, SourceShape};
+use crate::graph::shape::SourceShape;
 use crate::graph::{stage, GraphResult, Outlet, Port, Stage};
 use crate::AppData;
 use async_stream::stream;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use futures_util::stream::StreamExt;
-use std::fmt;
+use std::fmt::{self, Debug};
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 use tracing::Instrument;
@@ -127,10 +127,7 @@ impl Constraint {
 ///     assert_eq!(None, rx.recv().await);
 /// }
 /// ```
-pub struct Tick<T>
-where
-    T: AppData + Clone + Unpin,
-{
+pub struct Tick<T> {
     name: String,
     pub initial_delay: Duration,
     pub interval: Duration,
@@ -141,10 +138,7 @@ where
     rx_api: mpsc::UnboundedReceiver<TickMsg>,
 }
 
-impl<T> Tick<T>
-where
-    T: AppData + Clone + Unpin,
-{
+impl<T> Tick<T> {
     pub fn new<S: Into<String>>(name: S, initial_delay: Duration, interval: Duration, tick: T) -> Self {
         Self::with_constraint(name, initial_delay, interval, tick, Constraint::None)
     }
@@ -170,12 +164,7 @@ where
     }
 }
 
-impl<T> Shape for Tick<T> where T: AppData + Clone + Unpin {}
-
-impl<T> SourceShape for Tick<T>
-where
-    T: AppData + Clone + Unpin,
-{
+impl<T> SourceShape for Tick<T> {
     type Out = T;
     #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
@@ -187,7 +176,7 @@ where
 #[async_trait]
 impl<T> Stage for Tick<T>
 where
-    T: AppData + Clone + Unpin + 'static,
+    T: AppData + Clone + Unpin + Sync,
 {
     #[inline]
     fn name(&self) -> &str {
@@ -261,10 +250,7 @@ where
     }
 }
 
-impl<T> stage::WithApi for Tick<T>
-where
-    T: AppData + Clone + Unpin,
-{
+impl<T> stage::WithApi for Tick<T> {
     type Sender = TickApi;
 
     #[inline]
@@ -273,10 +259,7 @@ where
     }
 }
 
-impl<T> fmt::Debug for Tick<T>
-where
-    T: AppData + Clone + Unpin,
-{
+impl<T> Debug for Tick<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Tick")
             .field("name", &self.name)

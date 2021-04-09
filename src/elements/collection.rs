@@ -1,13 +1,13 @@
 use super::TelemetryData;
 use crate::graph::stage::{self, Stage};
-use crate::graph::{Connect, Graph, GraphResult, Inlet, Outlet, Port, Shape, SinkShape, SourceShape};
+use crate::graph::{Connect, Graph, GraphResult, Inlet, Outlet, Port, SinkShape, SourceShape};
 use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use reqwest::header::HeaderMap;
 use reqwest::{IntoUrl, Url};
 use serde::de::DeserializeOwned;
-use std::fmt;
+use std::fmt::{self, Debug};
 
 //todo: collect once every minute for scaling metrics
 
@@ -192,8 +192,6 @@ impl Collect {
     }
 }
 
-impl Shape for Collect {}
-
 impl SourceShape for Collect {
     type Out = TelemetryData;
     #[inline]
@@ -234,7 +232,7 @@ impl Stage for Collect {
     }
 }
 
-impl fmt::Debug for Collect {
+impl Debug for Collect {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Collect")
             .field("target_url", &self.target)

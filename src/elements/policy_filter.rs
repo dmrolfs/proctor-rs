@@ -3,25 +3,25 @@ mod protocol;
 
 use crate::graph::stage::{self, Stage};
 use crate::graph::{GraphResult, Inlet, Outlet, Port};
-use crate::graph::{Shape, SinkShape, SourceShape};
+use crate::graph::{SinkShape, SourceShape};
 use crate::{AppData, ProctorContext};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use oso::Oso;
 use std::collections::HashSet;
-use std::fmt;
+use std::fmt::{self, Debug};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::{broadcast, mpsc};
 use tracing::Instrument;
 
-pub trait PolicySettings: fmt::Debug {
+pub trait PolicySettings {
     fn custom_subscription_fields(&self) -> HashSet<String>;
     fn specification_path(&self) -> PathBuf;
 }
 
-pub trait Policy: fmt::Debug + Send + Sync {
+pub trait Policy: Debug + Send + Sync {
     type Item;
     type Environment: ProctorContext;
     fn subscription_fields(&self) -> HashSet<String>;
@@ -32,13 +32,9 @@ pub trait Policy: fmt::Debug + Send + Sync {
     ) -> GraphResult<oso::Query>;
 }
 
-pub struct PolicyFilter<T, E>
-where
-    T: AppData + Clone,
-    E: AppData + Clone,
-{
+pub struct PolicyFilter<T, E> {
     name: String,
-    policy: Box<dyn Policy<Item = T, Environment = E> + 'static>,
+    policy: Box<dyn Policy<Item = T, Environment = E>>,
     environment_inlet: Inlet<E>,
     inlet: Inlet<T>,
     outlet: Outlet<T>,
@@ -49,13 +45,10 @@ where
 
 impl<T, E> PolicyFilter<T, E>
 where
-    T: AppData + Clone,
-    E: AppData + Clone,
+    T: Clone,
+    E: Clone,
 {
-    pub fn new<S>(name: S, policy: Box<dyn Policy<Item = T, Environment = E>>) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn new<S: Into<String>>(name: S, policy: Box<dyn Policy<Item = T, Environment = E>>) -> Self {
         let name = name.into();
         let environment_inlet = Inlet::new(format!("{}_environment", name.clone()));
         let inlet = Inlet::new(name.clone());
@@ -80,18 +73,7 @@ where
     }
 }
 
-impl<T, E> Shape for PolicyFilter<T, E>
-where
-    T: AppData + Clone,
-    E: AppData + Clone,
-{
-}
-
-impl<T, E> SinkShape for PolicyFilter<T, E>
-where
-    T: AppData + Clone,
-    E: AppData + Clone,
-{
+impl<T, E> SinkShape for PolicyFilter<T, E> {
     type In = T;
     #[inline]
     fn inlet(&self) -> Inlet<Self::In> {
@@ -99,11 +81,7 @@ where
     }
 }
 
-impl<T, E> SourceShape for PolicyFilter<T, E>
-where
-    T: AppData + Clone,
-    E: AppData + Clone,
-{
+impl<T, E> SourceShape for PolicyFilter<T, E> {
     type Out = T;
     #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
@@ -115,8 +93,8 @@ where
 #[async_trait]
 impl<T, E> Stage for PolicyFilter<T, E>
 where
-    T: AppData + Clone,
-    E: AppData + Clone + ProctorContext,
+    T: AppData + Clone + Sync,
+    E: ProctorContext + Debug + Clone + Send + Sync,
 {
     #[inline]
     fn name(&self) -> &str {
@@ -195,8 +173,8 @@ where
 
 impl<T, E> PolicyFilter<T, E>
 where
-    T: AppData + Clone,
-    E: AppData + Clone + ProctorContext,
+    T: Debug + Clone,
+    E: ProctorContext + Debug + Clone,
 {
     #[tracing::instrument(level = "info", name = "make policy knowledge base", skip(self))]
     fn oso(&self) -> GraphResult<Oso> {
@@ -349,11 +327,7 @@ where
     }
 }
 
-impl<T, E> stage::WithApi for PolicyFilter<T, E>
-where
-    T: AppData + Clone,
-    E: AppData + Clone,
-{
+impl<T, E> stage::WithApi for PolicyFilter<T, E> {
     type Sender = PolicyFilterApi<E>;
 
     #[inline]
@@ -362,11 +336,7 @@ where
     }
 }
 
-impl<T, E> stage::WithMonitor for PolicyFilter<T, E>
-where
-    T: AppData + Clone,
-    E: AppData + Clone,
-{
+impl<T, E> stage::WithMonitor for PolicyFilter<T, E> {
     type Receiver = PolicyFilterMonitor<T, E>;
     #[inline]
     fn rx_monitor(&self) -> Self::Receiver {
@@ -374,11 +344,7 @@ where
     }
 }
 
-impl<T, E> fmt::Debug for PolicyFilter<T, E>
-where
-    T: AppData + Clone,
-    E: AppData + Clone,
-{
+impl<T, E> Debug for PolicyFilter<T, E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("PolicyFilter")
             .field("name", &self.name)

@@ -1,10 +1,10 @@
-use crate::graph::shape::{Shape, SinkShape, SourceShape};
+use crate::graph::shape::{SinkShape, SourceShape};
 use crate::graph::{GraphResult, Inlet, Outlet, Port, Stage};
 use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use futures::future::Future;
-use std::fmt;
+use std::fmt::{self, Debug};
 
 /// Transform this stream by applying the given function to each of the elements as they pass
 /// through this processing step.
@@ -47,10 +47,8 @@ use std::fmt;
 /// ```
 pub struct AndThen<Op, Fut, In, Out>
 where
-    In: AppData,
-    Out: AppData,
-    Fut: Future<Output = Out> + Send,
-    Op: FnMut(In) -> Fut + Send + Sync,
+    Fut: Future<Output = Out>,
+    Op: FnMut(In) -> Fut,
 {
     name: String,
     operation: Op,
@@ -58,12 +56,10 @@ where
     outlet: Outlet<Out>,
 }
 
-impl<Op, Fut, In, Out> fmt::Debug for AndThen<Op, Fut, In, Out>
+impl<Op, Fut, In, Out> Debug for AndThen<Op, Fut, In, Out>
 where
-    In: AppData,
-    Out: AppData,
-    Fut: Future<Output = Out> + Send,
-    Op: FnMut(In) -> Fut + Send + Sync,
+    Fut: Future<Output = Out>,
+    Op: FnMut(In) -> Fut,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AsyncMap")
@@ -76,15 +72,10 @@ where
 
 impl<Op, Fut, In, Out> AndThen<Op, Fut, In, Out>
 where
-    In: AppData,
-    Out: AppData,
-    Fut: Future<Output = Out> + Send,
-    Op: FnMut(In) -> Fut + Send + Sync,
+    Fut: Future<Output = Out>,
+    Op: FnMut(In) -> Fut,
 {
-    pub fn new<S>(name: S, operation: Op) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn new<S: Into<String>>(name: S, operation: Op) -> Self {
         let name = name.into();
         let inlet = Inlet::new(name.clone());
         let outlet = Outlet::new(name.clone());
@@ -97,21 +88,10 @@ where
     }
 }
 
-impl<Op, Fut, In, Out> Shape for AndThen<Op, Fut, In, Out>
-where
-    In: AppData,
-    Out: AppData,
-    Fut: Future<Output = Out> + Send,
-    Op: FnMut(In) -> Fut + Send + Sync,
-{
-}
-
 impl<Op, Fut, In, Out> SourceShape for AndThen<Op, Fut, In, Out>
 where
-    In: AppData,
-    Out: AppData,
-    Fut: Future<Output = Out> + Send,
-    Op: FnMut(In) -> Fut + Send + Sync,
+    Fut: Future<Output = Out>,
+    Op: FnMut(In) -> Fut,
 {
     type Out = Out;
     #[inline]
@@ -122,10 +102,8 @@ where
 
 impl<Op, Fut, In, Out> SinkShape for AndThen<Op, Fut, In, Out>
 where
-    In: AppData,
-    Out: AppData,
-    Fut: Future<Output = Out> + Send,
-    Op: FnMut(In) -> Fut + Send + Sync,
+    Fut: Future<Output = Out>,
+    Op: FnMut(In) -> Fut,
 {
     type In = In;
     #[inline]
@@ -141,7 +119,7 @@ where
     In: AppData,
     Out: AppData,
     Fut: Future<Output = Out> + Send + 'static,
-    Op: FnMut(In) -> Fut + Send + Sync + 'static,
+    Op: FnMut(In) -> Fut + Send + 'static,
 {
     #[inline]
     fn name(&self) -> &str {

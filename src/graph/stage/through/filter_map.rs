@@ -1,9 +1,9 @@
 use crate::graph::{GraphResult, Inlet, Outlet, Port, Stage};
-use crate::graph::{Shape, SinkShape, SourceShape};
+use crate::graph::{SinkShape, SourceShape};
 use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
-use std::fmt;
+use std::fmt::{self, Debug};
 
 /// The FilterMap stage both filters and maps on items.
 ///
@@ -58,9 +58,7 @@ use std::fmt;
 /// ```
 pub struct FilterMap<F, In, Out>
 where
-    F: FnMut(In) -> Option<Out> + Send + 'static,
-    In: AppData,
-    Out: AppData,
+    F: FnMut(In) -> Option<Out>,
 {
     name: String,
     filter_map: F,
@@ -71,9 +69,7 @@ where
 
 impl<F, In, Out> FilterMap<F, In, Out>
 where
-    F: FnMut(In) -> Option<Out> + Send + 'static,
-    In: AppData,
-    Out: AppData,
+    F: FnMut(In) -> Option<Out>,
 {
     pub fn new<S: Into<String>>(name: S, f: F) -> Self {
         let name = name.into();
@@ -96,19 +92,9 @@ where
     }
 }
 
-impl<F, In, Out> Shape for FilterMap<F, In, Out>
-where
-    F: FnMut(In) -> Option<Out> + Send + 'static,
-    In: AppData,
-    Out: AppData,
-{
-}
-
 impl<F, In, Out> SourceShape for FilterMap<F, In, Out>
 where
-    F: FnMut(In) -> Option<Out> + Send + 'static,
-    In: AppData,
-    Out: AppData,
+    F: FnMut(In) -> Option<Out>,
 {
     type Out = Out;
 
@@ -120,9 +106,7 @@ where
 
 impl<F, In, Out> SinkShape for FilterMap<F, In, Out>
 where
-    F: FnMut(In) -> Option<Out> + Send + 'static,
-    In: AppData,
-    Out: AppData,
+    F: FnMut(In) -> Option<Out>,
 {
     type In = In;
 
@@ -169,11 +153,9 @@ where
     }
 }
 
-impl<F, In, Out> fmt::Debug for FilterMap<F, In, Out>
+impl<F, In, Out> Debug for FilterMap<F, In, Out>
 where
-    F: FnMut(In) -> Option<Out> + Send + 'static,
-    In: AppData,
-    Out: AppData,
+    F: FnMut(In) -> Option<Out>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("FilterMap")

@@ -64,9 +64,13 @@ pub struct EligibilitySettings {
 
 impl crate::elements::PolicySettings for EligibilitySettings {
     #[inline]
-    fn custom_subscription_fields(&self) -> HashSet<String> { self.custom_subscription_fields.clone() }
+    fn custom_subscription_fields(&self) -> HashSet<String> {
+        self.custom_subscription_fields.clone()
+    }
     #[inline]
-    fn specification_path(&self) -> PathBuf { self.policy_path.clone() }
+    fn specification_path(&self) -> PathBuf {
+        self.policy_path.clone()
+    }
 }
 
 // #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -285,7 +289,10 @@ mod tests {
         };
 
         let mut expected = vec![
-            Token::Struct { name: "EligibilitySettings", len: 2 },
+            Token::Struct {
+                name: "EligibilitySettings",
+                len: 2,
+            },
             Token::Str("custom_subscription_fields"),
             Token::Seq { len: Some(2) },
             Token::Str("foo"),
@@ -301,7 +308,7 @@ mod tests {
         });
 
         if result.is_err() {
-            expected.swap(3,4);
+            expected.swap(3, 4);
             assert_tokens(&settings, expected.as_slice());
         }
     }

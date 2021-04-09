@@ -14,7 +14,7 @@ use oso::PolarClass;
 use serde::{de::DeserializeOwned, Serialize};
 use std::collections::{HashMap, HashSet};
 
-pub trait ProctorContext: AppData + PolarClass + Clone + PartialEq + Serialize + DeserializeOwned {
+pub trait ProctorContext: AppData + PolarClass + Clone + PartialEq + Serialize + DeserializeOwned + Sync {
     fn subscription_fields_nucleus() -> HashSet<String>;
     fn custom(&self) -> HashMap<String, String>;
 }

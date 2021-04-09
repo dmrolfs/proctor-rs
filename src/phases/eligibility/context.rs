@@ -37,7 +37,7 @@ impl ProctorContext for FlinkEligibilityContext {
 pub struct TaskStatus {
     #[serde(default)]
     #[serde(
-        rename="task_status.last_failure",
+        rename = "task_status.last_failure",
         serialize_with = "crate::serde::serialize_optional_datetime",
         deserialize_with = "crate::serde::deserialize_optional_datetime"
     )]
@@ -56,12 +56,9 @@ impl TaskStatus {
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClusterStatus {
     #[polar(attribute)]
-    #[serde(rename="cluster_status.is_deploying")]
+    #[serde(rename = "cluster_status.is_deploying")]
     pub is_deploying: bool,
-    #[serde(
-        with = "crate::serde",
-        rename="cluster_status.last_deployment",
-    )]
+    #[serde(with = "crate::serde", rename = "cluster_status.last_deployment")]
     pub last_deployment: DateTime<Utc>,
 }
 
@@ -78,9 +75,9 @@ impl ClusterStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_test::{assert_tokens, Token};
     use chrono::{DateTime, Utc};
     use lazy_static::lazy_static;
+    use serde_test::{assert_tokens, Token};
 
     lazy_static! {
         static ref DT_1: DateTime<Utc> = Utc::now();
@@ -92,8 +89,13 @@ mod tests {
     #[test]
     fn test_serde_flink_eligibility_context() {
         let context = FlinkEligibilityContext {
-            task_status: TaskStatus { last_failure: Some(DT_1.clone()), },
-            cluster_status: ClusterStatus { is_deploying: false, last_deployment: DT_2.clone(), },
+            task_status: TaskStatus {
+                last_failure: Some(DT_1.clone()),
+            },
+            cluster_status: ClusterStatus {
+                is_deploying: false,
+                last_deployment: DT_2.clone(),
+            },
             custom: maplit::hashmap! {
                 "custom_foo".to_string() => "fred flintstone".to_string(),
                 "custom_bar".to_string() => "The Happy Barber".to_string(),

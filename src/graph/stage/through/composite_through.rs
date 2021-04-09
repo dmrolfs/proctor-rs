@@ -1,8 +1,9 @@
-use crate::graph::shape::{Shape, SinkShape, SourceShape};
+use crate::graph::shape::{SinkShape, SourceShape};
 use crate::graph::{stage, Connect, Graph, GraphResult, Inlet, Outlet, Port, Stage};
 use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
+use std::fmt::Debug;
 
 /// Through shape that encapsulates externally created stages, supporting graph stage composition.
 ///
@@ -84,14 +85,14 @@ use cast_trait_object::dyn_upcast;
 /// }
 /// ```
 #[derive(Debug)]
-pub struct CompositeThrough<In: AppData, Out: AppData> {
+pub struct CompositeThrough<In, Out> {
     name: String,
     graph: Option<Graph>,
     inlet: Inlet<In>,
     outlet: Outlet<Out>,
 }
 
-impl<In: AppData + 'static, Out: AppData + 'static> CompositeThrough<In, Out> {
+impl<In: AppData + Sync, Out: AppData + Sync> CompositeThrough<In, Out> {
     pub async fn new<S>(name: S, graph: Graph, graph_inlet: Inlet<In>, graph_outlet: Outlet<Out>) -> Self
     where
         S: Into<String>,
@@ -135,9 +136,7 @@ impl<In: AppData + 'static, Out: AppData + 'static> CompositeThrough<In, Out> {
     }
 }
 
-impl<In: AppData, Out: AppData> Shape for CompositeThrough<In, Out> {}
-
-impl<In: AppData, Out: AppData> SourceShape for CompositeThrough<In, Out> {
+impl<In, Out> SourceShape for CompositeThrough<In, Out> {
     type Out = Out;
     #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
@@ -145,7 +144,7 @@ impl<In: AppData, Out: AppData> SourceShape for CompositeThrough<In, Out> {
     }
 }
 
-impl<In: AppData, Out: AppData> SinkShape for CompositeThrough<In, Out> {
+impl<In, Out> SinkShape for CompositeThrough<In, Out> {
     type In = In;
     #[inline]
     fn inlet(&self) -> Inlet<Self::In> {

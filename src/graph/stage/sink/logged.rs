@@ -1,26 +1,17 @@
-use crate::graph::shape::{Shape, SinkShape};
+use crate::graph::shape::SinkShape;
 use crate::graph::{GraphResult, Inlet, Port, Stage};
 use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt;
 
-pub struct LoggedSink<In>
-where
-    In: AppData,
-{
+pub struct LoggedSink<In> {
     name: String,
     inlet: Inlet<In>,
 }
 
-impl<In> LoggedSink<In>
-where
-    In: AppData,
-{
-    pub fn new<S>(name: S) -> Self
-    where
-        S: Into<String>,
-    {
+impl<In> LoggedSink<In> {
+    pub fn new<S: Into<String>>(name: S) -> Self {
         let name = name.into();
         let inlet = Inlet::new(name.clone());
         Self { name, inlet }
@@ -29,10 +20,7 @@ where
 
 #[dyn_upcast]
 #[async_trait]
-impl<In> Stage for LoggedSink<In>
-where
-    In: AppData + 'static,
-{
+impl<In: AppData> Stage for LoggedSink<In> {
     #[inline]
     fn name(&self) -> &str {
         self.name.as_ref()
@@ -53,12 +41,7 @@ where
     }
 }
 
-impl<In> Shape for LoggedSink<In> where In: AppData {}
-
-impl<In> SinkShape for LoggedSink<In>
-where
-    In: AppData,
-{
+impl<In> SinkShape for LoggedSink<In> {
     type In = In;
 
     #[inline]
@@ -67,10 +50,7 @@ where
     }
 }
 
-impl<In> fmt::Debug for LoggedSink<In>
-where
-    In: AppData,
-{
+impl<In> fmt::Debug for LoggedSink<In> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LoggedSink")
             .field("name", &self.name)

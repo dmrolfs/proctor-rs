@@ -1,8 +1,8 @@
-use crate::graph::{FanInShape2, GraphResult, Inlet, Outlet, Port, Shape, SourceShape, Stage};
+use crate::graph::{FanInShape2, GraphResult, Inlet, Outlet, Port, SourceShape, Stage};
 use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
-use std::fmt;
+use std::fmt::{self, Debug};
 
 /// Merge multiple sources. Picks elements randomly if all sources has elements ready.
 ///
@@ -36,18 +36,15 @@ use std::fmt;
 ///     Ok(())
 /// }
 /// ```
-pub struct Merge<T: AppData> {
+pub struct Merge<T> {
     name: String,
     inlet_0: Inlet<T>,
     inlet_1: Inlet<T>,
     outlet: Outlet<T>,
 }
 
-impl<T: AppData> Merge<T> {
-    pub fn new<S>(name: S) -> Self
-    where
-        S: Into<String>,
-    {
+impl<T> Merge<T> {
+    pub fn new<S: Into<String>>(name: S) -> Self {
         let name = name.into();
         let inlet_0 = Inlet::new(format!("{}_0", name));
         let inlet_1 = Inlet::new(format!("{}_1", name));
@@ -61,9 +58,7 @@ impl<T: AppData> Merge<T> {
     }
 }
 
-impl<T: AppData> Shape for Merge<T> {}
-
-impl<T: AppData> FanInShape2 for Merge<T> {
+impl<T> FanInShape2 for Merge<T> {
     type In0 = T;
     type In1 = T;
 
@@ -78,7 +73,7 @@ impl<T: AppData> FanInShape2 for Merge<T> {
     }
 }
 
-impl<T: AppData> SourceShape for Merge<T> {
+impl<T> SourceShape for Merge<T> {
     type Out = T;
     #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
@@ -131,7 +126,7 @@ impl<T: AppData> Stage for Merge<T> {
     }
 }
 
-impl<T: AppData> fmt::Debug for Merge<T> {
+impl<T> Debug for Merge<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Merge")
             .field("name", &self.name)

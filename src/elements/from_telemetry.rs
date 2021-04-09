@@ -7,21 +7,14 @@ use serde::de::DeserializeOwned;
 
 pub type FromTelemetryShape<Out> = Box<dyn FromTelemetryStage<Out>>;
 
-pub trait FromTelemetryStage<Out>: Stage + ThroughShape<In = TelemetryData, Out = Out> + 'static
-where
-    Out: crate::AppData + serde::de::DeserializeOwned,
-{
-}
+pub trait FromTelemetryStage<Out>: Stage + ThroughShape<In = TelemetryData, Out = Out> + 'static {}
 
-impl<Out: AppData + DeserializeOwned, T: 'static + Stage + ThroughShape<In = TelemetryData, Out = Out>>
-    FromTelemetryStage<Out> for T
-{
-}
+impl<Out, T> FromTelemetryStage<Out> for T where T: Stage + ThroughShape<In = TelemetryData, Out = Out> + 'static {}
 
 #[tracing::instrument(level = "info", skip(name))]
 pub async fn make_from_telemetry<Out, S>(name: S) -> ProctorResult<FromTelemetryShape<Out>>
 where
-    Out: AppData + DeserializeOwned,
+    Out: AppData + Sync + DeserializeOwned,
     S: AsRef<str>,
 {
     let from_telemetry =

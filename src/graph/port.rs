@@ -1,13 +1,12 @@
 use crate::error::GraphError;
-use crate::AppData;
 use async_trait::async_trait;
-use std::fmt;
+use std::fmt::{self, Debug};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 
 #[async_trait]
-pub trait Port: fmt::Debug + Send {
+pub trait Port: fmt::Debug {
     fn name(&self) -> &str;
 
     /// Closes this half of a channel without dropping it.
@@ -21,12 +20,12 @@ pub trait Port: fmt::Debug + Send {
 }
 
 #[async_trait]
-pub trait Connect<T: AppData> {
+pub trait Connect<T> {
     async fn connect(self);
 }
 
 #[async_trait]
-impl<T: AppData> Connect<T> for (Outlet<T>, Inlet<T>) {
+impl<T: Debug + Send> Connect<T> for (Outlet<T>, Inlet<T>) {
     async fn connect(mut self) {
         let outlet = self.0;
         let inlet = self.1;
@@ -36,7 +35,7 @@ impl<T: AppData> Connect<T> for (Outlet<T>, Inlet<T>) {
 
 #[async_trait]
 #[async_trait]
-impl<T: AppData> Connect<T> for (&Outlet<T>, &Inlet<T>) {
+impl<T: Debug + Send> Connect<T> for (&Outlet<T>, &Inlet<T>) {
     async fn connect(mut self) {
         let outlet = self.0.clone();
         let inlet = self.1.clone();
@@ -45,7 +44,7 @@ impl<T: AppData> Connect<T> for (&Outlet<T>, &Inlet<T>) {
 }
 
 #[async_trait]
-impl<T: AppData> Connect<T> for (Inlet<T>, Outlet<T>) {
+impl<T: Debug + Send> Connect<T> for (Inlet<T>, Outlet<T>) {
     async fn connect(mut self) {
         let outlet = self.1;
         let inlet = self.0;
@@ -54,7 +53,7 @@ impl<T: AppData> Connect<T> for (Inlet<T>, Outlet<T>) {
 }
 
 #[async_trait]
-impl<T: AppData> Connect<T> for (&Inlet<T>, &Outlet<T>) {
+impl<T: Debug + Send> Connect<T> for (&Inlet<T>, &Outlet<T>) {
     async fn connect(mut self) {
         let outlet = self.1.clone();
         let inlet = self.0.clone();
@@ -62,15 +61,15 @@ impl<T: AppData> Connect<T> for (&Inlet<T>, &Outlet<T>) {
     }
 }
 
-pub async fn connect_out_to_in<T: AppData>(mut lhs: Outlet<T>, mut rhs: Inlet<T>) {
+pub async fn connect_out_to_in<T: Debug>(mut lhs: Outlet<T>, mut rhs: Inlet<T>) {
     let (tx, rx) = mpsc::channel(num_cpus::get());
     lhs.attach(tx).await;
     rhs.attach(rx).await;
 }
 
-pub struct Inlet<T: AppData>(String, Arc<Mutex<Option<mpsc::Receiver<T>>>>);
+pub struct Inlet<T>(String, Arc<Mutex<Option<mpsc::Receiver<T>>>>);
 
-impl<T: AppData> Inlet<T> {
+impl<T> Inlet<T> {
     pub fn new<S: Into<String>>(name: S) -> Self {
         Self(name.into(), Arc::new(Mutex::new(None)))
     }
@@ -81,7 +80,7 @@ impl<T: AppData> Inlet<T> {
 }
 
 #[async_trait]
-impl<T: AppData> Port for Inlet<T> {
+impl<T: Send> Port for Inlet<T> {
     #[inline]
     fn name(&self) -> &str {
         self.0.as_str()
@@ -102,14 +101,14 @@ impl<T: AppData> Port for Inlet<T> {
     }
 }
 
-impl<T: AppData> Clone for Inlet<T> {
+impl<T> Clone for Inlet<T> {
     #[inline]
     fn clone(&self) -> Self {
         Self(self.0.clone(), self.1.clone())
     }
 }
 
-impl<T: AppData> Inlet<T> {
+impl<T: Debug> Inlet<T> {
     pub async fn attach(&mut self, rx: mpsc::Receiver<T>) {
         let mut port = self.1.lock().await;
         *port = Some(rx);
@@ -197,15 +196,15 @@ impl<T: AppData> Inlet<T> {
     }
 }
 
-impl<T: AppData> fmt::Debug for Inlet<T> {
+impl<T> fmt::Debug for Inlet<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Inlet").field(&self.0).finish()
     }
 }
 
-pub struct Outlet<T: AppData>(String, Arc<Mutex<Option<mpsc::Sender<T>>>>);
+pub struct Outlet<T>(String, Arc<Mutex<Option<mpsc::Sender<T>>>>);
 
-impl<T: AppData> Outlet<T> {
+impl<T> Outlet<T> {
     pub fn new<S: Into<String>>(name: S) -> Self {
         Self(name.into(), Arc::new(Mutex::new(None)))
     }
@@ -216,7 +215,7 @@ impl<T: AppData> Outlet<T> {
 }
 
 #[async_trait]
-impl<T: AppData> Port for Outlet<T> {
+impl<T: Send> Port for Outlet<T> {
     #[inline]
     fn name(&self) -> &str {
         self.0.as_str()
@@ -228,13 +227,13 @@ impl<T: AppData> Port for Outlet<T> {
     }
 }
 
-impl<T: AppData> Clone for Outlet<T> {
+impl<T> Clone for Outlet<T> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), self.1.clone())
     }
 }
 
-impl<T: AppData> Outlet<T> {
+impl<T> Outlet<T> {
     pub async fn attach(&mut self, tx: mpsc::Sender<T>) {
         let mut port = self.1.lock().await;
         *port = Some(tx);
@@ -308,7 +307,7 @@ impl<T: AppData> Outlet<T> {
     }
 }
 
-impl<T: AppData> fmt::Debug for Outlet<T> {
+impl<T> fmt::Debug for Outlet<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Outlet").field(&self.0).finish()
     }

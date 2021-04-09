@@ -1,4 +1,4 @@
-use crate::graph::shape::{Shape, SinkShape};
+use crate::graph::shape::SinkShape;
 use crate::graph::{GraphResult, Inlet, Port, Stage};
 use crate::AppData;
 use async_trait::async_trait;
@@ -54,8 +54,7 @@ use std::fmt;
 /// ```
 pub struct Foreach<F, In>
 where
-    F: Fn(In) -> () + Send,
-    In: AppData,
+    F: Fn(In) -> (),
 {
     name: String,
     operation: F,
@@ -64,30 +63,18 @@ where
 
 impl<F, In> Foreach<F, In>
 where
-    F: Fn(In) -> () + Send,
-    In: AppData,
+    F: Fn(In) -> (),
 {
-    pub fn new<S>(name: S, operation: F) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn new<S: Into<String>>(name: S, operation: F) -> Self {
         let name = name.into();
         let inlet = Inlet::new(name.clone());
         Self { name, operation, inlet }
     }
 }
 
-impl<F, In> Shape for Foreach<F, In>
-where
-    F: Fn(In) -> () + Send,
-    In: AppData,
-{
-}
-
 impl<F, In> SinkShape for Foreach<F, In>
 where
-    F: Fn(In) -> () + Send,
-    In: AppData,
+    F: Fn(In) -> (),
 {
     type In = In;
 
@@ -102,7 +89,7 @@ where
 impl<F, In> Stage for Foreach<F, In>
 where
     F: Fn(In) -> () + Send + Sync + 'static,
-    In: AppData + 'static,
+    In: AppData,
 {
     #[inline]
     fn name(&self) -> &str {
@@ -127,8 +114,7 @@ where
 
 impl<F, In> fmt::Debug for Foreach<F, In>
 where
-    F: Fn(In) -> () + Send,
-    In: AppData,
+    F: Fn(In) -> (),
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Foreach").field("inlet", &self.inlet).finish()

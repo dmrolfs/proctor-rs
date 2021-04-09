@@ -1,20 +1,20 @@
 use crate::error::GraphError;
-use crate::graph::shape::{Shape, SinkShape};
+use crate::graph::shape::SinkShape;
 use crate::graph::{stage, GraphResult, Inlet, Port, Stage};
 use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
-use std::fmt;
+use std::fmt::{self, Debug};
 use tokio::sync::{mpsc, oneshot};
 
 pub type FoldApi<Acc> = mpsc::UnboundedSender<FoldCmd<Acc>>;
 
 #[derive(Debug)]
-pub enum FoldCmd<Acc: AppData + Clone> {
+pub enum FoldCmd<Acc> {
     GetAcc(oneshot::Sender<Acc>),
 }
 
-impl<Acc: AppData + Clone> FoldCmd<Acc> {
+impl<Acc> FoldCmd<Acc> {
     pub fn get_accumulation() -> (FoldCmd<Acc>, oneshot::Receiver<Acc>) {
         let (tx, rx) = oneshot::channel();
         (Self::GetAcc(tx), rx)
@@ -82,8 +82,6 @@ impl<Acc: AppData + Clone> FoldCmd<Acc> {
 pub struct Fold<F, In, Acc>
 where
     F: FnMut(Acc, In) -> Acc,
-    In: AppData,
-    Acc: AppData + Clone,
 {
     name: String,
     acc: Acc,
@@ -98,13 +96,10 @@ where
 impl<F, In, Acc> Fold<F, In, Acc>
 where
     F: FnMut(Acc, In) -> Acc,
-    In: AppData,
-    Acc: AppData + Clone,
+    In: Debug,
+    Acc: Debug + Clone,
 {
-    pub fn new<S>(name: S, initial: Acc, operation: F) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn new<S: Into<String>>(name: S, initial: Acc, operation: F) -> Self {
         let name = name.into();
         let inlet = Inlet::new(name.clone());
         let (tx_api, rx_api) = mpsc::unbounded_channel();
@@ -183,19 +178,10 @@ where
     }
 }
 
-impl<F, In, Acc> Shape for Fold<F, In, Acc>
-where
-    F: FnMut(Acc, In) -> Acc,
-    In: AppData,
-    Acc: AppData + Clone,
-{
-}
-
 impl<F, In, Acc> SinkShape for Fold<F, In, Acc>
 where
     F: FnMut(Acc, In) -> Acc,
-    In: AppData,
-    Acc: AppData + Clone,
+    Acc: Debug,
 {
     type In = In;
     #[inline]
@@ -208,9 +194,9 @@ where
 #[async_trait]
 impl<F, In, Acc> Stage for Fold<F, In, Acc>
 where
-    F: FnMut(Acc, In) -> Acc + Send + Sync + 'static,
-    In: AppData + 'static,
-    Acc: AppData + Clone + 'static,
+    F: FnMut(Acc, In) -> Acc + Send /*+ Sync */ + 'static,
+    In: AppData,
+    Acc: AppData + Clone,
 {
     #[inline]
     fn name(&self) -> &str {
@@ -235,8 +221,6 @@ where
 impl<F, In, Acc> stage::WithApi for Fold<F, In, Acc>
 where
     F: FnMut(Acc, In) -> Acc + Send + Sync + 'static,
-    In: AppData + 'static,
-    Acc: AppData + Clone + 'static,
 {
     type Sender = FoldApi<Acc>;
 
@@ -249,8 +233,7 @@ where
 impl<F, In, Acc> fmt::Debug for Fold<F, In, Acc>
 where
     F: FnMut(Acc, In) -> Acc,
-    In: AppData,
-    Acc: AppData + Clone,
+    Acc: Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Fold")
