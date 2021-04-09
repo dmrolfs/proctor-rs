@@ -4,7 +4,7 @@ mod protocol;
 use crate::graph::stage::{self, Stage};
 use crate::graph::{GraphResult, Inlet, Outlet, Port};
 use crate::graph::{Shape, SinkShape, SourceShape};
-use crate::AppData;
+use crate::{AppData, ProctorContext};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use oso::Oso;
@@ -23,7 +23,7 @@ pub trait PolicySettings: fmt::Debug {
 
 pub trait Policy: fmt::Debug + Send + Sync {
     type Item;
-    type Environment;
+    type Environment: ProctorContext;
     fn subscription_fields(&self) -> HashSet<String>;
     fn load_knowledge_base(&self, oso: &mut oso::Oso) -> GraphResult<()>;
     fn initialize_knowledge_base(&self, oso: &mut oso::Oso) -> GraphResult<()>;
@@ -116,7 +116,7 @@ where
 impl<T, E> Stage for PolicyFilter<T, E>
 where
     T: AppData + Clone,
-    E: AppData + Clone,
+    E: AppData + Clone + ProctorContext,
 {
     #[inline]
     fn name(&self) -> &str {
@@ -196,7 +196,7 @@ where
 impl<T, E> PolicyFilter<T, E>
 where
     T: AppData + Clone,
-    E: AppData + Clone,
+    E: AppData + Clone + ProctorContext,
 {
     #[tracing::instrument(level = "info", name = "make policy knowledge base", skip(self))]
     fn oso(&self) -> GraphResult<Oso> {
@@ -422,6 +422,16 @@ mod tests {
         pub qualities: HashMap<String, String>,
     }
 
+    impl ProctorContext for TestEnvironment {
+        fn subscription_fields_nucleus() -> HashSet<String> {
+            maplit::hashset! {"location_code".to_string(),}
+        }
+
+        fn custom(&self) -> HashMap<String, String> {
+            self.qualities.clone()
+        }
+    }
+
     #[derive(Debug)]
     struct TestPolicy {
         policy: String,
@@ -438,7 +448,9 @@ mod tests {
         type Environment = TestEnvironment;
 
         fn subscription_fields(&self) -> HashSet<String> {
-            maplit::hashset! { "username".to_string(), "foo".to_string(), "score".to_string(), }
+            let mut fields = Self::Environment::subscription_fields_nucleus();
+            fields.extend(maplit::hashset! { "foo".to_string(), "score".to_string(), });
+            fields
         }
 
         fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {

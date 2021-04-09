@@ -4,6 +4,7 @@ use crate::graph::GraphResult;
 use crate::settings::EligibilitySettings;
 use oso::{Oso, PolarClass};
 use std::collections::HashSet;
+use crate::ProctorContext;
 
 #[derive(Debug)]
 pub struct EligibilityPolicy {
@@ -13,13 +14,9 @@ pub struct EligibilityPolicy {
 
 impl EligibilityPolicy {
     pub fn new(settings: &EligibilitySettings) -> Self {
-        let mut subscription_fields = maplit::hashset! {
-            "task_status.last_failure".to_string(),
-            "cluster_status.is_deploying".to_string(),
-            "cluster_status.last_deployment".to_string(),
-        };
+        // let mut subscription_fields = <EligibilitySettings as ProctorContext>::subscription_fields_nucleus();
+        let mut subscription_fields = <Self as Policy>::Environment::subscription_fields_nucleus();
         subscription_fields.extend(settings.custom_subscription_fields());
-
         let policy_source = PolicySource::File(settings.policy_path.clone());
         Self { subscription_fields, policy_source, }
     }
@@ -29,9 +26,7 @@ impl Policy for EligibilityPolicy {
     type Item = TelemetryData;
     type Environment = FlinkEligibilityContext;
 
-    fn subscription_fields(&self) -> HashSet<String> {
-        self.subscription_fields.clone()
-    }
+    fn subscription_fields(&self) -> HashSet<String> { self.subscription_fields.clone() }
 
     fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
         self.policy_source.load_into(oso)

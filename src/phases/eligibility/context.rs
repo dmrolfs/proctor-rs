@@ -2,7 +2,7 @@ use crate::ProctorContext;
 use chrono::{DateTime, Utc};
 use oso::PolarClass;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -20,6 +20,14 @@ pub struct FlinkEligibilityContext {
 }
 
 impl ProctorContext for FlinkEligibilityContext {
+    fn subscription_fields_nucleus() -> HashSet<String> {
+        maplit::hashset! {
+            "task_status.last_failure".to_string(),
+            "cluster_status.is_deploying".to_string(),
+            "cluster_status.last_deployment".to_string(),
+        }
+    }
+
     fn custom(&self) -> HashMap<String, String> {
         self.custom.clone()
     }
@@ -63,15 +71,15 @@ impl ClusterStatus {
         boundary < self.last_deployment
     }
 }
+
 // /////////////////////////////////////////////////////
 // // Unit Tests ///////////////////////////////////////
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use reqwest::header;
     use serde_test::{assert_tokens, Token};
-    use chrono::{DateTime, TimeZone, Utc};
+    use chrono::{DateTime, Utc};
     use lazy_static::lazy_static;
 
     lazy_static! {

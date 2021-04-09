@@ -70,6 +70,13 @@ impl TestEnvironment {
 }
 
 impl proctor::ProctorContext for TestEnvironment {
+    fn subscription_fields_nucleus() -> HashSet<String> {
+        maplit::hashset! {
+            "location_code".to_string(),
+            "input_messages_per_sec".to_string(),
+        }
+    }
+
     fn custom(&self) -> HashMap<String, String> {
         self.custom.clone()
     }
@@ -95,7 +102,7 @@ impl Policy for TestPolicy {
     type Environment = TestEnvironment;
 
     fn subscription_fields(&self) -> HashSet<String> {
-        maplit::hashset! { "location_code".to_string(), "input_messages_per_sec".to_string() }
+        Self::Environment::subscription_fields_nucleus()
     }
 
     fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
