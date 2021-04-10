@@ -1,3 +1,3 @@
-last_failure,is_deploying,last_deployment
-,true,2014-11-28T10:11:37.246310806Z
-2014-11-28T12:45:59.324310806Z,false,2021-03-08T23:57:12.918473937Z
+task_last_failure,cluster_is_deploying,cluster_last_deployment,cat
+,true,2014-11-28T10:11:37.246310806Z,Otis
+2014-11-28T12:45:59.324310806Z,false,2021-03-08T23:57:12.918473937Z,Stella

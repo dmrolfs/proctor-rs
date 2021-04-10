@@ -9,17 +9,21 @@ use proctor::phases::collection::make_telemetry_cvs_source;
 use proctor::settings::SourceSetting;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use serde_test::{assert_tokens, Token};
+use lazy_static::lazy_static;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Data {
-    #[serde(default)]
     #[serde(
+        default,
+        rename="task_last_failure",
         serialize_with = "proctor::serde::serialize_optional_datetime",
         deserialize_with = "proctor::serde::deserialize_optional_datetime"
     )]
     pub last_failure: Option<DateTime<Utc>>,
+    #[serde(rename="cluster_is_deploying")]
     pub is_deploying: bool,
-    #[serde(with = "proctor::serde")]
+    #[serde(rename="cluster_last_deployment", with = "proctor::serde")]
     pub last_deployment: DateTime<Utc>,
 }
 
@@ -35,6 +39,36 @@ impl Default for Data {
     }
 }
 
+lazy_static! {
+    static ref NOW: DateTime<Utc> = Utc::now();
+    static ref NOW_REP: String = format!("{}", NOW.format("%+"));
+}
+
+#[test]
+fn test_data_serde() {
+    let data = Data {
+        last_failure: Some(NOW.clone()),
+        is_deploying: true,
+        last_deployment: NOW.clone(),
+    };
+
+    assert_tokens(
+        &data,
+        &vec![
+            Token::Struct { name: "Data", len: 3 },
+            Token::Str("task_last_failure"),
+            Token::Some,
+            Token::Str(&NOW_REP),
+            Token::Str("cluster_is_deploying"),
+            Token::Bool(true),
+            Token::Str("cluster_last_deployment"),
+            Token::Str(&NOW_REP),
+            Token::StructEnd,
+        ]
+    );
+
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_make_from_telemetry_stage() -> Result<()> {
     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
@@ -47,7 +81,7 @@ async fn test_make_from_telemetry_stage() -> Result<()> {
     let setting = SourceSetting::Csv { path };
 
     let source = make_telemetry_cvs_source("local", &setting)?;
-    let convert = make_from_telemetry("convert").await?;
+    let convert = make_from_telemetry("convert", true).await?;
 
     let mut sink = stage::Fold::<_, Data, Vec<Data>>::new("sink", Vec::default(), |mut acc, item| {
         acc.push(item);
