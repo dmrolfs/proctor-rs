@@ -24,7 +24,12 @@ pub trait PolicySettings {
 pub trait Policy: Debug + Send + Sync {
     type Item;
     type Environment: ProctorContext;
-    fn subscription_fields(&self) -> HashSet<String>;
+    fn required_fields(&self) -> HashSet<String> {
+        Self::Environment::subscription_fields_nucleus()
+    }
+    fn optional_fields(&self) -> HashSet<String> {
+        HashSet::default()
+    }
     fn load_knowledge_base(&self, oso: &mut oso::Oso) -> GraphResult<()>;
     fn initialize_knowledge_base(&self, oso: &mut oso::Oso) -> GraphResult<()>;
     fn query_knowledge_base(
@@ -413,7 +418,7 @@ mod tests {
         type Item = User;
         type Environment = TestEnvironment;
 
-        fn subscription_fields(&self) -> HashSet<String> {
+        fn required_fields(&self) -> HashSet<String> {
             let mut fields = Self::Environment::subscription_fields_nucleus();
             fields.extend(maplit::hashset! { "foo".to_string(), "score".to_string(), });
             fields

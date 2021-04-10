@@ -1,2 +1,2 @@
 pub mod collection;
-mod eligibility;
+pub mod eligibility;

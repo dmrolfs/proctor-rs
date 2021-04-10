@@ -5,6 +5,7 @@ use proctor::graph::stage;
 use proctor::graph::SinkShape;
 use proctor::graph::{Connect, Graph};
 use proctor::phases::collection;
+use proctor::phases::collection::TelemetrySubscription;
 use proctor::settings::SourceSetting;
 use proctor::telemetry::{get_subscriber, init_subscriber};
 use std::collections::HashSet;
@@ -69,7 +70,10 @@ async fn main() -> Result<()> {
     let rx_pos_stats = pos_stats.take_final_rx().unwrap();
 
     clearinghouse
-        .add_subscription("pos", maplit::hashset! { POS_FIELD.to_string() }, &pos_stats.inlet())
+        .add_subscription(
+            TelemetrySubscription::new("pos").with_required_fields(maplit::hashset! { POS_FIELD.to_string() }),
+            &pos_stats.inlet(),
+        )
         .await;
 
     // let (mut sink, _, rx_acc) =

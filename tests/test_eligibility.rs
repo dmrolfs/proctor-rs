@@ -2,7 +2,7 @@
 //
 // use chrono::*;
 // use oso::{Oso, PolarClass};
-// use proctor::elements::{self, Policy, TelemetryData};
+// use proctor::elements::{self, Policy, TelemetryData, PolicySource};
 // use proctor::graph::stage::{self, WithApi, WithMonitor};
 // use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
 // use proctor::ProctorContext;
@@ -10,28 +10,30 @@
 // use std::collections::{HashMap, HashSet};
 // use tokio::sync::oneshot;
 // use tokio::task::JoinHandle;
+// use proctor::phases::collection;
+// use proctor::phases::eligibility::{self, Eligibility};
 //
 //
 // #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
-// pub struct FlinkEligibilityContext {
+// pub struct TestFlinkEligibilityContext {
 //     #[polar(attribute)]
 //     #[serde(flatten)]
-//     pub task_status: TaskStatus,
+//     pub task_status: TestTaskStatus,
 //     #[polar(attribute)]
 //     #[serde(flatten)]
-//     pub cluster_status: ClusterStatus,
+//     pub cluster_status: TestClusterStatus,
 //
 //     #[polar(attribute)]
 //     #[serde(flatten)]
 //     pub custom: HashMap<String, String>,
 // }
 //
-// impl ProctorContext for FlinkEligibilityContext {
+// impl ProctorContext for TestFlinkEligibilityContext {
 //     fn subscription_fields_nucleus() -> HashSet<String> {
 //         maplit::hashset! {
-//             "task_status.last_failure".to_string(),
-//             "cluster_status.is_deploying".to_string(),
-//             "cluster_status.last_deployment".to_string(),
+//             "task.last_failure".to_string(),
+//             "cluster.is_deploying".to_string(),
+//             "cluster.last_deployment".to_string(),
 //         }
 //     }
 //
@@ -41,17 +43,17 @@
 // }
 //
 // #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
-// pub struct TaskStatus {
+// pub struct TestTaskStatus {
 //     #[serde(default)]
 //     #[serde(
-//     rename="task_status.last_failure",
+//     rename="task.last_failure",
 //     serialize_with = "proctor::serde::serialize_optional_datetime",
 //     deserialize_with = "proctor::serde::deserialize_optional_datetime"
 //     )]
 //     pub last_failure: Option<DateTime<Utc>>,
 // }
 //
-// impl TaskStatus {
+// impl TestTaskStatus {
 //     pub fn last_failure_within_seconds(&self, seconds: i64) -> bool {
 //         self.last_failure.map_or(false, |last_failure| {
 //             let boundary = Utc::now() - chrono::Duration::seconds(seconds);
@@ -61,21 +63,74 @@
 // }
 //
 // #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
-// pub struct ClusterStatus {
+// pub struct TestClusterStatus {
 //     #[polar(attribute)]
-//     #[serde(rename="cluster_status.is_deploying")]
+//     #[serde(rename="cluster.is_deploying")]
 //     pub is_deploying: bool,
 //     #[serde(
 //     with = "proctor::serde",
-//     rename="cluster_status.last_deployment",
+//     rename="cluster.last_deployment",
 //     )]
 //     pub last_deployment: DateTime<Utc>,
 // }
 //
-// impl ClusterStatus {
+// impl TestClusterStatus {
 //     pub fn last_deployment_within_seconds(&self, seconds: i64) -> bool {
 //         let boundary = Utc::now() - chrono::Duration::seconds(seconds);
 //         boundary < self.last_deployment
+//     }
+// }
+//
+// #[derive(Debug)]
+// struct TestEligibilityPolicy {
+//     subscription_fields: HashSet<String>,
+//     policy: PolicySource,
+// }
+//
+// impl TestEligibilityPolicy {
+//     pub fn new(policy: PolicySource) -> Self {
+//         let subscription_fields = Self::Environment::subscription_fields_nucleus();
+//         Self {
+//             subscription_fields,
+//             policy
+//         }
+//     }
+//
+//     pub fn with_custom(self, custom_fields: HashSet<String>) -> Self {
+//         let mut subscription_fields = self.subscription_fields;
+//         subscription_fields.extend(custom_fields);
+//         Self { subscription_fields, ..self }
+//     }
+// }
+//
+// impl Policy for TestEligibilityPolicy {
+//     type Item = TelemetryData;
+//     type Environment = TestFlinkEligibilityContext;
+//
+//     fn subscription_fields(&self) -> HashSet<String> { self.subscription_fields.clone() }
+//
+//     fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> { self.policy.load_into(oso) }
+//
+//     fn initialize_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
+//         oso.register_class(
+//             TestFlinkEligibilityContext::get_polar_class_builder()
+//                 .name("TestEnvironment")
+//                 .add_method("custom", ProctorContext::custom)
+//                 .build(),
+//         )?;
+//
+//         oso.register_class(
+//             TestTaskStatus::get_polar_class_builder()
+//                 .name("TestTaskStatus")
+//                 .add_method("last_failure_within_seconds", TestTaskStatus::last_failure_within_seconds)
+//                 .build(),
+//         )?;
+//
+//         Ok(())
+//     }
+//
+//     fn query_knowledge_base(&self, oso: &Oso, item_env: (Self::Item, Self::Environment)) -> GraphResult<oso::Query> {
+//         oso.query_rule("eligible", item_env).map_err(|err| err.into())
 //     }
 // }
 //
@@ -94,10 +149,24 @@
 //         let telemetry_source = stage::ActorSource::<TelemetryData>::new("telemetry_source");
 //         let tx_telemetry_source_api = telemetry_source.tx_api();
 //
-//         let env_source = stage::ActorSource::<FlinkEligibilityContext>::new("env_source");
+//         let env_source = stage::ActorSource::<TestFlinkEligibilityContext>::new("env_source");
 //         let tx_env_source_api = env_source.tx_api();
 //
-//         let policy = Box::new(TestPolicy::new(policy));
+//         let clearinghouse = collection::Clearinghouse::new("clearinghouse");
+//         let tx_clearinghouse = clearinghouse.tx_api();
+//
+//         let policy = TestEligibilityPolicy::new(policy);
+//
+//         let eligibility = Eligibility::<TestFlinkEligibilityContext>::new(
+//             "test_flink",
+//             policy,
+//             tx_clearinghouse,
+//         ).await?;
+//
+//
+//
+//
+//
 //         let policy_filter = elements::PolicyFilter::new("eligibility", policy);
 //         let tx_policy_api = policy_filter.tx_api();
 //         let rx_policy_monitor = policy_filter.rx_monitor();

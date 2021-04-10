@@ -101,9 +101,10 @@ impl Policy for TestPolicy {
     type Item = TestItem;
     type Environment = TestEnvironment;
 
-    fn subscription_fields(&self) -> HashSet<String> {
-        Self::Environment::subscription_fields_nucleus()
-    }
+    //todo test optional fields
+    // fn subscription_fields(&self) -> HashSet<String> {
+    //     Self::Environment::subscription_fields_nucleus()
+    // }
 
     fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
         oso.load_str(self.policy.as_str()).map_err(|err| err.into())

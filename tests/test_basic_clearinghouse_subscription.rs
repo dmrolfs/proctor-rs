@@ -4,6 +4,7 @@ use cast_trait_object::DynCastExt;
 use proctor::elements;
 use proctor::graph::{stage, Connect, Graph, SinkShape};
 use proctor::phases::collection;
+use proctor::phases::collection::TelemetrySubscription;
 use proctor::settings::SourceSetting;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -88,7 +89,12 @@ async fn test_scenario(focus: HashSet<String>) -> anyhow::Result<(usize, usize)>
     );
     let rx_pos_stats = pos_stats.take_final_rx().unwrap();
 
-    clearinghouse.add_subscription("pos", focus, &pos_stats.inlet()).await;
+    clearinghouse
+        .add_subscription(
+            TelemetrySubscription::new("pos").with_required_fields(focus),
+            &pos_stats.inlet(),
+        )
+        .await;
 
     (cvs.outlet(), clearinghouse.inlet()).connect().await;
 

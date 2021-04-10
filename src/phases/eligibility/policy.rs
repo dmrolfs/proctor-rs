@@ -29,10 +29,6 @@ impl Policy for EligibilityPolicy {
     type Item = TelemetryData;
     type Environment = FlinkEligibilityContext;
 
-    fn subscription_fields(&self) -> HashSet<String> {
-        self.subscription_fields.clone()
-    }
-
     fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
         self.policy_source.load_into(oso)
     }

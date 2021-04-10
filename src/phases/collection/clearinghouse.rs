@@ -15,8 +15,7 @@ pub type ClearinghouseApi = mpsc::UnboundedSender<ClearinghouseCmd>;
 #[derive(Debug)]
 pub enum ClearinghouseCmd {
     Subscribe {
-        name: String,
-        fields: HashSet<String>,
+        subscription: TelemetrySubscription,
         receiver: Inlet<TelemetryData>,
         tx: oneshot::Sender<Ack>,
     },
@@ -32,19 +31,13 @@ pub enum ClearinghouseCmd {
 
 impl ClearinghouseCmd {
     #[inline]
-    pub fn subscribe<S0, S1>(
-        name: S0, fields: HashSet<S1>, receiver: Inlet<TelemetryData>,
-    ) -> (Self, oneshot::Receiver<Ack>)
-    where
-        S0: Into<String>,
-        S1: Into<String>,
-    {
+    pub fn subscribe(
+        subscription: TelemetrySubscription, receiver: Inlet<TelemetryData>,
+    ) -> (Self, oneshot::Receiver<Ack>) {
         let (tx, rx) = oneshot::channel();
-        let fields = fields.into_iter().map(|f| f.into()).collect();
         (
             Self::Subscribe {
-                name: name.into(),
-                fields,
+                subscription,
                 receiver,
                 tx,
             },
@@ -89,8 +82,38 @@ pub enum ClearinghouseResp {
 #[derive(Debug, Clone)]
 pub struct TelemetrySubscription {
     pub name: String,
-    pub fields: HashSet<String>,
+    pub required_fields: HashSet<String>,
+    pub optional_fields: HashSet<String>,
     pub outlet_to_subscription: Outlet<TelemetryData>,
+}
+
+impl TelemetrySubscription {
+    pub fn new<S: Into<String>>(name: S) -> Self {
+        let name = name.into();
+        let outlet_to_subscription = Outlet::new(format!("outlet_for_subscription_{}", name));
+        Self {
+            name,
+            required_fields: HashSet::default(),
+            optional_fields: HashSet::default(),
+            outlet_to_subscription,
+        }
+    }
+
+    pub fn with_required_fields<S: Into<String>>(self, required_fields: HashSet<S>) -> Self {
+        let required_fields = required_fields.into_iter().map(|s| s.into()).collect();
+        Self {
+            required_fields,
+            ..self
+        }
+    }
+
+    pub fn with_optional_fields<S: Into<String>>(self, optional_fields: HashSet<S>) -> Self {
+        let optional_fields = optional_fields.into_iter().map(|s| s.into()).collect();
+        Self {
+            optional_fields,
+            ..self
+        }
+    }
 }
 
 impl TelemetrySubscription {
@@ -101,7 +124,9 @@ impl TelemetrySubscription {
 
 impl PartialEq for TelemetrySubscription {
     fn eq(&self, other: &Self) -> bool {
-        (self.name == other.name) && (self.fields == other.fields)
+        (self.name == other.name)
+            && (self.required_fields == other.required_fields)
+            && (self.optional_fields == other.optional_fields)
     }
 }
 
@@ -134,24 +159,10 @@ impl Clearinghouse {
         }
     }
 
-    pub async fn add_subscription<S0, S1>(&mut self, name: S0, fields: HashSet<S1>, receiver: &Inlet<TelemetryData>)
-    where
-        S0: Into<String>,
-        S1: Into<String>,
-    {
-        let name = name.into();
-        let fields = fields.into_iter().map(|f| f.into()).collect();
-        tracing::info!(stage=%self.name, subscription=%name, ?fields, "adding clearinghouse subscription.");
-        let outlet_to_subscription = Outlet::new(format!("outlet_to_subscription_{}", name));
-        (&outlet_to_subscription, receiver).connect().await;
-        let subscription = TelemetrySubscription {
-            name,
-            fields,
-            outlet_to_subscription,
-        };
-        let nr_subs = self.subscriptions.len();
+    pub async fn add_subscription(&mut self, subscription: TelemetrySubscription, receiver: &Inlet<TelemetryData>) {
+        tracing::info!(stage=%self.name, ?subscription, "adding clearinghouse subscription.");
+        (&subscription.outlet_to_subscription, receiver).connect().await;
         self.subscriptions.push(subscription);
-        assert_eq!(self.subscriptions.len(), nr_subs + 1);
     }
 
     #[tracing::instrument(level = "trace", skip(subscriptions, database,))]
@@ -184,7 +195,8 @@ impl Clearinghouse {
     ) -> Vec<&TelemetrySubscription> {
         let interested = subscriptions
             .iter()
-            .filter(|s| !s.fields.intersection(&changed).collect::<HashSet<_>>().is_empty())
+            //todo: add consideration for optional fields
+            .filter(|s| !s.required_fields.intersection(&changed).collect::<HashSet<_>>().is_empty())
             .collect::<Vec<_>>();
 
         tracing::info!(
@@ -209,7 +221,8 @@ impl Clearinghouse {
         let nr_subscribers = subscribers.len();
         let fulfilled = subscribers
             .into_iter()
-            .map(|s| Self::fulfill_subscription(&s.name, &s.fields, database).map(|fulfillment| (s, fulfillment)))
+            //todo: extend with optional fields
+            .map(|s| Self::fulfill_subscription(&s.name, &s.required_fields, database).map(|fulfillment| (s, fulfillment)))
             .flatten()
             .map(|(s, fulfillment)| {
                 let o = &s.outlet_to_subscription;
@@ -238,6 +251,7 @@ impl Clearinghouse {
         result
     }
 
+    //todo fufill optional fields too; may simplfy interface to subscription?
     fn fulfill_subscription(
         subscription_name: &str, pick_list: &HashSet<String>, database: &TelemetryData,
     ) -> Option<TelemetryData> {
@@ -283,11 +297,11 @@ impl Clearinghouse {
                     Some(name) => match subscriptions.iter().find(|s| s.name == name) {
                         Some(sub) => {
                             let mut db = database.clone();
-                            db.retain(|k, _| sub.fields.contains(k.as_str()));
+                            db.retain(|k, _| sub.required_fields.contains(k.as_str()));
 
                             let mut missing: HashSet<String> = HashSet::default();
                             for field in db.keys() {
-                                if sub.fields.contains(field) {
+                                if sub.required_fields.contains(field) {
                                     missing.insert(field.clone());
                                 }
                             }
@@ -322,25 +336,13 @@ impl Clearinghouse {
             }
 
             ClearinghouseCmd::Subscribe {
-                name,
-                fields,
+                subscription,
                 receiver,
                 tx,
             } => {
-                let outlet_to_subscription = Outlet::new(format!("outlet_to_subscription_{}", name));
-                (&outlet_to_subscription, &receiver).connect().await;
-
-                // let fields= fields.iter().cloned().collect::<HashSet<&'a str>>();
-                let fields = fields.iter().map(|f| (*f).clone()).collect();
-                let s: TelemetrySubscription = TelemetrySubscription {
-                    name,
-                    fields,
-                    outlet_to_subscription,
-                };
-
-                tracing::info!(subscriber=?s, "adding telemetry subscriber.");
-                subscriptions.push(s);
-
+                tracing::info!(?subscription, "adding telemetry subscriber.");
+                (&subscription.outlet_to_subscription, &receiver).connect().await;
+                subscriptions.push(subscription);
                 let _ = tx.send(());
                 Ok(true)
             }
@@ -481,20 +483,24 @@ mod tests {
     use tracing::Instrument;
 
     lazy_static! {
+        //todo test optional fields
         static ref SUBSCRIPTIONS: Vec<TelemetrySubscription> = vec![
             TelemetrySubscription {
                 name: "none".to_string(),
-                fields: HashSet::default(),
+                required_fields: HashSet::default(),
+                optional_fields: HashSet::default(),
                 outlet_to_subscription: Outlet::new("none_outlet"),
             },
             TelemetrySubscription {
                 name: "cat_pos".to_string(),
-                fields: maplit::hashset!{"pos".to_string(), "cat".to_string()},
+                required_fields: maplit::hashset!{"pos".to_string(), "cat".to_string()},
+                optional_fields: HashSet::default(),
                 outlet_to_subscription: Outlet::new("cat_pos_outlet"),
             },
             TelemetrySubscription {
                 name: "all".to_string(),
-                fields: maplit::hashset!{"pos".to_string(), "cat".to_string(), "value".to_string()},
+                required_fields: maplit::hashset!{"pos".to_string(), "cat".to_string(), "value".to_string()},
+                optional_fields: HashSet::default(),
                 outlet_to_subscription: Outlet::new("all_outlet"),
             },
         ];
@@ -543,10 +549,12 @@ mod tests {
         block_on(async {
             assert!(!clearinghouse.inlet.is_attached().await);
 
+            //todo test optional fields
             clearinghouse
                 .add_subscription(
-                    "sub1",
-                    maplit::hashset! {"aaa".to_string(), "bbb".to_string()},
+                    TelemetrySubscription::new("sub1")
+                        .with_required_fields(maplit::hashset! {"aaa".to_string(), "bbb".to_string()})
+                        .with_optional_fields(HashSet::<&str>::default()),
                     &sub1_inlet,
                 )
                 .await;
@@ -593,8 +601,13 @@ mod tests {
 
             tracing::info!("sending add subscriber command to clearinghouse...");
             let sub1_inlet = Inlet::new("sub1");
-            let (add_cmd, rx_add) =
-                ClearinghouseCmd::subscribe("sub1", maplit::hashset! {"aaa", "bbb"}, sub1_inlet.clone());
+            let (add_cmd, rx_add) = ClearinghouseCmd::subscribe(
+                TelemetrySubscription::new("sub1")
+                        .with_required_fields(maplit::hashset! {"aaa", "bbb"})
+                        //todo: test optional fields
+                        .with_optional_fields(HashSet::<&str>::default()),
+                sub1_inlet.clone(),
+            );
             tx_api.send(add_cmd)?;
             tracing::info!("waiting for api confirmation...");
             rx_add.await?;
@@ -645,8 +658,13 @@ mod tests {
             let clear_handle = tokio::spawn(async move { clearinghouse.run().await });
 
             let inlet_1 = Inlet::new("inlet_1");
-            let (add, rx_add) =
-                ClearinghouseCmd::subscribe("sub1", maplit::hashset! { "dr".to_string() }, inlet_1.clone());
+            let (add, rx_add) = ClearinghouseCmd::subscribe(
+                TelemetrySubscription::new("sub1")
+                    .with_required_fields(maplit::hashset! { "dr".to_string() })
+                //todo: test optional fields
+                    .with_optional_fields(HashSet::<&str>::default()),
+                inlet_1.clone(),
+            );
             tx_api.send(add)?;
 
             let (get_1, rx_get_1) = ClearinghouseCmd::get_clearinghouse_snapshot();
@@ -733,7 +751,7 @@ mod tests {
             let sub = &SUBSCRIPTIONS[subscriber];
             let expected = &EXPECTED[&sub.name];
             for ((row, data_row), expected_row) in DB_ROWS.iter().enumerate().zip(expected) {
-                let actual = Clearinghouse::fulfill_subscription(sub.name.as_str(), &sub.fields, data_row);
+                let actual = Clearinghouse::fulfill_subscription(sub.name.as_str(), &sub.required_fields, data_row);
 
                 assert_eq!((subscriber, row, &actual), (subscriber, row, expected_row));
             }

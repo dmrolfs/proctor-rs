@@ -1,4 +1,5 @@
 use crate::Ack;
+use std::path::PathBuf;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
 pub type PolicyFilterApi<E> = mpsc::UnboundedSender<PolicyFilterCmd<E>>;
@@ -55,10 +56,18 @@ pub enum PolicyFilterEvent<T, E> {
 #[derive(Debug)]
 pub enum PolicySource {
     String(String),
-    File(std::path::PathBuf),
+    File(PathBuf),
 }
 
 impl PolicySource {
+    pub fn from_string<S: Into<String>>(policy: S) -> Self {
+        Self::String(policy.into())
+    }
+
+    pub fn from_path(policy_path: PathBuf) -> Self {
+        Self::File(policy_path)
+    }
+
     pub fn load_into(&self, oso: &oso::Oso) -> crate::graph::GraphResult<()> {
         let result = match self {
             PolicySource::String(policy) => oso.load_str(policy.as_str()),

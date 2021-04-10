@@ -2,6 +2,7 @@ use super::collection::{ClearinghouseApi, ClearinghouseCmd};
 use crate::elements::{Policy, PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, TelemetryData};
 use crate::graph::stage::{self, Stage, WithApi, WithMonitor};
 use crate::graph::{Connect, Graph, GraphResult, Inlet, Outlet, Port, SinkShape, SourceShape, ThroughShape};
+use crate::phases::collection::TelemetrySubscription;
 use crate::{ProctorContext, ProctorResult};
 use async_trait::async_trait;
 use cast_trait_object::{dyn_upcast, DynCastExt};
@@ -28,8 +29,13 @@ impl<E: ProctorContext> Eligibility<E> {
         tx_clearinghouse: ClearinghouseApi,
     ) -> ProctorResult<Self> {
         let name = name.into();
-        let (environment_source, es_outlet) =
-            Self::subscribe_to_environment(name.as_str(), tx_clearinghouse, policy.subscription_fields()).await?;
+        let (environment_source, es_outlet) = Self::subscribe_to_environment(
+            name.as_str(),
+            tx_clearinghouse,
+            policy.required_fields(),
+            policy.optional_fields(),
+        )
+        .await?;
         let policy_filter = PolicyFilter::new(format!("eligibility_{}", name), Box::new(policy));
         let tx_policy_api = policy_filter.tx_api();
         let tx_policy_monitor = policy_filter.tx_monitor.clone();
@@ -84,14 +90,19 @@ impl<E: ProctorContext> Eligibility<E> {
     //todo: simplify return to a Stage + SourceShape<E> once upcasting is better support wrt type constraints and/or auto trait support is expanded.
     // but until then settled on this approach to return outlet to be connected with stage.
     async fn subscribe_to_environment(
-        name: &str, tx_clearinghouse: ClearinghouseApi, subscription_fields: HashSet<String>,
+        name: &str, tx_clearinghouse: ClearinghouseApi, required_fields: HashSet<String>,
+        optional_fields: HashSet<String>,
     ) -> ProctorResult<(Box<dyn Stage>, Outlet<E>)> {
-        let convert_telemetry = crate::elements::make_from_telemetry::<E, _>(name).await?;
-        let outlet = convert_telemetry.outlet();
-        let (cmd, ack) =
-            ClearinghouseCmd::subscribe(convert_telemetry.name(), subscription_fields, convert_telemetry.inlet());
+        let convert_telemetry = crate::elements::make_from_telemetry::<E, _>(name, true).await?;
+
+        let subscription = TelemetrySubscription::new(convert_telemetry.name())
+            .with_required_fields(required_fields)
+            .with_optional_fields(optional_fields);
+        let (cmd, ack) = ClearinghouseCmd::subscribe(subscription, convert_telemetry.inlet());
         tx_clearinghouse.send(cmd)?;
         ack.await?;
+
+        let outlet = convert_telemetry.outlet();
         Ok((convert_telemetry.dyn_upcast(), outlet))
     }
 }
