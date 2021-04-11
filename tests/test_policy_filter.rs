@@ -70,7 +70,7 @@ impl TestEnvironment {
 }
 
 impl proctor::ProctorContext for TestEnvironment {
-    fn subscription_fields_nucleus() -> HashSet<String> {
+    fn required_subscription_fields() -> HashSet<String> {
         maplit::hashset! {
             "location_code".to_string(),
             "input_messages_per_sec".to_string(),

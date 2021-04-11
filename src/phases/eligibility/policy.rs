@@ -15,7 +15,7 @@ pub struct EligibilityPolicy {
 impl EligibilityPolicy {
     pub fn new(settings: &EligibilitySettings) -> Self {
         // let mut subscription_fields = <EligibilitySettings as ProctorContext>::subscription_fields_nucleus();
-        let mut subscription_fields = <Self as Policy>::Environment::subscription_fields_nucleus();
+        let mut subscription_fields = <Self as Policy>::Environment::required_subscription_fields();
         subscription_fields.extend(settings.custom_subscription_fields());
         let policy_source = PolicySource::File(settings.policy_path.clone());
         Self {

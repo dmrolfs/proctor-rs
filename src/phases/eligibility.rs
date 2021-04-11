@@ -30,10 +30,8 @@ impl<E: ProctorContext> Eligibility<E> {
     ) -> ProctorResult<Self> {
         let name = name.into();
         let (environment_source, es_outlet) = Self::subscribe_to_environment(
-            name.as_str(),
+            policy.subscription(name.as_str()),
             tx_clearinghouse,
-            policy.required_fields(),
-            policy.optional_fields(),
         )
         .await?;
         let policy_filter = PolicyFilter::new(format!("eligibility_{}", name), Box::new(policy));
@@ -90,14 +88,11 @@ impl<E: ProctorContext> Eligibility<E> {
     //todo: simplify return to a Stage + SourceShape<E> once upcasting is better support wrt type constraints and/or auto trait support is expanded.
     // but until then settled on this approach to return outlet to be connected with stage.
     async fn subscribe_to_environment(
-        name: &str, tx_clearinghouse: ClearinghouseApi, required_fields: HashSet<String>,
-        optional_fields: HashSet<String>,
+        subscription: TelemetrySubscription,
+        tx_clearinghouse: ClearinghouseApi,
     ) -> ProctorResult<(Box<dyn Stage>, Outlet<E>)> {
-        let convert_telemetry = crate::elements::make_from_telemetry::<E, _>(name, true).await?;
+        let convert_telemetry = crate::elements::make_from_telemetry::<E, _>(&subscription.name, true).await?;
 
-        let subscription = TelemetrySubscription::new(convert_telemetry.name())
-            .with_required_fields(required_fields)
-            .with_optional_fields(optional_fields);
         let (cmd, ack) = ClearinghouseCmd::subscribe(subscription, convert_telemetry.inlet());
         tx_clearinghouse.send(cmd)?;
         ack.await?;

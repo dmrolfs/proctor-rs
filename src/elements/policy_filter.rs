@@ -15,6 +15,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::{broadcast, mpsc};
 use tracing::Instrument;
+use crate::phases::collection::TelemetrySubscription;
 
 pub trait PolicySettings {
     fn custom_subscription_fields(&self) -> HashSet<String>;
@@ -24,11 +25,9 @@ pub trait PolicySettings {
 pub trait Policy: Debug + Send + Sync {
     type Item;
     type Environment: ProctorContext;
-    fn required_fields(&self) -> HashSet<String> {
-        Self::Environment::subscription_fields_nucleus()
-    }
-    fn optional_fields(&self) -> HashSet<String> {
-        HashSet::default()
+    fn subscription(&self, name: &str) -> TelemetrySubscription {
+        TelemetrySubscription::new(name)
+            .with_required_fields(Self::Environment::required_subscription_fields())
     }
     fn load_knowledge_base(&self, oso: &mut oso::Oso) -> GraphResult<()>;
     fn initialize_knowledge_base(&self, oso: &mut oso::Oso) -> GraphResult<()>;
@@ -394,7 +393,7 @@ mod tests {
     }
 
     impl ProctorContext for TestEnvironment {
-        fn subscription_fields_nucleus() -> HashSet<String> {
+        fn required_subscription_fields() -> HashSet<String> {
             maplit::hashset! {"location_code".to_string(),}
         }
 
@@ -418,11 +417,17 @@ mod tests {
         type Item = User;
         type Environment = TestEnvironment;
 
-        fn required_fields(&self) -> HashSet<String> {
-            let mut fields = Self::Environment::subscription_fields_nucleus();
-            fields.extend(maplit::hashset! { "foo".to_string(), "score".to_string(), });
-            fields
+        fn subscription(&self, name: &str) -> TelemetrySubscription {
+            //dmr: desire is to call default impl and extend with optional fields
+            <Self as Policy>::subscription(self, name)
+                .with_optional_fields(maplit::hashset! {"foo".to_string(), "score".to_string()})
         }
+
+        // fn required_fields(&self) -> HashSet<String> {
+        //     let mut fields = Self::Environment::required_subscription_fields();
+        //     fields.extend(maplit::hashset! { "foo".to_string(), "score".to_string(), });
+        //     fields
+        // }
 
         fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
             oso.load_str(self.policy.as_str()).map_err(|err| err.into())

@@ -268,7 +268,6 @@ impl Clearinghouse {
         }
 
         //todo combine these two if-blocks
-        tracing::trace!(?ready, ?unfilled, ?subscription, "after required, before optional.");
         if unfilled.is_empty() {
             for optional in subscription.optional_fields.iter() {
                 tracing::trace!(?optional, "looking for optional.");

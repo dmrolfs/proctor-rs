@@ -29,7 +29,7 @@
 // }
 //
 // impl ProctorContext for TestFlinkEligibilityContext {
-//     fn subscription_fields_nucleus() -> HashSet<String> {
+//     fn required_subscription_fields() -> HashSet<String> {
 //         maplit::hashset! {
 //             "task.last_failure".to_string(),
 //             "cluster.is_deploying".to_string(),
@@ -89,7 +89,7 @@
 //
 // impl TestEligibilityPolicy {
 //     pub fn new(policy: PolicySource) -> Self {
-//         let subscription_fields = Self::Environment::subscription_fields_nucleus();
+//         let subscription_fields = Self::Environment::required_subscription_fields();
 //         Self {
 //             subscription_fields,
 //             policy
