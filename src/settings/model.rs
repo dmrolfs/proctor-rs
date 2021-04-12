@@ -58,14 +58,19 @@ impl HttpQuery {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EligibilitySettings {
-    pub custom_subscription_fields: HashSet<String>,
+    pub required_subscription_fields: HashSet<String>,
+    pub optional_subscription_fields: HashSet<String>,
     pub policy_path: PathBuf,
 }
 
 impl crate::elements::PolicySettings for EligibilitySettings {
     #[inline]
-    fn custom_subscription_fields(&self) -> HashSet<String> {
-        self.custom_subscription_fields.clone()
+    fn required_subscription_fields(&self) -> HashSet<String> {
+        self.required_subscription_fields.clone()
+    }
+    #[inline]
+    fn optional_subscription_fields(&self) -> HashSet<String> {
+        self.optional_subscription_fields.clone()
     }
     #[inline]
     fn specification_path(&self) -> PathBuf {
@@ -284,32 +289,59 @@ mod tests {
     #[test]
     fn test_serde_eligibility_settings() {
         let settings = EligibilitySettings {
-            custom_subscription_fields: maplit::hashset! { "foo".to_string(), "bar".to_string() },
+            required_subscription_fields: maplit::hashset! { "foo".to_string(), "bar".to_string() },
+            optional_subscription_fields: maplit::hashset! { "Otis".to_string(), "Stella".to_string() },
             policy_path: PathBuf::from("./tests/policies/eligibility.polar"),
         };
 
         let mut expected = vec![
             Token::Struct {
                 name: "EligibilitySettings",
-                len: 2,
+                len: 3,
             },
-            Token::Str("custom_subscription_fields"),
+            Token::Str("required_subscription_fields"),
             Token::Seq { len: Some(2) },
             Token::Str("foo"),
             Token::Str("bar"),
+            Token::SeqEnd,
+            Token::Str("optional_subscription_fields"),
+            Token::Seq { len: Some(2) },
+            Token::Str("Otis"),
+            Token::Str("Stella"),
             Token::SeqEnd,
             Token::Str("policy_path"),
             Token::Str("./tests/policies/eligibility.polar"),
             Token::StructEnd,
         ];
 
-        let result = std::panic::catch_unwind(|| {
+        let mut result = std::panic::catch_unwind(|| {
             assert_tokens(&settings, expected.as_slice());
         });
 
         if result.is_err() {
             expected.swap(3, 4);
-            assert_tokens(&settings, expected.as_slice());
+            result = std::panic::catch_unwind(|| {
+                assert_tokens(&settings, expected.as_slice());
+            })
+        }
+
+        if result.is_err() {
+            expected.swap(8, 9);
+            result = std::panic::catch_unwind(|| {
+                assert_tokens(&settings, expected.as_slice());
+            })
+        }
+
+        if result.is_err() {
+            // move first set back
+            expected.swap(3, 4);
+            result = std::panic::catch_unwind(|| {
+                assert_tokens(&settings, expected.as_slice());
+            })
+        }
+
+        if result.is_err() {
+            panic!("{:?}", result);
         }
     }
 

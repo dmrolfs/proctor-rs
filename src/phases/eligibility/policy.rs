@@ -2,24 +2,23 @@ use super::context::*;
 use crate::elements::{Policy, PolicySettings, PolicySource, TelemetryData};
 use crate::graph::GraphResult;
 use crate::settings::EligibilitySettings;
-use crate::ProctorContext;
 use oso::{Oso, PolarClass};
 use std::collections::HashSet;
+use crate::phases::collection::TelemetrySubscription;
 
 #[derive(Debug)]
 pub struct EligibilityPolicy {
-    subscription_fields: HashSet<String>,
+    required_subscription_fields: HashSet<String>,
+    optional_subscription_fields: HashSet<String>,
     policy_source: PolicySource,
 }
 
 impl EligibilityPolicy {
     pub fn new(settings: &EligibilitySettings) -> Self {
-        // let mut subscription_fields = <EligibilitySettings as ProctorContext>::subscription_fields_nucleus();
-        let mut subscription_fields = <Self as Policy>::Environment::required_subscription_fields();
-        subscription_fields.extend(settings.custom_subscription_fields());
         let policy_source = PolicySource::File(settings.policy_path.clone());
         Self {
-            subscription_fields,
+            required_subscription_fields: settings.required_subscription_fields(),
+            optional_subscription_fields: settings.optional_subscription_fields(),
             policy_source,
         }
     }
@@ -27,7 +26,13 @@ impl EligibilityPolicy {
 
 impl Policy for EligibilityPolicy {
     type Item = TelemetryData;
-    type Environment = FlinkEligibilityContext;
+    type Context = FlinkEligibilityContext;
+
+    fn subscription(&self, name: &str) -> TelemetrySubscription {
+        <Self as Policy>::subscription(self, name)
+            .with_required_fields(self.required_subscription_fields.clone())
+            .with_optional_fields(self.optional_subscription_fields.clone())
+    }
 
     fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
         self.policy_source.load_into(oso)
@@ -55,7 +60,7 @@ impl Policy for EligibilityPolicy {
         Ok(())
     }
 
-    fn query_knowledge_base(&self, oso: &Oso, item_env: (Self::Item, Self::Environment)) -> GraphResult<oso::Query> {
+    fn query_knowledge_base(&self, oso: &Oso, item_env: (Self::Item, Self::Context)) -> GraphResult<oso::Query> {
         oso.query_rule("eligible", item_env).map_err(|err| err.into())
     }
 }

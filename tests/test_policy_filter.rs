@@ -50,13 +50,13 @@ struct TestFlowMetrics {
 }
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
-struct TestEnvironment {
+struct TestContext {
     #[polar(attribute)]
     pub location_code: u32,
     custom: HashMap<String, String>,
 }
 
-impl TestEnvironment {
+impl TestContext {
     pub fn new(location_code: u32) -> Self {
         Self {
             location_code,
@@ -69,8 +69,8 @@ impl TestEnvironment {
     }
 }
 
-impl proctor::ProctorContext for TestEnvironment {
-    fn required_subscription_fields() -> HashSet<String> {
+impl proctor::ProctorContext for TestContext {
+    fn required_context_fields() -> HashSet<String> {
         maplit::hashset! {
             "location_code".to_string(),
             "input_messages_per_sec".to_string(),
@@ -99,11 +99,11 @@ impl TestPolicy {
 
 impl Policy for TestPolicy {
     type Item = TestItem;
-    type Environment = TestEnvironment;
+    type Context = TestContext;
 
     //todo test optional fields
     // fn subscription_fields(&self) -> HashSet<String> {
-    //     Self::Environment::subscription_fields_nucleus()
+    //     Self::Context::subscription_fields_nucleus()
     // }
 
     fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
@@ -120,17 +120,17 @@ impl Policy for TestPolicy {
         )?;
 
         oso.register_class(
-            TestEnvironment::get_polar_class_builder()
-                .name("TestEnvironment")
+            TestContext::get_polar_class_builder()
+                .name("TestContext")
                 .add_method("custom", ProctorContext::custom)
-                // .add_method("custom", |env: &TestEnvironment| env.custom() )
+                // .add_method("custom", |env: &TestContext| env.custom() )
                 .build(),
         )?;
 
         Ok(())
     }
 
-    fn query_knowledge_base(&self, oso: &Oso, item_env: (Self::Item, Self::Environment)) -> GraphResult<oso::Query> {
+    fn query_knowledge_base(&self, oso: &Oso, item_env: (Self::Item, Self::Context)) -> GraphResult<oso::Query> {
         oso.query_rule("eligible", item_env).map_err(|err| err.into())
     }
 }
@@ -138,9 +138,9 @@ impl Policy for TestPolicy {
 struct TestFlow {
     pub graph_handle: JoinHandle<()>,
     pub tx_item_source_api: stage::ActorSourceApi<TestItem>,
-    pub tx_env_source_api: stage::ActorSourceApi<TestEnvironment>,
-    pub tx_policy_api: elements::PolicyFilterApi<TestEnvironment>,
-    pub rx_policy_monitor: elements::PolicyFilterMonitor<TestItem, TestEnvironment>,
+    pub tx_env_source_api: stage::ActorSourceApi<TestContext>,
+    pub tx_policy_api: elements::PolicyFilterApi<TestContext>,
+    pub rx_policy_monitor: elements::PolicyFilterMonitor<TestItem, TestContext>,
     pub tx_sink_api: stage::FoldApi<Vec<TestItem>>,
     pub rx_sink: Option<oneshot::Receiver<Vec<TestItem>>>,
 }
@@ -150,7 +150,7 @@ impl TestFlow {
         let item_source = stage::ActorSource::<TestItem>::new("item_source");
         let tx_item_source_api = item_source.tx_api();
 
-        let env_source = stage::ActorSource::<TestEnvironment>::new("env_source");
+        let env_source = stage::ActorSource::<TestContext>::new("env_source");
         let tx_env_source_api = env_source.tx_api();
 
         let policy = Box::new(TestPolicy::new(policy));
@@ -166,7 +166,7 @@ impl TestFlow {
         let rx_sink = sink.take_final_rx();
 
         (item_source.outlet(), policy_filter.inlet()).connect().await;
-        (env_source.outlet(), policy_filter.environment_inlet()).connect().await;
+        (env_source.outlet(), policy_filter.context_inlet()).connect().await;
         (policy_filter.outlet(), sink.inlet()).connect().await;
 
         let mut graph = Graph::default();
@@ -202,7 +202,7 @@ impl TestFlow {
         ack.await.map_err(|err| err.into())
     }
 
-    pub async fn push_environment(&self, env: TestEnvironment) -> GraphResult<()> {
+    pub async fn push_context(&self, env: TestContext) -> GraphResult<()> {
         let (cmd, ack) = stage::ActorSourceCmd::push(env);
         self.tx_env_source_api.send(cmd)?;
         ack.await.map_err(|err| err.into())
@@ -211,7 +211,7 @@ impl TestFlow {
     pub async fn tell_policy(
         &self,
         command_rx: (
-            elements::PolicyFilterCmd<TestEnvironment>,
+            elements::PolicyFilterCmd<TestContext>,
             oneshot::Receiver<proctor::Ack>,
         ),
     ) -> GraphResult<proctor::Ack> {
@@ -219,11 +219,11 @@ impl TestFlow {
         command_rx.1.await.map_err(|err| err.into())
     }
 
-    pub async fn recv_policy_event(&mut self) -> GraphResult<elements::PolicyFilterEvent<TestItem, TestEnvironment>> {
+    pub async fn recv_policy_event(&mut self) -> GraphResult<elements::PolicyFilterEvent<TestItem, TestContext>> {
         self.rx_policy_monitor.recv().await.map_err(|err| err.into())
     }
 
-    pub async fn inspect_filter_environment(&self) -> GraphResult<elements::PolicyFilterDetail<TestEnvironment>> {
+    pub async fn inspect_filter_context(&self) -> GraphResult<elements::PolicyFilterDetail<TestContext>> {
         let (cmd, detail) = elements::PolicyFilterCmd::inspect();
         self.tx_policy_api.send(cmd)?;
         detail
@@ -260,12 +260,12 @@ impl TestFlow {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn test_policy_filter_before_environment_baseline() -> anyhow::Result<()> {
+async fn test_policy_filter_before_context_baseline() -> anyhow::Result<()> {
     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
-    let main_span = tracing::info_span!("test_before_environment_baseline");
+    let main_span = tracing::info_span!("test_before_context_baseline");
     let _ = main_span.enter();
 
-    let flow = TestFlow::new(r#"eligible(item, environment) if environment.location_code == 33;"#).await;
+    let flow = TestFlow::new(r#"eligible(item, context) if context.location_code == 33;"#).await;
     let item = TestItem {
         flow: TestFlowMetrics {
             input_messages_per_sec: 3.1415926535,
@@ -282,27 +282,27 @@ async fn test_policy_filter_before_environment_baseline() -> anyhow::Result<()> 
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn test_policy_filter_happy_environment() -> anyhow::Result<()> {
+async fn test_policy_filter_happy_context() -> anyhow::Result<()> {
     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
     let main_span = tracing::info_span!("test_policy_filter_w_pass_and_blocks");
     let _ = main_span.enter();
 
-    let flow = TestFlow::new(r#"eligible(item, environment) if environment.location_code == 33;"#).await;
+    let flow = TestFlow::new(r#"eligible(item, context) if context.location_code == 33;"#).await;
 
     tracing::info!("DMR: 01. Make sure empty env...");
 
-    let detail = flow.inspect_filter_environment().await?;
-    assert!(detail.environment.is_none());
+    let detail = flow.inspect_filter_context().await?;
+    assert!(detail.context.is_none());
 
-    tracing::info!("DMR: 02. Push environment...");
+    tracing::info!("DMR: 02. Push context...");
 
-    flow.push_environment(TestEnvironment::new(33)).await?;
+    flow.push_context(TestContext::new(33)).await?;
 
-    tracing::info!("DMR: 03. Verify environment set...");
+    tracing::info!("DMR: 03. Verify context set...");
 
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    let detail = flow.inspect_filter_environment().await?;
-    assert!(detail.environment.is_some());
+    let detail = flow.inspect_filter_context().await?;
+    assert!(detail.context.is_some());
 
     tracing::info!("DMR: 04. Push Item...");
 
@@ -340,23 +340,23 @@ async fn test_policy_filter_happy_environment() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
-    let main_span = tracing::info_span!("test_policy_filter_happy_environment");
+    let main_span = tracing::info_span!("test_policy_filter_happy_context");
     let _ = main_span.enter();
 
-    let mut flow = TestFlow::new(r#"eligible(item, environment) if environment.location_code == 33;"#).await;
-    flow.push_environment(TestEnvironment::new(33)).await?;
+    let mut flow = TestFlow::new(r#"eligible(item, context) if context.location_code == 33;"#).await;
+    flow.push_context(TestContext::new(33)).await?;
     let event = flow.recv_policy_event().await?;
-    assert!(matches!(event, elements::PolicyFilterEvent::EnvironmentChanged(_)));
-    tracing::info!(?event, "DMR-A: environment changed confirmed");
+    assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
+    tracing::info!(?event, "DMR-A: context changed confirmed");
 
     let ts = Utc::now().into();
     let item = TestItem::new(std::f64::consts::PI, ts, 1);
     flow.push_item(item).await?;
 
-    flow.push_environment(TestEnvironment::new(19)).await?;
+    flow.push_context(TestContext::new(19)).await?;
     let event = flow.recv_policy_event().await?;
-    assert!(matches!(event, elements::PolicyFilterEvent::EnvironmentChanged(_)));
-    tracing::info!(?event, "DMR-B: environment changed confirmed");
+    assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
+    tracing::info!(?event, "DMR-B: context changed confirmed");
 
     let item = TestItem::new(std::f64::consts::E, ts, 2);
     flow.push_item(item).await?;
@@ -376,10 +376,10 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     assert!(matches!(event, elements::PolicyFilterEvent::ItemBlocked(_)));
     tracing::info!(?event, "DMR-E: item dropped confirmed");
 
-    flow.push_environment(TestEnvironment::new(33)).await?;
+    flow.push_context(TestContext::new(33)).await?;
     let event = flow.recv_policy_event().await?;
-    assert!(matches!(event, elements::PolicyFilterEvent::EnvironmentChanged(_)));
-    tracing::info!(?event, "DMR-F: environment changed confirmed");
+    assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
+    tracing::info!(?event, "DMR-F: context changed confirmed");
 
     let item = TestItem::new(std::f64::consts::LN_2, ts, 5);
     flow.push_item(item).await?;
@@ -405,19 +405,19 @@ async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
     let _ = main_span.enter();
 
     let mut flow = TestFlow::new(
-        r#"eligible(item, environment) if
-            c = environment.custom() and
+        r#"eligible(item, context) if
+            c = context.custom() and
             c.cat = "Otis";"#,
     )
     .await;
 
-    flow.push_environment(
-        TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
+    flow.push_context(
+        TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
     )
     .await?;
     let event = flow.recv_policy_event().await?;
-    tracing::info!(?event, "verifying environment update...");
-    assert!(matches!(event, elements::PolicyFilterEvent::EnvironmentChanged(_)));
+    tracing::info!(?event, "verifying context update...");
+    assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
 
     let ts = Utc::now().into();
     let item = TestItem::new(std::f64::consts::PI, ts, 1);
@@ -459,8 +459,8 @@ lag_2(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
     .await;
 
     tracing::info!("DMR-B:push env...");
-    flow.push_environment(
-        TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
+    flow.push_context(
+        TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
     )
     .await?;
     tracing::info!("DMR-C:verify enviornment...");
@@ -491,8 +491,8 @@ and item.input_messages_per_sec(item.inbox_lag) < 36;"#,
     )
     .await;
 
-    flow.push_environment(
-        TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
+    flow.push_context(
+        TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
     )
     .await?;
 
@@ -519,14 +519,14 @@ async fn test_replace_policy() -> anyhow::Result<()> {
     let good_ts = Utc::now();
     let too_old_ts = Utc::now() - chrono::Duration::seconds(boundary_age_secs + 5);
 
-    let policy_1 = r#"eligible(_, env: TestEnvironment) if env.custom().cat = "Otis";"#;
+    let policy_1 = r#"eligible(_, env: TestContext) if env.custom().cat = "Otis";"#;
     let policy_2 = format!("eligible(item, _) if item.within_seconds({});", boundary_age_secs);
     tracing::info!(?policy_2, "DMR: policy with timestamp");
 
     let flow = TestFlow::new(policy_1).await;
 
-    flow.push_environment(
-        TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
+    flow.push_context(
+        TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
     )
     .await?;
 
@@ -563,12 +563,12 @@ async fn test_append_policy() -> anyhow::Result<()> {
     let _ = main_span.enter();
 
     let policy_1 = r#"eligible(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#;
-    let policy_2 = r#"eligible(_, env: TestEnvironment) if env.custom().cat = "Otis";"#;
+    let policy_2 = r#"eligible(_, env: TestContext) if env.custom().cat = "Otis";"#;
 
     let flow = TestFlow::new(policy_1).await;
 
-    flow.push_environment(
-        TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
+    flow.push_context(
+        TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
     )
     .await?;
 
@@ -613,8 +613,8 @@ async fn test_reset_policy() -> anyhow::Result<()> {
 
     let flow = TestFlow::new(policy_1).await;
 
-    flow.push_environment(
-        TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
+    flow.push_context(
+        TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
     )
     .await?;
 

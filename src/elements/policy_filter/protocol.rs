@@ -2,54 +2,54 @@ use crate::Ack;
 use std::path::PathBuf;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
-pub type PolicyFilterApi<E> = mpsc::UnboundedSender<PolicyFilterCmd<E>>;
-pub type PolicyFilterMonitor<T, E> = broadcast::Receiver<PolicyFilterEvent<T, E>>;
+pub type PolicyFilterApi<C> = mpsc::UnboundedSender<PolicyFilterCmd<C>>;
+pub type PolicyFilterMonitor<T, C> = broadcast::Receiver<PolicyFilterEvent<T, C>>;
 
 #[derive(Debug)]
-pub enum PolicyFilterCmd<E> {
+pub enum PolicyFilterCmd<C> {
     ReplacePolicy {
         new_policy: PolicySource,
         tx: oneshot::Sender<Ack>,
     },
     AppendPolicy {
-        policy: PolicySource,
+        additional_policy: PolicySource,
         tx: oneshot::Sender<Ack>,
     },
     ResetPolicy(oneshot::Sender<Ack>),
-    Inspect(oneshot::Sender<PolicyFilterDetail<E>>),
+    Inspect(oneshot::Sender<PolicyFilterDetail<C>>),
 }
 
-impl<E> PolicyFilterCmd<E> {
-    pub fn replace_policy(new_policy: PolicySource) -> (PolicyFilterCmd<E>, oneshot::Receiver<Ack>) {
+impl<C> PolicyFilterCmd<C> {
+    pub fn replace_policy(new_policy: PolicySource) -> (PolicyFilterCmd<C>, oneshot::Receiver<Ack>) {
         let (tx, rx) = oneshot::channel();
         (Self::ReplacePolicy { new_policy, tx }, rx)
     }
 
-    pub fn append_policy(policy: PolicySource) -> (PolicyFilterCmd<E>, oneshot::Receiver<Ack>) {
+    pub fn append_policy(additional_policy: PolicySource) -> (PolicyFilterCmd<C>, oneshot::Receiver<Ack>) {
         let (tx, rx) = oneshot::channel();
-        (Self::AppendPolicy { policy, tx }, rx)
+        (Self::AppendPolicy { additional_policy, tx }, rx)
     }
 
-    pub fn reset_policy() -> (PolicyFilterCmd<E>, oneshot::Receiver<Ack>) {
+    pub fn reset_policy() -> (PolicyFilterCmd<C>, oneshot::Receiver<Ack>) {
         let (tx, rx) = oneshot::channel();
         (Self::ResetPolicy(tx), rx)
     }
 
-    pub fn inspect() -> (PolicyFilterCmd<E>, oneshot::Receiver<PolicyFilterDetail<E>>) {
+    pub fn inspect() -> (PolicyFilterCmd<C>, oneshot::Receiver<PolicyFilterDetail<C>>) {
         let (tx, rx) = oneshot::channel();
         (Self::Inspect(tx), rx)
     }
 }
 
 #[derive(Debug)]
-pub struct PolicyFilterDetail<E> {
+pub struct PolicyFilterDetail<C> {
     pub name: String,
-    pub environment: Option<E>,
+    pub context: Option<C>,
 }
 
 #[derive(Debug, Clone)]
-pub enum PolicyFilterEvent<T, E> {
-    EnvironmentChanged(Option<E>),
+pub enum PolicyFilterEvent<T, C> {
+    ContextChanged(Option<C>),
     ItemBlocked(T),
 }
 

@@ -20,7 +20,7 @@ pub struct FlinkEligibilityContext {
 }
 
 impl ProctorContext for FlinkEligibilityContext {
-    fn required_subscription_fields() -> HashSet<String> {
+    fn required_context_fields() -> HashSet<String> {
         maplit::hashset! {
             "task_status.last_failure".to_string(),
             "cluster_status.is_deploying".to_string(),

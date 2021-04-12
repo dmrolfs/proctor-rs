@@ -18,43 +18,44 @@ use tracing::Instrument;
 use crate::phases::collection::TelemetrySubscription;
 
 pub trait PolicySettings {
-    fn custom_subscription_fields(&self) -> HashSet<String>;
+    fn required_subscription_fields(&self) -> HashSet<String>;
+    fn optional_subscription_fields(&self) -> HashSet<String>;
     fn specification_path(&self) -> PathBuf;
 }
 
 pub trait Policy: Debug + Send + Sync {
     type Item;
-    type Environment: ProctorContext;
+    type Context: ProctorContext;
     fn subscription(&self, name: &str) -> TelemetrySubscription {
         TelemetrySubscription::new(name)
-            .with_required_fields(Self::Environment::required_subscription_fields())
+            .with_required_fields(Self::Context::required_context_fields())
     }
     fn load_knowledge_base(&self, oso: &mut oso::Oso) -> GraphResult<()>;
     fn initialize_knowledge_base(&self, oso: &mut oso::Oso) -> GraphResult<()>;
     fn query_knowledge_base(
-        &self, oso: &oso::Oso, item_env: (Self::Item, Self::Environment),
+        &self, oso: &oso::Oso, item_context: (Self::Item, Self::Context),
     ) -> GraphResult<oso::Query>;
 }
 
-pub struct PolicyFilter<T, E> {
+pub struct PolicyFilter<T, C> {
     name: String,
-    policy: Box<dyn Policy<Item = T, Environment = E>>,
-    environment_inlet: Inlet<E>,
+    policy: Box<dyn Policy<Item = T, Context= C>>,
+    context_inlet: Inlet<C>,
     inlet: Inlet<T>,
     outlet: Outlet<T>,
-    tx_api: PolicyFilterApi<E>,
-    rx_api: mpsc::UnboundedReceiver<PolicyFilterCmd<E>>,
-    pub tx_monitor: broadcast::Sender<PolicyFilterEvent<T, E>>,
+    tx_api: PolicyFilterApi<C>,
+    rx_api: mpsc::UnboundedReceiver<PolicyFilterCmd<C>>,
+    pub tx_monitor: broadcast::Sender<PolicyFilterEvent<T, C>>,
 }
 
-impl<T, E> PolicyFilter<T, E>
+impl<T, C> PolicyFilter<T, C>
 where
     T: Clone,
-    E: Clone,
+    C: Clone,
 {
-    pub fn new<S: Into<String>>(name: S, policy: Box<dyn Policy<Item = T, Environment = E>>) -> Self {
+    pub fn new<S: Into<String>>(name: S, policy: Box<dyn Policy<Item = T, Context= C>>) -> Self {
         let name = name.into();
-        let environment_inlet = Inlet::new(format!("{}_environment", name.clone()));
+        let context_inlet = Inlet::new(format!("{}_context", name.clone()));
         let inlet = Inlet::new(name.clone());
         let outlet = Outlet::new(name.clone());
         let (tx_api, rx_api) = mpsc::unbounded_channel();
@@ -62,7 +63,7 @@ where
         Self {
             name,
             policy,
-            environment_inlet,
+            context_inlet,
             inlet,
             outlet,
             tx_api,
@@ -72,12 +73,12 @@ where
     }
 
     #[inline]
-    pub fn environment_inlet(&self) -> Inlet<E> {
-        self.environment_inlet.clone()
+    pub fn context_inlet(&self) -> Inlet<C> {
+        self.context_inlet.clone()
     }
 }
 
-impl<T, E> SinkShape for PolicyFilter<T, E> {
+impl<T, C> SinkShape for PolicyFilter<T, C> {
     type In = T;
     #[inline]
     fn inlet(&self) -> Inlet<Self::In> {
@@ -85,7 +86,7 @@ impl<T, E> SinkShape for PolicyFilter<T, E> {
     }
 }
 
-impl<T, E> SourceShape for PolicyFilter<T, E> {
+impl<T, C> SourceShape for PolicyFilter<T, C> {
     type Out = T;
     #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
@@ -95,10 +96,10 @@ impl<T, E> SourceShape for PolicyFilter<T, E> {
 
 #[dyn_upcast]
 #[async_trait]
-impl<T, E> Stage for PolicyFilter<T, E>
+impl<T, C> Stage for PolicyFilter<T, C>
 where
     T: AppData + Clone + Sync,
-    E: ProctorContext + Debug + Clone + Send + Sync,
+    C: ProctorContext + Debug + Clone + Send + Sync,
 {
     #[inline]
     fn name(&self) -> &str {
@@ -116,10 +117,9 @@ where
         let mut oso = self.oso()?;
         let outlet = &self.outlet;
         let item_inlet = &mut self.inlet;
-        let env_inlet = &mut self.environment_inlet;
-        let context = &self.policy;
-        let environment: Arc<Mutex<Option<E>>> = Arc::new(Mutex::new(None));
-        let policy_context = &self.policy;
+        let context_inlet = &mut self.context_inlet;
+        let policy = &self.policy;
+        let context: Arc<Mutex<Option<C>>> = Arc::new(Mutex::new(None));
         let rx_api = &mut self.rx_api;
         let tx_monitor = &self.tx_monitor;
 
@@ -127,11 +127,11 @@ where
             tokio::select! {
                 item = item_inlet.recv() => match item {
                     Some(item) => {
-                        tracing::trace!(?item, ?environment, "handling next item...");
+                        tracing::trace!(?item, ?context, "handling next item...");
 
-                        match environment.lock().await.as_ref() {
-                            Some(env) => Self::handle_item(item, env, &context, &oso, outlet, tx_monitor).await?,
-                            None => Self::handle_item_before_env(item, tx_monitor)?,
+                        match context.lock().await.as_ref() {
+                            Some(ctx) => Self::handle_item(item, ctx, policy, &oso, outlet, tx_monitor).await?,
+                            None => Self::handle_item_before_context(item, tx_monitor)?,
                         }
                     },
                     None => {
@@ -140,15 +140,15 @@ where
                     }
                 },
 
-                Some(env) = env_inlet.recv() => Self::handle_environment(environment.clone(), env, tx_monitor).await?,
+                Some(ctx) = context_inlet.recv() => Self::handle_context(context.clone(), ctx, tx_monitor).await?,
 
                 Some(command) = rx_api.recv() => {
                     let cont_loop = Self::handle_command(
                         command,
                         &mut oso,
                         name.as_str(),
-                        policy_context,
-                        environment.clone(),
+                        policy,
+                        context.clone(),
                     ).await?;
 
                     if !cont_loop {
@@ -175,10 +175,10 @@ where
     }
 }
 
-impl<T, E> PolicyFilter<T, E>
+impl<T, C> PolicyFilter<T, C>
 where
     T: Debug + Clone,
-    E: ProctorContext + Debug + Clone,
+    C: ProctorContext + Debug + Clone,
 {
     #[tracing::instrument(level = "info", name = "make policy knowledge base", skip(self))]
     fn oso(&self) -> GraphResult<Oso> {
@@ -199,7 +199,7 @@ where
 
     #[tracing::instrument(level = "trace", skip(tx))]
     fn publish_event(
-        event: PolicyFilterEvent<T, E>, tx: &broadcast::Sender<PolicyFilterEvent<T, E>>,
+        event: PolicyFilterEvent<T, C>, tx: &broadcast::Sender<PolicyFilterEvent<T, C>>,
     ) -> GraphResult<()> {
         let nr_notified = tx
             .send(event.clone())
@@ -210,12 +210,12 @@ where
 
     #[tracing::instrument(level = "info", name = "policy_filter handle item", skip(oso, outlet), fields())]
     async fn handle_item(
-        item: T, environment: &E, context: &Box<dyn Policy<Item = T, Environment = E>>, oso: &Oso, outlet: &Outlet<T>,
-        tx: &broadcast::Sender<PolicyFilterEvent<T, E>>,
+        item: T, context: &C, policy: &Box<dyn Policy<Item = T, Context= C>>, oso: &Oso, outlet: &Outlet<T>,
+        tx: &broadcast::Sender<PolicyFilterEvent<T, C>>,
     ) -> GraphResult<()> {
         let result = {
             // query lifetime cannot span across `.await` since it cannot `Send` between threads.
-            let mut query = context.query_knowledge_base(oso, (item.clone(), environment.clone()))?;
+            let mut query = policy.query_knowledge_base(oso, (item.clone(), context.clone()))?;
             query.next()
         };
 
@@ -226,8 +226,8 @@ where
                 tracing::info!(
                     ?result_set,
                     ?item,
-                    ?environment,
-                    "item and environment passed policy review - sending via outlet."
+                    ?context,
+                    "item and context passed policy review - sending via outlet."
                 );
                 outlet
                     .send(item.clone())
@@ -237,7 +237,7 @@ where
             }
 
             Some(Err(err)) => {
-                tracing::warn!(error=?err, ?item, ?environment, "error in policy review - skipping item.");
+                tracing::warn!(error=?err, ?item, ?context, "error in policy review - skipping item.");
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
                 Err(err.into())
             }
@@ -245,8 +245,8 @@ where
             None => {
                 tracing::info!(
                     ?item,
-                    ?environment,
-                    "item and environment did not pass policy review - skipping item."
+                    ?context,
+                    "item and context did not pass policy review - skipping item."
                 );
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
                 Ok(())
@@ -256,46 +256,46 @@ where
 
     #[tracing::instrument(
         level = "info",
-        name = "policy_filter handle item before env set",
+        name = "policy_filter handle item before context set",
         skip(tx),
         fields()
     )]
-    fn handle_item_before_env(item: T, tx: &broadcast::Sender<PolicyFilterEvent<T, E>>) -> GraphResult<()> {
-        tracing::info!(?item, "dropping item received before policy environment set.");
+    fn handle_item_before_context(item: T, tx: &broadcast::Sender<PolicyFilterEvent<T, C>>) -> GraphResult<()> {
+        tracing::info!(?item, "dropping item received before policy context set.");
         Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "policy_filter handle environment", skip(tx), fields())]
-    async fn handle_environment(
-        environment: Arc<Mutex<Option<E>>>, recv_env: E, tx: &broadcast::Sender<PolicyFilterEvent<T, E>>,
+    #[tracing::instrument(level = "info", name = "policy_filter handle context", skip(tx), fields())]
+    async fn handle_context(
+        context: Arc<Mutex<Option<C>>>, recv_context: C, tx: &broadcast::Sender<PolicyFilterEvent<T, C>>,
     ) -> GraphResult<()> {
-        tracing::trace!(recv_environment=?recv_env, "handling policy environment update...");
-        let mut env = environment.lock().await;
-        *env = Some(recv_env);
+        tracing::trace!(recv_context=?recv_context, "handling policy context update...");
+        let mut ctx = context.lock().await;
+        *ctx = Some(recv_context);
 
-        Self::publish_event(PolicyFilterEvent::EnvironmentChanged(env.clone()), tx)?;
+        Self::publish_event(PolicyFilterEvent::ContextChanged(ctx.clone()), tx)?;
         Ok(())
     }
 
     #[tracing::instrument(
         level = "info",
         name = "policy_filter handle command",
-        skip(oso, policy_context,),
+        skip(oso, policy,),
         fields()
     )]
     async fn handle_command(
-        command: PolicyFilterCmd<E>, oso: &mut Oso, name: &str,
-        policy_context: &Box<dyn Policy<Item = T, Environment = E>>,
-        environment: std::sync::Arc<tokio::sync::Mutex<Option<E>>>,
+        command: PolicyFilterCmd<C>, oso: &mut Oso, name: &str,
+        policy: &Box<dyn Policy<Item = T, Context= C>>,
+        context: std::sync::Arc<tokio::sync::Mutex<Option<C>>>,
     ) -> GraphResult<bool> {
-        tracing::trace!(?command, ?environment, "handling policy filter command...");
+        tracing::trace!(?command, ?context, "handling policy filter command...");
 
         match command {
             PolicyFilterCmd::Inspect(tx) => {
                 let detail = PolicyFilterDetail {
                     name: name.to_owned(),
-                    environment: environment.lock().await.clone(),
+                    context: context.lock().await.clone(),
                 };
                 let _ignore_failure = tx.send(detail);
                 Ok(true)
@@ -312,8 +312,8 @@ where
                 Ok(true)
             }
 
-            PolicyFilterCmd::AppendPolicy { policy, tx } => {
-                match policy {
+            PolicyFilterCmd::AppendPolicy { additional_policy: policy_source, tx } => {
+                match policy_source {
                     PolicySource::String(p) => oso.load_str(p.as_str())?,
                     PolicySource::File(path) => oso.load_file(path)?,
                 }
@@ -323,7 +323,7 @@ where
 
             PolicyFilterCmd::ResetPolicy(tx) => {
                 oso.clear_rules();
-                policy_context.load_knowledge_base(oso)?;
+                policy.load_knowledge_base(oso)?;
                 let _ignore_failrue = tx.send(());
                 Ok(true)
             }
@@ -331,8 +331,8 @@ where
     }
 }
 
-impl<T, E> stage::WithApi for PolicyFilter<T, E> {
-    type Sender = PolicyFilterApi<E>;
+impl<T, C> stage::WithApi for PolicyFilter<T, C> {
+    type Sender = PolicyFilterApi<C>;
 
     #[inline]
     fn tx_api(&self) -> Self::Sender {
@@ -340,20 +340,20 @@ impl<T, E> stage::WithApi for PolicyFilter<T, E> {
     }
 }
 
-impl<T, E> stage::WithMonitor for PolicyFilter<T, E> {
-    type Receiver = PolicyFilterMonitor<T, E>;
+impl<T, C> stage::WithMonitor for PolicyFilter<T, C> {
+    type Receiver = PolicyFilterMonitor<T, C>;
     #[inline]
     fn rx_monitor(&self) -> Self::Receiver {
         self.tx_monitor.subscribe()
     }
 }
 
-impl<T, E> Debug for PolicyFilter<T, E> {
+impl<T, C> Debug for PolicyFilter<T, C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("PolicyFilter")
             .field("name", &self.name)
             .field("policy_context", &self.policy)
-            .field("environment_inlet", &self.environment_inlet)
+            .field("context_inlet", &self.context_inlet)
             .field("inlet", &self.inlet)
             .field("outlet", &self.outlet)
             .finish()
@@ -384,7 +384,7 @@ mod tests {
     }
 
     #[derive(PolarClass, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-    struct TestEnvironment {
+    struct TestContext {
         #[polar(attribute)]
         pub location_code: u32,
         #[polar(attribute)]
@@ -392,8 +392,8 @@ mod tests {
         pub qualities: HashMap<String, String>,
     }
 
-    impl ProctorContext for TestEnvironment {
-        fn required_subscription_fields() -> HashSet<String> {
+    impl ProctorContext for TestContext {
+        fn required_context_fields() -> HashSet<String> {
             maplit::hashset! {"location_code".to_string(),}
         }
 
@@ -415,19 +415,12 @@ mod tests {
 
     impl Policy for TestPolicy {
         type Item = User;
-        type Environment = TestEnvironment;
+        type Context = TestContext;
 
         fn subscription(&self, name: &str) -> TelemetrySubscription {
-            //dmr: desire is to call default impl and extend with optional fields
             <Self as Policy>::subscription(self, name)
                 .with_optional_fields(maplit::hashset! {"foo".to_string(), "score".to_string()})
         }
-
-        // fn required_fields(&self) -> HashSet<String> {
-        //     let mut fields = Self::Environment::required_subscription_fields();
-        //     fields.extend(maplit::hashset! { "foo".to_string(), "score".to_string(), });
-        //     fields
-        // }
 
         fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
             oso.load_str(self.policy.as_str()).map_err(|err| err.into())
@@ -436,15 +429,15 @@ mod tests {
         fn initialize_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
             oso.register_class(User::get_polar_class())
                 .map_err::<GraphError, _>(|err| err.into())?;
-            oso.register_class(TestEnvironment::get_polar_class())
+            oso.register_class(TestContext::get_polar_class())
                 .map_err::<GraphError, _>(|err| err.into())?;
             Ok(())
         }
 
         fn query_knowledge_base(
-            &self, oso: &Oso, item_env: (Self::Item, Self::Environment),
+            &self, oso: &Oso, item_context: (Self::Item, Self::Context),
         ) -> GraphResult<oso::Query> {
-            oso.query_rule("allow", (item_env.0, "foo", "bar"))
+            oso.query_rule("allow", (item_context.0, "foo", "bar"))
                 .map_err(|err| err.into())
         }
     }
@@ -455,7 +448,7 @@ mod tests {
         let main_span = tracing::info_span!("policy_filter::test_handle_item");
         let _main_span_guard = main_span.enter();
 
-        let policy: Box<dyn Policy<Item = User, Environment = TestEnvironment>> = Box::new(TestPolicy::new(
+        let policy: Box<dyn Policy<Item = User, Context= TestContext>> = Box::new(TestPolicy::new(
             r#"allow(actor, action, resource) if actor.username.ends_with("example.com");"#,
         ));
 
@@ -473,7 +466,7 @@ mod tests {
 
             let (tx_monitor, _rx_monitor) = broadcast::channel(4);
 
-            let env = TestEnvironment {
+            let context = TestContext {
                 location_code: 17,
                 qualities: maplit::hashmap! {
                     "foo".to_string() => "bar".to_string(),
@@ -481,7 +474,7 @@ mod tests {
                 },
             };
 
-            PolicyFilter::handle_item(item, &env, &policy_filter.policy, &oso, &outlet, &tx_monitor)
+            PolicyFilter::handle_item(item, &context, &policy_filter.policy, &oso, &outlet, &tx_monitor)
                 .await
                 .expect("handle_item failed");
 

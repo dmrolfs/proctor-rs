@@ -100,17 +100,21 @@ impl TelemetrySubscription {
     }
 
     pub fn with_required_fields<S: Into<String>>(self, required_fields: HashSet<S>) -> Self {
-        let required_fields = required_fields.into_iter().map(|s| s.into()).collect();
+        let required_fields: HashSet<String> = required_fields.into_iter().map(|s| s.into()).collect();
+        let mut extended_required_fields = self.required_fields;
+        extended_required_fields.extend(required_fields);
         Self {
-            required_fields,
+            required_fields: extended_required_fields,
             ..self
         }
     }
 
     pub fn with_optional_fields<S: Into<String>>(self, optional_fields: HashSet<S>) -> Self {
-        let optional_fields = optional_fields.into_iter().map(|s| s.into()).collect();
+        let optional_fields: HashSet<String> = optional_fields.into_iter().map(|s| s.into()).collect();
+        let mut extended_optional_fields = self.optional_fields;
+        extended_optional_fields.extend(optional_fields);
         Self {
-            optional_fields,
+            optional_fields: extended_optional_fields,
             ..self
         }
     }
