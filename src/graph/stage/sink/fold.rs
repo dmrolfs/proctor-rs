@@ -167,7 +167,7 @@ where
     fn complete_fold(&mut self) -> GraphResult<()> {
         if let Some(tx_final) = self.tx_final.take() {
             tx_final.send(self.acc.clone()).map_err(|_err| {
-                GraphError::Channel(format!(
+                GraphError::GraphChannel(format!(
                     "Fold sink final receiver detached. Failed to send accumulation: {:?}",
                     self.acc
                 ))

@@ -1,10 +1,10 @@
 use super::context::*;
 use crate::elements::{Policy, PolicySettings, PolicySource, TelemetryData};
 use crate::graph::GraphResult;
+use crate::phases::collection::TelemetrySubscription;
 use crate::settings::EligibilitySettings;
 use oso::{Oso, PolarClass};
 use std::collections::HashSet;
-use crate::phases::collection::TelemetrySubscription;
 
 #[derive(Debug)]
 pub struct EligibilityPolicy {
@@ -28,8 +28,8 @@ impl Policy for EligibilityPolicy {
     type Item = TelemetryData;
     type Context = FlinkEligibilityContext;
 
-    fn subscription(&self, name: &str) -> TelemetrySubscription {
-        <Self as Policy>::subscription(self, name)
+    fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
+        subscription
             .with_required_fields(self.required_subscription_fields.clone())
             .with_optional_fields(self.optional_subscription_fields.clone())
     }

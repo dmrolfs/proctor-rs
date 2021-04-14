@@ -122,7 +122,7 @@ impl<T: Debug> Inlet<T> {
         if self.is_attached().await {
             return Ok(());
         } else {
-            return Err(GraphError::Detached);
+            return Err(GraphError::GraphPortDetached);
         }
     }
 
@@ -247,7 +247,7 @@ impl<T> Outlet<T> {
         if self.is_attached().await {
             return Ok(());
         } else {
-            return Err(GraphError::Detached);
+            return Err(GraphError::GraphPortDetached);
         }
     }
 

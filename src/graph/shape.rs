@@ -78,9 +78,9 @@ impl<T> fmt::Debug for InletsShape<T> {
 
 pub trait UniformFanInShape: SourceShape {
     type In;
-             //todo use once associated type defaults are stable
-             // type InletShape = Arc<Mutex<Inlet<Self::In>>>;
-             // type InletsShape = Arc<Mutex<Vec<Self::InletShape>>>;
+    //todo use once associated type defaults are stable
+    // type InletShape = Arc<Mutex<Inlet<Self::In>>>;
+    // type InletsShape = Arc<Mutex<Vec<Self::InletShape>>>;
 
     fn inlets(&self) -> InletsShape<Self::In>;
 }

@@ -102,7 +102,9 @@ impl TelemetrySubscription {
     pub fn with_required_fields<S: Into<String>>(self, required_fields: HashSet<S>) -> Self {
         let required_fields: HashSet<String> = required_fields.into_iter().map(|s| s.into()).collect();
         let mut extended_required_fields = self.required_fields;
+        tracing::warn!("DMR: before extended_required_fields: {:?}", extended_required_fields);
         extended_required_fields.extend(required_fields);
+        tracing::warn!("DMR: after extended_required_fields: {:?}", extended_required_fields);
         Self {
             required_fields: extended_required_fields,
             ..self
@@ -200,7 +202,11 @@ impl Clearinghouse {
         let interested = subscriptions
             .iter()
             .filter(|s| {
-                let focus = s.required_fields.union(&s.optional_fields).cloned().collect::<HashSet<_>>();
+                let focus = s
+                    .required_fields
+                    .union(&s.optional_fields)
+                    .cloned()
+                    .collect::<HashSet<_>>();
                 !focus.intersection(&changed).collect::<HashSet<_>>().is_empty()
             })
             .collect::<Vec<_>>();
@@ -256,11 +262,8 @@ impl Clearinghouse {
         result
     }
 
-    #[tracing::instrument(level="trace")]
-    fn fulfill_subscription(
-        subscription: &TelemetrySubscription,
-        database: &TelemetryData,
-    ) -> Option<TelemetryData> {
+    #[tracing::instrument(level = "trace")]
+    fn fulfill_subscription(subscription: &TelemetrySubscription, database: &TelemetryData) -> Option<TelemetryData> {
         let mut ready = Vec::new();
         let mut unfilled = Vec::new();
 
@@ -509,25 +512,31 @@ mod tests {
             },
             TelemetrySubscription {
                 name: "cat_pos".to_string(),
-                required_fields: maplit::hashset!{"pos".to_string(), "cat".to_string()},
-                optional_fields: maplit::hashset!{"extra".to_string()},
+                required_fields: maplit::hashset! {"pos".to_string(), "cat".to_string()},
+                optional_fields: maplit::hashset! {"extra".to_string()},
                 outlet_to_subscription: Outlet::new("cat_pos_outlet"),
             },
             TelemetrySubscription {
                 name: "all".to_string(),
-                required_fields: maplit::hashset!{"pos".to_string(), "cat".to_string(), "value".to_string()},
+                required_fields: maplit::hashset! {"pos".to_string(), "cat".to_string(), "value".to_string()},
                 optional_fields: HashSet::default(),
                 outlet_to_subscription: Outlet::new("all_outlet"),
             },
         ];
-
         static ref DB_ROWS: Vec<TelemetryData> = vec![
-            TelemetryData::from_data(maplit::hashmap! {"pos".to_string() => "1".to_string(), "cat".to_string() => "Stella".to_string(), "extra".to_string() => "Ripley".to_string(),}),
-            TelemetryData::from_data(maplit::hashmap! {"value".to_string() => "3.14159".to_string(), "cat".to_string() => "Otis".to_string(), "extra".to_string() => "Ripley".to_string(),}),
-            TelemetryData::from_data(maplit::hashmap! {"pos".to_string() => "3".to_string(), "cat".to_string() => "Neo".to_string(), "extra".to_string() => "Ripley".to_string(),}),
-            TelemetryData::from_data(maplit::hashmap! {"pos".to_string() => "4".to_string(), "value".to_string() => "2.71828".to_string(), "cat".to_string() => "Apollo".to_string(), "extra".to_string() => "Ripley".to_string(),}),
+            TelemetryData::from_data(
+                maplit::hashmap! {"pos".to_string() => "1".to_string(), "cat".to_string() => "Stella".to_string(), "extra".to_string() => "Ripley".to_string(),}
+            ),
+            TelemetryData::from_data(
+                maplit::hashmap! {"value".to_string() => "3.14159".to_string(), "cat".to_string() => "Otis".to_string(), "extra".to_string() => "Ripley".to_string(),}
+            ),
+            TelemetryData::from_data(
+                maplit::hashmap! {"pos".to_string() => "3".to_string(), "cat".to_string() => "Neo".to_string(), "extra".to_string() => "Ripley".to_string(),}
+            ),
+            TelemetryData::from_data(
+                maplit::hashmap! {"pos".to_string() => "4".to_string(), "value".to_string() => "2.71828".to_string(), "cat".to_string() => "Apollo".to_string(), "extra".to_string() => "Ripley".to_string(),}
+            ),
         ];
-
         static ref EXPECTED: HashMap<String, Vec<Option<TelemetryData>>> = maplit::hashmap! {
             SUBSCRIPTIONS[0].name.clone() => vec![
                 None,
@@ -618,8 +627,8 @@ mod tests {
             let sub1_inlet = Inlet::new("sub1");
             let (add_cmd, rx_add) = ClearinghouseCmd::subscribe(
                 TelemetrySubscription::new("sub1")
-                        .with_required_fields(maplit::hashset! {"aaa", "bbb"})
-                        .with_optional_fields(HashSet::<&str>::default()),
+                    .with_required_fields(maplit::hashset! {"aaa", "bbb"})
+                    .with_optional_fields(HashSet::<&str>::default()),
                 sub1_inlet.clone(),
             );
             tx_api.send(add_cmd)?;
@@ -773,7 +782,8 @@ mod tests {
                     &TelemetrySubscription::new(sub.name.as_str())
                         .with_required_fields(sub.required_fields.clone())
                         .with_optional_fields(sub.optional_fields.clone()),
-                    data_row);
+                    data_row,
+                );
 
                 assert_eq!((&sub.name, row, &actual), (&sub.name, row, expected_row));
             }

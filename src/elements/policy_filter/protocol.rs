@@ -75,4 +75,27 @@ impl PolicySource {
         };
         result.map_err(|err| err.into())
     }
+
+    pub fn validate(&self) -> crate::graph::GraphResult<()> {
+        let polar = polar_core::polar::Polar::new();
+        let result = match self {
+            Self::String(policy) => polar.load_str(policy.as_str()),
+            Self::File(policy) => {
+                let file = policy.as_path();
+                if !file.extension().map(|ext| ext == "polar").unwrap_or(false) {
+                    return Err(oso::OsoError::IncorrectFileType {
+                        filename: file.to_string_lossy().into_owned(),
+                    })
+                    .map_err(|err| err.into());
+                }
+
+                use std::io::Read;
+                let mut f = std::fs::File::open(file)?;
+                let mut p = String::new();
+                f.read_to_string(&mut p)?;
+                polar.load_str(p.as_str())
+            }
+        };
+        result.map_err(|err| err.into())
+    }
 }

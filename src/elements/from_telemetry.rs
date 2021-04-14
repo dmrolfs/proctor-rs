@@ -2,7 +2,6 @@ use super::TelemetryData;
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape, ThroughShape};
 use crate::AppData;
-use crate::ProctorResult;
 use serde::de::DeserializeOwned;
 
 pub type FromTelemetryShape<Out> = Box<dyn FromTelemetryStage<Out>>;
@@ -12,7 +11,7 @@ pub trait FromTelemetryStage<Out>: Stage + ThroughShape<In = TelemetryData, Out 
 impl<Out, T> FromTelemetryStage<Out> for T where T: Stage + ThroughShape<In = TelemetryData, Out = Out> + 'static {}
 
 #[tracing::instrument(level = "info", skip(name))]
-pub async fn make_from_telemetry<Out, S>(name: S, log_conversion_failure: bool) -> ProctorResult<FromTelemetryShape<Out>>
+pub async fn make_from_telemetry<Out, S>(name: S, log_conversion_failure: bool) -> GraphResult<FromTelemetryShape<Out>>
 where
     Out: AppData + Sync + DeserializeOwned,
     S: AsRef<str>,

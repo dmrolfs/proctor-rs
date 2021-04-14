@@ -76,25 +76,17 @@ impl Graph {
         self.nodes.push_back(node);
     }
 
-    #[tracing::instrument(level = "info", name = "run graph", skip(self))]
+    #[tracing::instrument(level = "info", skip(self))]
     pub async fn run(self) -> GraphResult<()> {
-        let tasks = self
-            .nodes
-            .into_iter()
-            .map(|node| {
-                let name = node.name.clone();
-                node.run()
-                    .instrument(tracing::info_span!("graph_node_run", graph=%name))
-            })
-            .collect::<Vec<_>>();
+        let tasks = self.nodes.into_iter().map(|node| node.run()).collect::<Vec<_>>();
 
         futures::future::try_join_all(tasks)
-            .instrument(tracing::info_span!("graph_join_all"))
+            .instrument(tracing::info_span!("graph_run_join_all"))
             .await
             .map_err(|err| {
                 tracing::error!(error=?err, "at least one graph node run failed.");
                 err.into()
             })
-            .map(|_| ())
+            .map(|results| results.into_iter().for_each(|r| r.unwrap()))
     }
 }

@@ -209,11 +209,7 @@ impl TestFlow {
     }
 
     pub async fn tell_policy(
-        &self,
-        command_rx: (
-            elements::PolicyFilterCmd<TestContext>,
-            oneshot::Receiver<proctor::Ack>,
-        ),
+        &self, command_rx: (elements::PolicyFilterCmd<TestContext>, oneshot::Receiver<proctor::Ack>),
     ) -> GraphResult<proctor::Ack> {
         self.tx_policy_api.send(command_rx.0)?;
         command_rx.1.await.map_err(|err| err.into())
@@ -411,10 +407,8 @@ async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
     )
     .await;
 
-    flow.push_context(
-        TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
-    )
-    .await?;
+    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
+        .await?;
     let event = flow.recv_policy_event().await?;
     tracing::info!(?event, "verifying context update...");
     assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
@@ -459,10 +453,8 @@ lag_2(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
     .await;
 
     tracing::info!("DMR-B:push env...");
-    flow.push_context(
-        TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
-    )
-    .await?;
+    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
+        .await?;
     tracing::info!("DMR-C:verify enviornment...");
 
     let ts = Utc::now().into();
@@ -491,10 +483,8 @@ and item.input_messages_per_sec(item.inbox_lag) < 36;"#,
     )
     .await;
 
-    flow.push_context(
-        TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
-    )
-    .await?;
+    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
+        .await?;
 
     let ts = Utc::now().into();
     let item = TestItem::new(std::f64::consts::PI, ts, 1);
@@ -525,10 +515,8 @@ async fn test_replace_policy() -> anyhow::Result<()> {
 
     let flow = TestFlow::new(policy_1).await;
 
-    flow.push_context(
-        TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
-    )
-    .await?;
+    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
+        .await?;
 
     let item_1 = TestItem::new(std::f64::consts::PI, too_old_ts, 1);
     flow.push_item(item_1.clone()).await?;
@@ -567,10 +555,8 @@ async fn test_append_policy() -> anyhow::Result<()> {
 
     let flow = TestFlow::new(policy_1).await;
 
-    flow.push_context(
-        TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
-    )
-    .await?;
+    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
+        .await?;
 
     let ts = Utc::now().into();
     let item = TestItem::new(std::f64::consts::PI, ts, 1);
@@ -613,10 +599,8 @@ async fn test_reset_policy() -> anyhow::Result<()> {
 
     let flow = TestFlow::new(policy_1).await;
 
-    flow.push_context(
-        TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
-    )
-    .await?;
+    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
+        .await?;
 
     let ts = Utc::now().into();
     let item = TestItem::new(std::f64::consts::PI, ts, 1);

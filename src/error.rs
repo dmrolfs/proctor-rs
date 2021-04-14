@@ -151,24 +151,24 @@ impl From<reqwest::header::InvalidHeaderValue> for ConfigError {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum GraphError {
-    // ///An internal error occurred.
-    // #[error("{0}")]
-    // ProctorError(#[from] ProctorError),
     /// Attempt to use detached port.
     #[error("Improper attempt to use detached port.")]
-    Detached,
+    GraphPortDetached,
     /// Error occurred in underlying channel.
     #[error("{0}")]
-    Channel(String),
+    GraphChannel(String),
     /// Error occurred in underlying asynchronous task.
     #[error("{0}")]
-    Task(anyhow::Error),
+    GraphStage(anyhow::Error),
     /// Error occurred at graph node boundary point.
     #[error("{0}")]
-    BoundarySerde(String),
+    GraphSerde(String),
     ///Error occurred at graph node boundary point.
     #[error("{0}")]
-    Boundary(anyhow::Error),
+    GraphBoundary(anyhow::Error),
+    ///Precondition error occurred in graph setup.
+    #[error("{0}")]
+    GraphPrecondition(String),
 }
 
 // impl std::error::Error for GraphError {}
@@ -181,19 +181,19 @@ pub enum GraphError {
 
 impl From<config::ConfigError> for GraphError {
     fn from(that: config::ConfigError) -> Self {
-        GraphError::Boundary(that.into())
+        GraphError::GraphBoundary(that.into())
     }
 }
 
 impl serde::de::Error for GraphError {
     fn custom<T: fmt::Display>(msg: T) -> Self {
-        GraphError::BoundarySerde(msg.to_string())
+        GraphError::GraphSerde(msg.to_string())
     }
 }
 
 impl serde::ser::Error for GraphError {
     fn custom<T: fmt::Display>(msg: T) -> Self {
-        GraphError::BoundarySerde(msg.to_string())
+        GraphError::GraphSerde(msg.to_string())
     }
 }
 
@@ -205,39 +205,39 @@ impl serde::ser::Error for GraphError {
 
 impl From<tokio::sync::oneshot::error::RecvError> for GraphError {
     fn from(that: tokio::sync::oneshot::error::RecvError) -> Self {
-        GraphError::Channel(format!("failed to receive oneshot message: {:?}", that))
+        GraphError::GraphChannel(format!("failed to receive oneshot message: {:?}", that))
     }
 }
 
 impl From<tokio::sync::mpsc::error::RecvError> for GraphError {
     fn from(that: tokio::sync::mpsc::error::RecvError) -> Self {
-        GraphError::Channel(format!("failed to receive mpsc message: {:?}", that))
+        GraphError::GraphChannel(format!("failed to receive mpsc message: {:?}", that))
     }
 }
 
 impl From<tokio::sync::broadcast::error::RecvError> for GraphError {
     fn from(that: tokio::sync::broadcast::error::RecvError) -> Self {
-        GraphError::Channel(format!("failed to receive broadcast message: {:?}", that))
+        GraphError::GraphChannel(format!("failed to receive broadcast message: {:?}", that))
     }
 }
 
 impl<T> From<tokio::sync::mpsc::error::SendError<T>> for GraphError {
     fn from(that: tokio::sync::mpsc::error::SendError<T>) -> Self {
         //todo: can I make this into anyhow::Error while avoid `T: 'static` requirement?
-        GraphError::Channel(format!("failed to send: {}", that))
+        GraphError::GraphChannel(format!("failed to send: {}", that))
     }
 }
 
 impl<T> From<tokio::sync::broadcast::error::SendError<T>> for GraphError {
     fn from(that: tokio::sync::broadcast::error::SendError<T>) -> Self {
         //todo: can I make this into anyhow::Error while avoid `T: 'static` requirement?
-        GraphError::Channel(format!("failed to send: {}", that))
+        GraphError::GraphChannel(format!("failed to send: {}", that))
     }
 }
 
 impl From<tokio::task::JoinError> for GraphError {
     fn from(that: JoinError) -> Self {
-        GraphError::Task(that.into())
+        GraphError::GraphStage(that.into())
     }
 }
 
@@ -246,24 +246,36 @@ where
     T: fmt::Debug,
 {
     fn from(that: std::sync::PoisonError<T>) -> Self {
-        GraphError::Channel(format!("Mutex is poisoned: {:?}", that))
+        GraphError::GraphChannel(format!("Mutex is poisoned: {:?}", that))
     }
 }
 
 impl From<reqwest::Error> for GraphError {
     fn from(that: reqwest::Error) -> Self {
-        GraphError::Task(that.into())
+        GraphError::GraphStage(that.into())
     }
 }
 
 impl From<serde_json::Error> for GraphError {
     fn from(that: serde_json::Error) -> Self {
-        GraphError::Task(that.into())
+        GraphError::GraphStage(that.into())
     }
 }
 
 impl From<oso::OsoError> for GraphError {
     fn from(that: oso::OsoError) -> Self {
-        GraphError::Task(that.into())
+        GraphError::GraphStage(that.into())
+    }
+}
+
+impl From<polar_core::error::PolarError> for GraphError {
+    fn from(that: polar_core::error::PolarError) -> Self {
+        GraphError::GraphStage(that.into())
+    }
+}
+
+impl From<std::io::Error> for GraphError {
+    fn from(that: std::io::Error) -> Self {
+        GraphError::GraphStage(that.into())
     }
 }

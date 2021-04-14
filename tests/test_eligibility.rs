@@ -1,301 +1,353 @@
-// mod fixtures;
-//
-// use chrono::*;
-// use oso::{Oso, PolarClass};
-// use proctor::elements::{self, Policy, TelemetryData, PolicySource};
-// use proctor::graph::stage::{self, WithApi, WithMonitor};
-// use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
-// use proctor::ProctorContext;
-// use serde::{Deserialize, Serialize};
-// use std::collections::{HashMap, HashSet};
-// use tokio::sync::oneshot;
-// use tokio::task::JoinHandle;
-// use proctor::phases::collection;
-// use proctor::phases::eligibility::{self, Eligibility};
-//
-//
-// #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
-// pub struct TestFlinkEligibilityContext {
-//     #[polar(attribute)]
-//     #[serde(flatten)]
-//     pub task_status: TestTaskStatus,
-//     #[polar(attribute)]
-//     #[serde(flatten)]
-//     pub cluster_status: TestClusterStatus,
-//
-//     #[polar(attribute)]
-//     #[serde(flatten)]
-//     pub custom: HashMap<String, String>,
-// }
-//
-// impl ProctorContext for TestFlinkEligibilityContext {
-//     fn required_subscription_fields() -> HashSet<String> {
-//         maplit::hashset! {
-//             "task.last_failure".to_string(),
-//             "cluster.is_deploying".to_string(),
-//             "cluster.last_deployment".to_string(),
-//         }
-//     }
-//
-//     fn custom(&self) -> HashMap<String, String> {
-//         self.custom.clone()
-//     }
-// }
-//
-// #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
-// pub struct TestTaskStatus {
-//     #[serde(default)]
-//     #[serde(
-//     rename="task.last_failure",
-//     serialize_with = "proctor::serde::serialize_optional_datetime",
-//     deserialize_with = "proctor::serde::deserialize_optional_datetime"
-//     )]
-//     pub last_failure: Option<DateTime<Utc>>,
-// }
-//
-// impl TestTaskStatus {
-//     pub fn last_failure_within_seconds(&self, seconds: i64) -> bool {
-//         self.last_failure.map_or(false, |last_failure| {
-//             let boundary = Utc::now() - chrono::Duration::seconds(seconds);
-//             boundary < last_failure
-//         })
-//     }
-// }
-//
-// #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
-// pub struct TestClusterStatus {
-//     #[polar(attribute)]
-//     #[serde(rename="cluster.is_deploying")]
-//     pub is_deploying: bool,
-//     #[serde(
-//     with = "proctor::serde",
-//     rename="cluster.last_deployment",
-//     )]
-//     pub last_deployment: DateTime<Utc>,
-// }
-//
-// impl TestClusterStatus {
-//     pub fn last_deployment_within_seconds(&self, seconds: i64) -> bool {
-//         let boundary = Utc::now() - chrono::Duration::seconds(seconds);
-//         boundary < self.last_deployment
-//     }
-// }
-//
-// #[derive(Debug)]
-// struct TestEligibilityPolicy {
-//     subscription_fields: HashSet<String>,
-//     policy: PolicySource,
-// }
-//
-// impl TestEligibilityPolicy {
-//     pub fn new(policy: PolicySource) -> Self {
-//         let subscription_fields = Self::Environment::required_subscription_fields();
-//         Self {
-//             subscription_fields,
-//             policy
-//         }
-//     }
-//
-//     pub fn with_custom(self, custom_fields: HashSet<String>) -> Self {
-//         let mut subscription_fields = self.subscription_fields;
-//         subscription_fields.extend(custom_fields);
-//         Self { subscription_fields, ..self }
-//     }
-// }
-//
-// impl Policy for TestEligibilityPolicy {
-//     type Item = TelemetryData;
-//     type Environment = TestFlinkEligibilityContext;
-//
-//     fn subscription_fields(&self) -> HashSet<String> { self.subscription_fields.clone() }
-//
-//     fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> { self.policy.load_into(oso) }
-//
-//     fn initialize_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
-//         oso.register_class(
-//             TestFlinkEligibilityContext::get_polar_class_builder()
-//                 .name("TestEnvironment")
-//                 .add_method("custom", ProctorContext::custom)
-//                 .build(),
-//         )?;
-//
-//         oso.register_class(
-//             TestTaskStatus::get_polar_class_builder()
-//                 .name("TestTaskStatus")
-//                 .add_method("last_failure_within_seconds", TestTaskStatus::last_failure_within_seconds)
-//                 .build(),
-//         )?;
-//
-//         Ok(())
-//     }
-//
-//     fn query_knowledge_base(&self, oso: &Oso, item_env: (Self::Item, Self::Environment)) -> GraphResult<oso::Query> {
-//         oso.query_rule("eligible", item_env).map_err(|err| err.into())
-//     }
-// }
-//
-// struct TestFlow {
-//     pub graph_handle: JoinHandle<()>,
-//     pub tx_item_source_api: stage::ActorSourceApi<TestItem>,
-//     pub tx_env_source_api: stage::ActorSourceApi<TestEnvironment>,
-//     pub tx_policy_api: elements::PolicyFilterApi<TestEnvironment>,
-//     pub rx_policy_monitor: elements::PolicyFilterMonitor<TestItem, TestEnvironment>,
-//     pub tx_sink_api: stage::FoldApi<Vec<TestItem>>,
-//     pub rx_sink: Option<oneshot::Receiver<Vec<TestItem>>>,
-// }
-//
-// impl TestFlow {
-//     pub async fn new<S: AsRef<str>>(policy: S) -> Self {
-//         let telemetry_source = stage::ActorSource::<TelemetryData>::new("telemetry_source");
-//         let tx_telemetry_source_api = telemetry_source.tx_api();
-//
-//         let env_source = stage::ActorSource::<TestFlinkEligibilityContext>::new("env_source");
-//         let tx_env_source_api = env_source.tx_api();
-//
-//         let clearinghouse = collection::Clearinghouse::new("clearinghouse");
-//         let tx_clearinghouse = clearinghouse.tx_api();
-//
-//         let policy = TestEligibilityPolicy::new(policy);
-//
-//         let eligibility = Eligibility::<TestFlinkEligibilityContext>::new(
-//             "test_flink",
-//             policy,
-//             tx_clearinghouse,
-//         ).await?;
-//
-//
-//
-//
-//
-//         let policy_filter = elements::PolicyFilter::new("eligibility", policy);
-//         let tx_policy_api = policy_filter.tx_api();
-//         let rx_policy_monitor = policy_filter.rx_monitor();
-//
-//         let mut sink = stage::Fold::<_, TestItem, _>::new("sink", Vec::new(), |mut acc, item| {
-//             acc.push(item);
-//             acc
-//         });
-//         let tx_sink_api = sink.tx_api();
-//         let rx_sink = sink.take_final_rx();
-//
-//         (telemetry_source.outlet(), policy_filter.inlet()).connect().await;
-//         (env_source.outlet(), policy_filter.environment_inlet()).connect().await;
-//         (policy_filter.outlet(), sink.inlet()).connect().await;
-//
-//         let mut graph = Graph::default();
-//         graph.push_back(Box::new(telemetry_source)).await;
-//         graph.push_back(Box::new(env_source)).await;
-//         graph.push_back(Box::new(policy_filter)).await;
-//         graph.push_back(Box::new(sink)).await;
-//         let graph_handle = tokio::spawn(async move {
-//             graph
-//                 .run()
-//                 .await
-//                 .map_err(|err| {
-//                     tracing::error!(error=?err, "graph run failed!!");
-//                     err
-//                 })
-//                 .expect("graph run failed")
-//         });
-//
-//         Self {
-//             graph_handle,
-//             tx_item_source_api: tx_telemetry_source_api,
-//             tx_env_source_api,
-//             tx_policy_api,
-//             rx_policy_monitor,
-//             tx_sink_api,
-//             rx_sink,
-//         }
-//     }
-//
-//     pub async fn push_item(&self, item: TestItem) -> GraphResult<()> {
-//         let (cmd, ack) = stage::ActorSourceCmd::push(item);
-//         self.tx_item_source_api.send(cmd)?;
-//         ack.await.map_err(|err| err.into())
-//     }
-//
-//     pub async fn push_environment(&self, env: TestEnvironment) -> GraphResult<()> {
-//         let (cmd, ack) = stage::ActorSourceCmd::push(env);
-//         self.tx_env_source_api.send(cmd)?;
-//         ack.await.map_err(|err| err.into())
-//     }
-//
-//     pub async fn tell_policy(
-//         &self,
-//         command_rx: (
-//             elements::PolicyFilterCmd<TestEnvironment>,
-//             oneshot::Receiver<proctor::Ack>,
-//         ),
-//     ) -> GraphResult<proctor::Ack> {
-//         self.tx_policy_api.send(command_rx.0)?;
-//         command_rx.1.await.map_err(|err| err.into())
-//     }
-//
-//     pub async fn recv_policy_event(&mut self) -> GraphResult<elements::PolicyFilterEvent<TestItem, TestEnvironment>> {
-//         self.rx_policy_monitor.recv().await.map_err(|err| err.into())
-//     }
-//
-//     pub async fn inspect_filter_environment(&self) -> GraphResult<elements::PolicyFilterDetail<TestEnvironment>> {
-//         let (cmd, detail) = elements::PolicyFilterCmd::inspect();
-//         self.tx_policy_api.send(cmd)?;
-//         detail
-//             .await
-//             .map(|d| {
-//                 tracing::info!(detail=?d, "inspected policy.");
-//                 d
-//             })
-//             .map_err(|err| err.into())
-//     }
-//
-//     pub async fn inspect_sink(&self) -> GraphResult<Vec<TestItem>> {
-//         let (cmd, acc) = stage::FoldCmd::get_accumulation();
-//         self.tx_sink_api.send(cmd)?;
-//         acc.await
-//             .map(|a| {
-//                 tracing::info!(accumulation=?a, "inspected sink accumulation");
-//                 a
-//             })
-//             .map_err(|err| err.into())
-//     }
-//
-//     pub async fn close(mut self) -> GraphResult<Vec<TestItem>> {
-//         let (stop, _) = stage::ActorSourceCmd::stop();
-//         self.tx_item_source_api.send(stop)?;
-//
-//         let (stop, _) = stage::ActorSourceCmd::stop();
-//         self.tx_env_source_api.send(stop)?;
-//
-//         self.graph_handle.await?;
-//
-//         self.rx_sink.take().unwrap().await.map_err(|err| err.into())
-//     }
-// }
-//
+mod fixtures;
+
+use chrono::*;
+use oso::{Oso, PolarClass};
+use proctor::elements::{self, Policy, PolicySource, TelemetryData};
+use proctor::graph::stage::{self, WithApi, WithMonitor};
+use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape, UniformFanInShape};
+use proctor::phases::collection;
+use proctor::phases::collection::TelemetrySubscription;
+use proctor::phases::eligibility::{self, Eligibility};
+use proctor::{ProctorContext, ProctorResult};
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
+use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
+
+#[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TestFlinkEligibilityContext {
+    #[polar(attribute)]
+    #[serde(flatten)]
+    pub task_status: TestTaskStatus,
+    #[polar(attribute)]
+    #[serde(flatten)]
+    pub cluster_status: TestClusterStatus,
+
+    #[polar(attribute)]
+    #[serde(flatten)]
+    pub custom: HashMap<String, String>,
+}
+
+impl ProctorContext for TestFlinkEligibilityContext {
+    fn required_context_fields() -> HashSet<String> {
+        maplit::hashset! {
+            "task.last_failure".to_string(),
+            "cluster.is_deploying".to_string(),
+            "cluster.last_deployment".to_string(),
+        }
+    }
+
+    fn custom(&self) -> HashMap<String, String> {
+        self.custom.clone()
+    }
+}
+
+#[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TestTaskStatus {
+    #[serde(default)]
+    #[serde(
+        rename = "task.last_failure",
+        serialize_with = "proctor::serde::serialize_optional_datetime",
+        deserialize_with = "proctor::serde::deserialize_optional_datetime"
+    )]
+    pub last_failure: Option<DateTime<Utc>>,
+}
+
+impl TestTaskStatus {
+    pub fn last_failure_within_seconds(&self, seconds: i64) -> bool {
+        self.last_failure.map_or(false, |last_failure| {
+            let boundary = Utc::now() - chrono::Duration::seconds(seconds);
+            boundary < last_failure
+        })
+    }
+}
+
+#[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TestClusterStatus {
+    #[polar(attribute)]
+    #[serde(rename = "cluster.is_deploying")]
+    pub is_deploying: bool,
+    #[serde(with = "proctor::serde", rename = "cluster.last_deployment")]
+    pub last_deployment: DateTime<Utc>,
+}
+
+impl TestClusterStatus {
+    pub fn last_deployment_within_seconds(&self, seconds: i64) -> bool {
+        let boundary = Utc::now() - chrono::Duration::seconds(seconds);
+        boundary < self.last_deployment
+    }
+}
+
+#[derive(Debug)]
+struct TestEligibilityPolicy {
+    custom_fields: Option<HashSet<String>>,
+    policy: PolicySource,
+}
+
+impl TestEligibilityPolicy {
+    pub fn new(policy: PolicySource) -> Self {
+        policy.validate().expect("failed to parse policy");
+        Self {
+            custom_fields: None,
+            policy,
+        }
+    }
+
+    pub fn with_custom(self, custom_fields: HashSet<String>) -> Self {
+        Self {
+            custom_fields: Some(custom_fields),
+            ..self
+        }
+    }
+}
+
+impl Policy for TestEligibilityPolicy {
+    type Item = TelemetryData;
+    type Context = TestFlinkEligibilityContext;
+
+    fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
+        tracing::warn!(
+            "DMR: TestEligibilityPolicy::subscription: before custom subscription:{:?}",
+            subscription
+        );
+        let result = if let Some(ref custom_fields) = self.custom_fields {
+            tracing::warn!(
+                "DMR: TestEligibilityPolicy::subscription: custom_fields:{:?}",
+                custom_fields
+            );
+            subscription.with_optional_fields(custom_fields.clone())
+        } else {
+            subscription
+        };
+
+        tracing::warn!(
+            "DMR: TestEligibilityPolicy::subscription: after custom subscription:{:?}",
+            result
+        );
+        result
+    }
+
+    fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
+        self.policy.load_into(oso)
+    }
+
+    fn initialize_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
+        oso.register_class(
+            TestFlinkEligibilityContext::get_polar_class_builder()
+                .name("TestEnvironment")
+                .add_method("custom", ProctorContext::custom)
+                .build(),
+        )?;
+
+        oso.register_class(
+            TestTaskStatus::get_polar_class_builder()
+                .name("TestTaskStatus")
+                .add_method(
+                    "last_failure_within_seconds",
+                    TestTaskStatus::last_failure_within_seconds,
+                )
+                .build(),
+        )?;
+
+        Ok(())
+    }
+
+    fn query_knowledge_base(&self, oso: &Oso, item_env: (Self::Item, Self::Context)) -> GraphResult<oso::Query> {
+        oso.query_rule("eligible", item_env).map_err(|err| err.into())
+    }
+}
+
+struct TestFlow {
+    pub graph_handle: JoinHandle<()>,
+    pub tx_data_source_api: stage::ActorSourceApi<TelemetryData>,
+    pub tx_context_source_api: stage::ActorSourceApi<TelemetryData>,
+    pub tx_clearinghouse_api: collection::ClearinghouseApi,
+    pub tx_eligibility_api: elements::PolicyFilterApi<TestFlinkEligibilityContext>,
+    pub rx_eligibility_monitor: elements::PolicyFilterMonitor<TelemetryData, TestFlinkEligibilityContext>,
+    pub tx_sink_api: stage::FoldApi<Vec<TelemetryData>>,
+    pub rx_sink: Option<oneshot::Receiver<Vec<TelemetryData>>>,
+}
+
+impl TestFlow {
+    pub async fn new<S: Into<String>>(policy: S) -> ProctorResult<Self> {
+        tracing::warn!("AA");
+        let telemetry_source = stage::ActorSource::<TelemetryData>::new("telemetry_source");
+        let tx_data_source_api = telemetry_source.tx_api();
+
+        tracing::warn!("BB");
+        let ctx_source = stage::ActorSource::<TelemetryData>::new("context_source");
+        let tx_context_source_api = ctx_source.tx_api();
+
+        let merge = stage::MergeN::new("source_merge", 2);
+
+        tracing::warn!("CC");
+        let mut clearinghouse = collection::Clearinghouse::new("clearinghouse");
+        let tx_clearinghouse_api = clearinghouse.tx_api();
+
+        tracing::warn!("DD");
+        let policy = TestEligibilityPolicy::new(PolicySource::String(policy.into()));
+
+        tracing::warn!("EE");
+        let mut eligibility = Eligibility::<TestFlinkEligibilityContext>::new("test_flink_eligibility", policy).await?;
+
+        let tx_eligibility_api = eligibility.tx_api();
+        let rx_eligibility_monitor = eligibility.rx_monitor();
+
+        tracing::warn!("FF");
+        let mut sink = stage::Fold::<_, TelemetryData, _>::new("sink", Vec::new(), |mut acc, item| {
+            acc.push(item);
+            acc
+        });
+        let tx_sink_api = sink.tx_api();
+        let rx_sink = sink.take_final_rx();
+
+        tracing::warn!("GG");
+        (&telemetry_source.outlet(), &merge.inlets().get(0).await.unwrap())
+            .connect()
+            .await;
+        (&ctx_source.outlet(), &merge.inlets().get(1).await.unwrap())
+            .connect()
+            .await;
+        (merge.outlet(), clearinghouse.inlet()).connect().await;
+        clearinghouse
+            .add_subscription(
+                eligibility.subscription.clone(),
+                &eligibility.context_subscription_inlet,
+            )
+            .await;
+        (eligibility.outlet(), sink.inlet()).connect().await;
+
+        tracing::warn!("HH");
+        let mut graph = Graph::default();
+        graph.push_back(Box::new(telemetry_source)).await;
+        graph.push_back(Box::new(ctx_source)).await;
+        graph.push_back(Box::new(merge)).await;
+        graph.push_back(Box::new(clearinghouse)).await;
+        graph.push_back(Box::new(eligibility)).await;
+        graph.push_back(Box::new(sink)).await;
+        tracing::warn!("II");
+        let graph_handle = tokio::spawn(async move {
+            graph
+                .run()
+                .await
+                .map_err(|err| {
+                    tracing::error!(error=?err, "graph run failed!!");
+                    err
+                })
+                .expect("graph run failed")
+        });
+
+        tracing::warn!("JJ");
+        Ok(Self {
+            graph_handle,
+            tx_data_source_api,
+            tx_context_source_api,
+            tx_clearinghouse_api,
+            tx_eligibility_api,
+            rx_eligibility_monitor,
+            tx_sink_api,
+            rx_sink,
+        })
+    }
+
+    pub async fn push_telemetry(&self, telemetry: TelemetryData) -> GraphResult<()> {
+        let (cmd, ack) = stage::ActorSourceCmd::push(telemetry);
+        self.tx_data_source_api.send(cmd)?;
+        ack.await.map_err(|err| err.into())
+    }
+
+    pub async fn push_context(&self, context_data: TelemetryData) -> GraphResult<()> {
+        let (cmd, ack) = stage::ActorSourceCmd::push(context_data);
+        self.tx_context_source_api.send(cmd)?;
+        ack.await.map_err(|err| err.into())
+    }
+
+    pub async fn tell_policy(
+        &self,
+        command_rx: (
+            elements::PolicyFilterCmd<TestFlinkEligibilityContext>,
+            oneshot::Receiver<proctor::Ack>,
+        ),
+    ) -> GraphResult<proctor::Ack> {
+        self.tx_eligibility_api.send(command_rx.0)?;
+        command_rx.1.await.map_err(|err| err.into())
+    }
+
+    pub async fn recv_policy_event(
+        &mut self,
+    ) -> GraphResult<elements::PolicyFilterEvent<TelemetryData, TestFlinkEligibilityContext>> {
+        self.rx_eligibility_monitor.recv().await.map_err(|err| err.into())
+    }
+
+    pub async fn inspect_filter_environment(
+        &self,
+    ) -> GraphResult<elements::PolicyFilterDetail<TestFlinkEligibilityContext>> {
+        let (cmd, detail) = elements::PolicyFilterCmd::inspect();
+        self.tx_eligibility_api.send(cmd)?;
+        detail
+            .await
+            .map(|d| {
+                tracing::info!(detail=?d, "inspected policy.");
+                d
+            })
+            .map_err(|err| err.into())
+    }
+
+    pub async fn inspect_sink(&self) -> GraphResult<Vec<TelemetryData>> {
+        let (cmd, acc) = stage::FoldCmd::get_accumulation();
+        self.tx_sink_api.send(cmd)?;
+        acc.await
+            .map(|a| {
+                tracing::info!(accumulation=?a, "inspected sink accumulation");
+                a
+            })
+            .map_err(|err| err.into())
+    }
+
+    pub async fn close(mut self) -> GraphResult<Vec<TelemetryData>> {
+        let (stop, _) = stage::ActorSourceCmd::stop();
+        self.tx_data_source_api.send(stop)?;
+
+        let (stop, _) = stage::ActorSourceCmd::stop();
+        self.tx_context_source_api.send(stop)?;
+
+        self.graph_handle.await?;
+
+        self.rx_sink.take().unwrap().await.map_err(|err| err.into())
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
+    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
+    let main_span = tracing::info_span!("test_eligibility_before_context_baseline");
+    let _ = main_span.enter();
+
+    tracing::warn!("A");
+    let flow = TestFlow::new(r#"eligible(item, environment) if environment.location_code == 33;"#).await?;
+    tracing::warn!("B");
+    let data = TelemetryData(maplit::hashmap! {
+       "input_messages_per_sec".to_string() => std::f64::consts::PI.to_string(),
+        "timestamp".to_string() => format!("{}", Utc::now().format("%+")),
+        "inbox_lag".to_string() => 3.to_string(),
+    });
+    tracing::warn!("C");
+
+    flow.push_telemetry(data).await?;
+    tracing::warn!("D");
+    let actual = flow.inspect_sink().await?;
+    tracing::warn!("E");
+    assert!(actual.is_empty());
+    tracing::warn!("F");
+
+    flow.close().await?;
+    tracing::warn!("G");
+    Ok(())
+}
+
+// #[ignore]
 // #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-// async fn test_policy_filter_before_environment_baseline() -> anyhow::Result<()> {
-//     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
-//     let main_span = tracing::info_span!("test_before_environment_baseline");
-//     let _ = main_span.enter();
-//
-//     let flow = TestFlow::new(r#"eligible(item, environment) if environment.location_code == 33;"#).await;
-//     let item = TestItem {
-//         flow: TestFlowMetrics {
-//             input_messages_per_sec: 3.1415926535,
-//         },
-//         timestamp: Utc::now().into(),
-//         inbox_lag: 3,
-//     };
-//     flow.push_item(item).await?;
-//     let actual = flow.inspect_sink().await?;
-//     assert!(actual.is_empty());
-//
-//     flow.close().await?;
-//     Ok(())
-// }
-//
-// #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-// async fn test_policy_filter_happy_environment() -> anyhow::Result<()> {
+// async fn test_policy_filter_happy_context() -> anyhow::Result<()> {
 //     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
 //     let main_span = tracing::info_span!("test_policy_filter_w_pass_and_blocks");
 //     let _ = main_span.enter();
@@ -350,6 +402,7 @@
 //     Ok(())
 // }
 //
+// #[ignore]
 // #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 // async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
 //     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
@@ -410,6 +463,7 @@
 //     Ok(())
 // }
 //
+// #[ignore]
 // // #[tokio::test(flavor="multi_thread", worker_threads = 4)]
 // #[tokio::test]
 // async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
@@ -451,6 +505,7 @@
 //     Ok(())
 // }
 //
+// #[ignore]
 // #[tokio::test]
 // async fn test_policy_w_item_n_env() -> anyhow::Result<()> {
 //     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
@@ -491,6 +546,7 @@
 //     Ok(())
 // }
 //
+// #[ignore]
 // #[tokio::test]
 // async fn test_policy_w_method() -> anyhow::Result<()> {
 //     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
@@ -521,7 +577,8 @@
 //     assert_eq!(actual, vec![TestItem::new(17.327, ts, 2),]);
 //     Ok(())
 // }
-//
+
+// #[ignore]
 // #[tokio::test]
 // async fn test_replace_policy() -> anyhow::Result<()> {
 //     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
@@ -569,6 +626,7 @@
 //     Ok(())
 // }
 //
+// #[ignore]
 // #[tokio::test]
 // async fn test_append_policy() -> anyhow::Result<()> {
 //     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
@@ -615,6 +673,7 @@
 //     Ok(())
 // }
 //
+// #[ignore]
 // #[tokio::test]
 // async fn test_reset_policy() -> anyhow::Result<()> {
 //     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);

@@ -60,7 +60,12 @@ async fn test_make_telemetry_cvs_source() -> Result<()> {
             let rec_is_deploying = if is_first {
                 tracing::info!("first record - set is_deploying.");
                 is_first = false;
-                let is_deploying = rec.get("cluster_is_deploying").unwrap().as_str().parse::<bool>().unwrap();
+                let is_deploying = rec
+                    .get("cluster_is_deploying")
+                    .unwrap()
+                    .as_str()
+                    .parse::<bool>()
+                    .unwrap();
                 Some(is_deploying)
             } else {
                 tracing::info!("not first record - skip parsing is_deploying.");

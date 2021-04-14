@@ -16,6 +16,24 @@ impl Node {
 }
 
 impl Node {
+    // #[tracing::instrument( level="info", skip(self), fields(node=%self.name),)]
+    // pub fn prepare_for_run(mut self) -> JoinHandle<GraphResult<Self>> {
+    //     tokio::spawn(
+    //         async move {
+    //             self.stage
+    //                 .prepare_for_run()
+    //                 .instrument(tracing::info_span!("prepare graph node for run"))
+    //                 .await
+    //                 .map_err(|err| {
+    //                     tracing::error!(error=?err, "node failed to prepare for run.");
+    //                     err
+    //                 })
+    //                 .map(|_| self)
+    //         }
+    //         .instrument(tracing::info_span!("spawn prepare graph node for run",)),
+    //     )
+    // }
+
     #[tracing::instrument(
     level="info",
     name="run node",
@@ -25,6 +43,16 @@ impl Node {
     pub fn run(mut self) -> JoinHandle<GraphResult<()>> {
         tokio::spawn(
             async move {
+                // self.stage
+                //     .prepare_for_run()
+                //     .instrument(tracing::info_span!("prepare graph node for run"))
+                //     .await
+                //     .map_err(|err| {
+                //         tracing::error!(error=?err, "node failed to prepare for run.");
+                //         err
+                //     })
+                //     .unwrap();
+
                 let run_result = self.stage.run().instrument(tracing::info_span!("run graph node")).await;
                 if let Err(err) = &run_result {
                     tracing::error!(error=?err, "node run failed.");

@@ -4,6 +4,7 @@ mod protocol;
 use crate::graph::stage::{self, Stage};
 use crate::graph::{GraphResult, Inlet, Outlet, Port};
 use crate::graph::{SinkShape, SourceShape};
+use crate::phases::collection::TelemetrySubscription;
 use crate::{AppData, ProctorContext};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
@@ -15,7 +16,6 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::{broadcast, mpsc};
 use tracing::Instrument;
-use crate::phases::collection::TelemetrySubscription;
 
 pub trait PolicySettings {
     fn required_subscription_fields(&self) -> HashSet<String>;
@@ -27,8 +27,18 @@ pub trait Policy: Debug + Send + Sync {
     type Item;
     type Context: ProctorContext;
     fn subscription(&self, name: &str) -> TelemetrySubscription {
-        TelemetrySubscription::new(name)
-            .with_required_fields(Self::Context::required_context_fields())
+        tracing::warn!("DMR: subscription-A");
+        let required_fields = Self::Context::required_context_fields();
+        tracing::warn!("DMR: subscription-B: required_fields:{:?}", required_fields);
+        let subscription =
+            TelemetrySubscription::new(name).with_required_fields(Self::Context::required_context_fields());
+        tracing::warn!("DMR: subscription-C: before extend subscription:{:?}", subscription);
+        let subscription = self.do_extend_subscription(subscription);
+        tracing::warn!("DMR: subscription-D: after extend subscription:{:?}", subscription);
+        subscription
+    }
+    fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
+        subscription
     }
     fn load_knowledge_base(&self, oso: &mut oso::Oso) -> GraphResult<()>;
     fn initialize_knowledge_base(&self, oso: &mut oso::Oso) -> GraphResult<()>;
@@ -39,7 +49,7 @@ pub trait Policy: Debug + Send + Sync {
 
 pub struct PolicyFilter<T, C> {
     name: String,
-    policy: Box<dyn Policy<Item = T, Context= C>>,
+    policy: Box<dyn Policy<Item = T, Context = C>>,
     context_inlet: Inlet<C>,
     inlet: Inlet<T>,
     outlet: Outlet<T>,
@@ -53,7 +63,7 @@ where
     T: Clone,
     C: Clone,
 {
-    pub fn new<S: Into<String>>(name: S, policy: Box<dyn Policy<Item = T, Context= C>>) -> Self {
+    pub fn new<S: Into<String>>(name: S, policy: Box<dyn Policy<Item = T, Context = C>>) -> Self {
         let name = name.into();
         let context_inlet = Inlet::new(format!("{}_context", name.clone()));
         let inlet = Inlet::new(name.clone());
@@ -210,7 +220,7 @@ where
 
     #[tracing::instrument(level = "info", name = "policy_filter handle item", skip(oso, outlet), fields())]
     async fn handle_item(
-        item: T, context: &C, policy: &Box<dyn Policy<Item = T, Context= C>>, oso: &Oso, outlet: &Outlet<T>,
+        item: T, context: &C, policy: &Box<dyn Policy<Item = T, Context = C>>, oso: &Oso, outlet: &Outlet<T>,
         tx: &broadcast::Sender<PolicyFilterEvent<T, C>>,
     ) -> GraphResult<()> {
         let result = {
@@ -278,15 +288,9 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(
-        level = "info",
-        name = "policy_filter handle command",
-        skip(oso, policy,),
-        fields()
-    )]
+    #[tracing::instrument(level = "info", name = "policy_filter handle command", skip(oso, policy,), fields())]
     async fn handle_command(
-        command: PolicyFilterCmd<C>, oso: &mut Oso, name: &str,
-        policy: &Box<dyn Policy<Item = T, Context= C>>,
+        command: PolicyFilterCmd<C>, oso: &mut Oso, name: &str, policy: &Box<dyn Policy<Item = T, Context = C>>,
         context: std::sync::Arc<tokio::sync::Mutex<Option<C>>>,
     ) -> GraphResult<bool> {
         tracing::trace!(?command, ?context, "handling policy filter command...");
@@ -312,7 +316,10 @@ where
                 Ok(true)
             }
 
-            PolicyFilterCmd::AppendPolicy { additional_policy: policy_source, tx } => {
+            PolicyFilterCmd::AppendPolicy {
+                additional_policy: policy_source,
+                tx,
+            } => {
                 match policy_source {
                     PolicySource::String(p) => oso.load_str(p.as_str())?,
                     PolicySource::File(path) => oso.load_file(path)?,
@@ -417,9 +424,8 @@ mod tests {
         type Item = User;
         type Context = TestContext;
 
-        fn subscription(&self, name: &str) -> TelemetrySubscription {
-            <Self as Policy>::subscription(self, name)
-                .with_optional_fields(maplit::hashset! {"foo".to_string(), "score".to_string()})
+        fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
+            subscription.with_optional_fields(maplit::hashset! {"foo".to_string(), "score".to_string()})
         }
 
         fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
@@ -448,7 +454,7 @@ mod tests {
         let main_span = tracing::info_span!("policy_filter::test_handle_item");
         let _main_span_guard = main_span.enter();
 
-        let policy: Box<dyn Policy<Item = User, Context= TestContext>> = Box::new(TestPolicy::new(
+        let policy: Box<dyn Policy<Item = User, Context = TestContext>> = Box::new(TestPolicy::new(
             r#"allow(actor, action, resource) if actor.username.ends_with("example.com");"#,
         ));
 

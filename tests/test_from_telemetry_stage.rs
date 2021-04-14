@@ -3,27 +3,27 @@ mod fixtures;
 use anyhow::Result;
 use cast_trait_object::DynCastExt;
 use chrono::{DateTime, TimeZone, Utc};
+use lazy_static::lazy_static;
 use proctor::elements::make_from_telemetry;
 use proctor::graph::{stage, Connect, Graph, SinkShape};
 use proctor::phases::collection::make_telemetry_cvs_source;
 use proctor::settings::SourceSetting;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use serde_test::{assert_tokens, Token};
-use lazy_static::lazy_static;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Data {
     #[serde(
         default,
-        rename="task_last_failure",
+        rename = "task_last_failure",
         serialize_with = "proctor::serde::serialize_optional_datetime",
         deserialize_with = "proctor::serde::deserialize_optional_datetime"
     )]
     pub last_failure: Option<DateTime<Utc>>,
-    #[serde(rename="cluster_is_deploying")]
+    #[serde(rename = "cluster_is_deploying")]
     pub is_deploying: bool,
-    #[serde(rename="cluster_last_deployment", with = "proctor::serde")]
+    #[serde(rename = "cluster_last_deployment", with = "proctor::serde")]
     pub last_deployment: DateTime<Utc>,
 }
 
@@ -64,9 +64,8 @@ fn test_data_serde() {
             Token::Str("cluster_last_deployment"),
             Token::Str(&NOW_REP),
             Token::StructEnd,
-        ]
+        ],
     );
-
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
