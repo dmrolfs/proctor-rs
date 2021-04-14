@@ -25,12 +25,13 @@ pub struct Eligibility<C> {
     tx_policy_monitor: broadcast::Sender<PolicyFilterEvent<TelemetryData, C>>,
 }
 
+//todo extract subscriptions (data and context) from eligibility into SubscriptionSource stage.
+
 impl<C: ProctorContext> Eligibility<C> {
     #[tracing::instrument(level = "info", skip(name))]
     pub async fn new<S: Into<String>>(
         name: S, policy: impl Policy<Item = TelemetryData, Context = C> + 'static,
     ) -> GraphResult<Self> {
-        tracing::warn!("AAA");
         let name = name.into();
         let subscription = policy.subscription(name.as_str());
 
@@ -184,6 +185,7 @@ impl<C: ProctorContext> Stage for Eligibility<C> {
         }
     }
 
+    #[tracing::instrument(level="info", skip(self),)]
     async fn close(mut self: Box<Self>) -> GraphResult<()> {
         tracing::trace!("closing eligibility ports.");
         self.inlet.close().await;

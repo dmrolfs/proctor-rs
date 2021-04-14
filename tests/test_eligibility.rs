@@ -170,30 +170,24 @@ struct TestFlow {
 
 impl TestFlow {
     pub async fn new<S: Into<String>>(policy: S) -> ProctorResult<Self> {
-        tracing::warn!("AA");
         let telemetry_source = stage::ActorSource::<TelemetryData>::new("telemetry_source");
         let tx_data_source_api = telemetry_source.tx_api();
 
-        tracing::warn!("BB");
         let ctx_source = stage::ActorSource::<TelemetryData>::new("context_source");
         let tx_context_source_api = ctx_source.tx_api();
 
         let merge = stage::MergeN::new("source_merge", 2);
 
-        tracing::warn!("CC");
         let mut clearinghouse = collection::Clearinghouse::new("clearinghouse");
         let tx_clearinghouse_api = clearinghouse.tx_api();
 
-        tracing::warn!("DD");
         let policy = TestEligibilityPolicy::new(PolicySource::String(policy.into()));
 
-        tracing::warn!("EE");
         let mut eligibility = Eligibility::<TestFlinkEligibilityContext>::new("test_flink_eligibility", policy).await?;
 
         let tx_eligibility_api = eligibility.tx_api();
         let rx_eligibility_monitor = eligibility.rx_monitor();
 
-        tracing::warn!("FF");
         let mut sink = stage::Fold::<_, TelemetryData, _>::new("sink", Vec::new(), |mut acc, item| {
             acc.push(item);
             acc
@@ -201,7 +195,6 @@ impl TestFlow {
         let tx_sink_api = sink.tx_api();
         let rx_sink = sink.take_final_rx();
 
-        tracing::warn!("GG");
         (&telemetry_source.outlet(), &merge.inlets().get(0).await.unwrap())
             .connect()
             .await;
@@ -217,7 +210,6 @@ impl TestFlow {
             .await;
         (eligibility.outlet(), sink.inlet()).connect().await;
 
-        tracing::warn!("HH");
         let mut graph = Graph::default();
         graph.push_back(Box::new(telemetry_source)).await;
         graph.push_back(Box::new(ctx_source)).await;
@@ -225,7 +217,7 @@ impl TestFlow {
         graph.push_back(Box::new(clearinghouse)).await;
         graph.push_back(Box::new(eligibility)).await;
         graph.push_back(Box::new(sink)).await;
-        tracing::warn!("II");
+
         let graph_handle = tokio::spawn(async move {
             graph
                 .run()
@@ -237,7 +229,6 @@ impl TestFlow {
                 .expect("graph run failed")
         });
 
-        tracing::warn!("JJ");
         Ok(Self {
             graph_handle,
             tx_data_source_api,
@@ -323,25 +314,27 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_eligibility_before_context_baseline");
     let _ = main_span.enter();
 
-    tracing::warn!("A");
+    tracing::warn!("test_eligibility_before_context_baseline_A");
     let flow = TestFlow::new(r#"eligible(item, environment) if environment.location_code == 33;"#).await?;
-    tracing::warn!("B");
+    tracing::warn!("test_eligibility_before_context_baseline_B");
     let data = TelemetryData(maplit::hashmap! {
        "input_messages_per_sec".to_string() => std::f64::consts::PI.to_string(),
         "timestamp".to_string() => format!("{}", Utc::now().format("%+")),
         "inbox_lag".to_string() => 3.to_string(),
     });
-    tracing::warn!("C");
+    tracing::warn!("test_eligibility_before_context_baseline_C");
 
     flow.push_telemetry(data).await?;
-    tracing::warn!("D");
+    tracing::warn!("test_eligibility_before_context_baseline_D");
     let actual = flow.inspect_sink().await?;
-    tracing::warn!("E");
+    tracing::warn!("test_eligibility_before_context_baseline_E");
     assert!(actual.is_empty());
-    tracing::warn!("F");
+    tracing::warn!("test_eligibility_before_context_baseline_F");
 
-    flow.close().await?;
-    tracing::warn!("G");
+    let actual = flow.close().await?;
+    tracing::info!("final accumulation:{:?}", actual);
+    assert!(actual.is_empty());
+    tracing::warn!("test_eligibility_before_context_baseline_G");
     Ok(())
 }
 
