@@ -110,21 +110,21 @@ impl<In: AppData + Sync, Out: AppData + Sync> CompositeThrough<In, Out> {
     async fn extend_graph(
         name: String, mut graph: Graph, graph_inlet: Inlet<In>, graph_outlet: Outlet<Out>,
     ) -> (Graph, Inlet<In>, Outlet<Out>) {
-        let composite_inlet = Inlet::new(format!("{}_inlet", name));
-        let into_graph = Outlet::new(format!("into_{}_graph", name));
-        let from_graph = Inlet::new(format!("from_{}_graph", name));
-        let composite_outlet = Outlet::new(format!("{}_outlet", name));
+        let composite_inlet = Inlet::new(format!("{}__[composite_inlet]", name));
+        let into_graph = Outlet::new(format!("{}__into_composite_graph", name));
+        let from_graph = Inlet::new(format!("{}__from_composite_graph", name));
+        let composite_outlet = Outlet::new(format!("{}__[composite_outlet]", name));
 
         (&into_graph, &graph_inlet).connect().await;
         (&graph_outlet, &from_graph).connect().await;
 
         let in_bridge = stage::Identity::new(
-            format!("{}-bridge-into-graph", name),
+            format!("{}__composite_ingress_bridge", name),
             composite_inlet.clone(),
             into_graph,
         );
         let out_bridge = stage::Identity::new(
-            format!("{}-bridge-from-graph", name),
+            format!("{}__composite_egress_bridge", name),
             from_graph,
             composite_outlet.clone(),
         );
@@ -158,6 +158,13 @@ impl<In: AppData, Out: AppData> Stage for CompositeThrough<In, Out> {
     #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    #[tracing::instrument(level="info", skip(self))]
+    async fn check(&self) -> GraphResult<()> {
+        self.inlet.check_attachment().await?;
+        self.outlet.check_attachment().await?;
+        Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run composite through", skip(self))]

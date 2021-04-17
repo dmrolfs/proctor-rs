@@ -89,6 +89,14 @@ impl<T: AppData> Stage for Merge<T> {
         self.name.as_str()
     }
 
+    #[tracing::instrument(level="info", skip(self))]
+    async fn check(&self) -> GraphResult<()> {
+        self.inlet_0.check_attachment().await?;
+        self.inlet_1.check_attachment().await?;
+        self.outlet.check_attachment().await?;
+        Ok(())
+    }
+
     #[tracing::instrument(level = "info", name = "run merge through", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
         let outlet = &self.outlet;

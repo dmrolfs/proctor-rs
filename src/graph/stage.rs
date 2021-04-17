@@ -17,8 +17,9 @@ use std::fmt;
 /// placed in a graph. See https://github.com/Lej77/cast_trait_object README for background.
 #[dyn_upcast]
 #[async_trait]
-pub trait Stage: fmt::Debug + Send {
+pub trait Stage: fmt::Debug + Send + Sync {
     fn name(&self) -> &str;
+    async fn check(&self) -> GraphResult<()>;
     async fn run(&mut self) -> GraphResult<()>;
     async fn close(self: Box<Self>) -> GraphResult<()>;
 }

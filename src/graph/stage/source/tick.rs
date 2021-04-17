@@ -183,6 +183,12 @@ where
         self.name.as_ref()
     }
 
+    #[tracing::instrument(level="info", skip(self))]
+    async fn check(&self) -> GraphResult<()> {
+        self.outlet.check_attachment().await?;
+        Ok(())
+    }
+
     #[tracing::instrument(level = "info", name = "run tick source", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
         let start = tokio::time::Instant::now() + self.initial_delay;

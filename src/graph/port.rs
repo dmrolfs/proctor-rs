@@ -122,7 +122,7 @@ impl<T: Debug> Inlet<T> {
         if self.is_attached().await {
             return Ok(());
         } else {
-            return Err(GraphError::GraphPortDetached);
+            return Err(GraphError::GraphPortDetached(self.0.clone()));
         }
     }
 
@@ -175,13 +175,13 @@ impl<T: Debug> Inlet<T> {
     ///     assert_eq!(Some("world"), port.recv().await);
     /// }
     /// ```
-    #[tracing::instrument(level = "trace", skip(self), fields(inlet=%self.0))]
+    // #[tracing::instrument(level = "trace", skip(self), fields(inlet=%self.0))]
     pub async fn recv(&mut self) -> Option<T> {
         if self.is_attached().await {
             let mut rx = self.1.lock().await;
-            tracing::trace!(inlet=%self.0, "Inlet receiving...");
+            tracing::trace!(inlet=%self.0, "Inlet awaiting next item...");
             let item = (*rx).as_mut()?.recv().await;
-            tracing::trace!(inlet=%self.0, ?item, "Inlet ...received");
+            tracing::trace!(inlet=%self.0, ?item, "Inlet received {} item.", if item.is_some() {"an"} else { "no"});
             if item.is_none() && rx.is_some() {
                 tracing::info!(inlet=%self.0, "Inlet depleted - closing receiver");
                 rx.as_mut().unwrap().close();
@@ -247,7 +247,7 @@ impl<T> Outlet<T> {
         if self.is_attached().await {
             return Ok(());
         } else {
-            return Err(GraphError::GraphPortDetached);
+            return Err(GraphError::GraphPortDetached(self.0.clone()));
         }
     }
 

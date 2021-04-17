@@ -119,11 +119,18 @@ where
     In: AppData,
     Out: AppData,
     Fut: Future<Output = Out> + Send + 'static,
-    Op: FnMut(In) -> Fut + Send + 'static,
+    Op: FnMut(In) -> Fut + Send + Sync + 'static,
 {
     #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    #[tracing::instrument(level="info", skip(self))]
+    async fn check(&self) -> GraphResult<()> {
+        self.inlet.check_attachment().await?;
+        self.outlet.check_attachment().await?;
+        Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run map through", skip(self))]

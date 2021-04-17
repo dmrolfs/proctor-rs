@@ -22,9 +22,9 @@ pub struct FlinkEligibilityContext {
 impl ProctorContext for FlinkEligibilityContext {
     fn required_context_fields() -> HashSet<String> {
         maplit::hashset! {
-            "task_status.last_failure".to_string(),
-            "cluster_status.is_deploying".to_string(),
-            "cluster_status.last_deployment".to_string(),
+            "task.last_failure".to_string(),
+            "cluster.is_deploying".to_string(),
+            "cluster.last_deployment".to_string(),
         }
     }
 
@@ -37,7 +37,7 @@ impl ProctorContext for FlinkEligibilityContext {
 pub struct TaskStatus {
     #[serde(default)]
     #[serde(
-        rename = "task_status.last_failure",
+        rename = "task.last_failure",
         serialize_with = "crate::serde::serialize_optional_datetime",
         deserialize_with = "crate::serde::deserialize_optional_datetime"
     )]
@@ -56,9 +56,9 @@ impl TaskStatus {
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClusterStatus {
     #[polar(attribute)]
-    #[serde(rename = "cluster_status.is_deploying")]
+    #[serde(rename = "cluster.is_deploying")]
     pub is_deploying: bool,
-    #[serde(with = "crate::serde", rename = "cluster_status.last_deployment")]
+    #[serde(with = "crate::serde", rename = "cluster.last_deployment")]
     pub last_deployment: DateTime<Utc>,
 }
 
@@ -104,12 +104,12 @@ mod tests {
 
         let mut expected = vec![
             Token::Map { len: None },
-            Token::Str("task_status.last_failure"),
+            Token::Str("task.last_failure"),
             Token::Some,
             Token::Str(&DT_1_STR),
-            Token::Str("cluster_status.is_deploying"),
+            Token::Str("cluster.is_deploying"),
             Token::Bool(false),
-            Token::Str("cluster_status.last_deployment"),
+            Token::Str("cluster.last_deployment"),
             Token::Str(&DT_2_STR),
             Token::Str("custom_foo"),
             Token::Str("fred flintstone"),

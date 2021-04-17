@@ -106,12 +106,19 @@ where
 #[async_trait]
 impl<P, T> Stage for Filter<P, T>
 where
-    P: FnMut(&T) -> bool + Send + 'static,
+    P: FnMut(&T) -> bool + Send + Sync + 'static,
     T: AppData,
 {
     #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    #[tracing::instrument(level="info", skip(self))]
+    async fn check(&self) -> GraphResult<()> {
+        self.inlet.check_attachment().await?;
+        self.outlet.check_attachment().await?;
+        Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run filter through", skip(self))]

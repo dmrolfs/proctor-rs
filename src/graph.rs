@@ -76,8 +76,23 @@ impl Graph {
         self.nodes.push_back(node);
     }
 
+    fn node_names(&self) -> Vec<&str> {
+        self.nodes.iter().map(|n| n.name.as_str() ).collect()
+    }
+
+    #[tracing::instrument(level="info", skip(self))]
+    pub async fn check(&self) -> GraphResult<()> {
+        tracing::info!(nodes=?self.node_names(), "checking graph nodes.");
+        for node in self.nodes.iter() {
+            node.check().await?;
+        }
+        Ok(())
+    }
+
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn run(self) -> GraphResult<()> {
+        self.check().await?;
+
         let tasks = self.nodes.into_iter().map(|node| node.run()).collect::<Vec<_>>();
 
         futures::future::try_join_all(tasks)

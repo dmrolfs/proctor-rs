@@ -113,6 +113,15 @@ impl<T: AppData + Clone + Sync> Stage for Broadcast<T> {
         self.name.as_str()
     }
 
+    #[tracing::instrument(level="info", skip(self))]
+    async fn check(&self) -> GraphResult<()> {
+        self.inlet.check_attachment().await?;
+        for outlet in self.outlets.iter() {
+            outlet.check_attachment().await?;
+        }
+        Ok(())
+    }
+
     #[tracing::instrument(level = "info", name = "run broadcast through", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
         let outlets = &self.outlets;

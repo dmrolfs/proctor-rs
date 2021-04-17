@@ -28,10 +28,16 @@ pub trait Policy: Debug + Send + Sync {
     type Context: ProctorContext;
     fn subscription(&self, name: &str) -> TelemetrySubscription {
         tracing::warn!("DMR: subscription-A");
-        let required_fields = Self::Context::required_context_fields();
-        tracing::warn!("DMR: subscription-B: required_fields:{:?}", required_fields);
+
+        tracing::warn!(
+            "DMR: subscription-B: required_fields:{:?}, optional_fields:{:?}",
+            Self::Context::required_context_fields(),
+            Self::Context::optional_context_fields(),
+        );
         let subscription =
-            TelemetrySubscription::new(name).with_required_fields(Self::Context::required_context_fields());
+            TelemetrySubscription::new(name)
+                .with_required_fields(Self::Context::required_context_fields())
+                .with_optional_fields(Self::Context::optional_context_fields());
         tracing::warn!("DMR: subscription-C: before extend subscription:{:?}", subscription);
         let subscription = self.do_extend_subscription(subscription);
         tracing::warn!("DMR: subscription-D: after extend subscription:{:?}", subscription);
@@ -65,7 +71,7 @@ where
 {
     pub fn new<S: Into<String>>(name: S, policy: Box<dyn Policy<Item = T, Context = C>>) -> Self {
         let name = name.into();
-        let context_inlet = Inlet::new(format!("{}_context", name.clone()));
+        let context_inlet = Inlet::new(format!("{}_policy_context_inlet", name.clone()));
         let inlet = Inlet::new(name.clone());
         let outlet = Outlet::new(name.clone());
         let (tx_api, rx_api) = mpsc::unbounded_channel();
@@ -114,6 +120,13 @@ where
     #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    #[tracing::instrument(level="info", skip(self))]
+    async fn check(&self) -> GraphResult<()> {
+        self.inlet.check_attachment().await?;
+        self.outlet.check_attachment().await?;
+        Ok(())
     }
 
     #[tracing::instrument(

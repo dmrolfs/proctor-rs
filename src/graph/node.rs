@@ -34,37 +34,41 @@ impl Node {
     //     )
     // }
 
+    pub async fn check(&self) -> GraphResult<()> {
+        self.stage.check().instrument(tracing::info_span!("check graph node")).await
+    }
+
     pub fn run(mut self) -> JoinHandle<GraphResult<()>> {
         let name = self.name.clone();
         tokio::spawn(
             async move {
-            // self.stage
-            //     .prepare_for_run()
-            //     .instrument(tracing::info_span!("prepare graph node for run"))
-            //     .await
-            //     .map_err(|err| {
-            //         tracing::error!(error=?err, "node failed to prepare for run.");
-            //         err
-            //     })
-            //     .unwrap();
+                // self.stage
+                //     .prepare_for_run()
+                //     .instrument(tracing::info_span!("prepare graph node for run"))
+                //     .await
+                //     .map_err(|err| {
+                //         tracing::error!(error=?err, "node failed to prepare for run.");
+                //         err
+                //     })
+                //     .unwrap();
 
-            let run_result = self.stage.run().instrument(tracing::info_span!("run graph node")).await;
-            if let Err(err) = &run_result {
-                tracing::error!(error=?err, "node run failed.");
+                let run_result = self.stage.run().instrument(tracing::info_span!("run graph node")).await;
+                if let Err(err) = &run_result {
+                    tracing::error!(error=?err, "node run failed.");
+                }
+
+                let close_result = self
+                    .stage
+                    .close()
+                    .instrument(tracing::info_span!("close graph node"))
+                    .await;
+                if let Err(err) = &close_result {
+                    tracing::error!(error=?err, "node close failed.");
+                }
+
+                run_result.and(close_result)
             }
-
-            let close_result = self
-                .stage
-                .close()
-                .instrument(tracing::info_span!("close graph node"))
-                .await;
-            if let Err(err) = &close_result {
-                tracing::error!(error=?err, "node close failed.");
-            }
-
-            run_result.and(close_result)
-        }
-                .instrument(tracing::info_span!("spawn node", node=%name))
+            .instrument(tracing::info_span!("spawn node", node=%name)),
         )
     }
 }

@@ -26,6 +26,12 @@ impl<In: AppData> Stage for LoggedSink<In> {
         self.name.as_ref()
     }
 
+    #[tracing::instrument(level="info", skip(self))]
+    async fn check(&self) -> GraphResult<()> {
+        self.inlet.check_attachment().await?;
+        Ok(())
+    }
+
     #[tracing::instrument(level = "info", name = "run logging sink", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
         while let Some(input) = self.inlet.recv().await {

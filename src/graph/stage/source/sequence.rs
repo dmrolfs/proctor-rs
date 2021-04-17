@@ -81,11 +81,17 @@ impl<T, I> Sequence<T, I> {
 impl<T, I> Stage for Sequence<T, I>
 where
     T: AppData,
-    I: Iterator<Item = T> + Send + 'static,
+    I: Iterator<Item = T> + Send + Sync + 'static,
 {
     #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    #[tracing::instrument(level="info", skip(self))]
+    async fn check(&self) -> GraphResult<()> {
+        self.outlet.check_attachment().await?;
+        Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run sequence source", skip(self))]

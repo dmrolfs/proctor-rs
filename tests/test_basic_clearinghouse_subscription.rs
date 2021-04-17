@@ -1,18 +1,21 @@
 mod fixtures;
 
 use cast_trait_object::DynCastExt;
-use proctor::elements;
-use proctor::graph::{stage, Connect, Graph, SinkShape};
+use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use proctor::phases::collection;
 use proctor::phases::collection::TelemetrySubscription;
 use proctor::settings::SourceSetting;
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Data {
+    #[serde(default)]
     pub pos: Option<usize>,
+    #[serde(default)]
     pub value: Option<f64>,
+    #[serde(default)]
     pub cat: String,
 }
 
@@ -71,36 +74,36 @@ async fn test_scenario(focus: HashSet<String>) -> anyhow::Result<(usize, usize)>
     let cvs = collection::make_telemetry_cvs_source("cvs", &cvs_setting)?;
 
     let mut clearinghouse = collection::Clearinghouse::new("clearinghouse");
+    let pos_channel = collection::SubscriptionChannel::<Data>::new("pos_channel").await?;
 
-    let pos_stats_fields = focus.clone();
-    let mut pos_stats = stage::Fold::<_, elements::TelemetryData, (usize, usize)>::new(
-        "pos_stats",
-        (0, 0),
-        move |(count, sum), data| {
-            let delivered = data.keys().cloned().collect::<HashSet<_>>();
-            let unexpected = delivered.difference(&pos_stats_fields).collect::<HashSet<_>>();
-            assert!(unexpected.is_empty());
-            let pos = data.get(POS_FIELD).map_or(0, |pos| {
-                tracing::warn!(?pos, "parsing pos...");
-                pos.parse::<usize>().expect("failed to parse pos field")
-            });
-            (count + 1, sum + pos)
-        },
-    );
+    // let pos_stats_fields = focus.clone();
+    let mut pos_stats = stage::Fold::<_, Data, (usize, usize)>::new("pos_stats", (0, 0), move |(count, sum), data| {
+        let pos = data.pos.unwrap_or(0);
+        // let delivered = data.keys().cloned().collect::<HashSet<_>>();
+        // let unexpected = delivered.difference(&pos_stats_fields).collect::<HashSet<_>>();
+        // assert!(unexpected.is_empty());
+        // let pos = data.get(POS_FIELD).map_or(0, |pos| {
+        //     tracing::warn!(?pos, "parsing pos...");
+        //     pos.parse::<usize>().expect("failed to parse pos field")
+        // });
+        (count + 1, sum + pos)
+    });
     let rx_pos_stats = pos_stats.take_final_rx().unwrap();
 
+    (cvs.outlet(), clearinghouse.inlet()).connect().await;
     clearinghouse
         .add_subscription(
             TelemetrySubscription::new("pos").with_required_fields(focus),
-            &pos_stats.inlet(),
+            &pos_channel.subscription_receiver,
         )
         .await;
 
-    (cvs.outlet(), clearinghouse.inlet()).connect().await;
+    (pos_channel.outlet(), pos_stats.inlet()).connect().await;
 
     let mut g = Graph::default();
     g.push_back(cvs.dyn_upcast()).await;
     g.push_back(Box::new(clearinghouse)).await;
+    g.push_back(Box::new(pos_channel)).await;
     g.push_back(Box::new(pos_stats)).await;
     g.run().await?;
 

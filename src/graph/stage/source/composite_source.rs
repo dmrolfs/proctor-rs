@@ -185,6 +185,12 @@ impl<Out: AppData> Stage for CompositeSource<Out> {
         self.name.as_str()
     }
 
+    #[tracing::instrument(level="info", skip(self))]
+    async fn check(&self) -> GraphResult<()> {
+        self.outlet.check_attachment().await?;
+        Ok(())
+    }
+
     #[tracing::instrument(level = "info", name = "run composite source", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
         match self.graph.take() {

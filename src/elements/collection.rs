@@ -116,7 +116,7 @@ impl Collect {
     pub async fn new<T, F, S, U>(name: S, url: U, default_headers: HeaderMap, transform: F) -> Self
     where
         T: AppData + DeserializeOwned + 'static,
-        F: FnMut(T) -> TelemetryData + Send + 'static,
+        F: FnMut(T) -> TelemetryData + Send + Sync + 'static,
         S: Into<String>,
         U: IntoUrl,
     {
@@ -139,7 +139,7 @@ impl Collect {
     ) -> (Graph, Inlet<()>, Outlet<TelemetryData>)
     where
         T: AppData + DeserializeOwned + 'static,
-        F: FnMut(T) -> TelemetryData + Send + 'static,
+        F: FnMut(T) -> TelemetryData + Send + Sync + 'static,
     {
         let query = stage::AndThen::new(format!("{}-query", name), move |_| {
             let client = reqwest::Client::builder()
@@ -214,6 +214,16 @@ impl Stage for Collect {
     #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    #[tracing::instrument(level="info", skip(self))]
+    async fn check(&self) -> GraphResult<()> {
+        self.trigger.check_attachment().await?;
+        self.outlet.check_attachment().await?;
+        if let Some(ref g) = self.graph {
+            g.check().await?;
+        }
+        Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run collect source", skip(self))]

@@ -179,6 +179,15 @@ impl<T: AppData> Stage for MergeN<T> {
         self.name.as_str()
     }
 
+    #[tracing::instrument(level="info", skip(self))]
+    async fn check(&self) -> GraphResult<()> {
+        for inlet in self.inlets.0.lock().await.iter() {
+            inlet.check_attachment().await?;
+        }
+        self.outlet.check_attachment().await?;
+        Ok(())
+    }
+
     #[tracing::instrument(level = "info", name = "run merge through", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
         let mut active_inlets = Self::initialize_active_inlets(self.inlets()).await;

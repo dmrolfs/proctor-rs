@@ -1,24 +1,21 @@
-use super::collection::{ClearinghouseApi, ClearinghouseCmd};
 use crate::elements::{Policy, PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, TelemetryData};
 use crate::error::GraphError;
 use crate::graph::stage::{self, Stage, WithApi, WithMonitor};
 use crate::graph::{Connect, Graph, GraphResult, Inlet, Outlet, Port, SinkShape, SourceShape, ThroughShape};
-use crate::phases::collection::TelemetrySubscription;
-use crate::Ack;
-use crate::{ProctorContext, ProctorResult};
+use crate::ProctorContext;
 use async_trait::async_trait;
-use cast_trait_object::{dyn_upcast, DynCastExt};
+use cast_trait_object::dyn_upcast;
 use std::fmt::{self, Debug};
-use tokio::sync::{broadcast, oneshot};
+use tokio::sync::broadcast;
 
 mod context;
 mod policy;
 
 pub struct Eligibility<C> {
     name: String,
-    pub subscription: TelemetrySubscription,
+    // pub subscription: TelemetrySubscription,
     inner_stage: Option<Box<dyn InnerStage>>,
-    pub context_subscription_inlet: Inlet<TelemetryData>,
+    pub context_inlet: Inlet<C>,
     inlet: Inlet<TelemetryData>,
     outlet: Outlet<TelemetryData>,
     tx_policy_api: PolicyFilterApi<C>,
@@ -29,62 +26,80 @@ pub struct Eligibility<C> {
 
 impl<C: ProctorContext> Eligibility<C> {
     #[tracing::instrument(level = "info", skip(name))]
-    pub async fn new<S: Into<String>>(
+    pub fn new<S: Into<String>>(
         name: S, policy: impl Policy<Item = TelemetryData, Context = C> + 'static,
-    ) -> GraphResult<Self> {
+    ) -> Self {
         let name = name.into();
-        let subscription = policy.subscription(name.as_str());
-
-        let inlet = Inlet::new(format!("into_{}", name));
-        let outlet = Outlet::new(format!("from_{}", name));
-
-        let telemetry_into_context = crate::elements::make_from_telemetry::<C, _>(&subscription.name, true).await?;
-        let context_subscription_inlet = telemetry_into_context.inlet().clone();
-
-        let policy_filter = PolicyFilter::new(format!("eligibility_{}", name), Box::new(policy));
+        let policy_filter: PolicyFilter<TelemetryData, C> = PolicyFilter::new(format!("{}_eligibility_policy", name), Box::new(policy));
+        let context_inlet = policy_filter.context_inlet();
+        let inlet = policy_filter.inlet();
+        let outlet = policy_filter.outlet();
         let tx_policy_api = policy_filter.tx_api();
         let tx_policy_monitor = policy_filter.tx_monitor.clone();
-        // let context_inlet = policy_filter.context_inlet();
 
-        (telemetry_into_context.outlet(), policy_filter.context_inlet())
-            .connect()
-            .await;
 
-        let into_graph = Outlet::new(format!("into-{}-eligibility-graph", name));
-        let policy_inlet = policy_filter.inlet();
-        let policy_outlet = policy_filter.outlet();
-        let from_graph = Inlet::new(format!("from-{}-eligibility-graph", name));
-
-        (&into_graph, &policy_inlet).connect().await;
-        (&policy_outlet, &from_graph).connect().await;
-
-        let in_bridge = stage::Identity::new(format!("{}-bridge-into-eligibility", name), inlet.clone(), into_graph);
-        let out_bridge = stage::Identity::new(format!("{}-bridge-from-eligibility", name), from_graph, outlet.clone());
-
-        let mut graph = Graph::default();
-        graph.push_front(Box::new(in_bridge)).await;
-        graph.push_back(telemetry_into_context.dyn_upcast()).await;
-        graph.push_back(Box::new(policy_filter)).await;
-        graph.push_back(Box::new(out_bridge)).await;
-
-        let composite = stage::CompositeThrough::new(
-            format!("eligibility_composite_{}", name),
-            graph,
-            inlet.clone(),
-            outlet.clone(),
-        )
-        .await;
-
-        Ok(Self {
+        Self {
             name,
-            subscription,
-            inner_stage: Some(Box::new(composite)),
-            context_subscription_inlet,
+            inner_stage: Some(Box::new(policy_filter)),
+            context_inlet,
             inlet,
             outlet,
             tx_policy_api,
             tx_policy_monitor,
-        })
+        }
+        // let name = name.into();
+        // // let subscription = policy.subscription(name.as_str());
+        //
+        // let inlet = Inlet::new(format!("{}_eligibility_inlet", name));
+        // let outlet = Outlet::new(format!("{}_eligibility_outlet", name));
+        //
+        // // let telemetry_into_context = crate::elements::make_from_telemetry::<C, _>(&subscription.name, true).await?;
+        // // let context_subscription_inlet = telemetry_into_context.inlet().clone();
+        //
+        // let policy_filter = PolicyFilter::new(format!("{}_eligibility_policy", name), Box::new(policy));
+        // let tx_policy_api = policy_filter.tx_api();
+        // let tx_policy_monitor = policy_filter.tx_monitor.clone();
+        // let context_inlet = policy_filter.context_inlet();
+        //
+        // // (telemetry_into_context.outlet(), policy_filter.context_inlet())
+        // //     .connect()
+        // //     .await;
+        //
+        // let into_graph = Outlet::new(format!("{}_into_eligibility_graph", name));
+        // let policy_inlet = policy_filter.inlet();
+        // let policy_outlet = policy_filter.outlet();
+        // let from_graph = Inlet::new(format!("{}_from_eligibility_graph", name));
+        //
+        // (&into_graph, &policy_inlet).connect().await;
+        // (&policy_outlet, &from_graph).connect().await;
+        //
+        // let in_bridge = stage::Identity::new(format!("{}_eligibility_ingress_bridge", name), inlet.clone(), into_graph);
+        // let out_bridge = stage::Identity::new(format!("{}_eligibility_egress_bridge", name), from_graph, outlet.clone());
+        //
+        // let mut graph = Graph::default();
+        // graph.push_front(Box::new(in_bridge)).await;
+        // // graph.push_back(telemetry_into_context.dyn_upcast()).await;
+        // graph.push_back(Box::new(policy_filter)).await;
+        // graph.push_back(Box::new(out_bridge)).await;
+        //
+        // let composite = stage::CompositeThrough::new(
+        //     format!("{}__[eligibility]", name),
+        //     graph,
+        //     inlet.clone(),
+        //     outlet.clone(),
+        // )
+        // .await;
+        //
+        // Ok(Self {
+        //     name,
+        //     // subscription,
+        //     inner_stage: Some(Box::new(composite)),
+        //     context_inlet,
+        //     inlet,
+        //     outlet,
+        //     tx_policy_api,
+        //     tx_policy_monitor,
+        // })
     }
 
     // pub fn new<S: Into<String>>(
@@ -130,18 +145,19 @@ impl<C: ProctorContext> Eligibility<C> {
     //     self.subscribe_command.take()
     // }
 
-    // #[inline]
-    // pub fn context_inlet(&self) -> Inlet<C> {
-    //     self.context_subscription_inlet.clone()
-    // }
+    #[inline]
+    pub fn context_inlet(&self) -> Inlet<C> {
+        self.context_inlet.clone()
+    }
 }
 
 impl<C: Debug> Debug for Eligibility<C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Eligibility")
             .field("name", &self.name)
-            .field("subscription", &self.subscription)
+            // .field("subscription", &self.subscription)
             .field("inner_stage", &self.inner_stage)
+            .field("context_inlet", &self.context_inlet)
             .field("inlet", &self.inlet)
             .field("outlet", &self.outlet)
             .finish()
@@ -175,6 +191,18 @@ impl<C: ProctorContext> Stage for Eligibility<C> {
         self.name.as_ref()
     }
 
+    #[tracing::instrument(level="info", skip(self))]
+    async fn check(&self) -> GraphResult<()> {
+        self.inlet.check_attachment().await?;
+        self.context_inlet.check_attachment().await?;
+        self.outlet.check_attachment().await?;
+        if let Some(ref inner) = self.inner_stage {
+            inner.check().await?;
+        }
+        Ok(())
+    }
+
+
     #[tracing::instrument(level = "info", name = "run eligibility through", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
         match self.inner_stage.as_mut() {
@@ -185,7 +213,7 @@ impl<C: ProctorContext> Stage for Eligibility<C> {
         }
     }
 
-    #[tracing::instrument(level="info", skip(self),)]
+    #[tracing::instrument(level = "info", skip(self))]
     async fn close(mut self: Box<Self>) -> GraphResult<()> {
         tracing::trace!("closing eligibility ports.");
         self.inlet.close().await;

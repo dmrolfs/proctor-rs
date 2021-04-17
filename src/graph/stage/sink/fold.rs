@@ -6,6 +6,8 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt::{self, Debug};
 use tokio::sync::{mpsc, oneshot};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub type FoldApi<Acc> = mpsc::UnboundedSender<FoldCmd<Acc>>;
 
@@ -84,7 +86,7 @@ where
     F: FnMut(Acc, In) -> Acc,
 {
     name: String,
-    acc: Acc,
+    acc: Arc<Mutex<Acc>>,
     operation: F,
     inlet: Inlet<In>,
     tx_api: FoldApi<Acc>,
@@ -107,7 +109,7 @@ where
 
         Self {
             name,
-            acc: initial,
+            acc: Arc::new(Mutex::new(initial)),
             operation,
             inlet,
             tx_api,
@@ -126,15 +128,17 @@ where
     async fn do_run(&mut self) {
         let inlet = &mut self.inlet;
         let rx_api = &mut self.rx_api;
+        let acc = self.acc.clone();
 
         loop {
             tracing::trace!("handling next item..");
             tokio::select! {
                 input = inlet.recv() => match input {
                     Some(input) => {
-                        tracing::trace!(?input, before_acc=?self.acc, "handling input");
-                        self.acc = (self.operation)(self.acc.clone(), input);
-                        tracing::trace!(after_acc=?self.acc, "folded input into accumulation");
+                        let mut acc_2 = acc.lock().await;
+                        tracing::trace!(?input, before_acc=?acc_2, "handling input");
+                        *acc_2 = (self.operation)(acc_2.clone(), input);
+                        tracing::trace!(after_acc=?acc_2, "folded input into accumulation");
                     },
 
                     None => {
@@ -146,10 +150,10 @@ where
                 Some(cmd) = rx_api.recv() => match cmd {
                     FoldCmd::GetAcc(tx) => {
                         tracing::info!("handling request for current accumulation...");
-                        let resp = &self.acc;
+                        let resp = acc.lock().await;
                         tracing::info!(accumulation=?resp,"sending accumulation to sender...");
                         match tx.send(resp.clone()) {
-                            Ok(_) => tracing::info!(accumulation=?self.acc, "sent accumulation"),
+                            Ok(_) => tracing::info!(accumulation=?resp, "sent accumulation"),
                             Err(resp) => tracing::warn!(accumulation=?resp, "failed to send accumulation"),
                         }
                     },
@@ -164,9 +168,9 @@ where
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    fn complete_fold(&mut self) -> GraphResult<()> {
+    async fn complete_fold(&mut self) -> GraphResult<()> {
         if let Some(tx_final) = self.tx_final.take() {
-            tx_final.send(self.acc.clone()).map_err(|_err| {
+            tx_final.send(self.acc.lock().await.clone()).map_err(|_err| {
                 GraphError::GraphChannel(format!(
                     "Fold sink final receiver detached. Failed to send accumulation: {:?}",
                     self.acc
@@ -194,7 +198,7 @@ where
 #[async_trait]
 impl<F, In, Acc> Stage for Fold<F, In, Acc>
 where
-    F: FnMut(Acc, In) -> Acc + Send /*+ Sync */ + 'static,
+    F: FnMut(Acc, In) -> Acc + Send + Sync + 'static,
     In: AppData,
     Acc: AppData + Clone,
 {
@@ -203,16 +207,23 @@ where
         self.name.as_ref()
     }
 
+    #[tracing::instrument(level="info", skip(self))]
+    async fn check(&self) -> GraphResult<()> {
+        self.inlet.check_attachment().await?;
+        Ok(())
+    }
+
     #[tracing::instrument(level = "info", name = "run fold sink", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
         self.do_run().await;
-        self.complete_fold()
+        self.complete_fold().await?;
+        Ok(())
     }
 
     async fn close(mut self: Box<Self>) -> GraphResult<()> {
         tracing::trace!("closing fold-sink inlet.");
         self.inlet.close().await;
-        self.complete_fold()?;
+        self.complete_fold().await?;
         self.rx_api.close();
         Ok(())
     }

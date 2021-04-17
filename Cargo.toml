@@ -31,48 +31,48 @@ path = "examples/async_stream.rs"
 
 [dependencies]
 anyhow = "1"
-async-stream = "0.3"
-async-trait = "0.1"
-chrono = "0.4"
-config = { version = "0.10", default-features = false, features = ["toml", "hjson"] }
-derive_more = "0.99"
-futures = "0.3"
-futures-core = "0.3"
-futures-util = "0.3"
-lazy_static = "1.4"
-num_cpus = "1.13"
-reqwest = { version = "0.11", features = ["blocking", "json"] }
+async-stream = "0"
+async-trait = "0"
+chrono = "0"
+config = { version = "0", default-features = false, features = ["toml", "hjson"] }
+derive_more = "0"
+futures = "0"
+futures-core = "0"
+futures-util = "0"
+lazy_static = "1"
+num_cpus = "1"
+reqwest = { version = "0", features = ["blocking", "json"] }
 serde = "1"
 serde_json = "1"
-serde-aux = "2.1"
-sonyflake = "0.1"
+serde-aux = "2"
+sonyflake = "0"
 thiserror = "1"
 tokio = { version = "1", features = ["full"] }
-tokio-stream = "0.1"
-tracing = "0.1"
-tracing-bunyan-formatter = "0.1"
-tracing-futures = "0.2"
-tracing-log = "0.1"
-tracing-subscriber = "0.2"
-uuid = { version = "0.8", features = ["serde", "v4"] }
+tokio-stream = "0"
+tracing = "0"
+tracing-bunyan-formatter = "0"
+tracing-futures = "0"
+tracing-log = "0"
+tracing-subscriber = "0"
+uuid = { version = "0", features = ["serde", "v4"] }
 pin-project = "1"
-pin-project-lite = "0.2"
-enum-display-derive = "0.1"
-rand = "0.8"
-oso = "0.11"
-polar-core = "0.11"
+pin-project-lite = "0"
+enum-display-derive = "0"
+rand = "0"
+oso = "0"
+polar-core = "0"
 proctor_derive = { path = "proctor_derive" }
 clap = { version = "3.0.0-beta.2", features = ["yaml"] }
-csv = "1.1"
-toml = "0.5"
-cast_trait_object = "0.1"
+csv = "1"
+toml = "0"
+cast_trait_object = "0"
 #serde_with = { version = "1.6.4", features = ["chrono", "json", "macros"] }
 maplit = "1"
 
 [dev-dependencies]
 serde_test = "1"
-tokio-test = "0.4"
-criterion = { version = "0.3", features = ["async_tokio", "html_reports"] }
+tokio-test = "0"
+criterion = { version = "0", features = ["async_tokio", "html_reports"] }
 static_assertions = "1"
 
 [[bench]]

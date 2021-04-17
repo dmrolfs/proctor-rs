@@ -258,7 +258,7 @@ impl TestFlow {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_policy_filter_before_context_baseline() -> anyhow::Result<()> {
     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
-    let main_span = tracing::info_span!("test_before_context_baseline");
+    let main_span = tracing::info_span!("test_policy_filter_before_context_baseline");
     let _ = main_span.enter();
 
     let flow = TestFlow::new(r#"eligible(item, context) if context.location_code == 33;"#).await;
@@ -280,7 +280,7 @@ async fn test_policy_filter_before_context_baseline() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_policy_filter_happy_context() -> anyhow::Result<()> {
     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
-    let main_span = tracing::info_span!("test_policy_filter_w_pass_and_blocks");
+    let main_span = tracing::info_span!("test_policy_filter_happy_context");
     let _ = main_span.enter();
 
     let flow = TestFlow::new(r#"eligible(item, context) if context.location_code == 33;"#).await;
@@ -336,7 +336,7 @@ async fn test_policy_filter_happy_context() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
-    let main_span = tracing::info_span!("test_policy_filter_happy_context");
+    let main_span = tracing::info_span!("test_policy_filter_w_pass_and_blocks");
     let _ = main_span.enter();
 
     let mut flow = TestFlow::new(r#"eligible(item, context) if context.location_code == 33;"#).await;
@@ -435,7 +435,7 @@ async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_policy_w_item_n_env() -> anyhow::Result<()> {
     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
-    let main_span = tracing::info_span!("test_policy_w_custom_fields");
+    let main_span = tracing::info_span!("test_policy_w_item_n_env");
     let _ = main_span.enter();
 
     tracing::info!("DMR-A:create flow...");
@@ -473,7 +473,7 @@ lag_2(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
 #[tokio::test]
 async fn test_policy_w_method() -> anyhow::Result<()> {
     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
-    let main_span = tracing::info_span!("test_policy_w_custom_fields");
+    let main_span = tracing::info_span!("test_policy_w_method");
     let _ = main_span.enter();
 
     let flow = TestFlow::new(
@@ -502,7 +502,7 @@ and item.input_messages_per_sec(item.inbox_lag) < 36;"#,
 #[tokio::test]
 async fn test_replace_policy() -> anyhow::Result<()> {
     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
-    let main_span = tracing::info_span!("test_policy_w_custom_fields");
+    let main_span = tracing::info_span!("test_replace_policy");
     let _ = main_span.enter();
 
     let boundary_age_secs = 60 * 60;
@@ -547,7 +547,7 @@ async fn test_replace_policy() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_append_policy() -> anyhow::Result<()> {
     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
-    let main_span = tracing::info_span!("test_policy_w_custom_fields");
+    let main_span = tracing::info_span!("test_append_policy");
     let _ = main_span.enter();
 
     let policy_1 = r#"eligible(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#;
@@ -591,7 +591,7 @@ async fn test_append_policy() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_reset_policy() -> anyhow::Result<()> {
     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
-    let main_span = tracing::info_span!("test_policy_w_custom_fields");
+    let main_span = tracing::info_span!("test_reset_policy");
     let _ = main_span.enter();
 
     let policy_1 = r#"eligible(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#;

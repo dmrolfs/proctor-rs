@@ -120,13 +120,20 @@ where
 #[async_trait]
 impl<F, In, Out> Stage for FilterMap<F, In, Out>
 where
-    F: FnMut(In) -> Option<Out> + Send + 'static,
+    F: FnMut(In) -> Option<Out> + Send + Sync + 'static,
     In: AppData,
     Out: AppData,
 {
     #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    #[tracing::instrument(level="info", skip(self))]
+    async fn check(&self) -> GraphResult<()> {
+        self.inlet.check_attachment().await?;
+        self.outlet.check_attachment().await?;
+        Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run filter_map through", skip(self))]

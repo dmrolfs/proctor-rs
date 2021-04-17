@@ -152,8 +152,8 @@ impl From<reqwest::header::InvalidHeaderValue> for ConfigError {
 #[non_exhaustive]
 pub enum GraphError {
     /// Attempt to use detached port.
-    #[error("Improper attempt to use detached port.")]
-    GraphPortDetached,
+    #[error("Improper attempt to use detached port, {0}")]
+    GraphPortDetached(String),
     /// Error occurred in underlying channel.
     #[error("{0}")]
     GraphChannel(String),

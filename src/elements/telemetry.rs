@@ -32,6 +32,26 @@ impl TelemetryData {
     }
 }
 
+impl std::ops::Deref for TelemetryData {
+    type Target = HashMap<String, String>;
+
+    fn deref(&self) -> &Self::Target {
+        let inner = &self.0;
+        &*inner
+    }
+}
+
+impl std::ops::DerefMut for TelemetryData {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        let inner = &mut self.0;
+        &mut *inner
+    }
+}
+
+impl Into<TelemetryData> for HashMap<String, String> {
+    fn into(self) -> TelemetryData { TelemetryData(self) }
+}
+
 impl std::ops::Add for TelemetryData {
     type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {
@@ -76,22 +96,6 @@ impl IntoIterator for TelemetryData {
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
-    }
-}
-
-impl std::ops::Deref for TelemetryData {
-    type Target = HashMap<String, String>;
-
-    fn deref(&self) -> &Self::Target {
-        let inner = &self.0;
-        &*inner
-    }
-}
-
-impl std::ops::DerefMut for TelemetryData {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        let inner = &mut self.0;
-        &mut *inner
     }
 }
 
