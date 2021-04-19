@@ -26,17 +26,15 @@ pub struct Eligibility<C> {
 
 impl<C: ProctorContext> Eligibility<C> {
     #[tracing::instrument(level = "info", skip(name))]
-    pub fn new<S: Into<String>>(
-        name: S, policy: impl Policy<Item = TelemetryData, Context = C> + 'static,
-    ) -> Self {
+    pub fn new<S: Into<String>>(name: S, policy: impl Policy<Item = TelemetryData, Context = C> + 'static) -> Self {
         let name = name.into();
-        let policy_filter: PolicyFilter<TelemetryData, C> = PolicyFilter::new(format!("{}_eligibility_policy", name), Box::new(policy));
+        let policy_filter: PolicyFilter<TelemetryData, C> =
+            PolicyFilter::new(format!("{}_eligibility_policy", name), Box::new(policy));
         let context_inlet = policy_filter.context_inlet();
         let inlet = policy_filter.inlet();
         let outlet = policy_filter.outlet();
         let tx_policy_api = policy_filter.tx_api();
         let tx_policy_monitor = policy_filter.tx_monitor.clone();
-
 
         Self {
             name,
@@ -191,7 +189,7 @@ impl<C: ProctorContext> Stage for Eligibility<C> {
         self.name.as_ref()
     }
 
-    #[tracing::instrument(level="info", skip(self))]
+    #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> GraphResult<()> {
         self.inlet.check_attachment().await?;
         self.context_inlet.check_attachment().await?;
@@ -201,7 +199,6 @@ impl<C: ProctorContext> Stage for Eligibility<C> {
         }
         Ok(())
     }
-
 
     #[tracing::instrument(level = "info", name = "run eligibility through", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {

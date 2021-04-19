@@ -96,7 +96,7 @@ where
         self.name.as_ref()
     }
 
-    #[tracing::instrument(level="info", skip(self))]
+    #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> GraphResult<()> {
         self.inlet.check_attachment().await?;
         Ok(())

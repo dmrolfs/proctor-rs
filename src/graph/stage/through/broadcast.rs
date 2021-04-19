@@ -113,7 +113,7 @@ impl<T: AppData + Clone + Sync> Stage for Broadcast<T> {
         self.name.as_str()
     }
 
-    #[tracing::instrument(level="info", skip(self))]
+    #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> GraphResult<()> {
         self.inlet.check_attachment().await?;
         for outlet in self.outlets.iter() {

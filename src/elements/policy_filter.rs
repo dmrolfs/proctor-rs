@@ -27,20 +27,16 @@ pub trait Policy: Debug + Send + Sync {
     type Item;
     type Context: ProctorContext;
     fn subscription(&self, name: &str) -> TelemetrySubscription {
-        tracing::warn!("DMR: subscription-A");
-
-        tracing::warn!(
-            "DMR: subscription-B: required_fields:{:?}, optional_fields:{:?}",
+        tracing::trace!(
+            "context required_fields:{:?}, optional_fields:{:?}",
             Self::Context::required_context_fields(),
             Self::Context::optional_context_fields(),
         );
-        let subscription =
-            TelemetrySubscription::new(name)
-                .with_required_fields(Self::Context::required_context_fields())
-                .with_optional_fields(Self::Context::optional_context_fields());
-        tracing::warn!("DMR: subscription-C: before extend subscription:{:?}", subscription);
+        let subscription = TelemetrySubscription::new(name)
+            .with_required_fields(Self::Context::required_context_fields())
+            .with_optional_fields(Self::Context::optional_context_fields());
         let subscription = self.do_extend_subscription(subscription);
-        tracing::warn!("DMR: subscription-D: after extend subscription:{:?}", subscription);
+        tracing::trace!("subscription after extension: {:?}", subscription);
         subscription
     }
     fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
@@ -122,7 +118,7 @@ where
         self.name.as_str()
     }
 
-    #[tracing::instrument(level="info", skip(self))]
+    #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> GraphResult<()> {
         self.inlet.check_attachment().await?;
         self.outlet.check_attachment().await?;

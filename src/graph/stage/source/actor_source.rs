@@ -67,7 +67,7 @@ impl<T: AppData> Stage for ActorSource<T> {
         self.name.as_ref()
     }
 
-    #[tracing::instrument(level="info", skip(self))]
+    #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> GraphResult<()> {
         self.outlet.check_attachment().await?;
         Ok(())

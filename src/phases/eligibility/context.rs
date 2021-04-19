@@ -37,7 +37,7 @@ impl ProctorContext for FlinkEligibilityContext {
 pub struct TaskStatus {
     #[serde(default)]
     #[serde(
-        rename = "task.last_failure",
+        rename = "task_last_failure",
         serialize_with = "crate::serde::serialize_optional_datetime",
         deserialize_with = "crate::serde::deserialize_optional_datetime"
     )]
@@ -56,9 +56,9 @@ impl TaskStatus {
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClusterStatus {
     #[polar(attribute)]
-    #[serde(rename = "cluster.is_deploying")]
+    #[serde(rename = "cluster_is_deploying")]
     pub is_deploying: bool,
-    #[serde(with = "crate::serde", rename = "cluster.last_deployment")]
+    #[serde(with = "crate::serde", rename = "cluster_last_deployment")]
     pub last_deployment: DateTime<Utc>,
 }
 
@@ -75,6 +75,7 @@ impl ClusterStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::elements::TelemetryData;
     use chrono::{DateTime, Utc};
     use lazy_static::lazy_static;
     use serde_test::{assert_tokens, Token};
@@ -127,5 +128,53 @@ mod tests {
             expected.swap(9, 11);
             assert_tokens(&context, expected.as_slice());
         }
+    }
+
+    #[test]
+    fn test_serde_flink_eligibility_context_from_telemetry() {
+        let data = TelemetryData(maplit::hashmap! {
+            "task_last_failure".to_string() => DT_1_STR.clone(),
+            "cluster_is_deploying".to_string() => "false".to_string(),
+            "cluster_last_deployment".to_string() => DT_2_STR.clone(),
+            "foo".to_string() => "bar".to_string(),
+        });
+
+        let actual = data.try_into::<FlinkEligibilityContext>();
+        let expected = FlinkEligibilityContext {
+            task_status: TaskStatus {
+                last_failure: Some(DT_1.clone()),
+            },
+            cluster_status: ClusterStatus {
+                is_deploying: false,
+                last_deployment: DT_2.clone(),
+            },
+            custom: maplit::hashmap! {"foo".to_string() => "bar".to_string(),},
+        };
+        tracing::info!("actual: {:?}", actual);
+        assert_eq!(actual.unwrap(), expected);
+    }
+
+    #[test]
+    fn test_serde_flink_eligibility_context_from_config() {
+        let mut config = config::Config::new();
+        config.set("task_last_failure", Some(DT_1_STR.clone()));
+        config.set("cluster_is_deploying", true);
+        config.set("cluster_last_deployment", DT_2_STR.clone());
+        config.set("foo", "bar");
+        tracing::info!("config = {:?}", config);
+
+        let actual = config.try_into::<FlinkEligibilityContext>();
+        let expected = FlinkEligibilityContext {
+            task_status: TaskStatus {
+                last_failure: Some(DT_1.clone()),
+            },
+            cluster_status: ClusterStatus {
+                is_deploying: true,
+                last_deployment: DT_2.clone(),
+            },
+            custom: maplit::hashmap! {"foo".to_string() => "bar".to_string(),},
+        };
+        tracing::info!("actual: {:?}", actual);
+        assert_eq!(actual.unwrap(), expected);
     }
 }

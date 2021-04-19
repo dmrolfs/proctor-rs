@@ -5,9 +5,9 @@ use crate::AppData;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt::{self, Debug};
-use tokio::sync::{mpsc, oneshot};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::sync::{mpsc, oneshot};
 
 pub type FoldApi<Acc> = mpsc::UnboundedSender<FoldCmd<Acc>>;
 
@@ -207,7 +207,7 @@ where
         self.name.as_ref()
     }
 
-    #[tracing::instrument(level="info", skip(self))]
+    #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> GraphResult<()> {
         self.inlet.check_attachment().await?;
         Ok(())

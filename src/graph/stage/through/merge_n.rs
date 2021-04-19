@@ -179,7 +179,7 @@ impl<T: AppData> Stage for MergeN<T> {
         self.name.as_str()
     }
 
-    #[tracing::instrument(level="info", skip(self))]
+    #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> GraphResult<()> {
         for inlet in self.inlets.0.lock().await.iter() {
             inlet.check_attachment().await?;

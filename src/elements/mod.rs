@@ -16,6 +16,8 @@ use std::collections::{HashMap, HashSet};
 
 pub trait ProctorContext: AppData + PolarClass + Clone + PartialEq + Serialize + DeserializeOwned + Sync {
     fn required_context_fields() -> HashSet<String>;
-    fn optional_context_fields() -> HashSet<String> { HashSet::default() }
+    fn optional_context_fields() -> HashSet<String> {
+        HashSet::default()
+    }
     fn custom(&self) -> HashMap<String, String>;
 }

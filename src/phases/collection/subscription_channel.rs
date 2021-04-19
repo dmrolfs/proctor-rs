@@ -62,7 +62,7 @@ impl<T: AppData> Stage for SubscriptionChannel<T> {
         self.name.as_str()
     }
 
-    #[tracing::instrument(level="info", skip(self))]
+    #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> GraphResult<()> {
         self.subscription_receiver.check_attachment().await?;
         self.outlet.check_attachment().await?;
@@ -71,7 +71,6 @@ impl<T: AppData> Stage for SubscriptionChannel<T> {
         }
         Ok(())
     }
-
 
     async fn run(&mut self) -> GraphResult<()> {
         match self.inner_stage.as_mut() {

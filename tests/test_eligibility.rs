@@ -1,7 +1,9 @@
 mod fixtures;
 
 use chrono::*;
+use lazy_static::lazy_static;
 use oso::{Oso, PolarClass};
+use proctor::elements::PolicyFilterEvent;
 use proctor::elements::{self, Policy, PolicySource, TelemetryData};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape, UniformFanInShape};
@@ -79,6 +81,39 @@ impl TestClusterStatus {
         let boundary = Utc::now() - chrono::Duration::seconds(seconds);
         boundary < self.last_deployment
     }
+}
+
+use serde_test::{assert_tokens, Token};
+
+lazy_static! {
+    static ref DT_1: DateTime<Utc> = Utc::now();
+    static ref DT_1_STR: String = format!("{}", DT_1.format("%+"));
+}
+
+#[test]
+fn test_context_serde() {
+    let context = TestFlinkEligibilityContext {
+        task_status: TestTaskStatus { last_failure: None },
+        cluster_status: TestClusterStatus {
+            is_deploying: false,
+            last_deployment: DT_1.clone(),
+        },
+        custom: HashMap::new(),
+    };
+
+    assert_tokens(
+        &context,
+        &vec![
+            Token::Map { len: None },
+            Token::Str("task.last_failure"),
+            Token::None,
+            Token::Str("cluster.is_deploying"),
+            Token::Bool(false),
+            Token::Str("cluster.last_deployment"),
+            Token::Str(&DT_1_STR),
+            Token::MapEnd,
+        ],
+    );
 }
 
 #[derive(Debug)]
@@ -217,6 +252,7 @@ impl TestFlow {
             .add_subscription(context_subscription, &context_channel.subscription_receiver)
             .await;
         (context_channel.outlet(), eligibility.context_inlet()).connect().await;
+        (telemetry_channel.outlet(), eligibility.inlet()).connect().await;
         (eligibility.outlet(), sink.inlet()).connect().await;
 
         assert!(eligibility.context_inlet.is_attached().await);
@@ -229,6 +265,7 @@ impl TestFlow {
         graph.push_back(Box::new(merge)).await;
         graph.push_back(Box::new(clearinghouse)).await;
         graph.push_back(Box::new(context_channel)).await;
+        graph.push_back(Box::new(telemetry_channel)).await;
         graph.push_back(Box::new(eligibility)).await;
         graph.push_back(Box::new(sink)).await;
 
@@ -322,7 +359,6 @@ impl TestFlow {
     }
 }
 
-#[ignore]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
@@ -330,7 +366,7 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
     let _ = main_span.enter();
 
     tracing::warn!("test_eligibility_before_context_baseline_A");
-    let flow = TestFlow::new(r#"eligible(item, environment) if environment.location_code == 33;"#).await?;
+    let mut flow = TestFlow::new(r#"eligible(item, environment) if environment.location_code == 33;"#).await?;
     tracing::warn!("test_eligibility_before_context_baseline_B");
     let data = TelemetryData(maplit::hashmap! {
        "input_messages_per_sec".to_string() => std::f64::consts::PI.to_string(),
@@ -339,28 +375,38 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
     });
     tracing::warn!("test_eligibility_before_context_baseline_C");
 
-    flow.push_telemetry(data).await?;
+    flow.push_telemetry(data.clone()).await?;
     tracing::warn!("test_eligibility_before_context_baseline_D");
     let actual = flow.inspect_sink().await?;
     tracing::warn!("test_eligibility_before_context_baseline_E");
     assert!(actual.is_empty());
     tracing::warn!("test_eligibility_before_context_baseline_F");
 
+    match flow.rx_eligibility_monitor.recv().await? {
+        PolicyFilterEvent::ItemBlocked(blocked) => {
+            tracing::warn!("receive item blocked notification re: {:?}", blocked);
+            assert_eq!(blocked, data);
+        }
+        PolicyFilterEvent::ContextChanged(ctx) => {
+            panic!("unexpected context change:{:?}", ctx);
+        }
+    }
+
     let actual = flow.close().await?;
     tracing::warn!("final accumulation:{:?}", actual);
+
     assert!(actual.is_empty());
     tracing::warn!("test_eligibility_before_context_baseline_G");
     Ok(())
 }
 
-#[ignore]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
     let main_span = tracing::info_span!("test_eligibility_happy_context");
     let _ = main_span.enter();
 
-    let flow = TestFlow::new(r#"eligible(_, context) if context.is_deploying == false;"#).await?;
+    let mut flow = TestFlow::new(r#"eligible(_, context) if context.is_deploying == false;"#).await?;
 
     tracing::warn!("DMR: 01. Make sure empty env...");
 
@@ -372,15 +418,38 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     let now = Utc::now();
     let t1 = now - chrono::Duration::days(1);
     let t1_rep = format!("{}", t1.format("%+"));
-    flow.push_context(maplit::hashmap! {
-        "cluster.is_deploying".to_string() => false.to_string(),
-        "cluster.last_deployment".to_string() => t1_rep,
-    }.into())
-        .await?;
+    flow.push_context(
+        maplit::hashmap! {
+            "cluster.is_deploying".to_string() => false.to_string(),
+            "cluster.last_deployment".to_string() => t1_rep,
+        }
+        .into(),
+    )
+    .await?;
 
     tracing::warn!("DMR: 03. Verify environment set...");
 
-    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    match flow.rx_eligibility_monitor.recv().await? {
+        PolicyFilterEvent::ContextChanged(Some(ctx)) => {
+            tracing::warn!("notified of eligibility context change: {:?}", ctx);
+            assert_eq!(
+                ctx,
+                TestFlinkEligibilityContext {
+                    task_status: TestTaskStatus { last_failure: None },
+                    cluster_status: TestClusterStatus {
+                        is_deploying: false,
+                        last_deployment: t1
+                    },
+                    custom: HashMap::new(),
+                }
+            );
+        }
+        PolicyFilterEvent::ContextChanged(None) => panic!("did not expect to clear context"),
+        PolicyFilterEvent::ItemBlocked(item) => panic!("no item since so surprise one was blocked: {:?}", item),
+    };
+    tracing::warn!("DMR: 03. environment change verified.");
+
+    // tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     let detail = flow.inspect_policy_context().await?;
     tracing::warn!("DMR: policy detail = {:?}", detail);
     assert!(detail.context.is_some());
@@ -388,17 +457,24 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     tracing::warn!("DMR: 04. Push Item...");
 
     // let ts = Utc::now().into();
-    flow.push_telemetry(maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_string()}.into()).await?;
+    flow.push_telemetry(maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_string()}.into())
+        .await?;
 
     tracing::warn!("DMR: 05. Look for Item in sink...");
 
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     let actual = flow.inspect_sink().await?;
-    assert_eq!(actual, vec![TelemetryData(maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_string()}),]);
+    assert_eq!(
+        actual,
+        vec![TelemetryData(
+            maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_string()}
+        ),]
+    );
 
     tracing::warn!("DMR: 06. Push another Item...");
 
-    flow.push_telemetry(maplit::hashmap! {"measurement".to_string() => std::f64::consts::TAU.to_string()}.into()).await?;
+    flow.push_telemetry(maplit::hashmap! {"measurement".to_string() => std::f64::consts::TAU.to_string()}.into())
+        .await?;
 
     tracing::warn!("DMR: 07. Close flow...");
 

@@ -49,7 +49,9 @@ impl std::ops::DerefMut for TelemetryData {
 }
 
 impl Into<TelemetryData> for HashMap<String, String> {
-    fn into(self) -> TelemetryData { TelemetryData(self) }
+    fn into(self) -> TelemetryData {
+        TelemetryData(self)
+    }
 }
 
 impl std::ops::Add for TelemetryData {
@@ -433,30 +435,38 @@ mod tests {
     struct Data {
         #[serde(default)]
         #[serde(
+            rename = "task_last_failure",
             serialize_with = "crate::serde::serialize_optional_datetime",
             deserialize_with = "crate::serde::deserialize_optional_datetime"
         )]
         pub last_failure: Option<DateTime<Utc>>,
+        #[serde(rename = "cluster_is_deploying")]
         pub is_deploying: bool,
-        #[serde(with = "crate::serde")]
+        #[serde(rename = "cluster_last_deployment", with = "crate::serde")]
         pub last_deployment: DateTime<Utc>,
     }
 
     #[test]
     fn test_telemetry_data_try_into_deserializer() -> anyhow::Result<()> {
+        lazy_static::initialize(&crate::telemetry::TEST_TRACING);
         let data = TelemetryData(maplit::hashmap! {
-            "last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_string(),
-            "is_deploying".to_string() => "false".to_string(),
-            "last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".to_string(),
+            "task_last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_string(),
+            "cluster_is_deploying".to_string() => "false".to_string(),
+            "cluster_last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".to_string(),
         });
+
+        let foo = data.get("cluster_is_deploying");
+        assert_eq!(foo, Some(&"false".to_string()));
 
         let expected = Data {
             last_failure: Some(DateTime::parse_from_str("2014-11-28T12:45:59.324310806Z", "%+")?.with_timezone(&Utc)),
             is_deploying: false,
             last_deployment: DateTime::parse_from_str("2014-11-28T10:11:37.246310806Z", "%+")?.with_timezone(&Utc),
         };
-        let actual = data.try_into::<Data>()?;
-        assert_eq!(actual, expected);
+        tracing::info!("expected: {:?} from data:{:?}", expected, data);
+        let actual = data.try_into::<Data>();
+        tracing::info!("actual: {:?}", actual);
+        assert_eq!(actual?, expected);
         Ok(())
     }
 

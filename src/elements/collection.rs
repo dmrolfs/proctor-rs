@@ -216,7 +216,7 @@ impl Stage for Collect {
         self.name.as_str()
     }
 
-    #[tracing::instrument(level="info", skip(self))]
+    #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> GraphResult<()> {
         self.trigger.check_attachment().await?;
         self.outlet.check_attachment().await?;

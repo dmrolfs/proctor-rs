@@ -77,10 +77,10 @@ impl Graph {
     }
 
     fn node_names(&self) -> Vec<&str> {
-        self.nodes.iter().map(|n| n.name.as_str() ).collect()
+        self.nodes.iter().map(|n| n.name.as_str()).collect()
     }
 
-    #[tracing::instrument(level="info", skip(self))]
+    #[tracing::instrument(level = "info", skip(self))]
     pub async fn check(&self) -> GraphResult<()> {
         tracing::info!(nodes=?self.node_names(), "checking graph nodes.");
         for node in self.nodes.iter() {

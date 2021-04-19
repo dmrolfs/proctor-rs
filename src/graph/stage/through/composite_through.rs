@@ -160,7 +160,7 @@ impl<In: AppData, Out: AppData> Stage for CompositeThrough<In, Out> {
         self.name.as_str()
     }
 
-    #[tracing::instrument(level="info", skip(self))]
+    #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> GraphResult<()> {
         self.inlet.check_attachment().await?;
         self.outlet.check_attachment().await?;

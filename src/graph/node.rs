@@ -35,7 +35,10 @@ impl Node {
     // }
 
     pub async fn check(&self) -> GraphResult<()> {
-        self.stage.check().instrument(tracing::info_span!("check graph node")).await
+        self.stage
+            .check()
+            .instrument(tracing::info_span!("check graph node", node=%self.stage.name()))
+            .await
     }
 
     pub fn run(mut self) -> JoinHandle<GraphResult<()>> {

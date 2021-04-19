@@ -101,24 +101,37 @@ impl TelemetrySubscription {
     pub fn new<S: Into<String>>(name: S) -> Self {
         let name = name.into();
         let outlet_to_subscription = Outlet::new(format!("outlet_for_subscription_{}", name));
-        Self::All { name, outlet_to_subscription,
+        Self::All {
+            name,
+            outlet_to_subscription,
         }
     }
 
     pub fn with_required_fields<S: Into<String>>(self, required_fields: HashSet<S>) -> Self {
         let required_fields: HashSet<String> = required_fields.into_iter().map(|s| s.into()).collect();
         match self {
-            Self::All { name, outlet_to_subscription, } => {
+            Self::All {
+                name,
+                outlet_to_subscription,
+            } => Self::Explicit {
+                name,
+                required_fields,
+                optional_fields: HashSet::default(),
+                outlet_to_subscription,
+            },
+            Self::Explicit {
+                name,
+                required_fields: mut my_required_fields,
+                optional_fields,
+                outlet_to_subscription,
+            } => {
+                my_required_fields.extend(required_fields);
                 Self::Explicit {
                     name,
-                    required_fields,
-                    optional_fields: HashSet::default(),
+                    required_fields: my_required_fields,
+                    optional_fields,
                     outlet_to_subscription,
                 }
-            },
-            Self::Explicit { name, required_fields: mut my_required_fields, optional_fields, outlet_to_subscription } => {
-                my_required_fields.extend(required_fields);
-                Self::Explicit { name, required_fields: my_required_fields, optional_fields, outlet_to_subscription, }
             }
         }
     }
@@ -126,17 +139,28 @@ impl TelemetrySubscription {
     pub fn with_optional_fields<S: Into<String>>(self, optional_fields: HashSet<S>) -> Self {
         let optional_fields: HashSet<String> = optional_fields.into_iter().map(|s| s.into()).collect();
         match self {
-            Self::All { name, outlet_to_subscription, } => {
+            Self::All {
+                name,
+                outlet_to_subscription,
+            } => Self::Explicit {
+                name,
+                required_fields: HashSet::default(),
+                optional_fields,
+                outlet_to_subscription,
+            },
+            Self::Explicit {
+                name,
+                required_fields,
+                optional_fields: mut my_optional_fields,
+                outlet_to_subscription,
+            } => {
+                my_optional_fields.extend(optional_fields);
                 Self::Explicit {
                     name,
-                    required_fields: HashSet::default(),
-                    optional_fields,
+                    required_fields,
+                    optional_fields: my_optional_fields,
                     outlet_to_subscription,
                 }
-            },
-            Self::Explicit { name, required_fields, optional_fields: mut my_optional_fields, outlet_to_subscription } => {
-                my_optional_fields.extend(optional_fields);
-                Self::Explicit { name, required_fields, optional_fields: my_optional_fields, outlet_to_subscription,}
             }
         }
     }
@@ -149,35 +173,59 @@ impl TelemetrySubscription {
 
     pub fn name(&self) -> &str {
         match self {
-            Self::All { name, outlet_to_subscription:_ } => name.as_str(),
-            Self::Explicit { name, required_fields:_, optional_fields:_, outlet_to_subscription:_ } => {
-                name.as_str()
-            },
+            Self::All {
+                name,
+                outlet_to_subscription: _,
+            } => name.as_str(),
+            Self::Explicit {
+                name,
+                required_fields: _,
+                optional_fields: _,
+                outlet_to_subscription: _,
+            } => name.as_str(),
         }
     }
 
     pub fn outlet_to_subscription(&self) -> Outlet<TelemetryData> {
         match self {
-            Self::All { name:_, outlet_to_subscription } => outlet_to_subscription.clone(),
-            Self::Explicit { name:_, required_fields:_, optional_fields:_, outlet_to_subscription } => {
-                outlet_to_subscription.clone()
-            }
+            Self::All {
+                name: _,
+                outlet_to_subscription,
+            } => outlet_to_subscription.clone(),
+            Self::Explicit {
+                name: _,
+                required_fields: _,
+                optional_fields: _,
+                outlet_to_subscription,
+            } => outlet_to_subscription.clone(),
         }
     }
 
     pub fn any_interest(&self, _available_fields: &HashSet<&String>, changed_fields: &HashSet<String>) -> bool {
         match self {
-            Self::All {..}=> true,
-            Self::Explicit { name:_, required_fields, optional_fields, outlet_to_subscription: _ } => {
+            Self::All { .. } => true,
+            Self::Explicit {
+                name: _,
+                required_fields,
+                optional_fields,
+                outlet_to_subscription: _,
+            } => {
                 let mut interested = false;
                 for changed in changed_fields {
+                    tracing::trace!(
+                        "DMR: looking for interest in {:?} within req:{:?} OR opt:{:?}",
+                        changed,
+                        required_fields,
+                        optional_fields
+                    );
                     if required_fields.contains(changed) || optional_fields.contains(changed) {
                         interested = true;
                         break;
                     }
                 }
+                tracing::trace!("DMR: interested in {:?}? => {}", changed_fields, interested);
                 interested
-            },
+            }
         }
     }
 
@@ -185,8 +233,13 @@ impl TelemetrySubscription {
         let mut db = database.clone();
 
         match self {
-            Self::All {..} => (db, HashSet::default()),
-            Self::Explicit { name:_, required_fields, optional_fields, outlet_to_subscription:_ } => {
+            Self::All { .. } => (db, HashSet::default()),
+            Self::Explicit {
+                name: _,
+                required_fields,
+                optional_fields,
+                outlet_to_subscription: _,
+            } => {
                 let mut missing = HashSet::default();
                 for (key, _value) in database.iter() {
                     if !required_fields.contains(key) && !optional_fields.contains(key) {
@@ -211,11 +264,16 @@ impl TelemetrySubscription {
         }
     }
 
-    #[tracing::instrument(level="info")]
+    #[tracing::instrument(level = "info")]
     pub fn fulfill(&self, database: &TelemetryData) -> Option<TelemetryData> {
         match self {
             Self::All { .. } => Some(database.clone()),
-            Self::Explicit { name:_, required_fields, optional_fields, outlet_to_subscription:_, } => {
+            Self::Explicit {
+                name: _,
+                required_fields,
+                optional_fields,
+                outlet_to_subscription: _,
+            } => {
                 let mut ready = Vec::new();
                 let mut unfilled = Vec::new();
 
@@ -253,23 +311,35 @@ impl TelemetrySubscription {
 
     pub async fn connect_to_receiver(&self, receiver: &Inlet<TelemetryData>) {
         match self {
-            Self::All { name:_, outlet_to_subscription } => {
+            Self::All {
+                name: _,
+                outlet_to_subscription,
+            } => {
                 (outlet_to_subscription, receiver).connect().await;
-            },
-            Self::Explicit { name:_, required_fields:_, optional_fields:_, outlet_to_subscription } => {
+            }
+            Self::Explicit {
+                name: _,
+                required_fields: _,
+                optional_fields: _,
+                outlet_to_subscription,
+            } => {
                 (outlet_to_subscription, receiver).connect().await;
-            },
+            }
         }
     }
 
     pub async fn send(&self, telemetry: TelemetryData) -> GraphResult<()> {
         match self {
-            Self::All { name:_, outlet_to_subscription} => {
-                outlet_to_subscription.send(telemetry).await
-            },
-            Self::Explicit { name:_, required_fields:_, optional_fields:_, outlet_to_subscription } => {
-                outlet_to_subscription.send(telemetry).await
-            },
+            Self::All {
+                name: _,
+                outlet_to_subscription,
+            } => outlet_to_subscription.send(telemetry).await,
+            Self::Explicit {
+                name: _,
+                required_fields: _,
+                optional_fields: _,
+                outlet_to_subscription,
+            } => outlet_to_subscription.send(telemetry).await,
         }
     }
 }
@@ -277,8 +347,16 @@ impl TelemetrySubscription {
 impl TelemetrySubscription {
     pub async fn close(self) {
         match self {
-            Self::All { name:_, mut outlet_to_subscription} => outlet_to_subscription.close().await,
-            Self::Explicit { name:_, required_fields:_, optional_fields:_, mut outlet_to_subscription } => outlet_to_subscription.close().await,
+            Self::All {
+                name: _,
+                mut outlet_to_subscription,
+            } => outlet_to_subscription.close().await,
+            Self::Explicit {
+                name: _,
+                required_fields: _,
+                optional_fields: _,
+                mut outlet_to_subscription,
+            } => outlet_to_subscription.close().await,
         }
     }
 }
@@ -288,17 +366,30 @@ impl PartialEq for TelemetrySubscription {
         use TelemetrySubscription::*;
 
         match (self, other) {
-            (All { name: lhs_name, outlet_to_subscription:_ }, All { name: rhs_name, outlet_to_subscription:_ }) => {
-                lhs_name == rhs_name
-            },
             (
-                Explicit { name: lhs_name, required_fields: lhs_required, optional_fields: lhs_optional, outlet_to_subscription:_ },
-                Explicit { name: rhs_name, required_fields: rhs_required, optional_fields: rhs_optional, outlet_to_subscription:_ },
-            ) => {
-                (lhs_name == rhs_name)
-                    && (lhs_required== rhs_required)
-                    && (lhs_optional== rhs_optional)
-            },
+                All {
+                    name: lhs_name,
+                    outlet_to_subscription: _,
+                },
+                All {
+                    name: rhs_name,
+                    outlet_to_subscription: _,
+                },
+            ) => lhs_name == rhs_name,
+            (
+                Explicit {
+                    name: lhs_name,
+                    required_fields: lhs_required,
+                    optional_fields: lhs_optional,
+                    outlet_to_subscription: _,
+                },
+                Explicit {
+                    name: rhs_name,
+                    required_fields: rhs_required,
+                    optional_fields: rhs_optional,
+                    outlet_to_subscription: _,
+                },
+            ) => (lhs_name == rhs_name) && (lhs_required == rhs_required) && (lhs_optional == rhs_optional),
             _ => false,
         }
     }
@@ -346,11 +437,11 @@ impl Clearinghouse {
         match data {
             Some(d) => {
                 let updated_fields = d.keys().cloned().collect::<HashSet<_>>();
-                let interested = Self::find_interested_subscriptions(subscriptions, database.keys().collect(), updated_fields);
+                let interested =
+                    Self::find_interested_subscriptions(subscriptions, database.keys().collect(), updated_fields);
 
                 database.extend(d);
                 Self::push_to_subscribers(database, interested).await?;
-
                 Ok(true)
             }
 
@@ -365,20 +456,27 @@ impl Clearinghouse {
 
     #[tracing::instrument(level = "trace", skip(subscriptions,))]
     fn find_interested_subscriptions<'a>(
-        subscriptions: &'a Vec<TelemetrySubscription>,
-        available: HashSet<&String>,
-        changed: HashSet<String>,
+        subscriptions: &'a Vec<TelemetrySubscription>, available: HashSet<&String>, changed: HashSet<String>,
     ) -> Vec<&'a TelemetrySubscription> {
         let interested = subscriptions
             .iter()
-            .filter(|s| { s.any_interest(&available, &changed) })
+            .filter(|s| {
+                let is_interested = s.any_interest(&available, &changed);
+                tracing::trace!(
+                    "DMR: is subscription, {}, interested in changed:{:?} => {}",
+                    s.name(),
+                    changed,
+                    is_interested
+                );
+                is_interested
+            })
             .collect::<Vec<_>>();
 
         tracing::info!(
             nr_subscriptions=%subscriptions.len(),
             nr_interested=%interested.len(),
             "interested subscriptions {}.",
-            if interested.is_empty() { "found" } else { "not found"}
+            if interested.is_empty() { "not found"} else { "found" }
         );
 
         interested
@@ -408,7 +506,7 @@ impl Clearinghouse {
 
         let statuses = futures::future::join_all(fulfilled).await;
         let result: GraphResult<()> = if let Some((s, err)) = statuses.into_iter().find(|(_, status)| status.is_err()) {
-            tracing::error!(subscriber=%s.name(), "failed to send fulfilled subscription.");
+            tracing::error!(subscription=%s.name(), "failed to send fulfilled subscription.");
             err
         } else {
             Ok(())
@@ -528,10 +626,7 @@ impl UniformFanOutShape for Clearinghouse {
 
     #[inline]
     fn outlets(&self) -> OutletsShape<Self::Out> {
-        self.subscriptions
-            .iter()
-            .map(|s| s.outlet_to_subscription())
-            .collect()
+        self.subscriptions.iter().map(|s| s.outlet_to_subscription()).collect()
     }
 }
 
@@ -543,7 +638,7 @@ impl Stage for Clearinghouse {
         self.name.as_str()
     }
 
-    #[tracing::instrument(level="info", skip(self))]
+    #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> GraphResult<()> {
         self.inlet.check_attachment().await?;
         for s in self.subscriptions.iter() {
@@ -862,26 +957,40 @@ mod tests {
         let main_span = tracing::info_span!("test_find_interested_subscriptions");
         let _main_span_guard = main_span.enter();
 
-        let actual = Clearinghouse::find_interested_subscriptions(&SUBSCRIPTIONS, HashSet::default(), HashSet::default());
+        let actual =
+            Clearinghouse::find_interested_subscriptions(&SUBSCRIPTIONS, HashSet::default(), HashSet::default());
         assert_eq!(actual, Vec::<&TelemetrySubscription>::default());
 
         let available = "extra".to_string();
-        let actual =
-            Clearinghouse::find_interested_subscriptions(&SUBSCRIPTIONS, maplit::hashset! {&available}, maplit::hashset! {"extra".to_string()});
+        let actual = Clearinghouse::find_interested_subscriptions(
+            &SUBSCRIPTIONS,
+            maplit::hashset! {&available},
+            maplit::hashset! {"extra".to_string()},
+        );
         assert_eq!(actual, vec![&SUBSCRIPTIONS[1]]);
 
         let available = "nonsense".to_string();
-        let actual =
-            Clearinghouse::find_interested_subscriptions(&SUBSCRIPTIONS, maplit::hashset! {&available}, maplit::hashset! {"nonsense".to_string()});
+        let actual = Clearinghouse::find_interested_subscriptions(
+            &SUBSCRIPTIONS,
+            maplit::hashset! {&available},
+            maplit::hashset! {"nonsense".to_string()},
+        );
         assert_eq!(actual, Vec::<&TelemetrySubscription>::default());
 
         let available = "pos".to_string();
-        let actual = Clearinghouse::find_interested_subscriptions(&SUBSCRIPTIONS, maplit::hashset! {&available}, maplit::hashset! {"pos".to_string()});
+        let actual = Clearinghouse::find_interested_subscriptions(
+            &SUBSCRIPTIONS,
+            maplit::hashset! {&available},
+            maplit::hashset! {"pos".to_string()},
+        );
         assert_eq!(actual, vec![&SUBSCRIPTIONS[1], &SUBSCRIPTIONS[2]]);
 
         let available = "value".to_string();
-        let actual =
-            Clearinghouse::find_interested_subscriptions(&SUBSCRIPTIONS, maplit::hashset! {&available}, maplit::hashset! {"value".to_string()});
+        let actual = Clearinghouse::find_interested_subscriptions(
+            &SUBSCRIPTIONS,
+            maplit::hashset! {&available},
+            maplit::hashset! {"value".to_string()},
+        );
         assert_eq!(actual, vec![&SUBSCRIPTIONS[2]]);
 
         let base = maplit::hashset! {"pos".to_string(), "cat".to_string()};
@@ -924,8 +1033,9 @@ mod tests {
                 name: sub_name,
                 required_fields: sub_required_fields,
                 optional_fields: sub_optional_fields,
-                outlet_to_subscription:_,
-            } = &SUBSCRIPTIONS[subscriber] {
+                outlet_to_subscription: _,
+            } = &SUBSCRIPTIONS[subscriber]
+            {
                 let expected = &EXPECTED[sub_name];
                 tracing::info!(
                     nr=%subscriber,
