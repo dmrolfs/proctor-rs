@@ -208,7 +208,7 @@ struct TestFlow {
 }
 
 impl TestFlow {
-    pub async fn new<S: Into<String>>(policy: S) -> ProctorResult<Self> {
+    pub async fn new<S: Into<String>>(telemetry_subscription: TelemetrySubscription, policy: S) -> ProctorResult<Self> {
         let telemetry_source = stage::ActorSource::<TelemetryData>::new("telemetry_source");
         let tx_data_source_api = telemetry_source.tx_api();
 
@@ -225,7 +225,6 @@ impl TestFlow {
         let context_channel =
             collection::SubscriptionChannel::<TestFlinkEligibilityContext>::new("eligibility_context").await?;
 
-        let telemetry_subscription = TelemetrySubscription::new("data");
         let telemetry_channel = collection::SubscriptionChannel::<TelemetryData>::new("data_channel").await?;
         let eligibility = Eligibility::<TestFlinkEligibilityContext>::new("test_flink_eligibility", policy);
 
@@ -367,7 +366,10 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
     let _ = main_span.enter();
 
     tracing::warn!("test_eligibility_before_context_baseline_A");
-    let mut flow = TestFlow::new(r#"eligible(item, environment) if environment.location_code == 33;"#).await?;
+    let mut flow = TestFlow::new(
+        TelemetrySubscription::new("all_data"),
+        r#"eligible(item, environment) if environment.location_code == 33;"#
+    ).await?;
     tracing::warn!("test_eligibility_before_context_baseline_B");
     let data = TelemetryData::from_data(maplit::btreemap! {
        "input_messages_per_sec".to_string() => Value::Float(std::f64::consts::PI),
@@ -413,7 +415,11 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_eligibility_happy_context");
     let _ = main_span.enter();
 
-    let mut flow = TestFlow::new(r#"eligible(_, context) if context.is_deploying == false;"#).await?;
+    let mut flow = TestFlow::new(
+        TelemetrySubscription::new("measurements")
+            .with_required_fields(maplit::hashset! {"measurement".to_string()}),
+        r#"eligible(_, context) if context.cluster_status.is_deploying == false;"#
+    ).await?;
 
     tracing::warn!("DMR: 01. Make sure empty env...");
 
@@ -436,7 +442,6 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
 
     tracing::warn!("DMR: 03. Verify environment set...");
 
-    for _ in 0..2 {
     match flow.rx_eligibility_monitor.recv().await? {
         PolicyFilterEvent::ContextChanged(Some(ctx)) => {
             tracing::warn!("notified of eligibility context change: {:?}", ctx);
@@ -453,9 +458,8 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
             );
         }
         PolicyFilterEvent::ContextChanged(None) => panic!("did not expect to clear context"),
-        PolicyFilterEvent::ItemBlocked(item) => tracing::warn!("DMR: Item blocked: {:?}", item),
+        PolicyFilterEvent::ItemBlocked(item) => panic!("unexpected item receipt - blocked: {:?}", item),
     };
-    }
     tracing::warn!("DMR: 03. environment change verified.");
 
     // tokio::time::sleep(std::time::Duration::from_secs(3)).await;
