@@ -729,6 +729,7 @@ mod tests {
     use tokio::sync::oneshot;
     use tokio_test::block_on;
     use tracing::Instrument;
+    use serde_cbor::Value;
 
     lazy_static! {
         static ref SUBSCRIPTIONS: Vec<TelemetrySubscription> = vec![
