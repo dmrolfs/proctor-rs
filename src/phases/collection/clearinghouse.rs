@@ -229,11 +229,11 @@ impl TelemetrySubscription {
         }
     }
 
-    pub fn trim_to_subscription(&self, database: &TelemetryData) -> (TelemetryData, HashSet<String>) {
+    pub fn trim_to_subscription(&self, database: &TelemetryData) -> GraphResult<(TelemetryData, HashSet<String>)> {
         let mut db = database.clone();
 
         match self {
-            Self::All { .. } => (db, HashSet::default()),
+            Self::All { .. } => Ok((db, HashSet::default())),
             Self::Explicit {
                 name: _,
                 required_fields,
@@ -241,9 +241,9 @@ impl TelemetrySubscription {
                 outlet_to_subscription: _,
             } => {
                 let mut missing = HashSet::default();
-                for (key, _value) in database.iter() {
+                for (key, _value) in database.dictionary().iter() {
                     if !required_fields.contains(key) && !optional_fields.contains(key) {
-                        let _ = db.remove(key);
+                        let _ignore: Option<serde_cbor::Value> = db.remove(key)?;
                     }
                 }
 
@@ -259,7 +259,7 @@ impl TelemetrySubscription {
                     }
                 }
 
-                (db, missing)
+                Ok((db, missing))
             }
         }
     }
@@ -278,8 +278,8 @@ impl TelemetrySubscription {
                 let mut unfilled = Vec::new();
 
                 for required in required_fields.iter() {
-                    match database.get(required) {
-                        Some(value) => ready.push((required.clone(), value.clone())),
+                    match database.get::<serde_cbor::Value>(required).ok().flatten() {
+                        Some(value) => ready.push((required.clone(), value)),
                         None => unfilled.push(required),
                     }
                 }
@@ -287,8 +287,8 @@ impl TelemetrySubscription {
                 if unfilled.is_empty() {
                     for optional in optional_fields.iter() {
                         tracing::trace!(?optional, "looking for optional.");
-                        if let Some(value) = database.get(optional) {
-                            ready.push((optional.clone(), value.clone()))
+                        if let Some(value) = database.get::<serde_cbor::Value>(optional).ok().flatten() {
+                            ready.push((optional.clone(), value))
                         }
                     }
                 }
@@ -436,11 +436,12 @@ impl Clearinghouse {
     ) -> GraphResult<bool> {
         match data {
             Some(d) => {
-                let updated_fields = d.keys().cloned().collect::<HashSet<_>>();
+                let updated_fields = d.dictionary().keys().cloned().collect::<HashSet<_>>();
                 let interested =
-                    Self::find_interested_subscriptions(subscriptions, database.keys().collect(), updated_fields);
+                    Self::find_interested_subscriptions(subscriptions, database.dictionary().keys().collect(), updated_fields);
 
-                database.extend(d);
+                database.merge(d);
+                // database.extend(d);
                 Self::push_to_subscribers(database, interested).await?;
                 Ok(true)
             }
@@ -545,7 +546,7 @@ impl Clearinghouse {
 
                     Some(name) => match subscriptions.iter().find(|s| s.name() == name.as_str()) {
                         Some(sub) => {
-                            let (db, missing) = sub.trim_to_subscription(&database);
+                            let (db, missing) = sub.trim_to_subscription(&database)?;
 
                             tracing::info!(
                                 requested_subscription=%name,
@@ -752,16 +753,16 @@ mod tests {
         ];
         static ref DB_ROWS: Vec<TelemetryData> = vec![
             TelemetryData::from_data(
-                maplit::hashmap! {"pos".to_string() => "1".to_string(), "cat".to_string() => "Stella".to_string(), "extra".to_string() => "Ripley".to_string(),}
+                maplit::btreemap! {"pos".to_string() => Value::Integer(1), "cat".to_string() => Value::Text("Stella".to_string()), "extra".to_string() => Value::Text("Ripley".to_string()),}
             ),
             TelemetryData::from_data(
-                maplit::hashmap! {"value".to_string() => "3.14159".to_string(), "cat".to_string() => "Otis".to_string(), "extra".to_string() => "Ripley".to_string(),}
+                maplit::btreemap! {"value".to_string() => Value::Float(3.14159), "cat".to_string() => Value::Text("Otis".to_string()), "extra".to_string() => Value::Text("Ripley".to_string()),}
             ),
             TelemetryData::from_data(
-                maplit::hashmap! {"pos".to_string() => "3".to_string(), "cat".to_string() => "Neo".to_string(), "extra".to_string() => "Ripley".to_string(),}
+                maplit::btreemap! {"pos".to_string() => Value::Integer(3), "cat".to_string() => Value::Text("Neo".to_string()), "extra".to_string() => Value::Text("Ripley".to_string()),}
             ),
             TelemetryData::from_data(
-                maplit::hashmap! {"pos".to_string() => "4".to_string(), "value".to_string() => "2.71828".to_string(), "cat".to_string() => "Apollo".to_string(), "extra".to_string() => "Ripley".to_string(),}
+                maplit::btreemap! {"pos".to_string() => Value::Integer(4), "value".to_string() => Value::Float(2.71828), "cat".to_string() => Value::Text("Apollo".to_string()), "extra".to_string() => Value::Text("Ripley".to_string()),}
             ),
         ];
         static ref EXPECTED: HashMap<String, Vec<Option<TelemetryData>>> = maplit::hashmap! {
@@ -772,16 +773,16 @@ mod tests {
                 None,
             ],
             SUBSCRIPTIONS[1].name().to_string() => vec![
-                Some(TelemetryData::from_data(maplit::hashmap! {"pos".to_string() => "1".to_string(), "cat".to_string() => "Stella".to_string(), "extra".to_string() => "Ripley".to_string(),})),
+                Some(TelemetryData::from_data(maplit::btreemap! {"pos".to_string() => Value::Integer(1), "cat".to_string() => Value::Text("Stella".to_string()), "extra".to_string() => Value::Text("Ripley".to_string()),})),
                 None,
-                Some(TelemetryData::from_data(maplit::hashmap! {"pos".to_string() => "3".to_string(), "cat".to_string() => "Neo".to_string(), "extra".to_string() => "Ripley".to_string(),})),
-                Some(TelemetryData::from_data(maplit::hashmap! {"pos".to_string() => "4".to_string(), "cat".to_string() => "Apollo".to_string(), "extra".to_string() => "Ripley".to_string(),})),
+                Some(TelemetryData::from_data(maplit::btreemap! {"pos".to_string() => Value::Integer(3), "cat".to_string() => Value::Text("Neo".to_string()), "extra".to_string() => Value::Text("Ripley".to_string()),})),
+                Some(TelemetryData::from_data(maplit::btreemap! {"pos".to_string() => Value::Integer(4), "cat".to_string() => Value::Text("Apollo".to_string()), "extra".to_string() => Value::Text("Ripley".to_string()),})),
             ],
             SUBSCRIPTIONS[2].name().to_string() => vec![
                 None,
                 None,
                 None,
-                Some(TelemetryData::from_data(maplit::hashmap! {"pos".to_string() => "4".to_string(), "value".to_string() => "2.71828".to_string(), "cat".to_string() => "Apollo".to_string()})),
+                Some(TelemetryData::from_data(maplit::btreemap! {"pos".to_string() => Value::Integer(4), "value".to_string() => Value::Float(2.71828), "cat".to_string() => Value::Text("Apollo".to_string()),})),
             ],
         };
     }
@@ -824,7 +825,7 @@ mod tests {
         let _main_span_guard = main_span.enter();
 
         block_on(async move {
-            let data = TelemetryData::from_data(maplit::hashmap! { "aaa".to_string() => "17".to_string() });
+            let data = TelemetryData::from_data(maplit::btreemap! { "aaa".to_string() => Value::Integer(17) });
             let mut tick = stage::Tick::new("tick", Duration::from_nanos(0), Duration::from_millis(5), data);
             let tx_tick_api = tick.tx_api();
             let mut clearinghouse = Clearinghouse::new("test-clearinghouse");
@@ -897,7 +898,7 @@ mod tests {
         let _main_span_guard = main_span.enter();
 
         block_on(async move {
-            let data = TelemetryData::from_data(maplit::hashmap! { "dr".to_string() => "17".to_string() });
+            let data = TelemetryData::from_data(maplit::btreemap! { "dr".to_string() => Value::Integer(17) });
             let mut tick = stage::Tick::new("tick", Duration::from_nanos(0), Duration::from_millis(5), data);
             let tx_tick_api = tick.tx_api();
             let mut clearinghouse = Clearinghouse::new("test-clearinghouse");
@@ -1073,13 +1074,13 @@ mod tests {
                 None, //Some(HashMap::default()),
             ],
             SUBSCRIPTIONS[1].name().to_string() => vec![
-                Some(TelemetryData::from_data(maplit::hashmap! {"pos".to_string() => "1".to_string(), "cat".to_string() => "Stella".to_string(), "extra".to_string() => "Ripley".to_string(),})),
-                Some(TelemetryData::from_data(maplit::hashmap! {"pos".to_string() => "3".to_string(), "cat".to_string() => "Neo".to_string(), "extra".to_string() => "Ripley".to_string(),})),
-                Some(TelemetryData::from_data(maplit::hashmap! {"pos".to_string() => "4".to_string(), "cat".to_string() => "Apollo".to_string(), "extra".to_string() => "Ripley".to_string(),})),
+                Some(TelemetryData::from_data(maplit::btreemap! {"pos".to_string() => Value::Integer(1), "cat".to_string() => Value::Text("Stella".to_string()), "extra".to_string() => Value::Text("Ripley".to_string()),})),
+                Some(TelemetryData::from_data(maplit::btreemap! {"pos".to_string() => Value::Integer(3), "cat".to_string() => Value::Text("Neo".to_string()), "extra".to_string() => Value::Text("Ripley".to_string()),})),
+                Some(TelemetryData::from_data(maplit::btreemap! {"pos".to_string() => Value::Integer(4), "cat".to_string() => Value::Text("Apollo".to_string()), "extra".to_string() => Value::Text("Ripley".to_string()),})),
                 None,
             ],
             SUBSCRIPTIONS[2].name().to_string() => vec![
-                Some(TelemetryData::from_data(maplit::hashmap! {"pos".to_string() => "4".to_string(), "value".to_string() => "2.71828".to_string(), "cat".to_string() => "Apollo".to_string()})),
+                Some(TelemetryData::from_data(maplit::btreemap! {"pos".to_string() => Value::Integer(4), "value".to_string() => Value::Float(2.71828), "cat".to_string() => Value::Text("Apollo".to_string()),})),
                 None,
                 None,
                 None,

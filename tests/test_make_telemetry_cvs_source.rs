@@ -46,7 +46,10 @@ async fn test_make_telemetry_cvs_source() -> Result<()> {
         (Data::default(), true),
         |(acc, mut is_first), rec: TelemetryData| {
             let dt_format = "%+";
-            let rec_last_failure = rec.get("task_last_failure").and_then(|r| {
+            let rec_last_failure = rec.
+                get::<String>("task_last_failure")
+                .unwrap()
+                .and_then(|r| {
                 if r.is_empty() {
                     None
                 } else {
@@ -60,20 +63,14 @@ async fn test_make_telemetry_cvs_source() -> Result<()> {
             let rec_is_deploying = if is_first {
                 tracing::info!("first record - set is_deploying.");
                 is_first = false;
-                let is_deploying = rec
-                    .get("cluster_is_deploying")
-                    .unwrap()
-                    .as_str()
-                    .parse::<bool>()
-                    .unwrap();
-                Some(is_deploying)
+                rec.get::<bool>("cluster_is_deploying").unwrap()
             } else {
                 tracing::info!("not first record - skip parsing is_deploying.");
                 None
             };
 
             let rec_latest_deployment =
-                DateTime::parse_from_str(rec.get("cluster_last_deployment").unwrap().as_str(), dt_format)
+                DateTime::parse_from_str(rec.get::<String>("cluster_last_deployment").unwrap().unwrap().as_str(), dt_format)
                     .unwrap()
                     .with_timezone(&Utc);
 

@@ -25,16 +25,16 @@ impl Into<TelemetryData> for HttpBinResponse {
     fn into(self) -> TelemetryData {
         let mut data = TelemetryData::default();
         if let Some(last_failure) = self.args.get("last_failure") {
-            data.insert("last_failure".to_string(), last_failure.to_owned());
+            let _ = data.insert::<String>("last_failure", last_failure.to_owned());
         }
 
         data.insert(
-            "is_deploying".to_string(),
+            "is_deploying",
             self.args.get("is_deploying").unwrap_or(&"false".to_string()).to_owned(),
         );
 
         data.insert(
-            "last_deployment".to_string(),
+            "last_deployment",
             self.args
                 .get("last_deployment")
                 .unwrap_or(&"1970-08-30 11:32:09".to_string())
@@ -90,7 +90,9 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
         (Data::default(), 0),
         |(acc, count), rec: TelemetryData| {
             let dt_format = "%+";
-            let rec_last_failure = rec.get("last_failure").and_then(|r| {
+            let rec_last_failure = rec.get::<String>("last_failure")
+                .unwrap()
+                .and_then(|r| {
                 if r.is_empty() {
                     None
                 } else {
@@ -101,10 +103,10 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
                 }
             });
 
-            let is_deploying = rec.get("is_deploying").unwrap().as_str().parse::<bool>().unwrap();
+            let is_deploying = rec.get::<bool>("is_deploying").unwrap().unwrap();
 
             let rec_latest_deployment =
-                DateTime::parse_from_str(rec.get("last_deployment").unwrap().as_str(), dt_format)
+                DateTime::parse_from_str(rec.get::<String>("last_deployment").unwrap().unwrap().as_str(), dt_format)
                     .unwrap()
                     .with_timezone(&Utc);
 

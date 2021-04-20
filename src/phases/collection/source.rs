@@ -8,6 +8,8 @@ use futures::future::FutureExt;
 use serde::de::DeserializeOwned;
 use std::time::Duration;
 use tokio::sync::mpsc;
+use serde_cbor::Value;
+use std::collections::BTreeMap;
 
 //todo api access should follow new convention rt via returned tuple
 pub type TelemetrySource = Box<dyn TelemetrySourceStage>;
@@ -40,9 +42,19 @@ where
 
         let mut reader = csv::Reader::from_path(path).map_err::<ProctorError, _>(|err| err.into())?;
 
-        for data in reader.deserialize::<TelemetryData>() {
-            let mut data = data.map_err::<ProctorError, _>(|err| err.into())?;
-            data.retain(|_, v| !v.is_empty());
+        for data in reader.deserialize::<BTreeMap<String, Value>>() {
+            let data = data.map_err::<ProctorError, _>(|err| err.into())?;
+            let mut data = TelemetryData::from_data(data);
+            data.retain(|_, v| {
+                match v {
+                    Value::Null => false,
+                    Value::Bytes(rep) => !rep.is_empty(),
+                    Value::Text(rep) => !rep.is_empty(),
+                    Value::Array(rep) => !rep.is_empty(),
+                    Value::Map(rep) => !rep.is_empty(),
+                    _ => true,
+                }
+            });
             records.push(data);
         }
         let source = stage::Sequence::new(name, records);

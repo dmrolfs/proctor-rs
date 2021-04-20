@@ -279,3 +279,7 @@ impl From<std::io::Error> for GraphError {
         GraphError::GraphStage(that.into())
     }
 }
+
+impl From<serde_cbor::Error> for GraphError {
+    fn from(that: serde_cbor::Error) -> Self { GraphError::GraphBoundary(that.into()) }
+}

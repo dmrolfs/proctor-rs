@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
+use serde_cbor::Value;
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TestFlinkEligibilityContext {
@@ -368,11 +369,17 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
     tracing::warn!("test_eligibility_before_context_baseline_A");
     let mut flow = TestFlow::new(r#"eligible(item, environment) if environment.location_code == 33;"#).await?;
     tracing::warn!("test_eligibility_before_context_baseline_B");
-    let data = TelemetryData(maplit::hashmap! {
-       "input_messages_per_sec".to_string() => std::f64::consts::PI.to_string(),
-        "timestamp".to_string() => format!("{}", Utc::now().format("%+")),
-        "inbox_lag".to_string() => 3.to_string(),
+    let data = TelemetryData::from_data(maplit::btreemap! {
+       "input_messages_per_sec".to_string() => Value::Float(std::f64::consts::PI),
+        "timestamp".to_string() => Value::Text(format!("{}", Utc::now().format("%+"))),
+        "inbox_lag".to_string() => Value::Integer(3),
+
     });
+    // let data = TelemetryData(maplit::hashmap! {
+    //    "input_messages_per_sec".to_string() => std::f64::consts::PI.to_string(),
+    //     "timestamp".to_string() => format!("{}", Utc::now().format("%+")),
+    //     "inbox_lag".to_string() => 3.to_string(),
+    // });
     tracing::warn!("test_eligibility_before_context_baseline_C");
 
     flow.push_telemetry(data.clone()).await?;
@@ -419,9 +426,9 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     let t1 = now - chrono::Duration::days(1);
     let t1_rep = format!("{}", t1.format("%+"));
     flow.push_context(
-        maplit::hashmap! {
-            "cluster.is_deploying".to_string() => false.to_string(),
-            "cluster.last_deployment".to_string() => t1_rep,
+        maplit::btreemap! {
+            "cluster.is_deploying".to_string() => Value::Bool(false),
+            "cluster.last_deployment".to_string() => Value::Text(t1_rep),
         }
         .into(),
     )
@@ -429,6 +436,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
 
     tracing::warn!("DMR: 03. Verify environment set...");
 
+    for _ in 0..2 {
     match flow.rx_eligibility_monitor.recv().await? {
         PolicyFilterEvent::ContextChanged(Some(ctx)) => {
             tracing::warn!("notified of eligibility context change: {:?}", ctx);
@@ -445,8 +453,9 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
             );
         }
         PolicyFilterEvent::ContextChanged(None) => panic!("did not expect to clear context"),
-        PolicyFilterEvent::ItemBlocked(item) => panic!("no item since so surprise one was blocked: {:?}", item),
+        PolicyFilterEvent::ItemBlocked(item) => tracing::warn!("DMR: Item blocked: {:?}", item),
     };
+    }
     tracing::warn!("DMR: 03. environment change verified.");
 
     // tokio::time::sleep(std::time::Duration::from_secs(3)).await;
@@ -457,7 +466,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     tracing::warn!("DMR: 04. Push Item...");
 
     // let ts = Utc::now().into();
-    flow.push_telemetry(maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_string()}.into())
+    flow.push_telemetry(maplit::btreemap! {"measurement".to_string() => Value::Float(std::f64::consts::PI)}.into())
         .await?;
 
     tracing::warn!("DMR: 05. Look for Item in sink...");
@@ -466,14 +475,17 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     let actual = flow.inspect_sink().await?;
     assert_eq!(
         actual,
-        vec![TelemetryData(
-            maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_string()}
+        vec![TelemetryData::from_data(
+            maplit::btreemap! {"measurement".to_string() => Value::Float(std::f64::consts::PI),}
+
+            // maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_string()}
         ),]
     );
 
     tracing::warn!("DMR: 06. Push another Item...");
 
-    flow.push_telemetry(maplit::hashmap! {"measurement".to_string() => std::f64::consts::TAU.to_string()}.into())
+    // flow.push_telemetry(maplit::hashmap! {"measurement".to_string() => std::f64::consts::TAU.to_string()}.into())
+    flow.push_telemetry(maplit::btreemap! {"measurement".to_string() => Value::Float(std::f64::consts::TAU)}.into())
         .await?;
 
     tracing::warn!("DMR: 07. Close flow...");
@@ -485,8 +497,10 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     assert_eq!(
         actual,
         vec![
-            TelemetryData(maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_string()}),
-            TelemetryData(maplit::hashmap! {"measurement".to_string() => std::f64::consts::TAU.to_string()}),
+            // TelemetryData(maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_string()}),
+            // TelemetryData(maplit::hashmap! {"measurement".to_string() => std::f64::consts::TAU.to_string()}),
+            TelemetryData::from_data(maplit::btreemap! {"measurement".to_string() => Value::Float(std::f64::consts::PI)}),
+            TelemetryData::from_data(maplit::btreemap! {"measurement".to_string() => Value::Float(std::f64::consts::TAU)}),
         ]
     );
     Ok(())

@@ -8,9 +8,10 @@ use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use proctor::telemetry::{get_subscriber, init_subscriber};
 use reqwest::Url;
 use serde::de;
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 use std::fmt::{self, Display};
 use std::time::Duration;
+use serde_cbor::Value;
 
 #[derive(Debug, Display, PartialEq)]
 pub enum CurrencyCode {
@@ -290,14 +291,14 @@ async fn main() -> anyhow::Result<()> {
 
     let to_metric_group = |base: HashMap<String, ExchangeRate>| {
         let (_, rate) = base.into_iter().next().unwrap();
-        let mut data = HashMap::new();
+        let mut data = BTreeMap::new();
         data.insert(
             format!(
                 "{}.to.{}",
                 CurrencyCode::label(&rate.from_currency.code),
                 CurrencyCode::label(&rate.to_currency.code)
             ),
-            rate.rate.to_string(),
+            Value::Float(rate.rate as f64),
         );
         // data.insert("currency".to_string(), ex.from_currency.name);
         // data.insert("value".to_string(), ex.rate.to_string());

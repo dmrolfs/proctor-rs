@@ -52,7 +52,7 @@ async fn main() -> Result<()> {
         "pos_stats",
         (0, 0),
         move |(count, sum), data| {
-            let delivered = data.keys().cloned().collect::<HashSet<_>>();
+            let delivered = data.dictionary().keys().cloned().collect::<HashSet<_>>();
             let allowed = &pos_stats_fields;
             let unexpected = delivered.difference(allowed).collect::<HashSet<_>>();
             if !unexpected.is_empty() {
@@ -60,10 +60,11 @@ async fn main() -> Result<()> {
                 panic!("fields fields beyond allowed: {:?}", unexpected);
             }
             let pos = data
-                .get(POS_FIELD)
+                .get::<usize>(POS_FIELD)
                 .unwrap()
-                .parse::<usize>()
-                .expect("failed to parse pos field");
+                .unwrap();
+                // .parse::<usize>()
+                // .expect("failed to parse pos field");
             (count + 1, sum + pos)
         },
     );
