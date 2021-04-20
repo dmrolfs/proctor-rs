@@ -281,5 +281,7 @@ impl From<std::io::Error> for GraphError {
 }
 
 impl From<serde_cbor::Error> for GraphError {
-    fn from(that: serde_cbor::Error) -> Self { GraphError::GraphBoundary(that.into()) }
+    fn from(that: serde_cbor::Error) -> Self {
+        GraphError::GraphBoundary(that.into())
+    }
 }

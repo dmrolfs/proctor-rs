@@ -30,7 +30,10 @@ impl Into<TelemetryData> for HttpBinResponse {
 
         data.insert(
             "is_deploying",
-            self.args.get("is_deploying").unwrap_or(&"false".to_string()).to_owned(),
+            self.args
+                .get("is_deploying")
+                .map(|rep| rep.parse::<bool>().unwrap_or(false))
+                .unwrap_or(false),
         );
 
         data.insert(
@@ -89,10 +92,9 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
         "sink",
         (Data::default(), 0),
         |(acc, count), rec: TelemetryData| {
+            tracing::info!(record=?rec, ?acc, ?count, "folding latest record into acc...");
             let dt_format = "%+";
-            let rec_last_failure = rec.get::<String>("last_failure")
-                .unwrap()
-                .and_then(|r| {
+            let rec_last_failure = rec.get::<String>("last_failure").unwrap().and_then(|r| {
                 if r.is_empty() {
                     None
                 } else {
@@ -102,13 +104,18 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
                     Some(lf)
                 }
             });
+            tracing::info!(?rec_last_failure, "parsed first record field.");
 
             let is_deploying = rec.get::<bool>("is_deploying").unwrap().unwrap();
+            tracing::info!(%is_deploying, "parsed second record field.");
 
-            let rec_latest_deployment =
-                DateTime::parse_from_str(rec.get::<String>("last_deployment").unwrap().unwrap().as_str(), dt_format)
-                    .unwrap()
-                    .with_timezone(&Utc);
+            let rec_latest_deployment = DateTime::parse_from_str(
+                rec.get::<String>("last_deployment").unwrap().unwrap().as_str(),
+                dt_format,
+            )
+            .unwrap()
+            .with_timezone(&Utc);
+            tracing::info!(?rec_latest_deployment, "parsed third record field.");
 
             let last_failure = match (acc.last_failure, rec_last_failure) {
                 (None, None) => None,

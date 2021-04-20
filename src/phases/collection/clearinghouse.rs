@@ -437,8 +437,11 @@ impl Clearinghouse {
         match data {
             Some(d) => {
                 let updated_fields = d.dictionary().keys().cloned().collect::<HashSet<_>>();
-                let interested =
-                    Self::find_interested_subscriptions(subscriptions, database.dictionary().keys().collect(), updated_fields);
+                let interested = Self::find_interested_subscriptions(
+                    subscriptions,
+                    database.dictionary().keys().collect(),
+                    updated_fields,
+                );
 
                 database.merge(d);
                 // database.extend(d);
@@ -724,12 +727,12 @@ mod tests {
     use crate::graph::stage::{self, Stage, WithApi};
     use crate::graph::{Connect, SinkShape, SourceShape};
     use lazy_static::lazy_static;
+    use serde_cbor::Value;
     use std::collections::HashMap;
     use std::time::Duration;
     use tokio::sync::oneshot;
     use tokio_test::block_on;
     use tracing::Instrument;
-    use serde_cbor::Value;
 
     lazy_static! {
         static ref SUBSCRIPTIONS: Vec<TelemetrySubscription> = vec![

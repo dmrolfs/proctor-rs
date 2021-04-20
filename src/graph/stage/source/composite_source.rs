@@ -21,11 +21,12 @@ use std::fmt::Debug;
 /// use futures::future::FutureExt;
 /// use reqwest::header::HeaderMap;
 /// use serde::Deserialize;
-/// use std::collections::HashMap;
+/// use std::collections::{BTreeMap, HashMap};
 /// use std::sync::Arc;
 /// use std::time::Duration;
 /// use tokio::sync::Mutex;
 /// use proctor::telemetry::{get_subscriber, init_subscriber};
+/// use serde_cbor::Value;
 ///
 /// #[derive(Debug, Clone, Deserialize)]
 /// pub struct HttpBinResponse {
@@ -63,9 +64,9 @@ use std::fmt::Debug;
 ///             let mine = cc.clone();
 ///             let mut cnt = mine.lock().await;
 ///             *cnt += 1;
-///             let mut data = HashMap::new();
+///             let mut data = BTreeMap::new();
 ///             for (k, v) in &r.args {
-///                 data.insert(format!("args.{}.{}", cnt, k), v.to_string());
+///                 data.insert(format!("args.{}.{}", cnt, k), Value::Text(v.to_owned()));
 ///             }
 ///             TelemetryData::from_data(data)
 ///         };
@@ -90,7 +91,14 @@ use std::fmt::Debug;
 ///     };
 ///
 ///     let mut generator = stage::TriggeredGenerator::new("generator", gen);
-///     let mut distill = stage::Map::<_, TelemetryData,_>::new("distill", |mc| mc.0);
+///     let mut distill = stage::Map::<_, TelemetryData,_>::new(
+///         "distill",
+///         |mc| {
+///             mc.dictionary()
+///               .into_iter()
+///               .map(|(k, v)| (k, TelemetryData::from_cbor::<String>(v).unwrap()))
+///               .collect()
+///         });
 ///
 ///     // let generator_outlet = generator.outlet().clone();
 ///     let composite_outlet = distill.outlet().clone();
@@ -104,7 +112,7 @@ use std::fmt::Debug;
 ///     cg.push_back(Box::new(distill)).await;
 ///     let mut composite = stage::CompositeSource::new("composite_source", cg, composite_outlet).await;
 ///
-///     let mut fold = stage::Fold::<_, HashMap<String, String>, _>::new(
+///     let mut fold = stage::Fold::<_, BTreeMap<String, String>, _>::new(
 ///         "gather latest",
 ///         HashMap::new(),
 ///         |mut acc: HashMap<String, String>, mg| {

@@ -17,10 +17,11 @@
 /// use futures::future::FutureExt;
 /// use reqwest::header::HeaderMap;
 /// use serde::Deserialize;
-/// use std::collections::HashMap;
+/// use std::collections::{BTreeMap, HashMap};
 /// use std::sync::Arc;
 /// use std::time::Duration;
 /// use tokio::sync::Mutex;
+/// use serde_cbor::Value;
 ///
 /// #[derive(Debug, Clone, Deserialize)]
 /// pub struct HttpBinResponse {
@@ -58,28 +59,28 @@
 ///             let url = "https://httpbin.org/get?f=foo&b=bar";
 ///             let mut default_headers = HeaderMap::new();
 ///             default_headers.insert("x-api-key", "fe37af1e07mshd1763d86e5f2a8cp1714cfjsnb6145a35e7ca".parse().unwrap());
-///             let client = reqwest::Client::builder().default_headers(default_headers).build()?;
+///             let client = reqwest::Client::builder().default_headers(default_headers).build().unwrap();
 ///             let resp = client
 ///                 .get(url)
 ///                 .send()
-///                 .await?
+///                 .await
+///                 .unwrap()
 ///                 .json::<HttpBinResponse>()
 ///                 .await
-///                 .map_err::<GraphError, _>(|err| err.into())?;
+///                 .map_err::<GraphError, _>(|err| err.into())
+///                 .unwrap();
 ///
 ///             let mine = cc.clone();
 ///             let mut my_count = mine.lock().await;
 ///             *my_count += 1;
 ///
-///             let mut data = HashMap::new();
-///             for (k, v) in &resp.args {
-///                 data.insert(format!("args.{}.{}", my_count, k), v.to_string());
+///             let mut data = TelemetryData::new();
+///             for (k, v) in resp.args {
+///                 data.insert(format!("args.{}.{}", my_count, k).as_str(), v);
 ///             }
 ///
-///             let result: GraphResult<TelemetryData> = Ok(TelemetryData::from_data(data));
-///             result
+///             data
 ///         }
-///         .map(|r| r.unwrap())
 ///     };
 ///
 ///     let mut httpbin_collection = stage::TriggeredGenerator::new("httpbin_collection", gen);
@@ -100,12 +101,11 @@
 ///
 ///     match rx_gather.await.expect("fold didn't release anything.") {
 ///         Some(resp) => {
-///             let mut exp = HashMap::new();
+///             let mut exp = TelemetryData::new();
 ///             for i in 1..=3 {
-///                 exp.insert(format!("args.{}.f", i), "foo".to_string());
-///                 exp.insert(format!("args.{}.b", i), "bar".to_string());
+///                 exp.insert(format!("args.{}.f", i).as_str(), "foo".to_string());
+///                 exp.insert(format!("args.{}.b", i).as_str(), "bar".to_string());
 ///             }
-///             let exp = TelemetryData::from_data(exp);
 ///             tracing::warn!(actual=?resp,expected=?exp, "validating results");
 ///             assert_eq!(resp, exp);
 ///         }

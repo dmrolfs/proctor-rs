@@ -1,10 +1,10 @@
+use crate::error::GraphError;
 use crate::graph::GraphResult;
 use oso::PolarClass;
-use serde::{Serialize, Deserialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde_cbor::Value;
 use std::collections::BTreeMap;
 use std::iter::{FromIterator, IntoIterator};
-use serde_cbor::{Value};
-use crate::error::GraphError;
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TelemetryData(Value);
@@ -16,6 +16,10 @@ impl Default for TelemetryData {
 }
 
 impl TelemetryData {
+    pub fn from_cbor<T: DeserializeOwned>(value: Value) -> GraphResult<T> {
+        serde_cbor::value::from_value(value).map_err(|err| err.into())
+    }
+
     pub fn new() -> Self {
         Self::default()
     }
@@ -55,7 +59,6 @@ impl TelemetryData {
         // c.try_into().map_err(|err| err.into())
     }
 
-
     pub fn merge(&mut self, that: Self) {
         let mut my_data: BTreeMap<Value, Value> = serde_cbor::value::from_value(self.0.clone()).unwrap();
         let that_data: BTreeMap<Value, Value> = serde_cbor::value::from_value(that.0.clone()).unwrap();
@@ -79,56 +82,57 @@ impl TelemetryData {
         // let dict: BTreeMap<String, Value> = serde_cbor::from_slice(&self.0)?;
         // Ok(dict)
 
-       // let value = serde_cbor::from_slice::<serde_cbor::Value>(&self.0)?;
-       // if let serde_cbor::Value::Map(map) = value {
-       //     let keys = map.into_iter()
-       //         .map(|(k,v)| {
-       //             let rep = serde_cbor::value::from_value::<String>(k)?;
-       //             (rep, v)
-       //         })
-       //         .into_keys()
-       //     Ok(keys)
-       // } else {
-       //     GraphError::GraphSerde(format!("{:?} type doesn't support keys", value))
-       // }
-       // let foo: serde_cbor::Value = serde_cbor::from_slice(self.0).unwrap();
-       // foo.
-       // let table = self.0.clone().collect().unwrap();
-       // table.keys()
-   }
+        // let value = serde_cbor::from_slice::<serde_cbor::Value>(&self.0)?;
+        // if let serde_cbor::Value::Map(map) = value {
+        //     let keys = map.into_iter()
+        //         .map(|(k,v)| {
+        //             let rep = serde_cbor::value::from_value::<String>(k)?;
+        //             (rep, v)
+        //         })
+        //         .into_keys()
+        //     Ok(keys)
+        // } else {
+        //     GraphError::GraphSerde(format!("{:?} type doesn't support keys", value))
+        // }
+        // let foo: serde_cbor::Value = serde_cbor::from_slice(self.0).unwrap();
+        // foo.
+        // let table = self.0.clone().collect().unwrap();
+        // table.keys()
+    }
 
     pub fn is_empty(&self) -> bool {
         if let Value::Map(my_data) = &self.0 {
             my_data.is_empty()
         } else {
-            panic!("{:?}", GraphError::GraphPrecondition(format!("telemetry data not a Map but a {:?}", self.0)));
+            panic!(
+                "{:?}",
+                GraphError::GraphPrecondition(format!("telemetry data not a Map but a {:?}", self.0))
+            );
         }
     }
 
     /// Returns a reference to the value corresponding to the key.
-///
-/// # Examples
-///
-/// Basic usage:
-///
-/// ```
-/// use proctor::elements::TelemetryData;
-/// use serde_cbor::Value;
-///
-/// let mut telemetry = TelemetryData::new();
-/// telemetry.insert("a", Value::Integer(1));
-/// assert_eq!(telemetry.get::<i32>("a"), Ok(Some(1)));
-/// assert_eq!(telemetry.get::<i32>("b"), Ok(None));
-/// ```
+    ///
+    /// # Examples
+    ///
+    /// Basic usage:
+    ///
+    /// ```
+    /// use proctor::elements::TelemetryData;
+    /// use serde_cbor::Value;
+    ///
+    /// let mut telemetry = TelemetryData::new();
+    /// telemetry.insert("a", Value::Integer(1));
+    /// assert_eq!(telemetry.get::<i32>("a").unwrap(), Some(1));
+    /// assert_eq!(telemetry.get::<i32>("b").unwrap(), None);
+    /// ```
     pub fn get<V: DeserializeOwned>(&self, key: &str) -> GraphResult<Option<V>> {
         let cbor_key = serde_cbor::value::to_value(key)?;
         let my_data: BTreeMap<Value, Value> = serde_cbor::value::from_value(self.0.clone())?;
         match my_data.get(&cbor_key) {
-            Some(v) => {
-                serde_cbor::value::from_value::<V>(v.clone())
-                    .map_err(|err| err.into())
-                .map(|r| Some(r))
-            },
+            Some(v) => serde_cbor::value::from_value::<V>(v.clone())
+                .map_err(|err| err.into())
+                .map(|r| Some(r)),
             None => Ok(None),
         }
     }
@@ -164,42 +168,36 @@ impl TelemetryData {
         self.0 = Value::Map(my_data);
 
         match replaced {
-            Some(replaced) => {
-                serde_cbor::value::from_value::<V>(replaced)
-                    .map(|r| Some(r))
-                    .unwrap()
-            },
+            Some(replaced) => serde_cbor::value::from_value::<V>(replaced).map(|r| Some(r)).unwrap(),
             None => None,
         }
     }
 
     /// Returns `true` if the telemetry contains a value for the specified key.
-///
-/// The key may be anything that can implements `Into<String>`.
-///
-/// # Examples
-///
-/// Basic usage:
-///
-/// ```
-/// use proctor::elements::TelemetryData;
-///
-/// let mut telemetry = TelemetryData::new();
-/// telemetry.insert("foo", 17);
-/// assert_eq!(map.contains_key("foo"), true);
-/// assert_eq!(map.contains_key("bar"), false);
-/// ```
+    ///
+    /// The key may be anything that can implements `Into<String>`.
+    ///
+    /// # Examples
+    ///
+    /// Basic usage:
+    ///
+    /// ```
+    /// use proctor::elements::TelemetryData;
+    ///
+    /// let mut telemetry = TelemetryData::new();
+    /// telemetry.insert("foo", 17);
+    /// assert_eq!(telemetry.contains_key("foo"), true);
+    /// assert_eq!(telemetry.contains_key("bar"), false);
+    /// ```
     pub fn remove<V: DeserializeOwned>(&mut self, key: &str) -> GraphResult<Option<V>> {
         let mut my_data: BTreeMap<Value, Value> = serde_cbor::value::from_value(self.0.clone())?;
         let cbor_key = serde_cbor::value::to_value(key)?;
         let removed_value = my_data.remove(&cbor_key);
         self.0 = Value::Map(my_data);
         match removed_value {
-            Some(removed) => {
-                serde_cbor::value::from_value::<V>(removed)
-                    .map(|r| Some(r))
-                    .map_err(|err| err.into())
-            },
+            Some(removed) => serde_cbor::value::from_value::<V>(removed)
+                .map(|r| Some(r))
+                .map_err(|err| err.into()),
             None => Ok(None),
         }
     }
@@ -216,40 +214,38 @@ impl TelemetryData {
     }
 
     /// Retains only the elements specified by the predicate.
-        ///
-        /// In other words, remove all pairs `(k, v)` such that `f(&k, &mut v)` returns `false`.
-        ///
-        /// # Examples
-        ///
-        /// ```
-        /// use proctor::elements::TelemetryData;
-        /// use serde_cbor::Value;
-        ///
-        /// let mut telemetry: TelemetryData = (0..8).map(|x| (x.to_string()), Value::Integer(x*10)).collect();
-        /// // Keep only the elements with even-numbered keys.
-        /// map.retain(|&k, _| i32::from_str(k.as_str()).unwrap() % 2 == 0);
-        /// assert!(map.dictionary().into_iter().eq(vec![
-        ///     (0.to_string(), Value::Integer(0)),
-        ///     (2.to_string(), Value::Integer(20)),
-        ///     (4.to_string(), Value::Integer(40)),
-        ///     (6.to_string(), Value::Integer(60))
-        /// ]));
-        /// ```
+    ///
+    /// In other words, remove all pairs `(k, v)` such that `f(&k, &mut v)` returns `false`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use proctor::elements::TelemetryData;
+    /// use serde_cbor::Value;
+    ///
+    /// let mut telemetry: TelemetryData = (0..8).map(|x| (x.to_string(), Value::Integer(x*10))).collect();
+    /// // Keep only the elements with even-numbered keys.
+    /// telemetry.retain(|key, _| {
+    ///     let key = TelemetryData::from_cbor::<String>(key.clone()).unwrap().parse::<i32>().unwrap();
+    ///     key % 2 == 0
+    /// });
+    /// assert!(telemetry.dictionary().into_iter().eq(vec![
+    ///     (0.to_string(), Value::Integer(0)),
+    ///     (2.to_string(), Value::Integer(20)),
+    ///     (4.to_string(), Value::Integer(40)),
+    ///     (6.to_string(), Value::Integer(60))
+    /// ]));
+    /// ```
     pub fn retain<F>(&mut self, mut f: F)
-        where
-            F: FnMut(&Value, &Value) -> bool,
+    where
+        F: FnMut(&Value, &Value) -> bool,
     {
         let my_data: BTreeMap<Value, Value> = serde_cbor::value::from_value(self.0.clone()).unwrap();
-        let retained = my_data
-            .into_iter()
-            .filter(|(k, v)| f(k, v))
-            .collect();
+        let retained = my_data.into_iter().filter(|(k, v)| f(k, v)).collect();
         self.0 = Value::Map(retained);
 
         // self.drain_filter(|k, v| !f(k, v));
     }
-
-
 }
 
 // impl config::Source for TelemetryData {
@@ -297,8 +293,6 @@ impl std::ops::Add for TelemetryData {
         let that_data: BTreeMap<Value, Value> = serde_cbor::value::from_value(rhs.0).unwrap();
         my_data.extend(that_data);
         Self(Value::Map(my_data))
-
-
 
         // let mut lhs = self.dictionary();
         // let rhs = self.dictionary();
@@ -682,20 +676,19 @@ mod tests {
     use super::*;
     use chrono::{DateTime, Utc};
     use serde::Deserialize;
-    use std::str::FromStr;
 
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
     struct Data {
         #[serde(default)]
         #[serde(
-            rename = "task_last_failure",
+            rename = "task.last_failure",
             serialize_with = "crate::serde::serialize_optional_datetime",
             deserialize_with = "crate::serde::deserialize_optional_datetime"
         )]
         pub last_failure: Option<DateTime<Utc>>,
-        #[serde(rename = "cluster_is_deploying")]
+        #[serde(rename = "cluster.is_deploying")]
         pub is_deploying: bool,
-        #[serde(rename = "cluster_last_deployment", with = "crate::serde")]
+        #[serde(rename = "cluster.last_deployment", with = "crate::serde")]
         pub last_deployment: DateTime<Utc>,
     }
 
@@ -703,12 +696,12 @@ mod tests {
     fn test_telemetry_data_try_into_deserializer() -> anyhow::Result<()> {
         lazy_static::initialize(&crate::telemetry::TEST_TRACING);
         let data = TelemetryData::from_data(maplit::btreemap! {
-            "task_last_failure".to_string() => Value::Text("2014-11-28T12:45:59.324310806Z".to_string()),
-            "cluster_is_deploying".to_string() => Value::Bool(false),
-            "cluster_last_deployment".to_string() => Value::Text("2014-11-28T10:11:37.246310806Z".to_string()),
+            "task.last_failure".to_string() => Value::Text("2014-11-28T12:45:59.324310806Z".to_string()),
+            "cluster.is_deploying".to_string() => Value::Bool(false),
+            "cluster.last_deployment".to_string() => Value::Text("2014-11-28T10:11:37.246310806Z".to_string()),
         });
 
-        let foo = data.get::<bool>("cluster_is_deploying")?;
+        let foo = data.get::<bool>("cluster.is_deploying")?;
         assert_eq!(foo, Some(false));
 
         let expected = Data {
@@ -721,6 +714,22 @@ mod tests {
         tracing::info!("actual: {:?}", actual);
         assert_eq!(actual?, expected);
         Ok(())
+    }
+
+    #[test]
+    fn test_telemetry_retain() {
+        let mut telemetry: TelemetryData = (0..8).map(|x| (x.to_string(), Value::Integer(x*10))).collect();
+        // Keep only the elements with even-numbered keys.
+        telemetry.retain(|k, _| {
+            let key = TelemetryData::from_cbor::<String>(k.clone()).unwrap().parse::<i32>().unwrap();
+            key % 2 == 0
+        });
+        assert!(telemetry.dictionary().into_iter().eq(vec![
+            (0.to_string(), Value::Integer(0)),
+            (2.to_string(), Value::Integer(20)),
+            (4.to_string(), Value::Integer(40)),
+            (6.to_string(), Value::Integer(60))
+        ]));
     }
 
     // #[test]

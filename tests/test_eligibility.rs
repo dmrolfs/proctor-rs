@@ -12,10 +12,10 @@ use proctor::phases::collection::TelemetrySubscription;
 use proctor::phases::eligibility::{self, Eligibility};
 use proctor::{ProctorContext, ProctorResult};
 use serde::{Deserialize, Serialize};
+use serde_cbor::Value;
 use std::collections::{HashMap, HashSet};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
-use serde_cbor::Value;
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TestFlinkEligibilityContext {
@@ -368,8 +368,9 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
     tracing::warn!("test_eligibility_before_context_baseline_A");
     let mut flow = TestFlow::new(
         TelemetrySubscription::new("all_data"),
-        r#"eligible(item, environment) if environment.location_code == 33;"#
-    ).await?;
+        r#"eligible(item, environment) if environment.location_code == 33;"#,
+    )
+    .await?;
     tracing::warn!("test_eligibility_before_context_baseline_B");
     let data = TelemetryData::from_data(maplit::btreemap! {
        "input_messages_per_sec".to_string() => Value::Float(std::f64::consts::PI),
@@ -416,10 +417,10 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     let _ = main_span.enter();
 
     let mut flow = TestFlow::new(
-        TelemetrySubscription::new("measurements")
-            .with_required_fields(maplit::hashset! {"measurement".to_string()}),
-        r#"eligible(_, context) if context.cluster_status.is_deploying == false;"#
-    ).await?;
+        TelemetrySubscription::new("measurements").with_required_fields(maplit::hashset! {"measurement".to_string()}),
+        r#"eligible(_, context) if context.cluster_status.is_deploying == false;"#,
+    )
+    .await?;
 
     tracing::warn!("DMR: 01. Make sure empty env...");
 
@@ -480,9 +481,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     assert_eq!(
         actual,
         vec![TelemetryData::from_data(
-            maplit::btreemap! {"measurement".to_string() => Value::Float(std::f64::consts::PI),}
-
-            // maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_string()}
+            maplit::btreemap! {"measurement".to_string() => Value::Float(std::f64::consts::PI),} // maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_string()}
         ),]
     );
 
@@ -503,8 +502,12 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
         vec![
             // TelemetryData(maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_string()}),
             // TelemetryData(maplit::hashmap! {"measurement".to_string() => std::f64::consts::TAU.to_string()}),
-            TelemetryData::from_data(maplit::btreemap! {"measurement".to_string() => Value::Float(std::f64::consts::PI)}),
-            TelemetryData::from_data(maplit::btreemap! {"measurement".to_string() => Value::Float(std::f64::consts::TAU)}),
+            TelemetryData::from_data(
+                maplit::btreemap! {"measurement".to_string() => Value::Float(std::f64::consts::PI)}
+            ),
+            TelemetryData::from_data(
+                maplit::btreemap! {"measurement".to_string() => Value::Float(std::f64::consts::TAU)}
+            ),
         ]
     );
     Ok(())

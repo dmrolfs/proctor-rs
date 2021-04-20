@@ -8,10 +8,10 @@ use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use proctor::telemetry::{get_subscriber, init_subscriber};
 use reqwest::Url;
 use serde::de;
-use std::collections::{HashMap, BTreeMap};
+use serde_cbor::Value;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::{self, Display};
 use std::time::Duration;
-use serde_cbor::Value;
 
 #[derive(Debug, Display, PartialEq)]
 pub enum CurrencyCode {

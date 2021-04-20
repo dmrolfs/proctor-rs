@@ -2,9 +2,9 @@ use crate::ProctorContext;
 use chrono::{DateTime, Utc};
 use oso::PolarClass;
 use serde::{Deserialize, Serialize};
+use serde_cbor::Value;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use serde_cbor::Value;
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FlinkEligibilityContext {

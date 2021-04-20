@@ -25,8 +25,9 @@ use std::fmt::{self, Debug};
 /// use proctor::graph::{Connect, Graph, SinkShape, SourceShape, ThroughShape};
 /// use reqwest::header::HeaderMap;
 /// use serde::Deserialize;
-/// use std::collections::HashMap;
+/// use std::collections::{BTreeMap, HashMap};
 /// use std::time::Duration;
+/// use serde_cbor::Value;
 ///
 /// #[derive(Debug, Clone, Deserialize)]
 /// pub struct HttpBinResponse {
@@ -55,9 +56,9 @@ use std::fmt::{self, Debug};
 ///     let to_metric_catalog = move |r: HttpBinResponse| {
 ///         let cnt = &mut count;
 ///         *cnt += 1;
-///         let mut data = HashMap::new();
+///         let mut data = BTreeMap::new();
 ///         for (k, v) in &r.args {
-///             data.insert(format!("args.{}.{}", cnt, k), v.to_string());
+///             data.insert(format!("args.{}.{}", cnt, k), Value::Text(v.to_string()));
 ///         }
 ///         elements::TelemetryData::from_data(data)
 ///     };
@@ -90,10 +91,10 @@ use std::fmt::{self, Debug};
 ///
 ///     match rx_gather.await.expect("fold didn't release anything.") {
 ///         Some(resp) => {
-///             let mut exp = HashMap::new();
+///             let mut exp = BTreeMap::new();
 ///             for i in 1..=3 {
-///                 exp.insert(format!("args.{}.f", i), "foo".to_string());
-///                 exp.insert(format!("args.{}.b", i), "bar".to_string());
+///                 exp.insert(format!("args.{}.f", i), Value::Text("foo".to_string()));
+///                 exp.insert(format!("args.{}.b", i), Value::Text("bar".to_string()));
 ///             }
 ///             let exp = elements::TelemetryData::from_data(exp);
 ///             assert_eq!(resp, exp);

@@ -59,12 +59,9 @@ async fn main() -> Result<()> {
                 tracing::error!(?unexpected, "fields delivered beyond allowed.");
                 panic!("fields fields beyond allowed: {:?}", unexpected);
             }
-            let pos = data
-                .get::<usize>(POS_FIELD)
-                .unwrap()
-                .unwrap();
-                // .parse::<usize>()
-                // .expect("failed to parse pos field");
+            let pos = data.get::<usize>(POS_FIELD).unwrap().unwrap();
+            // .parse::<usize>()
+            // .expect("failed to parse pos field");
             (count + 1, sum + pos)
         },
     );
