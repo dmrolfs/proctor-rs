@@ -12,7 +12,7 @@
 /// use proctor::error::GraphError;
 /// use proctor::graph::stage::{self, tick, Stage};
 /// use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
-/// use proctor::telemetry::{get_subscriber, init_subscriber};
+/// use proctor::tracing::{get_subscriber, init_subscriber};
 /// use proctor::AppData;
 /// use futures::future::FutureExt;
 /// use reqwest::header::HeaderMap;

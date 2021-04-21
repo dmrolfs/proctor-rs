@@ -7,7 +7,7 @@ use std::time::Duration;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_complex_multi_stage_merge_5() -> Result<()> {
-    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
     // fixtures::init_tracing("test_complex_multi_stage_merge_5");
     let main_span = tracing::info_span!("test_complex_multi_stage_merge_5");
     let _main_span_guard = main_span.enter();

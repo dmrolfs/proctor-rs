@@ -459,7 +459,7 @@ mod tests {
 
     #[test]
     fn test_handle_item() -> anyhow::Result<()> {
-        lazy_static::initialize(&crate::telemetry::TEST_TRACING);
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("policy_filter::test_handle_item");
         let _main_span_guard = main_span.enter();
 

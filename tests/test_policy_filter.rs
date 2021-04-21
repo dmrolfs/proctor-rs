@@ -257,7 +257,7 @@ impl TestFlow {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_policy_filter_before_context_baseline() -> anyhow::Result<()> {
-    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
     let main_span = tracing::info_span!("test_policy_filter_before_context_baseline");
     let _ = main_span.enter();
 
@@ -279,7 +279,7 @@ async fn test_policy_filter_before_context_baseline() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_policy_filter_happy_context() -> anyhow::Result<()> {
-    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
     let main_span = tracing::info_span!("test_policy_filter_happy_context");
     let _ = main_span.enter();
 
@@ -335,7 +335,7 @@ async fn test_policy_filter_happy_context() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
-    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
     let main_span = tracing::info_span!("test_policy_filter_w_pass_and_blocks");
     let _ = main_span.enter();
 
@@ -396,7 +396,7 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
 // #[tokio::test(flavor="multi_thread", worker_threads = 4)]
 #[tokio::test]
 async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
-    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
     let main_span = tracing::info_span!("test_policy_w_custom_fields");
     let _ = main_span.enter();
 
@@ -434,7 +434,7 @@ async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_policy_w_item_n_env() -> anyhow::Result<()> {
-    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
     let main_span = tracing::info_span!("test_policy_w_item_n_env");
     let _ = main_span.enter();
 
@@ -472,7 +472,7 @@ lag_2(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
 
 #[tokio::test]
 async fn test_policy_w_method() -> anyhow::Result<()> {
-    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
     let main_span = tracing::info_span!("test_policy_w_method");
     let _ = main_span.enter();
 
@@ -501,7 +501,7 @@ and item.input_messages_per_sec(item.inbox_lag) < 36;"#,
 
 #[tokio::test]
 async fn test_replace_policy() -> anyhow::Result<()> {
-    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
     let main_span = tracing::info_span!("test_replace_policy");
     let _ = main_span.enter();
 
@@ -546,7 +546,7 @@ async fn test_replace_policy() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_append_policy() -> anyhow::Result<()> {
-    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
     let main_span = tracing::info_span!("test_append_policy");
     let _ = main_span.enter();
 
@@ -590,7 +590,7 @@ async fn test_append_policy() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_reset_policy() -> anyhow::Result<()> {
-    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
     let main_span = tracing::info_span!("test_reset_policy");
     let _ = main_span.enter();
 

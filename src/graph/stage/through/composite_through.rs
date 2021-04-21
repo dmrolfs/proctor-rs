@@ -13,7 +13,7 @@ use std::fmt::Debug;
 /// use proctor::graph::stage::{self, Stage};
 /// use proctor::graph::{Connect, Graph, GraphResult};
 /// use proctor::graph::{SinkShape, SourceShape};
-/// use proctor::telemetry::{get_subscriber, init_subscriber};
+/// use proctor::tracing::{get_subscriber, init_subscriber};
 /// use futures::future;
 ///
 /// #[tokio::main(flavor = "multi_thread", worker_threads = 16)]

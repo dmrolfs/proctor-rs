@@ -141,7 +141,7 @@ mod tests {
 
     #[test]
     fn test_push_stop_api() {
-        lazy_static::initialize(&crate::telemetry::TEST_TRACING);
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_push_stop_api");
         let _ = main_span.enter();
 
@@ -178,7 +178,7 @@ mod tests {
 
     #[test]
     fn test_stop_push_api() {
-        lazy_static::initialize(&crate::telemetry::TEST_TRACING);
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_stop_push_api");
         let _ = main_span.enter();
 

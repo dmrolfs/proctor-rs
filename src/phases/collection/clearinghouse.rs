@@ -793,7 +793,7 @@ mod tests {
 
     #[test]
     fn test_create_with_subscriptions() -> anyhow::Result<()> {
-        lazy_static::initialize(&crate::telemetry::TEST_TRACING);
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_create_with_subscriptions");
         let _main_span_guard = main_span.enter();
 
@@ -824,7 +824,7 @@ mod tests {
 
     #[test]
     fn test_api_add_subscriptions() -> anyhow::Result<()> {
-        lazy_static::initialize(&crate::telemetry::TEST_TRACING);
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_api_add_subscriptions");
         let _main_span_guard = main_span.enter();
 
@@ -897,7 +897,7 @@ mod tests {
 
     #[test]
     fn test_api_remove_subscriptions() -> anyhow::Result<()> {
-        lazy_static::initialize(&crate::telemetry::TEST_TRACING);
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_api_remove_subscriptions");
         let _main_span_guard = main_span.enter();
 
@@ -958,7 +958,7 @@ mod tests {
 
     #[test]
     fn test_find_interested_subscriptions() {
-        lazy_static::initialize(&crate::telemetry::TEST_TRACING);
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_find_interested_subscriptions");
         let _main_span_guard = main_span.enter();
 
@@ -1028,7 +1028,7 @@ mod tests {
 
     #[test]
     fn test_fulfill_subscription() {
-        lazy_static::initialize(&crate::telemetry::TEST_TRACING);
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_fulfill_subscription");
         let _main_span_guard = main_span.enter();
 
@@ -1066,7 +1066,7 @@ mod tests {
 
     #[test]
     fn test_push_to_subscribers() {
-        lazy_static::initialize(&crate::telemetry::TEST_TRACING);
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_push_to_subscribers");
         let _main_span_guard = main_span.enter();
 

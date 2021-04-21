@@ -7,7 +7,7 @@ use proctor::graph::{Connect, Graph};
 use proctor::phases::collection;
 use proctor::phases::collection::TelemetrySubscription;
 use proctor::settings::SourceSetting;
-use proctor::telemetry::{get_subscriber, init_subscriber};
+use proctor::tracing::{get_subscriber, init_subscriber};
 use std::collections::HashSet;
 use std::path::PathBuf;
 

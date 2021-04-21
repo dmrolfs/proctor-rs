@@ -361,7 +361,7 @@ impl TestFlow {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
-    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
     let main_span = tracing::info_span!("test_eligibility_before_context_baseline");
     let _ = main_span.enter();
 
@@ -412,7 +412,7 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_eligibility_happy_context() -> anyhow::Result<()> {
-    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
     let main_span = tracing::info_span!("test_eligibility_happy_context");
     let _ = main_span.enter();
 

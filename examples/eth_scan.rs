@@ -5,7 +5,7 @@ use anyhow::anyhow;
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use proctor::elements::{Collect, TelemetryData};
 use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
-use proctor::telemetry::{get_subscriber, init_subscriber};
+use proctor::tracing::{get_subscriber, init_subscriber};
 use reqwest::Url;
 use serde::de;
 use serde_cbor::Value;

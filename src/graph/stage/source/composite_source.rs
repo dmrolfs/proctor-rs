@@ -25,7 +25,7 @@ use std::fmt::Debug;
 /// use std::sync::Arc;
 /// use std::time::Duration;
 /// use tokio::sync::Mutex;
-/// use proctor::telemetry::{get_subscriber, init_subscriber};
+/// use proctor::tracing::{get_subscriber, init_subscriber};
 /// use serde_cbor::Value;
 ///
 /// #[derive(Debug, Clone, Deserialize)]

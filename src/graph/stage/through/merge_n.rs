@@ -19,7 +19,7 @@ pub enum MergeMsg {
 ///
 /// ```rust
 /// use rand::Rng;
-/// use proctor::telemetry::{get_subscriber, init_subscriber};
+/// use proctor::tracing::{get_subscriber, init_subscriber};
 /// use proctor::graph::stage::{WithApi, MergeN, MergeMsg, Stage};
 /// use std::fmt;
 /// use std::time::Duration;

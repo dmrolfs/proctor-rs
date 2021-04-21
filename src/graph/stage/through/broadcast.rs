@@ -12,7 +12,7 @@ use std::fmt::{self, Debug};
 /// ```rust
 /// use proctor::graph::stage::{self, tick, Stage};
 /// use proctor::graph::{Connect, Graph, SinkShape, SourceShape, UniformFanOutShape};
-/// use proctor::telemetry::{get_subscriber, init_subscriber};
+/// use proctor::tracing::{get_subscriber, init_subscriber};
 /// use serde::Deserialize;
 /// use std::collections::HashMap;
 /// use std::time::Duration;

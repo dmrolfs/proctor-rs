@@ -694,7 +694,7 @@ mod tests {
 
     #[test]
     fn test_telemetry_data_try_into_deserializer() -> anyhow::Result<()> {
-        lazy_static::initialize(&crate::telemetry::TEST_TRACING);
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
         let data = TelemetryData::from_data(maplit::btreemap! {
             "task.last_failure".to_string() => Value::Text("2014-11-28T12:45:59.324310806Z".to_string()),
             "cluster.is_deploying".to_string() => Value::Bool(false),

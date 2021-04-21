@@ -70,7 +70,7 @@ fn test_data_serde() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_make_from_telemetry_stage() -> Result<()> {
-    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
     // fixtures::init_tracing("test_make_from_telemetry_stage");
     let main_span = tracing::info_span!("test_make_from_telemetry_stage");
     let _main_span_guard = main_span.enter();

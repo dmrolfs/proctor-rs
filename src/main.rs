@@ -1,7 +1,7 @@
 use proctor::graph::stage::{self, Stage};
 use proctor::graph::Connect;
 use proctor::graph::{SinkShape, SourceShape};
-use proctor::telemetry::{get_subscriber, init_subscriber};
+use proctor::tracing::{get_subscriber, init_subscriber};
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tracing_futures::Instrument;

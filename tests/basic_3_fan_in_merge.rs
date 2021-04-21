@@ -5,7 +5,7 @@ use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape, UniformFanIn
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_basic_sequence_3_fan_in_merge() -> Result<()> {
-    lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
     // fixtures::init_tracing("test_basic_sequence_3_fan_in_merge");
     let main_span = tracing::info_span!("test_basic_sequence_3_fan_in_merge");
     let _main_span_guard = main_span.enter();
