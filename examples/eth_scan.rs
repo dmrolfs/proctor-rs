@@ -3,14 +3,14 @@ extern crate enum_display_derive;
 
 use anyhow::anyhow;
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
-use proctor::elements::{Collect, TelemetryData};
+use proctor::elements::{Collect, Telemetry, ToTelemetry};
 use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use proctor::tracing::{get_subscriber, init_subscriber};
 use reqwest::Url;
 use serde::de;
-use serde_cbor::Value;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{self, Display};
+use std::iter::FromIterator;
 use std::time::Duration;
 
 #[derive(Debug, Display, PartialEq)]
@@ -291,18 +291,18 @@ async fn main() -> anyhow::Result<()> {
 
     let to_metric_group = |base: HashMap<String, ExchangeRate>| {
         let (_, rate) = base.into_iter().next().unwrap();
-        let mut data = BTreeMap::new();
+        let mut data = HashMap::new();
         data.insert(
             format!(
                 "{}.to.{}",
                 CurrencyCode::label(&rate.from_currency.code),
                 CurrencyCode::label(&rate.to_currency.code)
             ),
-            Value::Float(rate.rate as f64),
+            rate.rate.to_telemetry(),
         );
         // data.insert("currency".to_string(), ex.from_currency.name);
         // data.insert("value".to_string(), ex.rate.to_string());
-        TelemetryData::from_data(data)
+        Telemetry::from_iter(data)
     };
 
     let collect = Collect::new("collect", url, default_headers, to_metric_group).await;

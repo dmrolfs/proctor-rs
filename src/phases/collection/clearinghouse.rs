@@ -1,4 +1,4 @@
-use crate::elements::TelemetryData;
+use crate::elements::Telemetry;
 use crate::graph::stage::Stage;
 use crate::graph::{stage, Connect, GraphResult, Inlet, Outlet, OutletsShape, Port, SinkShape, UniformFanOutShape};
 use crate::Ack;
@@ -16,7 +16,7 @@ pub type ClearinghouseApi = mpsc::UnboundedSender<ClearinghouseCmd>;
 pub enum ClearinghouseCmd {
     Subscribe {
         subscription: TelemetrySubscription,
-        receiver: Inlet<TelemetryData>,
+        receiver: Inlet<Telemetry>,
         tx: oneshot::Sender<Ack>,
     },
     Unsubscribe {
@@ -32,7 +32,7 @@ pub enum ClearinghouseCmd {
 impl ClearinghouseCmd {
     #[inline]
     pub fn subscribe(
-        subscription: TelemetrySubscription, receiver: Inlet<TelemetryData>,
+        subscription: TelemetrySubscription, receiver: Inlet<Telemetry>,
     ) -> (Self, oneshot::Receiver<Ack>) {
         let (tx, rx) = oneshot::channel();
         (
@@ -73,7 +73,7 @@ impl ClearinghouseCmd {
 #[derive(Debug)]
 pub enum ClearinghouseResp {
     Snapshot {
-        database: TelemetryData,
+        database: Telemetry,
         missing: HashSet<String>,
         subscriptions: Vec<TelemetrySubscription>,
     },
@@ -83,13 +83,13 @@ pub enum ClearinghouseResp {
 pub enum TelemetrySubscription {
     All {
         name: String,
-        outlet_to_subscription: Outlet<TelemetryData>,
+        outlet_to_subscription: Outlet<Telemetry>,
     },
     Explicit {
         name: String,
         required_fields: HashSet<String>,
         optional_fields: HashSet<String>,
-        outlet_to_subscription: Outlet<TelemetryData>,
+        outlet_to_subscription: Outlet<Telemetry>,
     },
     // Remainder {
     //     name: String,
@@ -186,7 +186,7 @@ impl TelemetrySubscription {
         }
     }
 
-    pub fn outlet_to_subscription(&self) -> Outlet<TelemetryData> {
+    pub fn outlet_to_subscription(&self) -> Outlet<Telemetry> {
         match self {
             Self::All {
                 name: _,
@@ -229,7 +229,7 @@ impl TelemetrySubscription {
         }
     }
 
-    pub fn trim_to_subscription(&self, database: &TelemetryData) -> GraphResult<(TelemetryData, HashSet<String>)> {
+    pub fn trim_to_subscription(&self, database: &Telemetry) -> GraphResult<(Telemetry, HashSet<String>)> {
         let mut db = database.clone();
 
         match self {
@@ -241,9 +241,9 @@ impl TelemetrySubscription {
                 outlet_to_subscription: _,
             } => {
                 let mut missing = HashSet::default();
-                for (key, _value) in database.dictionary().iter() {
+                for (key, _value) in database.iter() {
                     if !required_fields.contains(key) && !optional_fields.contains(key) {
-                        let _ignore: Option<serde_cbor::Value> = db.remove(key)?;
+                        let _ = db.remove(key);
                     }
                 }
 
@@ -265,7 +265,7 @@ impl TelemetrySubscription {
     }
 
     #[tracing::instrument(level = "info")]
-    pub fn fulfill(&self, database: &TelemetryData) -> Option<TelemetryData> {
+    pub fn fulfill(&self, database: &Telemetry) -> Option<Telemetry> {
         match self {
             Self::All { .. } => Some(database.clone()),
             Self::Explicit {
@@ -278,7 +278,7 @@ impl TelemetrySubscription {
                 let mut unfilled = Vec::new();
 
                 for required in required_fields.iter() {
-                    match database.get::<serde_cbor::Value>(required).ok().flatten() {
+                    match database.get(required) {
                         Some(value) => ready.push((required.clone(), value)),
                         None => unfilled.push(required),
                     }
@@ -287,7 +287,7 @@ impl TelemetrySubscription {
                 if unfilled.is_empty() {
                     for optional in optional_fields.iter() {
                         tracing::trace!(?optional, "looking for optional.");
-                        if let Some(value) = database.get::<serde_cbor::Value>(optional).ok().flatten() {
+                        if let Some(value) = database.get(optional) {
                             ready.push((optional.clone(), value))
                         }
                     }
@@ -303,13 +303,15 @@ impl TelemetrySubscription {
 
                     None
                 } else {
-                    Some(TelemetryData::from_iter(ready))
+                    // let foo: std::collections::HashMap<String, oso::PolarValue> = ready.into_iter().cloned().collect();
+                    let ready = ready.into_iter().map(|(k, v)| (k, v.clone()));
+                    Some(Telemetry::from_iter(ready))
                 }
             }
         }
     }
 
-    pub async fn connect_to_receiver(&self, receiver: &Inlet<TelemetryData>) {
+    pub async fn connect_to_receiver(&self, receiver: &Inlet<Telemetry>) {
         match self {
             Self::All {
                 name: _,
@@ -328,7 +330,7 @@ impl TelemetrySubscription {
         }
     }
 
-    pub async fn send(&self, telemetry: TelemetryData) -> GraphResult<()> {
+    pub async fn send(&self, telemetry: Telemetry) -> GraphResult<()> {
         match self {
             Self::All {
                 name: _,
@@ -402,8 +404,8 @@ impl PartialEq for TelemetrySubscription {
 pub struct Clearinghouse {
     name: String,
     subscriptions: Vec<TelemetrySubscription>,
-    database: TelemetryData,
-    inlet: Inlet<TelemetryData>,
+    database: Telemetry,
+    inlet: Inlet<Telemetry>,
     tx_api: ClearinghouseApi,
     rx_api: mpsc::UnboundedReceiver<ClearinghouseCmd>,
 }
@@ -417,14 +419,14 @@ impl Clearinghouse {
         Self {
             name,
             subscriptions: Vec::default(),
-            database: TelemetryData::default(),
+            database: Telemetry::default(),
             inlet,
             tx_api,
             rx_api,
         }
     }
 
-    pub async fn add_subscription(&mut self, subscription: TelemetrySubscription, receiver: &Inlet<TelemetryData>) {
+    pub async fn add_subscription(&mut self, subscription: TelemetrySubscription, receiver: &Inlet<Telemetry>) {
         tracing::info!(stage=%self.name, ?subscription, "adding clearinghouse subscription.");
         subscription.connect_to_receiver(receiver).await;
         self.subscriptions.push(subscription);
@@ -432,16 +434,13 @@ impl Clearinghouse {
 
     #[tracing::instrument(level = "trace", skip(subscriptions, database,))]
     async fn handle_telemetry_data(
-        data: Option<TelemetryData>, subscriptions: &Vec<TelemetrySubscription>, database: &mut TelemetryData,
+        data: Option<Telemetry>, subscriptions: &Vec<TelemetrySubscription>, database: &mut Telemetry,
     ) -> GraphResult<bool> {
         match data {
             Some(d) => {
-                let updated_fields = d.dictionary().keys().cloned().collect::<HashSet<_>>();
-                let interested = Self::find_interested_subscriptions(
-                    subscriptions,
-                    database.dictionary().keys().collect(),
-                    updated_fields,
-                );
+                let updated_fields = d.keys().cloned().collect::<HashSet<_>>();
+                let interested =
+                    Self::find_interested_subscriptions(subscriptions, database.keys().collect(), updated_fields);
 
                 database.merge(d);
                 // database.extend(d);
@@ -487,9 +486,7 @@ impl Clearinghouse {
     }
 
     #[tracing::instrument(level = "trace", skip(database, subscribers))]
-    async fn push_to_subscribers(
-        database: &TelemetryData, subscribers: Vec<&TelemetrySubscription>,
-    ) -> GraphResult<()> {
+    async fn push_to_subscribers(database: &Telemetry, subscribers: Vec<&TelemetrySubscription>) -> GraphResult<()> {
         if subscribers.is_empty() {
             tracing::info!("not publishing - no subscribers corresponding to field changes.");
             return Ok(());
@@ -527,13 +524,13 @@ impl Clearinghouse {
     }
 
     #[tracing::instrument(level = "trace")]
-    fn fulfill_subscription(subscription: &TelemetrySubscription, database: &TelemetryData) -> Option<TelemetryData> {
+    fn fulfill_subscription(subscription: &TelemetrySubscription, database: &Telemetry) -> Option<Telemetry> {
         subscription.fulfill(database)
     }
 
     #[tracing::instrument(level = "trace", skip(subscriptions, database))]
     async fn handle_command(
-        command: ClearinghouseCmd, subscriptions: &mut Vec<TelemetrySubscription>, database: &TelemetryData,
+        command: ClearinghouseCmd, subscriptions: &mut Vec<TelemetrySubscription>, database: &Telemetry,
     ) -> GraphResult<bool> {
         match command {
             ClearinghouseCmd::GetSnapshot { name, tx } => {
@@ -618,7 +615,7 @@ impl Debug for Clearinghouse {
 }
 
 impl SinkShape for Clearinghouse {
-    type In = TelemetryData;
+    type In = Telemetry;
     #[inline]
     fn inlet(&self) -> Inlet<Self::In> {
         self.inlet.clone()
@@ -626,7 +623,7 @@ impl SinkShape for Clearinghouse {
 }
 
 impl UniformFanOutShape for Clearinghouse {
-    type Out = TelemetryData;
+    type Out = Telemetry;
 
     #[inline]
     fn outlets(&self) -> OutletsShape<Self::Out> {
@@ -724,11 +721,13 @@ impl stage::WithApi for Clearinghouse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::elements::{TelemetryValue, ToTelemetry};
     use crate::graph::stage::{self, Stage, WithApi};
     use crate::graph::{Connect, SinkShape, SourceShape};
     use lazy_static::lazy_static;
-    use serde_cbor::Value;
+    use oso::{FromPolar, PolarClass, PolarValue, ToPolar};
     use std::collections::HashMap;
+    use std::iter::FromIterator;
     use std::time::Duration;
     use tokio::sync::oneshot;
     use tokio_test::block_on;
@@ -755,21 +754,21 @@ mod tests {
                 outlet_to_subscription: Outlet::new("all_outlet"),
             },
         ];
-        static ref DB_ROWS: Vec<TelemetryData> = vec![
-            TelemetryData::from_data(
-                maplit::btreemap! {"pos".to_string() => Value::Integer(1), "cat".to_string() => Value::Text("Stella".to_string()), "extra".to_string() => Value::Text("Ripley".to_string()),}
+        static ref DB_ROWS: Vec<Telemetry> = vec![
+            Telemetry::from_iter(
+                maplit::btreemap! {"pos".to_string() => 1.to_telemetry(), "cat".to_string() => "Stella".to_telemetry(), "extra".to_string() => "Ripley".to_telemetry(),}
             ),
-            TelemetryData::from_data(
-                maplit::btreemap! {"value".to_string() => Value::Float(3.14159), "cat".to_string() => Value::Text("Otis".to_string()), "extra".to_string() => Value::Text("Ripley".to_string()),}
+            Telemetry::from_iter(
+                maplit::btreemap! {"value".to_string() => 3.14159.to_telemetry(), "cat".to_string() => "Otis".to_telemetry(), "extra".to_string() => "Ripley".to_telemetry(),}
             ),
-            TelemetryData::from_data(
-                maplit::btreemap! {"pos".to_string() => Value::Integer(3), "cat".to_string() => Value::Text("Neo".to_string()), "extra".to_string() => Value::Text("Ripley".to_string()),}
+            Telemetry::from_iter(
+                maplit::btreemap! {"pos".to_string() => 3.to_telemetry(), "cat".to_string() => "Neo".to_telemetry(), "extra".to_string() => "Ripley".to_telemetry(),}
             ),
-            TelemetryData::from_data(
-                maplit::btreemap! {"pos".to_string() => Value::Integer(4), "value".to_string() => Value::Float(2.71828), "cat".to_string() => Value::Text("Apollo".to_string()), "extra".to_string() => Value::Text("Ripley".to_string()),}
+            Telemetry::from_iter(
+                maplit::btreemap! {"pos".to_string() => 4.to_telemetry(), "value".to_string() => 2.71828.to_telemetry(), "cat".to_string() => "Apollo".to_telemetry(), "extra".to_string() => "Ripley".to_telemetry(),}
             ),
         ];
-        static ref EXPECTED: HashMap<String, Vec<Option<TelemetryData>>> = maplit::hashmap! {
+        static ref EXPECTED: HashMap<String, Vec<Option<Telemetry>>> = maplit::hashmap! {
             SUBSCRIPTIONS[0].name().to_string() => vec![
                 None,
                 None,
@@ -777,16 +776,17 @@ mod tests {
                 None,
             ],
             SUBSCRIPTIONS[1].name().to_string() => vec![
-                Some(TelemetryData::from_data(maplit::btreemap! {"pos".to_string() => Value::Integer(1), "cat".to_string() => Value::Text("Stella".to_string()), "extra".to_string() => Value::Text("Ripley".to_string()),})),
+                Some(Telemetry::from_iter(maplit::btreemap! {"pos".to_string() => 1.to_telemetry(), "cat".to_string() => "Stella".to_telemetry(), "extra".to_string() => "Ripley".to_telemetry(),})),
                 None,
-                Some(TelemetryData::from_data(maplit::btreemap! {"pos".to_string() => Value::Integer(3), "cat".to_string() => Value::Text("Neo".to_string()), "extra".to_string() => Value::Text("Ripley".to_string()),})),
-                Some(TelemetryData::from_data(maplit::btreemap! {"pos".to_string() => Value::Integer(4), "cat".to_string() => Value::Text("Apollo".to_string()), "extra".to_string() => Value::Text("Ripley".to_string()),})),
+                Some(Telemetry::from_iter(maplit::btreemap! {"pos".to_string() => 3.to_telemetry(), "cat".to_string() => "Neo".to_telemetry(), "extra".to_string() => "Ripley".to_telemetry(),})),
+                Some(Telemetry::from_iter(maplit::btreemap! {"pos".to_string() => 4.to_telemetry(), "cat".to_string() => "Apollo".to_telemetry(), "extra".to_string() => "Ripley".to_telemetry(),})),
             ],
             SUBSCRIPTIONS[2].name().to_string() => vec![
                 None,
                 None,
                 None,
-                Some(TelemetryData::from_data(maplit::btreemap! {"pos".to_string() => Value::Integer(4), "value".to_string() => Value::Float(2.71828), "cat".to_string() => Value::Text("Apollo".to_string()),})),
+                Some(Telemetry::from_iter(maplit::btreemap! {"pos".to_string() => 4.to_telemetry(), "value".to_string() => 2.71828.to_telemetry(), "cat".to_string() => "Apollo".to_telemetry(),})),
+
             ],
         };
     }
@@ -829,7 +829,7 @@ mod tests {
         let _main_span_guard = main_span.enter();
 
         block_on(async move {
-            let data = TelemetryData::from_data(maplit::btreemap! { "aaa".to_string() => Value::Integer(17) });
+            let data = Telemetry::from_iter(maplit::hashmap! { "aaa".to_string() => 17.to_telemetry() });
             let mut tick = stage::Tick::new("tick", Duration::from_nanos(0), Duration::from_millis(5), data);
             let tx_tick_api = tick.tx_api();
             let mut clearinghouse = Clearinghouse::new("test-clearinghouse");
@@ -902,7 +902,7 @@ mod tests {
         let _main_span_guard = main_span.enter();
 
         block_on(async move {
-            let data = TelemetryData::from_data(maplit::btreemap! { "dr".to_string() => Value::Integer(17) });
+            let data = Telemetry::from_iter(maplit::hashmap! { "dr".to_string() => 17.to_telemetry() });
             let mut tick = stage::Tick::new("tick", Duration::from_nanos(0), Duration::from_millis(5), data);
             let tx_tick_api = tick.tx_api();
             let mut clearinghouse = Clearinghouse::new("test-clearinghouse");
@@ -1070,7 +1070,7 @@ mod tests {
         let main_span = tracing::info_span!("test_push_to_subscribers");
         let _main_span_guard = main_span.enter();
 
-        let all_expected: HashMap<String, Vec<Option<TelemetryData>>> = maplit::hashmap! {
+        let all_expected: HashMap<String, Vec<Option<Telemetry>>> = maplit::hashmap! {
             SUBSCRIPTIONS[0].name().to_string() => vec![
                 None, //Some(HashMap::default()),
                 None, //Some(HashMap::default()),
@@ -1078,13 +1078,13 @@ mod tests {
                 None, //Some(HashMap::default()),
             ],
             SUBSCRIPTIONS[1].name().to_string() => vec![
-                Some(TelemetryData::from_data(maplit::btreemap! {"pos".to_string() => Value::Integer(1), "cat".to_string() => Value::Text("Stella".to_string()), "extra".to_string() => Value::Text("Ripley".to_string()),})),
-                Some(TelemetryData::from_data(maplit::btreemap! {"pos".to_string() => Value::Integer(3), "cat".to_string() => Value::Text("Neo".to_string()), "extra".to_string() => Value::Text("Ripley".to_string()),})),
-                Some(TelemetryData::from_data(maplit::btreemap! {"pos".to_string() => Value::Integer(4), "cat".to_string() => Value::Text("Apollo".to_string()), "extra".to_string() => Value::Text("Ripley".to_string()),})),
+                Some(Telemetry::from_iter(maplit::hashmap! {"pos".to_string() => 1.to_telemetry(), "cat".to_string() => "Stella".to_telemetry(), "extra".to_string() => "Ripley".to_telemetry(),})),
+                Some(Telemetry::from_iter(maplit::hashmap! {"pos".to_string() => 3.to_telemetry(), "cat".to_string() => "Neo".to_telemetry(), "extra".to_string() => "Ripley".to_telemetry(),})),
+                Some(Telemetry::from_iter(maplit::hashmap! {"pos".to_string() => 4.to_telemetry(), "cat".to_string() => "Apollo".to_telemetry(), "extra".to_string() => "Ripley".to_telemetry(),})),
                 None,
             ],
             SUBSCRIPTIONS[2].name().to_string() => vec![
-                Some(TelemetryData::from_data(maplit::btreemap! {"pos".to_string() => Value::Integer(4), "value".to_string() => Value::Float(2.71828), "cat".to_string() => Value::Text("Apollo".to_string()),})),
+                Some(Telemetry::from_iter(maplit::hashmap! {"pos".to_string() => 4.to_telemetry(), "value".to_string() => 2.71828.to_telemetry(), "cat".to_string() => "Apollo".to_telemetry(),})),
                 None,
                 None,
                 None,
@@ -1101,7 +1101,7 @@ mod tests {
             let mut sub_receivers = Vec::with_capacity(subscriptions.len());
             for s in SUBSCRIPTIONS.iter().skip(nr_skip).take(nr_take) {
                 //todo expand test to remove this line
-                let receiver: Inlet<TelemetryData> = Inlet::new(format!("recv_from_{}", s.name()));
+                let receiver: Inlet<Telemetry> = Inlet::new(format!("recv_from_{}", s.name()));
                 (&s.outlet_to_subscription(), &receiver).connect().await;
                 sub_receivers.push((s, receiver));
             }
@@ -1124,7 +1124,7 @@ mod tests {
                     let sub_name = sub.name();
                     tracing::warn!(%sub_name, "test iteration");
                     let expected = &all_expected[sub_name][row];
-                    let actual: Option<TelemetryData> = receiver.recv().await;
+                    let actual: Option<Telemetry> = receiver.recv().await;
                     tracing::warn!(%sub_name, ?actual, ?expected, "asserting scenario");
                     assert_eq!((row, sub_name, &actual), (row, sub_name, expected));
                 }

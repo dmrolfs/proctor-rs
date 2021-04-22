@@ -1,5 +1,5 @@
 use super::context::*;
-use crate::elements::{Policy, PolicySettings, PolicySource, TelemetryData};
+use crate::elements::{Policy, PolicySettings, PolicySource, Telemetry};
 use crate::graph::GraphResult;
 use crate::phases::collection::TelemetrySubscription;
 use crate::settings::EligibilitySettings;
@@ -25,7 +25,7 @@ impl EligibilityPolicy {
 }
 
 impl Policy for EligibilityPolicy {
-    type Item = TelemetryData;
+    type Item = Telemetry;
     type Context = FlinkEligibilityContext;
 
     fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
@@ -39,7 +39,7 @@ impl Policy for EligibilityPolicy {
     }
 
     fn initialize_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
-        oso.register_class(TelemetryData::get_polar_class())?;
+        oso.register_class(Telemetry::get_polar_class())?;
         oso.register_class(FlinkEligibilityContext::get_polar_class())?;
         oso.register_class(
             TaskStatus::get_polar_class_builder()

@@ -16,14 +16,14 @@ use std::path::PathBuf;
 struct Data {
     #[serde(
         default,
-        rename = "task_last_failure",
+        rename = "task.last_failure",
         serialize_with = "proctor::serde::serialize_optional_datetime",
         deserialize_with = "proctor::serde::deserialize_optional_datetime"
     )]
     pub last_failure: Option<DateTime<Utc>>,
-    #[serde(rename = "cluster_is_deploying")]
+    #[serde(rename = "cluster.is_deploying")]
     pub is_deploying: bool,
-    #[serde(rename = "cluster_last_deployment", with = "proctor::serde")]
+    #[serde(rename = "cluster.last_deployment", with = "proctor::serde")]
     pub last_deployment: DateTime<Utc>,
 }
 
@@ -56,12 +56,12 @@ fn test_data_serde() {
         &data,
         &vec![
             Token::Struct { name: "Data", len: 3 },
-            Token::Str("task_last_failure"),
+            Token::Str("task.last_failure"),
             Token::Some,
             Token::Str(&NOW_REP),
-            Token::Str("cluster_is_deploying"),
+            Token::Str("cluster.is_deploying"),
             Token::Bool(true),
-            Token::Str("cluster_last_deployment"),
+            Token::Str("cluster.last_deployment"),
             Token::Str(&NOW_REP),
             Token::StructEnd,
         ],

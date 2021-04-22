@@ -3,7 +3,7 @@ mod fixtures;
 use anyhow::Result;
 use cast_trait_object::DynCastExt;
 use chrono::{DateTime, TimeZone, Utc};
-use proctor::elements::TelemetryData;
+use proctor::elements::{FromTelemetry, Telemetry};
 use proctor::graph::{stage, Connect, Graph, SinkShape};
 use proctor::phases::collection::make_telemetry_cvs_source;
 use proctor::settings::SourceSetting;
@@ -41,16 +41,18 @@ async fn test_make_telemetry_cvs_source() -> Result<()> {
 
     let source = make_telemetry_cvs_source("local", &setting)?;
 
-    let mut sink = stage::Fold::<_, TelemetryData, (Data, bool)>::new(
+    let mut sink = stage::Fold::<_, Telemetry, (Data, bool)>::new(
         "sink",
         (Data::default(), true),
-        |(acc, mut is_first), rec: TelemetryData| {
+        |(acc, mut is_first), rec: Telemetry| {
             let dt_format = "%+";
-            let rec_last_failure = rec.get::<String>("task_last_failure").unwrap().and_then(|r| {
-                if r.is_empty() {
+
+            let rec_last_failure = rec.get("task_last_failure").and_then(|r| {
+                let rep = String::from_telemetry(r.clone()).unwrap();
+                if rep.is_empty() {
                     None
                 } else {
-                    let lf = DateTime::parse_from_str(r.as_str(), dt_format)
+                    let lf = DateTime::parse_from_str(rep.as_str(), dt_format)
                         .unwrap()
                         .with_timezone(&Utc);
                     Some(lf)
@@ -60,14 +62,17 @@ async fn test_make_telemetry_cvs_source() -> Result<()> {
             let rec_is_deploying = if is_first {
                 tracing::info!("first record - set is_deploying.");
                 is_first = false;
-                rec.get::<bool>("cluster_is_deploying").unwrap()
+                rec.get("cluster.is_deploying")
+                    .map(|v| bool::from_telemetry(v.clone()).unwrap())
             } else {
                 tracing::info!("not first record - skip parsing is_deploying.");
                 None
             };
 
             let rec_latest_deployment = DateTime::parse_from_str(
-                rec.get::<String>("cluster_last_deployment").unwrap().unwrap().as_str(),
+                String::from_telemetry(rec.get("cluster_last_deployment").unwrap().clone())
+                    .unwrap()
+                    .as_str(),
                 dt_format,
             )
             .unwrap()

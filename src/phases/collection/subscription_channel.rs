@@ -1,4 +1,4 @@
-use crate::elements::{make_from_telemetry, FromTelemetryShape, TelemetryData};
+use crate::elements::{make_from_telemetry, FromTelemetryShape, Telemetry};
 use crate::error::GraphError;
 use crate::graph::stage::Stage;
 use crate::graph::{GraphResult, Inlet, Outlet, Port, SourceShape};
@@ -13,7 +13,7 @@ use std::fmt::{self, Debug};
 ///
 pub struct SubscriptionChannel<T> {
     name: String,
-    pub subscription_receiver: Inlet<TelemetryData>,
+    pub subscription_receiver: Inlet<Telemetry>,
     inner_stage: Option<FromTelemetryShape<T>>,
     outlet: Outlet<T>,
 }

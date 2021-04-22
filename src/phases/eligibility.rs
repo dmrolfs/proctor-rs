@@ -1,4 +1,4 @@
-use crate::elements::{Policy, PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, TelemetryData};
+use crate::elements::{Policy, PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, Telemetry};
 use crate::error::GraphError;
 use crate::graph::stage::{self, Stage, WithApi, WithMonitor};
 use crate::graph::{Connect, Graph, GraphResult, Inlet, Outlet, Port, SinkShape, SourceShape, ThroughShape};
@@ -16,19 +16,19 @@ pub struct Eligibility<C> {
     // pub subscription: TelemetrySubscription,
     inner_stage: Option<Box<dyn InnerStage>>,
     pub context_inlet: Inlet<C>,
-    inlet: Inlet<TelemetryData>,
-    outlet: Outlet<TelemetryData>,
+    inlet: Inlet<Telemetry>,
+    outlet: Outlet<Telemetry>,
     tx_policy_api: PolicyFilterApi<C>,
-    tx_policy_monitor: broadcast::Sender<PolicyFilterEvent<TelemetryData, C>>,
+    tx_policy_monitor: broadcast::Sender<PolicyFilterEvent<Telemetry, C>>,
 }
 
 //todo extract subscriptions (data and context) from eligibility into SubscriptionSource stage.
 
 impl<C: ProctorContext> Eligibility<C> {
     #[tracing::instrument(level = "info", skip(name))]
-    pub fn new<S: Into<String>>(name: S, policy: impl Policy<Item = TelemetryData, Context = C> + 'static) -> Self {
+    pub fn new<S: Into<String>>(name: S, policy: impl Policy<Item = Telemetry, Context = C> + 'static) -> Self {
         let name = name.into();
-        let policy_filter: PolicyFilter<TelemetryData, C> =
+        let policy_filter: PolicyFilter<Telemetry, C> =
             PolicyFilter::new(format!("{}_eligibility_policy", name), Box::new(policy));
         let context_inlet = policy_filter.context_inlet();
         let inlet = policy_filter.inlet();
@@ -162,11 +162,11 @@ impl<C: Debug> Debug for Eligibility<C> {
     }
 }
 
-trait InnerStage: Stage + ThroughShape<In = TelemetryData, Out = TelemetryData> + 'static {}
-impl<T: 'static + Stage + ThroughShape<In = TelemetryData, Out = TelemetryData>> InnerStage for T {}
+trait InnerStage: Stage + ThroughShape<In = Telemetry, Out = Telemetry> + 'static {}
+impl<T: 'static + Stage + ThroughShape<In = Telemetry, Out = Telemetry>> InnerStage for T {}
 
 impl<C> SinkShape for Eligibility<C> {
-    type In = TelemetryData;
+    type In = Telemetry;
     #[inline]
     fn inlet(&self) -> Inlet<Self::In> {
         self.inlet.clone()
@@ -174,7 +174,7 @@ impl<C> SinkShape for Eligibility<C> {
 }
 
 impl<C> SourceShape for Eligibility<C> {
-    type Out = TelemetryData;
+    type Out = Telemetry;
     #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()
@@ -232,7 +232,7 @@ impl<C> WithApi for Eligibility<C> {
 }
 
 impl<C> WithMonitor for Eligibility<C> {
-    type Receiver = PolicyFilterMonitor<TelemetryData, C>;
+    type Receiver = PolicyFilterMonitor<Telemetry, C>;
     #[inline]
     fn rx_monitor(&self) -> Self::Receiver {
         self.tx_policy_monitor.subscribe()

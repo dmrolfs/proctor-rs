@@ -169,6 +169,9 @@ pub enum GraphError {
     ///Precondition error occurred in graph setup.
     #[error("{0}")]
     GraphPrecondition(String),
+    ///Invalid Type used in application
+    #[error("invalid type used, expected {0}")]
+    TypeError(String),
 }
 
 // impl std::error::Error for GraphError {}
@@ -283,5 +286,17 @@ impl From<std::io::Error> for GraphError {
 impl From<serde_cbor::Error> for GraphError {
     fn from(that: serde_cbor::Error) -> Self {
         GraphError::GraphBoundary(that.into())
+    }
+}
+
+impl From<std::num::TryFromIntError> for GraphError {
+    fn from(_that: std::num::TryFromIntError) -> Self {
+        GraphError::TypeError("Integer".to_string())
+    }
+}
+
+impl From<std::convert::Infallible> for GraphError {
+    fn from(_that: std::convert::Infallible) -> Self {
+        GraphError::TypeError("Integer".to_string())
     }
 }

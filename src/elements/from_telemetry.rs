@@ -1,4 +1,4 @@
-use super::TelemetryData;
+use super::Telemetry;
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape, ThroughShape};
 use crate::AppData;
@@ -6,9 +6,9 @@ use serde::de::DeserializeOwned;
 
 pub type FromTelemetryShape<Out> = Box<dyn FromTelemetryStage<Out>>;
 
-pub trait FromTelemetryStage<Out>: Stage + ThroughShape<In = TelemetryData, Out = Out> + 'static {}
+pub trait FromTelemetryStage<Out>: Stage + ThroughShape<In = Telemetry, Out = Out> + 'static {}
 
-impl<Out, T> FromTelemetryStage<Out> for T where T: Stage + ThroughShape<In = TelemetryData, Out = Out> + 'static {}
+impl<Out, T> FromTelemetryStage<Out> for T where T: Stage + ThroughShape<In = Telemetry, Out = Out> + 'static {}
 
 #[tracing::instrument(level = "info", skip(name))]
 pub async fn make_from_telemetry<Out, S>(name: S, log_conversion_failure: bool) -> GraphResult<FromTelemetryShape<Out>>
@@ -17,7 +17,7 @@ where
     S: AsRef<str>,
 {
     let from_telemetry =
-        stage::Map::<_, TelemetryData, GraphResult<Out>>::new(format!("{}_from_telemetry", name.as_ref()), |data| {
+        stage::Map::<_, Telemetry, GraphResult<Out>>::new(format!("{}_from_telemetry", name.as_ref()), |data| {
             tracing::trace!("data item: {:?}", data);
             data.try_into::<Out>()
         });
@@ -36,7 +36,7 @@ where
     let mut cg = Graph::default();
     cg.push_back(Box::new(from_telemetry)).await;
     cg.push_back(Box::new(filter_failures)).await;
-    let composite = stage::CompositeThrough::<TelemetryData, Out>::new(name.as_ref(), cg, cg_inlet, cg_outlet).await;
+    let composite = stage::CompositeThrough::<Telemetry, Out>::new(name.as_ref(), cg, cg_inlet, cg_outlet).await;
 
     let result: FromTelemetryShape<Out> = Box::new(composite);
     Ok(result)

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use cast_trait_object::DynCastExt;
-use proctor::elements;
+use proctor::elements::{self, FromTelemetry};
 use proctor::graph::stage;
 use proctor::graph::SinkShape;
 use proctor::graph::{Connect, Graph};
@@ -48,23 +48,20 @@ async fn main() -> Result<()> {
     let mut clearinghouse = collection::Clearinghouse::new("clearinghouse");
 
     let pos_stats_fields = maplit::hashset! { POS_FIELD.to_string() };
-    let mut pos_stats = stage::Fold::<_, elements::TelemetryData, (usize, usize)>::new(
-        "pos_stats",
-        (0, 0),
-        move |(count, sum), data| {
-            let delivered = data.dictionary().keys().cloned().collect::<HashSet<_>>();
+    let mut pos_stats =
+        stage::Fold::<_, elements::Telemetry, (usize, usize)>::new("pos_stats", (0, 0), move |(count, sum), data| {
+            let delivered = data.keys().cloned().collect::<HashSet<_>>();
             let allowed = &pos_stats_fields;
             let unexpected = delivered.difference(allowed).collect::<HashSet<_>>();
             if !unexpected.is_empty() {
                 tracing::error!(?unexpected, "fields delivered beyond allowed.");
                 panic!("fields fields beyond allowed: {:?}", unexpected);
             }
-            let pos = data.get::<usize>(POS_FIELD).unwrap().unwrap();
+            let pos = usize::from_telemetry(data.get(POS_FIELD).unwrap().clone()).unwrap();
             // .parse::<usize>()
             // .expect("failed to parse pos field");
             (count + 1, sum + pos)
-        },
-    );
+        });
     let rx_pos_stats = pos_stats.take_final_rx().unwrap();
 
     clearinghouse

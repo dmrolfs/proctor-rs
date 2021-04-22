@@ -8,7 +8,7 @@
 /// #[macro_use]
 /// extern crate proctor_derive;
 ///
-/// use proctor::elements::TelemetryData;
+/// use proctor::elements::Telemetry;
 /// use proctor::error::GraphError;
 /// use proctor::graph::stage::{self, tick, Stage};
 /// use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
@@ -74,7 +74,7 @@
 ///             let mut my_count = mine.lock().await;
 ///             *my_count += 1;
 ///
-///             let mut data = TelemetryData::new();
+///             let mut data = Telemetry::new();
 ///             for (k, v) in resp.args {
 ///                 data.insert(format!("args.{}.{}", my_count, k).as_str(), v);
 ///             }
@@ -85,7 +85,7 @@
 ///
 ///     let mut httpbin_collection = stage::TriggeredGenerator::new("httpbin_collection", gen);
 ///
-///     let mut fold = stage::Fold::new("gather latest", None, |acc: Option<TelemetryData>, data: TelemetryData| {
+///     let mut fold = stage::Fold::new("gather latest", None, |acc: Option<Telemetry>, data: Telemetry| {
 ///         acc.map_or(Some(data.clone()), move |a| Some(a + data.clone()))
 ///     });
 ///     let rx_gather = fold.take_final_rx().unwrap();
@@ -101,7 +101,7 @@
 ///
 ///     match rx_gather.await.expect("fold didn't release anything.") {
 ///         Some(resp) => {
-///             let mut exp = TelemetryData::new();
+///             let mut exp = Telemetry::new();
 ///             for i in 1..=3 {
 ///                 exp.insert(format!("args.{}.f", i).as_str(), "foo".to_string());
 ///                 exp.insert(format!("args.{}.b", i).as_str(), "bar".to_string());

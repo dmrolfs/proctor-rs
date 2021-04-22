@@ -13,7 +13,7 @@ use std::fmt::Debug;
 /// #[macro_use]
 /// extern crate proctor_derive;
 ///
-/// use proctor::elements::TelemetryData;
+/// use proctor::elements::Telemetry;
 /// use proctor::error::GraphError;
 /// use proctor::graph::stage::{self, tick, Stage};
 /// use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
@@ -68,7 +68,7 @@ use std::fmt::Debug;
 ///             for (k, v) in &r.args {
 ///                 data.insert(format!("args.{}.{}", cnt, k), Value::Text(v.to_owned()));
 ///             }
-///             TelemetryData::from_data(data)
+///             Telemetry::from_data(data)
 ///         };
 ///
 ///         async move {
@@ -84,19 +84,19 @@ use std::fmt::Debug;
 ///                 .await
 ///                 .map_err::<GraphError, _>(|err| err.into())?;
 ///
-///             let result: GraphResult<TelemetryData> = Ok(to_telemetry_data(resp).await);
+///             let result: GraphResult<Telemetry> = Ok(to_telemetry_data(resp).await);
 ///             result
 ///         }
 ///         .map(|r| r.unwrap())
 ///     };
 ///
 ///     let mut generator = stage::TriggeredGenerator::new("generator", gen);
-///     let mut distill = stage::Map::<_, TelemetryData,_>::new(
+///     let mut distill = stage::Map::<_, Telemetry,_>::new(
 ///         "distill",
 ///         |mc| {
-///             mc.dictionary()
+///             mc.values()
 ///               .into_iter()
-///               .map(|(k, v)| (k, TelemetryData::from_cbor::<String>(v).unwrap()))
+///               .map(|(k, v)| (k, Telemetry::from_cbor::<String>(v).unwrap()))
 ///               .collect()
 ///         });
 ///

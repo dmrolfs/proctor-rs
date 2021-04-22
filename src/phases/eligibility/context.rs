@@ -2,7 +2,6 @@ use crate::ProctorContext;
 use chrono::{DateTime, Utc};
 use oso::PolarClass;
 use serde::{Deserialize, Serialize};
-use serde_cbor::Value;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 
@@ -76,10 +75,13 @@ impl ClusterStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::elements::TelemetryData;
+    use crate::elements::Telemetry;
+    use crate::elements::ToTelemetry;
     use chrono::{DateTime, Utc};
     use lazy_static::lazy_static;
+    use oso::{PolarClass, PolarValue, ToPolar};
     use serde_test::{assert_tokens, Token};
+    use std::iter::FromIterator;
 
     lazy_static! {
         static ref DT_1: DateTime<Utc> = Utc::now();
@@ -133,14 +135,18 @@ mod tests {
 
     #[test]
     fn test_serde_flink_eligibility_context_from_telemetry() {
-        let data = TelemetryData::from_data(maplit::btreemap! {
-            "task.last_failure".to_string() => Value::Text(DT_1_STR.clone()),
-            "cluster.is_deploying".to_string() => Value::Bool(false),
-            "cluster.last_deployment".to_string() => Value::Text(DT_2_STR.clone()),
-            "foo".to_string() => Value::Text("bar".to_string()),
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+
+        let data = Telemetry::from_iter(maplit::hashmap! {
+            "task.last_failure".to_string() => DT_1_STR.clone().to_telemetry(),
+            "cluster.is_deploying".to_string() => false.to_telemetry(),
+            "cluster.last_deployment".to_string() => DT_2_STR.clone().to_telemetry(),
+            "foo".to_string() => "bar".to_telemetry(),
         });
+        tracing::info!(telemetry=?data, "created telemetry");
 
         let actual = data.try_into::<FlinkEligibilityContext>();
+        tracing::info!(?actual, "converted into FlinkEligibilityContext");
         let expected = FlinkEligibilityContext {
             task_status: TaskStatus {
                 last_failure: Some(DT_1.clone()),
@@ -152,6 +158,7 @@ mod tests {
             custom: maplit::hashmap! {"foo".to_string() => "bar".to_string(),},
         };
         tracing::info!("actual: {:?}", actual);
+        tracing::info!("expected: {:?}", expected);
         assert_eq!(actual.unwrap(), expected);
     }
 }

@@ -1,4 +1,4 @@
-use crate::elements::TelemetryData;
+use crate::elements::{Telemetry, TelemetryValue, ToTelemetry};
 use crate::error::{ConfigError, GraphError, ProctorError};
 use crate::graph::stage::{tick, Stage, WithApi};
 use crate::graph::{stage, Connect, Graph, GraphResult, SinkShape, SourceShape};
@@ -6,15 +6,14 @@ use crate::settings::SourceSetting;
 use crate::ProctorResult;
 use futures::future::FutureExt;
 use serde::de::DeserializeOwned;
-use serde_cbor::Value;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
 //todo api access should follow new convention rt via returned tuple
 pub type TelemetrySource = Box<dyn TelemetrySourceStage>;
-pub trait TelemetrySourceStage: Stage + SourceShape<Out = TelemetryData> + 'static {}
-impl<T: 'static + Stage + SourceShape<Out = TelemetryData>> TelemetrySourceStage for T {}
+pub trait TelemetrySourceStage: Stage + SourceShape<Out = Telemetry> + 'static {}
+impl<T: 'static + Stage + SourceShape<Out = Telemetry>> TelemetrySourceStage for T {}
 
 /// Naive CVS source, which loads a `.cvs` file, then publishes via its outlet.
 ///
@@ -30,7 +29,7 @@ where
     S: AsRef<str>,
 {
     if let SourceSetting::Csv { path } = setting {
-        let mut records: Vec<TelemetryData> = vec![];
+        let mut records: Vec<Telemetry> = vec![];
         let mut name = format!("telemetry_{}", name.as_ref());
 
         if let Some(file_name) = path.file_name() {
@@ -42,18 +41,11 @@ where
 
         let mut reader = csv::Reader::from_path(path).map_err::<ProctorError, _>(|err| err.into())?;
 
-        for data in reader.deserialize::<BTreeMap<String, Value>>() {
-            let data = data.map_err::<ProctorError, _>(|err| err.into())?;
-            let mut data = TelemetryData::from_data(data);
-            data.retain(|_, v| match v {
-                Value::Null => false,
-                Value::Bytes(rep) => !rep.is_empty(),
-                Value::Text(rep) => !rep.is_empty(),
-                Value::Array(rep) => !rep.is_empty(),
-                Value::Map(rep) => !rep.is_empty(),
-                _ => true,
-            });
-            records.push(data);
+        for data in reader.deserialize::<HashMap<String, String>>() {
+            let data: HashMap<String, TelemetryValue> = data?.into_iter().map(|(k, v)| (k, v.to_telemetry())).collect();
+            let mut telemetry = Telemetry(data);
+            telemetry.retain(|_, v| !v.is_empty());
+            records.push(telemetry);
         }
         let source = stage::Sequence::new(name, records);
 
@@ -72,7 +64,7 @@ pub async fn make_telemetry_rest_api_source<D, S>(
     name: S, setting: &SourceSetting,
 ) -> ProctorResult<(TelemetrySource, mpsc::UnboundedSender<tick::TickMsg>)>
 where
-    D: DeserializeOwned + Into<TelemetryData>,
+    D: DeserializeOwned + Into<Telemetry>,
     S: AsRef<str>,
 {
     if let SourceSetting::RestApi(query) = setting {
@@ -111,14 +103,14 @@ where
                     .await
                     .map_err::<GraphError, _>(|err| err.into())?;
 
-                let data: GraphResult<TelemetryData> = Ok(resp.into());
+                let data: GraphResult<Telemetry> = Ok(resp.into());
                 data
             }
             .map(|d| d.unwrap())
         };
 
         let collect_telemetry =
-            stage::TriggeredGenerator::<_, _, TelemetryData>::new(format!("telemetry_{}_gen", name.as_ref()), gen);
+            stage::TriggeredGenerator::<_, _, Telemetry>::new(format!("telemetry_{}_gen", name.as_ref()), gen);
 
         // compose tick & generator into a source shape
         let composite_outlet = collect_telemetry.outlet().clone();
