@@ -172,6 +172,34 @@ pub enum GraphError {
     ///Invalid Type used in application
     #[error("invalid type used, expected {0}")]
     TypeError(String),
+    ///Unexpected Type
+    #[error("type {0} unexpected")]
+    Unexpected(UnexpectedType),
+}
+
+#[derive(Debug)]
+pub enum UnexpectedType {
+    Bool(bool),
+    Integer(i64),
+    Float(f64),
+    Text(String),
+    Unit,
+    List,
+    Map,
+}
+
+impl fmt::Display for UnexpectedType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            UnexpectedType::Bool(b) => write!(f, "boolean `{}`", b),
+            UnexpectedType::Integer(i) => write!(f, "integer `{}`", i),
+            UnexpectedType::Float(v) => write!(f, "floating point `{}`", v),
+            UnexpectedType::Text(ref s) => write!(f, "text {:?}", s),
+            UnexpectedType::Unit => write!(f, "unit value"),
+            UnexpectedType::List => write!(f, "list"),
+            UnexpectedType::Map => write!(f, "map"),
+        }
+    }
 }
 
 // impl std::error::Error for GraphError {}

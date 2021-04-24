@@ -9,12 +9,6 @@ pub trait FromTelemetry: Clone {
     fn from_telemetry(val: TelemetryValue) -> GraphResult<Self>;
 }
 
-impl FromTelemetry for TelemetryValue {
-    fn from_telemetry(val: TelemetryValue) -> GraphResult<Self> {
-        Ok(val)
-    }
-}
-
 macro_rules! telemetry_to_int {
     ($i:ty) => {
         impl FromTelemetry for $i {
@@ -37,6 +31,16 @@ telemetry_to_int!(i16);
 telemetry_to_int!(u32);
 telemetry_to_int!(i32);
 telemetry_to_int!(i64);
+
+impl FromTelemetry for f32 {
+    fn from_telemetry(val: TelemetryValue) -> GraphResult<Self> {
+        if let TelemetryValue::Float(f) = val {
+            Ok(f as f32)
+        } else {
+            Err(GraphError::TypeError("Float".to_string()))
+        }
+    }
+}
 
 impl FromTelemetry for f64 {
     fn from_telemetry(val: TelemetryValue) -> GraphResult<Self> {
@@ -70,7 +74,7 @@ impl FromTelemetry for bool {
 
 impl<T: FromTelemetry> FromTelemetry for HashMap<String, T> {
     fn from_telemetry(val: TelemetryValue) -> GraphResult<Self> {
-        if let TelemetryValue::Map(table) = val {
+        if let TelemetryValue::Table(table) = val {
             let mut result = HashMap::new();
             for (k, v) in table {
                 let t = T::from_telemetry(v)?;
@@ -85,7 +89,7 @@ impl<T: FromTelemetry> FromTelemetry for HashMap<String, T> {
 
 impl<T: FromTelemetry> FromTelemetry for BTreeMap<String, T> {
     fn from_telemetry(val: TelemetryValue) -> GraphResult<Self> {
-        if let TelemetryValue::Map(table) = val {
+        if let TelemetryValue::Table(table) = val {
             let mut result = BTreeMap::new();
             for (k, v) in table {
                 let t = T::from_telemetry(v)?;
@@ -100,7 +104,7 @@ impl<T: FromTelemetry> FromTelemetry for BTreeMap<String, T> {
 
 impl<T: FromTelemetry> FromTelemetry for Vec<T> {
     fn from_telemetry(val: TelemetryValue) -> GraphResult<Self> {
-        if let TelemetryValue::List(values) = val {
+        if let TelemetryValue::Seq(values) = val {
             let mut result = vec![];
             for v in values {
                 let t = T::from_telemetry(v)?;
@@ -115,7 +119,7 @@ impl<T: FromTelemetry> FromTelemetry for Vec<T> {
 
 impl<T: FromTelemetry> FromTelemetry for VecDeque<T> {
     fn from_telemetry(val: TelemetryValue) -> GraphResult<Self> {
-        if let TelemetryValue::List(values) = val {
+        if let TelemetryValue::Seq(values) = val {
             let mut result = VecDeque::new();
             for v in values {
                 let t = T::from_telemetry(v)?;
@@ -130,7 +134,7 @@ impl<T: FromTelemetry> FromTelemetry for VecDeque<T> {
 
 impl<T: FromTelemetry> FromTelemetry for LinkedList<T> {
     fn from_telemetry(val: TelemetryValue) -> GraphResult<Self> {
-        if let TelemetryValue::List(values) = val {
+        if let TelemetryValue::Seq(values) = val {
             let mut result = LinkedList::new();
             for v in values {
                 let t = T::from_telemetry(v)?;
@@ -145,7 +149,7 @@ impl<T: FromTelemetry> FromTelemetry for LinkedList<T> {
 
 impl<T: Eq + Hash + FromTelemetry> FromTelemetry for HashSet<T> {
     fn from_telemetry(val: TelemetryValue) -> GraphResult<Self> {
-        if let TelemetryValue::List(values) = val {
+        if let TelemetryValue::Seq(values) = val {
             let mut result = HashSet::new();
             for v in values {
                 let t = T::from_telemetry(v)?;
@@ -160,7 +164,7 @@ impl<T: Eq + Hash + FromTelemetry> FromTelemetry for HashSet<T> {
 
 impl<T: Eq + Ord + FromTelemetry> FromTelemetry for BTreeSet<T> {
     fn from_telemetry(val: TelemetryValue) -> GraphResult<Self> {
-        if let TelemetryValue::List(values) = val {
+        if let TelemetryValue::Seq(values) = val {
             let mut result = BTreeSet::new();
             for v in values {
                 let t = T::from_telemetry(v)?;
@@ -175,7 +179,7 @@ impl<T: Eq + Ord + FromTelemetry> FromTelemetry for BTreeSet<T> {
 
 impl<T: Ord + FromTelemetry> FromTelemetry for BinaryHeap<T> {
     fn from_telemetry(val: TelemetryValue) -> GraphResult<Self> {
-        if let TelemetryValue::List(values) = val {
+        if let TelemetryValue::Seq(values) = val {
             let mut result = BinaryHeap::new();
             for v in values {
                 let t = T::from_telemetry(v)?;
@@ -216,6 +220,7 @@ try_from_telemetry!(i16);
 try_from_telemetry!(u32);
 try_from_telemetry!(i32);
 try_from_telemetry!(i64);
+try_from_telemetry!(f32);
 try_from_telemetry!(f64);
 try_from_telemetry!(String);
 try_from_telemetry!(bool);

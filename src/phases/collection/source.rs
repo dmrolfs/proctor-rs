@@ -7,6 +7,7 @@ use crate::ProctorResult;
 use futures::future::FutureExt;
 use serde::de::DeserializeOwned;
 use std::collections::HashMap;
+use std::iter::FromIterator;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -43,7 +44,7 @@ where
 
         for data in reader.deserialize::<HashMap<String, String>>() {
             let data: HashMap<String, TelemetryValue> = data?.into_iter().map(|(k, v)| (k, v.to_telemetry())).collect();
-            let mut telemetry = Telemetry(data);
+            let mut telemetry = Telemetry::from_iter(data);
             telemetry.retain(|_, v| !v.is_empty());
             records.push(telemetry);
         }

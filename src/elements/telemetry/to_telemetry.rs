@@ -1,7 +1,7 @@
 // #![feature(specialization)]
 
 use super::TelemetryValue;
-use oso::{PolarClass, PolarValue, ToPolar};
+use oso::PolarValue;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque};
 
 pub trait ToTelemetry {
@@ -15,6 +15,18 @@ pub trait ToTelemetry {
 //         polar_value.to_telemetry()
 //     }
 // }
+
+// impl<T: ToTelemetry> From<T> for TelemetryValue {
+//     fn from(that: T) -> Self {
+//         that.to_telemetry()
+//     }
+// }
+
+impl ToTelemetry for TelemetryValue {
+    fn to_telemetry(self) -> TelemetryValue {
+        self
+    }
+}
 
 impl ToTelemetry for bool {
     fn to_telemetry(self) -> TelemetryValue {
@@ -73,80 +85,76 @@ impl<'a> ToTelemetry for &'a str {
 
 impl<T: ToTelemetry> ToTelemetry for Vec<T> {
     fn to_telemetry(self) -> TelemetryValue {
-        TelemetryValue::List(self.into_iter().map(|v| v.to_telemetry()).collect())
+        TelemetryValue::Seq(self.into_iter().map(|v| v.to_telemetry()).collect())
     }
 }
 
 impl<T: ToTelemetry> ToTelemetry for VecDeque<T> {
     fn to_telemetry(self) -> TelemetryValue {
-        TelemetryValue::List(self.into_iter().map(|v| v.to_telemetry()).collect())
+        TelemetryValue::Seq(self.into_iter().map(|v| v.to_telemetry()).collect())
     }
 }
 
 impl<T: ToTelemetry> ToTelemetry for LinkedList<T> {
     fn to_telemetry(self) -> TelemetryValue {
-        TelemetryValue::List(self.into_iter().map(|v| v.to_telemetry()).collect())
+        TelemetryValue::Seq(self.into_iter().map(|v| v.to_telemetry()).collect())
     }
 }
 
 impl<T: ToTelemetry> ToTelemetry for HashSet<T> {
     fn to_telemetry(self) -> TelemetryValue {
-        TelemetryValue::List(self.into_iter().map(|v| v.to_telemetry()).collect())
+        TelemetryValue::Seq(self.into_iter().map(|v| v.to_telemetry()).collect())
     }
 }
 
 impl<T: ToTelemetry> ToTelemetry for BTreeSet<T> {
     fn to_telemetry(self) -> TelemetryValue {
-        TelemetryValue::List(self.into_iter().map(|v| v.to_telemetry()).collect())
+        TelemetryValue::Seq(self.into_iter().map(|v| v.to_telemetry()).collect())
     }
 }
 
 impl<T: ToTelemetry> ToTelemetry for BinaryHeap<T> {
     fn to_telemetry(self) -> TelemetryValue {
-        TelemetryValue::List(self.into_iter().map(|v| v.to_telemetry()).collect())
+        TelemetryValue::Seq(self.into_iter().map(|v| v.to_telemetry()).collect())
     }
 }
 
 impl<'a, T: Clone + ToTelemetry> ToTelemetry for &'a [T] {
     fn to_telemetry(self) -> TelemetryValue {
-        TelemetryValue::List(self.iter().cloned().map(|v| v.to_telemetry()).collect())
+        TelemetryValue::Seq(self.iter().cloned().map(|v| v.to_telemetry()).collect())
     }
 }
 
 impl<T: ToTelemetry> ToTelemetry for HashMap<String, T> {
     fn to_telemetry(self) -> TelemetryValue {
-        TelemetryValue::Map(self.into_iter().map(|(k,v)| (k, v.to_telemetry())).collect())
+        TelemetryValue::Table(self.into_iter().map(|(k, v)| (k, v.to_telemetry())).collect())
     }
 }
 
 impl<T: ToTelemetry> ToTelemetry for HashMap<&str, T> {
     fn to_telemetry(self) -> TelemetryValue {
-        TelemetryValue::Map(
+        TelemetryValue::Table(
             self.into_iter()
-                .map(|(k,v)| (k.to_string(), v.to_telemetry()))
-                .collect()
+                .map(|(k, v)| (k.to_string(), v.to_telemetry()))
+                .collect(),
         )
     }
 }
 
 impl<T: ToTelemetry> ToTelemetry for BTreeMap<String, T> {
     fn to_telemetry(self) -> TelemetryValue {
-        TelemetryValue::Map(self.into_iter().map(|(k,v)| (k, v.to_telemetry())).collect())
+        TelemetryValue::Table(self.into_iter().map(|(k, v)| (k, v.to_telemetry())).collect())
     }
 }
 
 impl<T: ToTelemetry> ToTelemetry for BTreeMap<&str, T> {
     fn to_telemetry(self) -> TelemetryValue {
-        TelemetryValue::Map(
+        TelemetryValue::Table(
             self.into_iter()
-                .map(|(k,v)| (k.to_string(), v.to_telemetry()))
-                .collect()
+                .map(|(k, v)| (k.to_string(), v.to_telemetry()))
+                .collect(),
         )
     }
-}
-
-impl ToTelemetry for TelemetryValue {
-    fn to_telemetry(self) -> TelemetryValue { self }
 }
 
 // impl<T: ToTelemetry> ToTelemetry for Option<T> {
@@ -158,19 +166,19 @@ impl ToTelemetry for TelemetryValue {
 impl ToTelemetry for PolarValue {
     fn to_telemetry(self) -> TelemetryValue {
         match self {
-            Self::Instance(_) => TelemetryValue::Nil,
-            Self::Variable(_) => TelemetryValue::Nil,
+            Self::Instance(_) => TelemetryValue::Unit,
+            Self::Variable(_) => TelemetryValue::Unit,
             Self::Boolean(value) => TelemetryValue::Boolean(value),
             Self::Integer(value) => TelemetryValue::Integer(value),
             Self::Float(value) => TelemetryValue::Float(value),
             Self::String(rep) => TelemetryValue::Text(rep),
             Self::List(values) => {
                 let vs = values.into_iter().map(|v| v.to_telemetry()).collect();
-                TelemetryValue::List(vs)
+                TelemetryValue::Seq(vs)
             }
             Self::Map(table) => {
                 let vs = table.into_iter().map(|(k, v)| (k, v.to_telemetry())).collect();
-                TelemetryValue::Map(vs)
+                TelemetryValue::Table(vs)
             }
         }
     }

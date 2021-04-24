@@ -17,9 +17,13 @@ where
     S: AsRef<str>,
 {
     let from_telemetry =
-        stage::Map::<_, Telemetry, GraphResult<Out>>::new(format!("{}_from_telemetry", name.as_ref()), |data| {
-            tracing::trace!("data item: {:?}", data);
-            data.try_into::<Out>()
+        stage::Map::<_, Telemetry, GraphResult<Out>>::new(format!("{}_from_telemetry", name.as_ref()), |telemetry| {
+            let converted = telemetry.clone().try_into::<Out>();
+            if let Err(ref err) = converted {
+                tracing::error!(error=?err, "failed to convert an entity from telemetry data");
+            }
+            tracing::trace!(?telemetry, ?converted, "data item conversion from telemetry.");
+            converted
         });
 
     let mut filter_failures = stage::FilterMap::new(

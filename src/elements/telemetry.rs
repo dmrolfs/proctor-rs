@@ -2,108 +2,71 @@ pub use from_telemetry::FromTelemetry;
 pub use to_telemetry::ToTelemetry;
 pub use value::TelemetryValue;
 
+mod de;
 mod from_telemetry;
+mod ser;
 mod to_telemetry;
 mod value;
 
+use crate::error::GraphError;
 use crate::graph::GraphResult;
 use oso::ToPolar;
-use oso::{PolarClass, PolarValue};
-use serde::ser::SerializeMap;
-use serde::{de, Deserialize, Serialize, Serializer};
-use std::collections::HashMap;
-use std::fmt;
+use oso::PolarClass;
+use ser::TelemetrySerializer;
+use serde::{de as serde_de, Deserialize, Serialize};
+use std::collections::{BTreeMap, HashMap};
 use std::iter::{FromIterator, IntoIterator};
-use std::marker::PhantomData;
+use std::fmt::Debug;
 
-#[derive(PolarClass, Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Telemetry(pub HashMap<String, TelemetryValue>);
+#[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Telemetry(TelemetryValue);
+
+impl Default for Telemetry {
+    #[tracing::instrument(level="trace", skip())]
+    fn default() -> Self {
+        Self(TelemetryValue::Table(HashMap::default()))
+    }
+}
 
 impl Telemetry {
+    #[tracing::instrument(level="trace", skip())]
     pub fn new() -> Self {
         Self::default()
     }
 
-    // pub fn with_capacity(capacity: usize) -> Self {
-    //     Self(HashMap::with_capacity(capacity))
-    // }
-
-    // pub fn from_data(data: BTreeMap<String, Value>) -> Self {
-    //     let payload = serde_cbor::value::to_value(data).unwrap();
-    //     Self(payload)
-    //
-    //     // let payload = data
-    //     //     .into_iter()
-    //     //     .map(|(key, value)| {
-    //     //         let key_rep = serde_cbor::value::to_value(key).unwrap();
-    //     //         (key_rep, value)
-    //     //     })
-    //     //     .collect();
-    //     // Self(Value::Map(payload))
-    //     // let payload = serde_cbor::to_vec(&data).unwrap();
-    //     // Self(payload)
-    //     // let mut config = Config::new();
-    //     // for (k, v) in data {
-    //     //     config.set(k.as_str(), v);
-    //     // }
-    //     // Self(config)
-    // }
-    //
-    pub fn try_into<T: de::DeserializeOwned>(self) -> GraphResult<T> {
-        //todo optimize to transform directly
-        let config_shape: config::Value = TelemetryValue::Map(self.0).into();
-        config_shape.try_into().map_err(|err| err.into())
-        // serde_cbor::value::from_value::<T>(self.0).map_err(|err| err.into())
-        // serde_cbor::from_slice::<T>(&self.0).map_err(|err| err.into())
-        // self.0.try_into().map_err(|err| err.into())
-        // let mut c = config::Config::default();
-        // c.merge(self.0)?;
-        // let c = config::Config::try_from(&self.0)?;
-        // c.try_into().map_err(|err| err.into())
+    #[tracing::instrument(level="trace", skip())]
+    pub fn from_value<V: Into<TelemetryValue> + Debug>(value: V) -> Self {
+        let val = value.into();
+        match val {
+            inner @ TelemetryValue::Table(_) => Self(inner),
+            v => {
+                panic!("telemetry root value must be a Table, but was provided a: {:?}", v);
+            }
+        }
     }
 
-    pub fn merge(&mut self, that: Self) {
-        self.0.extend(that.0)
-        // let mut my_data: BTreeMap<Value, Value> = serde_cbor::value::from_value(self.0.clone()).unwrap();
-        // let that_data: BTreeMap<Value, Value> = serde_cbor::value::from_value(that.0.clone()).unwrap();
-
-        // my_data.extend(that_data);
-        // self.0 = Value::Map(my_data);
-
-        // my_data.extend(iter);
-        // let my_value = Value::Map(my_data);
-        // self.0 = my_value;
-        // self.0 = Value::Map(my_data);
-
-        // let mut data = self.dictionary().unwrap();
-        // let that_data = that.dictionary().unwrap();
-        // data.extend(that_data);
-        // self.0 = serde_cbor::to_vec(&data).unwrap();
+    /// Attempt to deserialize the entire telemetry into the requested type.
+    #[tracing::instrument(level="trace", skip())]
+    pub fn try_into<T: serde_de::DeserializeOwned>(self) -> GraphResult<T> {
+        T::deserialize(self)
+        // T::from_telemetry(TelemetryValue::Map(self.0))
+        // todo optimize to transform directly
+        // let config_shape: config::Value = TelemetryValue::Map(self.0).into();
+        // tracing::info!(?config_shape, "after conversion into config");
+        // config_shape.try_into().map_err(|err| err.into())
     }
 
-    // pub fn values(&self) -> &HashMap<String, PolarValue> {
-    //     &self.0
-    // serde_cbor::value::from_value(self.0.clone()).unwrap()
-    // let dict: BTreeMap<String, Value> = serde_cbor::from_slice(&self.0)?;
-    // Ok(dict)
+    /// Attempt to serialize the entire telemetry from the given type.
+    #[tracing::instrument(level="trace", skip())]
+    pub fn try_from<T: Serialize + Debug>(from: &T) -> GraphResult<Self> {
+        let mut serializer = TelemetrySerializer::default();
+        from.serialize(&mut serializer)?;
+        Ok(serializer.output)
+    }
 
-    // let value = serde_cbor::from_slice::<serde_cbor::Value>(&self.0)?;
-    // if let serde_cbor::Value::Map(map) = value {
-    //     let keys = map.into_iter()
-    //         .map(|(k,v)| {
-    //             let rep = serde_cbor::value::from_value::<String>(k)?;
-    //             (rep, v)
-    //         })
-    //         .into_keys()
-    //     Ok(keys)
-    // } else {
-    //     GraphError::GraphSerde(format!("{:?} type doesn't support keys", value))
-    // }
-    // let foo: serde_cbor::Value = serde_cbor::from_slice(self.0).unwrap();
-    // foo.
-    // let table = self.0.clone().collect().unwrap();
-    // table.keys()
-    // }
+    #[inline]
+    #[tracing::instrument(level="trace", skip())]
+    pub fn extend(&mut self, that: Self) { self.0.extend(&that.0); }
 
     // pub fn is_empty(&self) -> bool {
     //     if let Value::Map(my_data) = &self.0 {
@@ -252,6 +215,7 @@ impl Telemetry {
     //     // self.drain_filter(|k, v| !f(k, v));
     // }
 
+    #[tracing::instrument(level="trace", skip(oso))]
     pub fn load_knowledge_base(oso: &mut oso::Oso) -> GraphResult<()> {
         oso.register_class(Telemetry::get_polar_class())?;
 
@@ -265,82 +229,75 @@ impl Telemetry {
     }
 }
 
-// impl config::Source for TelemetryData {
-//     fn clone_into_box(&self) -> Box<dyn Source + Send + Sync> {
-//         self.0.clone_into_box()
-//     }
-//
-//     fn collect(&self) -> std::result::Result<HashMap<String, Value>, config::ConfigError> { //Result<HashMap<String, Value>> {
-//         self.0.collect()
-//     }
-// }
+impl ToTelemetry for Telemetry {
+    #[tracing::instrument(level="trace", skip())]
+    fn to_telemetry(self) -> TelemetryValue {
+        self.0
+    }
+}
+
+impl FromTelemetry for Telemetry {
+    #[tracing::instrument(level="trace", skip())]
+    fn from_telemetry(val: TelemetryValue) -> GraphResult<Self> {
+        match val {
+            inner @ TelemetryValue::Table(_) => Ok(Telemetry(inner)),
+            _ => Err(GraphError::TypeError("Table".to_string())),
+        }
+    }
+}
 
 impl std::ops::Deref for Telemetry {
     type Target = HashMap<String, TelemetryValue>;
 
+    #[tracing::instrument(level="trace", skip())]
     fn deref(&self) -> &Self::Target {
-        let inner = &self.0;
-        &*inner
+        if let TelemetryValue::Table(ref inner) = self.0 {
+            &*inner
+        } else {
+            panic!("root telemetry value must be a Table, but is {:?}", self.0);
+        }
     }
 }
 
 impl std::ops::DerefMut for Telemetry {
+    #[tracing::instrument(level="trace", skip())]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        let inner = &mut self.0;
-        &mut *inner
+        if let TelemetryValue::Table(ref mut inner) = self.0 {
+            &mut *inner
+        } else {
+            panic!("root telemetry value must be a Table, but is {:?}.", self.0);
+        }
     }
 }
 
 impl Into<Telemetry> for HashMap<String, TelemetryValue> {
+    #[tracing::instrument(level="trace", skip())]
     fn into(self) -> Telemetry {
-        Telemetry(self)
+        Telemetry(TelemetryValue::Table(self))
     }
 }
 
-// impl Into<TelemetryData> for BTreeMap<String, Value> {
-//     fn into(self) -> TelemetryData {
-//         TelemetryData::from_data(self)
-//     }
-// }
+impl Into<Telemetry> for BTreeMap<String, TelemetryValue> {
+    #[tracing::instrument(level="trace", skip())]
+    fn into(self) -> Telemetry {
+        Telemetry::from_iter(self)
+    }
+}
 
 impl std::ops::Add for Telemetry {
     type Output = Self;
+    #[tracing::instrument(level="trace", skip())]
     fn add(mut self, rhs: Self) -> Self::Output {
-        self.0.extend(rhs.0);
+        self.0.extend(&rhs.0);
         self
-
-        // let mut my_data: BTreeMap<Value, Value> = serde_cbor::value::from_value(self.0).unwrap();
-        // let that_data: BTreeMap<Value, Value> = serde_cbor::value::from_value(rhs.0).unwrap();
-        // my_data.extend(that_data);
-        // Self(Value::Map(my_data))
-
-        // let mut lhs = self.dictionary();
-        // let rhs = self.dictionary();
-        // lhs.extend(rhs);
-        // let payload = serde_cbor::value::to_value(lhs).unwrap();
-        // // let mut lhs = serde_cbor::value::to_value(self.0);
-        // // lhs.merge(rhs.0);
-        // Self(payload)
     }
 }
 
 impl FromIterator<(String, TelemetryValue)> for Telemetry {
+    #[tracing::instrument(level="trace", skip(iter))]
     fn from_iter<T: IntoIterator<Item = (String, TelemetryValue)>>(iter: T) -> Self {
-        let mut telemetry = Telemetry::new();
-        telemetry.extend(iter);
-        telemetry
+        Telemetry(TelemetryValue::Table(HashMap::from_iter(iter)))
     }
-
-    // fn from_iter<T: IntoIterator<Item = (String, Value)>>(iter: T) -> Self {
-    //     let data = iter.into_iter().collect::<BTreeMap<_, _>>();
-    //     let payload = serde_cbor::value::to_value(data).unwrap();
-    //     Self(payload)
-    //     // let mut data = TelemetryData::default();
-    //     // for (k, v) in iter {
-    //     //     data.set(k.as_str(), v);
-    //     // }
-    //     // data
-    // }
 }
 
 impl<'a> IntoIterator for &'a Telemetry {
@@ -348,8 +305,13 @@ impl<'a> IntoIterator for &'a Telemetry {
     type IntoIter = std::collections::hash_map::Iter<'a, String, TelemetryValue>;
 
     #[inline]
+    #[tracing::instrument(level="trace", skip())]
     fn into_iter(self) -> Self::IntoIter {
-        self.0.iter()
+        if let TelemetryValue::Table(ref table) = self.0 {
+            table.iter()
+        } else {
+            panic!("telemetry root value must be a Table, but was {:?}", self.0);
+        }
     }
 }
 
@@ -358,8 +320,13 @@ impl<'a> IntoIterator for &'a mut Telemetry {
     type IntoIter = std::collections::hash_map::IterMut<'a, String, TelemetryValue>;
 
     #[inline]
+    #[tracing::instrument(level="trace", skip())]
     fn into_iter(self) -> Self::IntoIter {
-        self.0.iter_mut()
+        if let TelemetryValue::Table(ref mut table) = self.0 {
+            table.iter_mut()
+        } else {
+            panic!("telemetry root value must be a Table, but was {:?}", self.0);
+        }
     }
 }
 
@@ -368,332 +335,15 @@ impl IntoIterator for Telemetry {
     type IntoIter = std::collections::hash_map::IntoIter<String, TelemetryValue>;
 
     #[inline]
+    #[tracing::instrument(level="trace", skip())]
     fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+        if let TelemetryValue::Table(table) = self.0 {
+            table.into_iter()
+        } else {
+            panic!("telemetry root value must be a Table, but was {:?}", self.0);
+        }
     }
 }
-
-// impl Serialize for Telemetry {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer,
-//     {
-//         let mut map = serializer.serialize_map(Some(self.0.len()))?;
-//         for (k, v) in &self.0 {
-//             //todo: this is lazy; optimize by serializing Value directly
-//             let config_value: config::Value = v.into();
-//             map.serialize_entry(&k, &config_value)?;
-//         }
-//         map.end()
-//     }
-// }
-//
-// impl<'de> de::Deserialize<'de> for Telemetry {
-//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-//     where
-//         D: de::Deserializer<'de>,
-//     {
-//          deserializer.deserialize_map(TelemetryVisitor::new())
-//     }
-// }
-//
-// struct TelemetryVisitor {
-//     marker: PhantomData<fn() -> Telemetry>,
-// }
-//
-// impl TelemetryVisitor {
-//     fn new() -> Self {
-//         TelemetryVisitor { marker: PhantomData }
-//     }
-// }
-//
-// impl<'de> de::Visitor<'de> for TelemetryVisitor {
-//     type Value = Telemetry;
-//
-//     fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         f.write_str("telemetry data")
-//     }
-//
-//     fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
-//     where
-//         M: de::MapAccess<'de>,
-//     {
-//         let mut telemetry = Telemetry::new();
-//         while let Some((key, value)) = access.next_entry()? {
-//             telemetry.insert(key, value);
-//         }
-//         Ok(telemetry)
-//     }
-// }
-
-// struct TelemetryDataDeserializer<'de> {
-//     input: &'de str,
-// }
-//
-// impl<'de> TelemetryDataDeserializer {
-//     pub fn from_str(input: &'de str) -> Self {
-//         Self { input }
-//     }
-// }
-//
-// pub fn from_str<'a, T: de::Deserialize<'a>>(s: &'a str) -> GraphResult<T> {
-//     let mut deserializer = TelemetryDataDeserializer::from_str(s);
-//     let t = T::deserialize(&mut deserializer)?;
-//     if deserializer.input.is_empty() {
-//         Ok(t)
-//     } else {
-//         Err(de::Error::TrailingCharacters)
-//     }
-// }
-//
-// impl<'de> TelemetryDataDeserializer<'de> {
-//     // Look at the first character in the input without consuming it.
-//     fn peek_char(&mut self) -> GraphResult<char> {
-//         self.input.chars().new().ok_or(de::Error::Eof)
-//     }
-//
-//     // Consume the first character in the input.
-//     fn next_char(&mut self) -> GraphResult<char> {
-//         let ch = self.peek_char()?;
-//         self.input = &self.input[ch.len_utf8()..];
-//         Ok(ch)
-//     }
-//
-//     // Parse the JSON identifier `true` or `false`.
-//     fn parse_bool(&mut self) -> GraphResult<bool> {
-//         if self.input.starts_with("true") {
-//             self.input = &self.input["true".len()..];
-//             Ok(true)
-//         } else if self.input.starts_with("false") {
-//             self.input = &self.input["false".len()..];
-//             Ok(false)
-//         } else {
-//             Err(de::Error::ExpectedBoolean)
-//         }
-//     }
-//
-//     // Parse a group of decimal digits as an unsigned integer of type T.
-//     //
-//     // This implementation is a bit too lenient, for example `001` is not
-//     // allowed in JSON. Also the various arithmetic operations can overflow and
-//     // panic or return bogus data. But it is good enough for example code!
-//     fn parse_unsigned<T>(&mut self) -> GraphResult<T>
-//     where
-//         T: std::ops::AddAssign<T> + std::ops::MulAssign<T> + From<u8>,
-//     {
-//         let mut int = match self.next_char()? {
-//             ch @ '0'..='9' => T::from(ch as u8 - b'0'),
-//             _ => {
-//                 return Err(Error::ExpectedInteger);
-//             }
-//         };
-//         loop {
-//             match self.input.chars().next() {
-//                 Some(ch @ '0'..='9') => {
-//                     self.input = &self.input[1..];
-//                     int *= T::from(10);
-//                     int += T::from(ch as u8 - b'0');
-//                 }
-//                 _ => {
-//                     return Ok(int);
-//                 }
-//             }
-//         }
-//     }
-//
-//     // Parse a possible minus sign followed by a group of decimal digits as a
-//     // signed integer of type T.
-//     fn parse_signed<T>(&mut self) -> GraphResult<T>
-//     where
-//         T: std::ops::Neg<Output = T> + std::ops::AddAssign<T> + std::ops::MulAssign<T> + From<i8>,
-//     {
-//         // Optional minus sign, delegate to `parse_unsigned`, negate if negative.
-//         unimplemented!()
-//     }
-//
-//     // Parse a string until the next '"' character.
-//     //
-//     // Makes no attempt to handle escape sequences. What did you expect? This is
-//     // example code!
-//     fn parse_string(&mut self) -> GraphResult<&'de str> {
-//         if self.next_char()? != '"' {
-//             return Err(Error::ExpectedString);
-//         }
-//         match self.input.find('"') {
-//             Some(len) => {
-//                 let s = &self.input[..len];
-//                 self.input = &self.input[len + 1..];
-//                 Ok(s)
-//             }
-//             None => Err(Error::Eof),
-//         }
-//     }
-// }
-//
-// impl<'de> de::Deserializer<'de> for TelemetryData {
-//     type Error = GraphError;
-//
-//     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-//     where
-//         V: de::Visitor<'de>,
-//     {
-//         visitor.visit_map(MapAccess::new(self))
-//     }
-//
-//     #[inline]
-//     fn deserialize_bool<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_i8<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_i16<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_i32<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_i64<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_u8<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_u16<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_u32<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_u64<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_f32<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_f64<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_char<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_str<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_string<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_bytes<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_byte_buf<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_option<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_unit<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_unit_struct<V: de::Visitor<'de>>(self, name: &'static str, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_newtype_struct<V: de::Visitor<'de>>(self, name: &'static str, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_seq<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_tuple<V: de::Visitor<'de>>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_tuple_struct<V: de::Visitor<'de>>(self, name: &'static str, len: usize, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_map<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_struct<V: de::Visitor<'de>>(
-//         self, name: &'static str, fields: &'static [&'static str], visitor: V,
-//     ) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_enum<V: de::Visitor<'de>>(
-//         self, name: &'static str, variants: &'static [&'static str], visitor: V,
-//     ) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_identifier<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-//
-//     fn deserialize_ignored_any<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         unimplemented!()
-//     }
-// }
-//
-// struct MapAccess {
-//     elements: VecDeque<(String, Value)>,
-// }
-//
-// impl MapAccess {
-//     pub fn new(data: TelemetryData) -> Self {
-//         MapAccess {
-//             elements: VecDeque::from_iter(data),
-//         }
-//     }
-// }
-//
-// impl<'de> de::MapAccess<'de> for MapAccess {
-//     type Error = GraphError;
-//
-//     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Self::Error>
-//     where
-//         K: de::DeserializeSeed<'de>,
-//     {
-//         if let Some(&(ref key_s, _)) = self.elements.front() {
-//             // let key = de::DeserializeSeed::deserialize()
-//             let key = de::DeserializeSeed::deserialize(seed, key_s)?;
-//             Ok(Some(key))
-//         } else {
-//             Ok(None)
-//         }
-//     }
-//
-//     fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value, Self::Error>
-//     where
-//         V: de::DeserializeSeed<'de>,
-//     {
-//         let (key, value) = self.elements.pop_front().unwrap();
-//         de::DeserializeSeed::deserialize(seed, value).map_err(|err| err.into())
-//     }
-// }
 
 // /////////////////////////////////////////////////////
 // // Unit Tests ///////////////////////////////////////
@@ -704,6 +354,7 @@ mod tests {
     use chrono::{DateTime, Utc};
     use oso::{FromPolar, PolarClass, ToPolar};
     use serde::{Deserialize, Serialize};
+    use serde_test::{assert_tokens, Token};
     use std::iter::FromIterator;
 
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -719,6 +370,105 @@ mod tests {
         pub is_deploying: bool,
         #[serde(rename = "cluster.last_deployment", with = "crate::serde")]
         pub last_deployment: DateTime<Utc>,
+    }
+
+    // impl FromTelemetry for Data {
+    //     fn from_telemetry(val: TelemetryValue) -> GraphResult<Self> {
+    //         if let TelemetryValue::Map(table) = val {
+    //             let last_failure = table.get(&"task.last_failure".to_string()).map(|t| );
+    //             let is_deploying
+    //         } else {
+    //             Err(crate::error::GraphError::TypeError("TelemetryValue::Map".to_string()))
+    //         }
+    //     }
+    // }
+
+    #[test]
+    fn test_telemetry_serde_tokens() {
+        let data = Telemetry::from_iter(maplit::hashmap! {
+            "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_telemetry(),
+            // "cluster.is_deploying".to_string() => false.to_telemetry(),
+            // "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".to_telemetry(),
+        });
+
+        assert_tokens(
+            &data,
+            &vec![
+                Token::NewtypeStruct { name: "Telemetry" },
+                Token::Map { len: Some(1) },
+                Token::Str("task.last_failure"),
+                Token::NewtypeVariant {
+                    name: "TelemetryValue",
+                    variant: "Text",
+                },
+                Token::Str("2014-11-28T12:45:59.324310806Z"),
+                // Token::Str("cluster.is_deploying"),
+                // Token::NewtypeVariant { name:"TelemetryValue", variant:"Boolean"},
+                // Token::Bool(false),
+                // Token::Str("cluster.last_deployment"),
+                // Token::NewtypeVariant { name:"TelemetryValue", variant:"Text"},
+                // Token::Str("2014-11-28T10:11:37.246310806Z",),
+                Token::MapEnd,
+            ],
+        );
+    }
+
+    #[test]
+    fn test_telemetry_try_into_tokens() {
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let data = Telemetry::from_iter(maplit::hashmap! {
+            "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_telemetry(),
+            // "cluster.is_deploying".to_string() => false.to_telemetry(),
+            // "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".to_telemetry(),
+        });
+
+        let config_shape: config::Value = data.0.into();
+        // assert_tokens(
+        //     &config_shape,
+        //    &vec![
+        //        Token::NewtypeStruct { name:"Telemetry" },
+        //        Token::Map{ len: Some(1), },
+        //        Token::Str("task.last_failure"),
+        //        Token::NewtypeVariant { name:"TelemetryValue", variant:"Text"},
+        //        Token::Str("2014-11-28T12:45:59.324310806Z"),
+        //        // Token::Str("cluster.is_deploying"),
+        //        // Token::NewtypeVariant { name:"TelemetryValue", variant:"Boolean"},
+        //        // Token::Bool(false),
+        //        // Token::Str("cluster.last_deployment"),
+        //        // Token::NewtypeVariant { name:"TelemetryValue", variant:"Text"},
+        //        // Token::Str("2014-11-28T10:11:37.246310806Z",),
+        //        Token::MapEnd,
+        //    ]
+        // )
+    }
+
+    #[test]
+    fn test_telemetry_identity_try_into() -> anyhow::Result<()> {
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let data = Telemetry::from_iter(maplit::hashmap! {
+            "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_telemetry(),
+            // "cluster.is_deploying".to_string() => false.to_telemetry(),
+            // "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".to_telemetry(),
+        });
+
+        // let foo: Option<bool> = data
+        //     .get("cluster.is_deploying")
+        //     .map(|f| bool::from_telemetry(f.clone()).unwrap());
+        // assert_eq!(foo, Some(false));
+
+        let expected = Telemetry(
+            maplit::hashmap! {
+                "task.last_failure".to_string() => TelemetryValue::Text("2014-11-28T12:45:59.324310806Z".to_string()),
+                // "cluster.is_deploying".to_string() => TelemetryValue::Boolean(false),
+                // "cluster.last_deployment".to_string() => TelemetryValue::Text("2014-11-28T10:11:37.246310806Z".to_string()),
+            }
+            .to_telemetry(),
+        );
+        tracing::info!(telemetry=?data, ?expected, "expected conversion from telemetry data.");
+        let actual = data.try_into::<Telemetry>();
+        tracing::info!(?actual, "actual conversion from telemetry data.");
+        assert_eq!(actual?, expected);
+        Ok(())
     }
 
     #[test]

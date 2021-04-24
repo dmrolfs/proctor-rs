@@ -442,7 +442,7 @@ impl Clearinghouse {
                 let interested =
                     Self::find_interested_subscriptions(subscriptions, database.keys().collect(), updated_fields);
 
-                database.merge(d);
+                database.extend(d);
                 // database.extend(d);
                 Self::push_to_subscribers(database, interested).await?;
                 Ok(true)
