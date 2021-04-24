@@ -70,6 +70,7 @@ cast_trait_object = "0"
 #serde_with = { version = "1.6.4", features = ["chrono", "json", "macros"] }
 maplit = "1"
 serde-name = "0"
+regex = "1.4.6"
 
 [dev-dependencies]
 serde_test = "1"

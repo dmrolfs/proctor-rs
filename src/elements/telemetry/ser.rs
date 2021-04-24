@@ -1,6 +1,9 @@
 use crate::graph::GraphResult;
 use serde::ser;
 use std::fmt::Display;
+use regex::Regex;
+use lazy_static::lazy_static;
+use std::collections::HashMap;
 
 use super::{Telemetry, TelemetryValue};
 use crate::error::GraphError;
@@ -12,20 +15,193 @@ pub struct TelemetrySerializer {
     pub output: Telemetry,
 }
 
+enum KeyType {
+    Primitive,
+    Seq(usize),
+    Table(String),
+    SeqTable(usize, String),
+}
+
+const SEQ_PREFIX: &str = "__SEQ_";
+const TABLE_PREFIX: &str = "__TABLE_";
+const SEQ_TABLE_PREFIX: &str = "__SEQ_TABLE_";
+
 impl TelemetrySerializer {
-    #[tracing::instrument(level="trace", skip(value))]
+    #[tracing::instrument(level="trace", skip(value), fields(%value))]
     fn serialize_primitive<T>(&mut self, value: T) -> GraphResult<()>
     where
         T: Into<TelemetryValue> + Display,
     {
-        let key = match self.last_key_index_pair() {
-            Some((key, Some(index))) => Ok(format!("{}[{}]", key, index)),
+        let full_key = match self.last_key_index_pair() {
+            Some((key, Some(index))) => Ok(format!("{}{}[{}]", SEQ_PREFIX, key, index)),
             Some((key, None)) => Ok(key.to_string()),
             None => Err(GraphError::GraphSerde(format!("key is not found for value {}", value))),
         }?;
 
-        let _ = self.output.insert(key, value.into());
+        let (key, value) = self.refine_key_value(full_key, value)?;
+        tracing::trace!(?key, %value, "inserting into serialization output.");
+        let _ = self.output.insert(key, value);
         Ok(())
+    }
+
+    #[tracing::instrument(level="trace", skip(value), fields(%value))]
+    fn refine_key_value<T>(&mut self, full_key: String, value: T) -> GraphResult<(String, TelemetryValue)>
+    where
+        T: Into<TelemetryValue> + Display,
+    {
+        tracing::trace!(?full_key, %value, "refining full_key and value...");
+
+        let (key, key_type) = Self::do_refine_key(full_key)?;
+        let value = match key_type {
+            KeyType::Primitive => Self::do_refine_primitive_key_type(value)?, //value.into(),
+            KeyType::Seq(idx) => {
+                Self::do_refine_seq_key_type(idx, self.output.get(&key), value)?
+            },
+            KeyType::Table(k) => {
+                Self::do_refine_table_key_type(k.as_str(),self.output.get(&key), value)?
+            },
+            KeyType::SeqTable(idx, k) => {
+                Self::do_refine_seq_table_key_type(idx, k.as_str(), self.output.get(&key), value)?
+            },
+        };
+        tracing::info!(?key, ?value, "refined telemetry serialized key and value");
+        Ok((key, value))
+    }
+
+    #[tracing::instrument(level="trace")]
+    fn do_refine_key(full_key: String) -> GraphResult<(String, KeyType)> {
+        const NAME: &str = "name";
+        const KEY: &str = "key";
+        const IDX: &str = "idx";
+        lazy_static! {
+            static ref RE_SEQ: Regex = Regex::new(format!(r"{}(?P<{}>.+)\[(?P<{}>\d+)\]", SEQ_PREFIX, NAME, IDX).as_str()).unwrap();
+            static ref RE_TABLE: Regex = Regex::new(format!(r"{}(?P<{}>.+)\.(?P<{}>.+)", TABLE_PREFIX, NAME, KEY).as_str()).unwrap();
+            static ref RE_SEQ_TABLE: Regex = Regex::new(format!(
+                r"{}(?P<{}>.+)\[(?P<{}>\d+)\]\.(?P<{}>.+)",
+                SEQ_TABLE_PREFIX, NAME, KEY, IDX
+            ).as_str()).unwrap();
+        }
+
+        if let Some(captures) = RE_SEQ.captures(full_key.as_str()) {
+            let name = captures.name(NAME).unwrap().as_str().to_string();
+            let idx = captures.name(IDX).unwrap().as_str().parse::<usize>().unwrap();
+            Ok((name, KeyType::Seq(idx)))
+        } else if let Some(captures) = RE_TABLE.captures(full_key.as_str()) {
+            let name = captures.name(NAME).unwrap().as_str().to_string();
+            let k = captures.name(KEY).unwrap().as_str().to_string();
+            Ok((name, KeyType::Table(k)))
+        } else if let Some(captures) = RE_SEQ_TABLE.captures(full_key.as_str()) {
+            let name = captures.name(NAME).unwrap().as_str().to_string();
+            let idx = captures.name(IDX).unwrap().as_str().parse::<usize>().unwrap();
+            let k = captures.name(KEY).unwrap().as_str().to_string();
+            Ok((name, KeyType::SeqTable(idx, k)))
+        } else {
+            Ok((full_key, KeyType::Primitive))
+        }
+    }
+
+    #[tracing::instrument(level="trace", skip(value), fields(%value))]
+    fn do_refine_primitive_key_type<T>(value: T) -> GraphResult<TelemetryValue>
+        where
+            T: Into<TelemetryValue> + Display,
+    {
+        Ok(value.into())
+    }
+
+    #[tracing::instrument(level="trace", skip(value), fields(%value))]
+    fn do_refine_seq_key_type<T>(_idx: usize, telemetry: Option<&TelemetryValue>, value: T) -> GraphResult<TelemetryValue>
+        where
+            T: Into<TelemetryValue> + Display,
+    {
+        let seq_value = match telemetry {
+            None => TelemetryValue::Seq(vec![value.into()]),
+            Some(values) => {
+                if let TelemetryValue::Seq(ref vals) = values {
+                    let mut updated = vals.clone();
+                    updated.push(value.into());
+                    TelemetryValue::Seq(updated)
+                } else {
+                    Err(GraphError::GraphSerde(
+                        format!(
+                            "serialized seq key form expected to match Seq telemetry value, but see: {:?}",
+                            values
+                        )
+                    ))?
+                }
+            }
+        };
+        Ok(seq_value)
+    }
+
+    #[tracing::instrument(level="trace", skip(value), fields(%value))]
+    fn do_refine_table_key_type<T>(key: &str, telemetry: Option<&TelemetryValue>, value: T) -> GraphResult<TelemetryValue>
+        where
+            T: Into<TelemetryValue> + Display,
+    {
+        let table_value = match telemetry {
+            None => TelemetryValue::Table(maplit::hashmap! {key.to_string() => value.into()}),
+            Some(table) => {
+                if let TelemetryValue::Table(ref tbl) = table {
+                    let mut updated = tbl.clone();
+                    updated.insert(key.to_string(), value.into());
+                    TelemetryValue::Table(updated)
+                } else {
+                    Err(GraphError::GraphSerde(format!(
+                        "serialized table key form expected to match Table telemetry value, but see: {:?}",
+                        table
+                    )))?
+                }
+            }
+        };
+
+        Ok(table_value)
+    }
+
+    #[tracing::instrument(level="trace", skip(value), fields(%value))]
+    fn do_refine_seq_table_key_type<T>(
+        idx: usize,
+        key: &str,
+        telemetry: Option<&TelemetryValue>,
+        value: T
+    ) -> GraphResult<TelemetryValue>
+        where
+            T: Into<TelemetryValue> + Display,
+    {
+        let seq_table_value = match telemetry {
+            None => {
+                let tbl_item = TelemetryValue::Table(maplit::hashmap! {key.to_string() => value.into()});
+                TelemetryValue::Seq(vec![tbl_item])
+            },
+            Some(tables) => {
+                if let TelemetryValue::Seq(ref tbls) = tables {
+                    let mut updated = tbls.clone();
+                    let mut tbl = if idx < updated.len() {
+                        updated.remove(idx)
+                    } else {
+                        TelemetryValue::Table(HashMap::new())
+                    };
+
+                    if let TelemetryValue::Table(mut t) = tbl {
+                        t.insert(key.to_string(), value.into());
+                        updated.insert(idx, TelemetryValue::Table(t));
+                    } else {
+                        Err(GraphError::GraphSerde(format!(
+                            "serialized seq of tables key form expected to match Seq+Table telemetry value, but see: {:?}",
+                            tables
+                        )))?
+                    }
+
+                    TelemetryValue::Seq(updated)
+                } else {
+                    Err(GraphError::GraphSerde(format!(
+                        "serialized seq of tables key form expected to match Seq+Table telemetry value, but see: {:?}",
+                        tables
+                    )))?
+                }
+            }
+        };
+
+        Ok(seq_table_value)
     }
 
     #[tracing::instrument(level="trace", skip())]
@@ -57,9 +233,9 @@ impl TelemetrySerializer {
         if 0 < len {
             if let Some(&(ref prev_key, index)) = self.keys.get(len - 1) {
                 let full_key = if let Some(index) = index {
-                    format!("{}[{}].{}", prev_key, index, key)
+                    format!("{}{}[{}].{}", SEQ_TABLE_PREFIX, prev_key, index, key)
                 } else {
-                    format!("{}.{}", prev_key, key)
+                    format!("{}{}.{}", TABLE_PREFIX, prev_key, key)
                 };
                 full_key
             } else {
@@ -752,21 +928,26 @@ mod test {
     #[test]
     fn test_telemetry_struct_serde() {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_telemetry_struct_serde");
+        let _ = main_span.enter();
 
         #[derive(Debug, Serialize, Deserialize, PartialEq)]
         struct Test {
-            int: u32,
-            seq: Vec<String>,
+            int_foo: u32,
+            seq_bar: Vec<String>,
+            map_zed: std::collections::HashMap<String, i32>,
         }
 
-        let test = Test {
-            int: 1,
-            seq: vec!["a".to_string(), "b".to_string()],
+        let expected = Test {
+            int_foo: 1,
+            seq_bar: vec!["a".to_string(), "b".to_string()],
+            map_zed: maplit::hashmap! { "otis".to_string() => 5, "neo".to_string() => 1},
         };
-        let telemetry = Telemetry::try_from(&test).unwrap();
+        let telemetry = Telemetry::try_from(&expected).unwrap();
         tracing::info!(?telemetry, "after converting Test into telemetry.");
 
         let actual: Test = telemetry.try_into().unwrap();
-        assert_eq!(test, actual);
+        tracing::info!(?actual, "after converting telemetry into Test struct.");
+        assert_eq!(actual, expected);
     }
 }

@@ -363,13 +363,34 @@ impl<'de> de::Deserializer<'de> for Telemetry {
     fn deserialize_any<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         // Deserialize based on the underlying type
         match self.0 {
-            TelemetryValue::Unit => visitor.visit_unit(),
-            TelemetryValue::Integer(i) => visitor.visit_i64(i),
-            TelemetryValue::Boolean(b) => visitor.visit_bool(b),
-            TelemetryValue::Float(f) => visitor.visit_f64(f),
-            TelemetryValue::Text(s) => visitor.visit_string(s),
-            TelemetryValue::Seq(values) => visitor.visit_seq(SeqAccess::new(values)),
-            TelemetryValue::Table(map) => visitor.visit_map(MapAccess::new(map)),
+            TelemetryValue::Unit => {
+                tracing::trace!("visiting unit");
+                visitor.visit_unit()
+            },
+            TelemetryValue::Integer(i) => {
+                tracing::trace!(?i, "visiting int");
+                visitor.visit_i64(i)
+            },
+            TelemetryValue::Boolean(b) => {
+                tracing::trace!(?b, "visiting bool");
+                visitor.visit_bool(b)
+            },
+            TelemetryValue::Float(f) => {
+                tracing::trace!(?f, "visiting float");
+                visitor.visit_f64(f)
+            },
+            TelemetryValue::Text(text) => {
+                tracing::trace!(?text, "visiting text");
+                visitor.visit_string(text)
+            },
+            TelemetryValue::Seq(seq) => {
+                tracing::trace!(?seq, "visiting seq");
+                visitor.visit_seq(SeqAccess::new(seq))
+            },
+            TelemetryValue::Table(table) => {
+                tracing::trace!(?table, "visiting map");
+                visitor.visit_map(MapAccess::new(table))
+            },
         }
     }
 
