@@ -225,7 +225,8 @@ impl TestFlow {
         let context_channel =
             collection::SubscriptionChannel::<TestFlinkEligibilityContext>::new("eligibility_context").await?;
 
-        let telemetry_channel = collection::SubscriptionChannel::<Telemetry>::new("data_channel").await?;
+        //todo:: WORK HERE TO RESOLVE ONCE Telement try_[into|from] settled
+        // let telemetry_channel = collection::SubscriptionChannel::<Telemetry>::new("data_channel").await?;
         let eligibility = Eligibility::<TestFlinkEligibilityContext>::new("test_flink_eligibility", policy);
 
         let tx_eligibility_api = eligibility.tx_api();
@@ -245,14 +246,16 @@ impl TestFlow {
             .connect()
             .await;
         (merge.outlet(), clearinghouse.inlet()).connect().await;
-        clearinghouse
-            .add_subscription(telemetry_subscription, &telemetry_channel.subscription_receiver)
-            .await;
+        //todo: WORK HERE SEE ABOVE
+        // clearinghouse
+        //     .add_subscription(telemetry_subscription, &telemetry_channel.subscription_receiver)
+        //     .await;
         clearinghouse
             .add_subscription(context_subscription, &context_channel.subscription_receiver)
             .await;
         (context_channel.outlet(), eligibility.context_inlet()).connect().await;
-        (telemetry_channel.outlet(), eligibility.inlet()).connect().await;
+        //todo WORK HERE SEE ABOVE
+        // (telemetry_channel.outlet(), eligibility.inlet()).connect().await;
         (eligibility.outlet(), sink.inlet()).connect().await;
 
         assert!(eligibility.context_inlet.is_attached().await);
@@ -265,7 +268,8 @@ impl TestFlow {
         graph.push_back(Box::new(merge)).await;
         graph.push_back(Box::new(clearinghouse)).await;
         graph.push_back(Box::new(context_channel)).await;
-        graph.push_back(Box::new(telemetry_channel)).await;
+        //todo WORK HERE SEE ABOVE
+        // graph.push_back(Box::new(telemetry_channel)).await;
         graph.push_back(Box::new(eligibility)).await;
         graph.push_back(Box::new(sink)).await;
 

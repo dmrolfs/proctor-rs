@@ -2,11 +2,14 @@ use super::{FromTelemetry, ToTelemetry};
 use crate::graph::GraphResult;
 use config::Value as ConfigValue;
 use oso::{FromPolar, PolarValue, ToPolar};
-use serde::{de, Serialize};
+use serde::{de, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
+use crate::error::GraphError;
+use serde::ser::{SerializeSeq, SerializeMap};
+use serde::de::{Visitor, EnumAccess, Unexpected, Error, DeserializeSeed, VariantAccess};
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TelemetryValue {
     Integer(i64),
     Float(f64),
@@ -142,6 +145,36 @@ impl Into<ConfigValue> for TelemetryValue {
     }
 }
 
+impl<'de> Serialize for TelemetryValue {
+    #[tracing::instrument(level="trace", skip(serializer))]
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Unit => {
+                serializer.serialize_unit_variant("TelemetryValue", 6, "Unit")
+            },
+            Self::Boolean(b) => {
+                serializer.serialize_newtype_variant("TelemetryValue", 2, "Boolean", b)
+            },
+            Self::Integer(i) => {
+                serializer.serialize_newtype_variant("TelemetryValue", 0, "Integer", i)
+            },
+            Self::Float(f) => {
+                serializer.serialize_newtype_variant("TelemetryValue", 1, "Float", f)
+            },
+            Self::Text(t) => {
+                serializer.serialize_newtype_variant("TelemetryValue", 3, "Text", t)
+            },
+            Self::Seq(values) => {
+                serializer.serialize_newtype_variant("TelemetryValue",4, "Seq", values)
+            },
+            Self::Table(table) => {
+                serializer.serialize_newtype_variant("TelemetryValue",5, "Table", table)
+            },
+        }
+    }
+}
+
+
 impl<'de> de::Deserialize<'de> for TelemetryValue {
     #[inline]
     #[tracing::instrument(level="trace", skip(deserializer))]
@@ -162,49 +195,57 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
             #[inline]
             #[tracing::instrument(level="trace", skip())]
             fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E> {
-                Ok(v.to_telemetry())
+                tracing::trace!(value=?v, "deserializing bool value");
+                Ok(TelemetryValue::Boolean(v))
             }
 
             #[inline]
             #[tracing::instrument(level="trace", skip())]
             fn visit_i8<E>(self, v: i8) -> Result<Self::Value, E> {
-                Ok((v as i64).to_telemetry())
+                tracing::trace!(value=?v, "deserializing i8 value");
+                Ok(TelemetryValue::Integer(v as i64))
             }
 
             #[inline]
             #[tracing::instrument(level="trace", skip())]
             fn visit_i16<E>(self, v: i16) -> Result<Self::Value, E> {
-                Ok((v as i64).to_telemetry())
+                tracing::trace!(value=?v, "deserializing i16 value");
+                Ok(TelemetryValue::Integer(v as i64))
             }
 
             #[inline]
             #[tracing::instrument(level="trace", skip())]
             fn visit_i32<E>(self, v: i32) -> Result<Self::Value, E> {
-                Ok((v as i64).to_telemetry())
+                tracing::trace!(value=?v, "deserializing i32 value");
+                Ok(TelemetryValue::Integer(v as i64))
             }
 
             #[inline]
             #[tracing::instrument(level="trace", skip())]
             fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E> {
-                Ok(v.to_telemetry())
+                tracing::trace!(value=?v, "deserializing i64 value");
+                Ok(TelemetryValue::Integer(v))
             }
 
             #[inline]
             #[tracing::instrument(level="trace", skip())]
             fn visit_u8<E>(self, v: u8) -> Result<Self::Value, E> {
-                Ok((v as i64).to_telemetry())
+                tracing::trace!(value=?v, "deserializing u8 value");
+                Ok(TelemetryValue::Integer(v as i64))
             }
 
             #[inline]
             #[tracing::instrument(level="trace", skip())]
             fn visit_u16<E>(self, v: u16) -> Result<Self::Value, E> {
-                Ok((v as i64).to_telemetry())
+                tracing::trace!(value=?v, "deserializing u16 value");
+                Ok(TelemetryValue::Integer(v as i64))
             }
 
             #[inline]
             #[tracing::instrument(level="trace", skip())]
             fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E> {
-                Ok((v as i64).to_telemetry())
+                tracing::trace!(value=?v, "deserializing u32 value");
+                Ok(TelemetryValue::Integer(v as i64))
             }
 
             // #[inline]
@@ -215,8 +256,15 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
 
             #[inline]
             #[tracing::instrument(level="trace", skip())]
+            fn visit_f32<E>(self, v: f32) -> Result<Self::Value, E> {
+                tracing::trace!(value=?v, "deserializing f32 value");
+                Ok(TelemetryValue::Float(v as f64))
+            }
+            #[inline]
+            #[tracing::instrument(level="trace", skip())]
             fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E> {
-                Ok(v.to_telemetry())
+                tracing::trace!(value=?v, "deserializing f64 value");
+                Ok(TelemetryValue::Float(v))
             }
 
             #[inline]
@@ -225,13 +273,15 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
             where
                 E: de::Error,
             {
+                tracing::trace!(value=?v, "deserializing &str value");
                 self.visit_string(String::from(v))
             }
 
             #[inline]
             #[tracing::instrument(level="trace", skip())]
             fn visit_string<E>(self, v: String) -> Result<Self::Value, E> {
-                Ok(v.to_telemetry())
+                tracing::trace!(value=?v, "deserializing string value");
+                Ok(TelemetryValue::Text(v))
             }
 
             #[inline]
@@ -242,10 +292,11 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
             {
                 let mut vec: Seq = vec![];
                 while let Some(elem) = visitor.next_element()? {
+                    tracing::trace!(value=?elem, "adding deserialized seq item");
                     vec.push(elem);
                 }
 
-                Ok(vec.to_telemetry())
+                Ok(TelemetryValue::Seq(vec))
             }
 
             #[tracing::instrument(level="trace", skip(visitor))]
@@ -255,11 +306,18 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
             {
                 let mut table: Table = HashMap::new();
                 while let Some((key, value)) = visitor.next_entry()? {
+                    tracing::trace!(?key, ?value, "adding deserialized entry.");
                     table.insert(key, value);
                 }
 
-                Ok(table.to_telemetry())
+                Ok(TelemetryValue::Table(table))
             }
+
+            // #[tracing::instrument(level="trace", skip())]
+            // fn visit_enum<A>(self, data: A) -> Result<Self::Value, <A as EnumAccess<'_>>::Error> where
+            //     A: EnumAccess<'de>, {
+            //     todo!()
+            // }
         }
 
         deserializer.deserialize_any(ValueVisitor)
@@ -318,36 +376,78 @@ mod tests {
     use serde::{Deserialize, Serialize};
     use serde_test::{assert_tokens, Token};
     use std::iter::FromIterator;
+    use crate::elements::Telemetry;
+    use fmt::Debug;
+
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    struct Foo {
+        bar: TelemetryValue,
+    }
 
     #[test]
     fn test_telemetry_value_integer_serde() {
-        let data = TelemetryValue::Integer(33);
-        assert_tokens(
-            &data,
-            &vec![
-                Token::NewtypeVariant {
-                    name: "TelemetryValue",
-                    variant: "Integer",
-                },
-                Token::I64(33),
-            ],
-        )
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_telemetry_value_integer_serde");
+        let _main_span_guard = main_span.enter();
+
+        // let tel = Telemetry::from_iter(maplit::hashmap! {"foo".to_string() => TelemetryValue::Integer(42)});
+        // let tel_json = serde_json::to_string(&tel).unwrap();
+        // // assert_eq!(tel_json, r#"{"Table":{"foo":{"Integer":42}}}"#);
+        // assert_eq!(tel_json, r#"{"Table":{"foo":{"Integer":42}}}"#);
+        // tracing::warn!("testing deser from json: {}", tel_json);
+        // let actual_tel: Telemetry = serde_json::from_str(tel_json.as_str()).unwrap();
+        // assert_eq!(actual_tel, tel);
+
+        let foo = Foo { bar: TelemetryValue::Integer(37), };
+        let json_foo = serde_json::to_string(&foo).unwrap();
+        assert_eq!(json_foo, r#"{"bar":{"Integer":37}}"#);
+        tracing::warn!("deserialize: {}", json_foo);
+        let actual_foo: Foo = serde_json::from_str(json_foo.as_str()).unwrap();
+        tracing::warn!(actual=?actual_foo, expected=?foo, "checking result");
+        assert_eq!(actual_foo, foo);
+
+        // tracing::warn!("asserting tokens...");
+        // assert_tokens(
+        //     &data,
+        //     &vec![
+        //         Token::NewtypeStruct {name:"Telemetry"},
+        //         Token::NewtypeVariant { name:"TelemetryValue", variant:"Table", },
+        //         Token::Map {len:Some(1)},
+        //         Token::Str("data"),
+        //         Token::NewtypeVariant { name:"TelemetryValue", variant:"Integer",},
+        //         Token::I64(33),
+        //         Token::MapEnd,
+        //     ],
+        // );
     }
 
-    #[test]
-    fn test_telemetry_value_float_serde() {
-        let data = TelemetryValue::Float(std::f64::consts::LN_2);
-        assert_tokens(
-            &data,
-            &vec![
-                Token::NewtypeVariant {
-                    name: "TelemetryValue",
-                    variant: "Float",
-                },
-                Token::F64(std::f64::consts::LN_2),
-            ],
-        )
-    }
+    // #[test]
+    // fn test_telemetry_value_float_serde() {
+    //     let value = TelemetryValue::Float(std::f64::consts::LN_2);
+    //
+    //     let foo = Foo { bar: value.clone() };
+    //     let json_foo = serde_json::to_string(&foo).unwrap();
+    //     assert_eq!(json_foo, format!(r#"{{"bar":{{"Float":{}}}}}"#, std::f64::consts::LN_2));
+    //     let actual_foo: Foo = serde_json::from_str(json_foo.as_str()).unwrap();
+    //     assert_eq!(actual_foo, foo);
+    //
+    //     let data = Telemetry::from_iter(maplit::hashmap! {"data".to_string() => value.clone()});
+    //     let data_json = serde_json::to_string(&data).unwrap();
+    //     assert_eq!(data_json, format!(r#"{{"Table":{{"foo":{{"Integer":{}}}}}}}"#, std::f64::consts::LN_2));
+    //     let actual_data: Telemetry = serde_json::from_str(data_json.as_str()).unwrap();
+    //     assert_eq!(actual_data, data);
+    //
+    //     assert_tokens(
+    //         &data,
+    //         &vec![
+    //             // Token::NewtypeVariant {
+    //             //     name: "TelemetryValue",
+    //             //     variant: "Float",
+    //             // },
+    //             Token::F64(std::f64::consts::LN_2),
+    //         ],
+    //     )
+    // }
 
     #[test]
     fn test_telemetry_value_boolean_serde() {

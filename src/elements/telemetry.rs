@@ -18,7 +18,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::iter::{FromIterator, IntoIterator};
 use std::fmt::Debug;
 
-#[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(PolarClass, Debug, Clone, PartialEq)]
 pub struct Telemetry(TelemetryValue);
 
 impl Default for Telemetry {
@@ -356,6 +356,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
     use serde_test::{assert_tokens, Token};
     use std::iter::FromIterator;
+    use itertools::Itertools;
 
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
     struct Data {
@@ -372,6 +373,192 @@ mod tests {
         pub last_deployment: DateTime<Utc>,
     }
 
+    #[test]
+    fn test_telemetry_map_struct() {
+        #[derive(Debug, PartialEq, Serialize, Deserialize)]
+        struct TestData {
+            place: HashMap<String, i32>,
+        }
+
+        let data = TestData {
+            place: maplit::hashmap! {
+                    "foo".to_string() => 37,
+                    "bar".to_string() => 19,
+                }
+        };
+
+        let telemetry = Telemetry::from_iter(
+            maplit::hashmap! {
+                "place".to_string() => TelemetryValue::Table(maplit::hashmap! {
+                    "foo".to_string() => 37.to_telemetry(),
+                    "bar".to_string() => 19.to_telemetry(),
+                })
+            });
+
+        let actual_data: TestData = telemetry.clone().try_into().unwrap();
+        assert_eq!( actual_data, data);
+
+        let actual_telemetry = Telemetry::try_from(&actual_data).unwrap();
+        assert_eq!(actual_telemetry, telemetry);
+    }
+
+    #[test]
+    fn test_telemetry_struct_array() {
+        #[derive(Debug, Serialize, Deserialize)]
+        struct TestData {
+            #[serde(rename = "arr")]
+            elements: Vec<String>,
+        }
+
+        impl PartialEq for TestData {
+            fn eq(&self, other: &Self) -> bool {
+                let mut result = self.elements.len() == other.elements.len();
+                if result {
+                    let result = self.elements
+                        .iter()
+                        .zip_eq(&other.elements)
+                        .all(|(lhs, rhs)| lhs == rhs);
+                }
+                result
+            }
+        }
+
+        let data  = TestData {
+            elements: vec!["Otis".to_string(), "Stella".to_string(), "Neo".to_string()],
+        };
+
+        let telemetry = Telemetry::from_iter(
+            maplit::hashmap! {
+                "arr".to_string() => TelemetryValue::Seq(vec![
+                    TelemetryValue::Text("Otis".to_string()),
+                    TelemetryValue::Text("Stells".to_string()),
+                    TelemetryValue::Text("Neo".to_string()),
+                ])
+            }
+        );
+
+        let actual_data: TestData = telemetry.clone().try_into().unwrap();
+        assert_eq!(actual_data, data);
+
+        let actual_telemetry = Telemetry::try_from(&actual_data).unwrap();
+        assert_eq!(actual_telemetry, telemetry);
+    }
+
+    #[test]
+    fn test_telemetry_simple_enum() {
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_telemetry_enum");
+        let _main_span_guard = main_span.enter();
+
+        #[derive(Debug, Serialize, Deserialize, PartialEq)]
+        #[serde(rename_all = "lowercase")]
+        enum Diode {
+            Off,
+            Brightness(i32),
+            Blinking(i32, i32),
+            Pattern { name: String, infinite: bool },
+        }
+        #[derive(Debug, PartialEq, Serialize, Deserialize)]
+        struct TestData {
+            diodes: HashMap<String, Diode>,
+        }
+
+        let data = TestData {
+            diodes: maplit::hashmap! {
+                // "green".to_string() => Diode::Off,
+                // "lt-green".to_string() => Diode::Off,
+                "red".to_string() => Diode::Brightness(100),
+                // "blue".to_string() => Diode::Blinking(300, 700),
+                // "white".to_string() => Diode::Pattern { name: "christmas".to_string(), infinite: true,},
+            }
+        };
+
+        let telemetry = Telemetry::from_iter(
+            maplit::hashmap! {
+                "diodes".to_string() => TelemetryValue::Table(maplit::hashmap! {
+                    // "green".to_string() => TelemetryValue::Table(maplit::hashmap! { "off".to_string() => TelemetryValue::Unit}),
+                    // "lt-green".to_string() => TelemetryValue::Table(maplit::hashmap! { "off".to_string() => TelemetryValue::Unit}),
+                    "red".to_string() => TelemetryValue::Table(maplit::hashmap!{"brightness".to_string() => TelemetryValue::Integer(100)}),
+                    // "blue".to_string() => TelemetryValue::Table(maplit::hashmap!{"blinking".to_string() => TelemetryValue::Seq(vec![TelemetryValue::Integer(300), TelemetryValue::Integer(700)])}),
+                    // "white".to_string() => TelemetryValue::Table(maplit::hashmap!{"pattern".to_string() => TelemetryValue::Table(maplit::hashmap! {
+                    //     "name".to_string() => TelemetryValue::Text("christmas".to_string()),
+                    //     "infinite".to_string() => TelemetryValue::Boolean(true),
+                    // })})
+                }),
+            }
+        );
+
+        tracing::warn!("deserializing actual data from telemetry...");
+        let actual_data: TestData = telemetry.clone().try_into().unwrap();
+        tracing::warn!(?actual_data, "deserialized actual data");
+        assert_eq!(actual_data, data);
+
+        let actual_telemetry = Telemetry::try_from(&actual_data).unwrap();
+        assert_eq!(actual_telemetry, telemetry);
+    }
+
+    #[test]
+    fn test_telemetry_enum() {
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_telemetry_enum");
+        let _main_span_guard = main_span.enter();
+
+        #[derive(Debug, Serialize, Deserialize, PartialEq)]
+        #[serde(rename_all = "lowercase")]
+        enum Diode {
+            Off,
+            Brightness(i32),
+            Blinking(i32, i32),
+            Pattern { name: String, infinite: bool },
+        }
+        #[derive(Debug, PartialEq, Serialize, Deserialize)]
+        struct TestData {
+            diodes: HashMap<String, Diode>,
+        }
+
+        let data = TestData {
+            diodes: maplit::hashmap! {
+                "green".to_string() => Diode::Off,
+                "red".to_string() => Diode::Brightness(100),
+                "blue".to_string() => Diode::Blinking(300, 700),
+                "white".to_string() => Diode::Pattern { name: "christmas".to_string(), infinite: true,},
+            }
+        };
+
+        let telemetry = Telemetry::from_iter(
+            maplit::hashmap! {
+                "diodes".to_string() => TelemetryValue::Table(maplit::hashmap! {
+                    "green".to_string() => TelemetryValue::Table(maplit::hashmap! { "off".to_string() => TelemetryValue::Unit}),
+                    "red".to_string() => TelemetryValue::Table(maplit::hashmap!{"brightness".to_string() => TelemetryValue::Integer(100)}),
+                    "blue".to_string() => TelemetryValue::Table(maplit::hashmap!{"blinking".to_string() => TelemetryValue::Seq(vec![TelemetryValue::Integer(300), TelemetryValue::Integer(700)])}),
+                    "white".to_string() => TelemetryValue::Table(maplit::hashmap!{"pattern".to_string() => TelemetryValue::Table(maplit::hashmap! {
+                        "name".to_string() => TelemetryValue::Text("christmas".to_string()),
+                        "infinite".to_string() => TelemetryValue::Boolean(true),
+                    })})
+                }),
+            }
+        );
+
+        tracing::warn!("deserializing actual data from telemetry...");
+        let actual_data: TestData = telemetry.clone().try_into().unwrap();
+        tracing::warn!(?actual_data, "deserialized actual data");
+        assert_eq!(actual_data, data);
+
+        let actual_telemetry = Telemetry::try_from(&actual_data).unwrap();
+        assert_eq!(actual_telemetry, telemetry);
+
+        // assert_eq!(s.diodes["green"], Diode::Off);
+        // assert_eq!(s.diodes["red"], Diode::Brightness(100));
+        // assert_eq!(s.diodes["blue"], Diode::Blinking(300, 700));
+        // assert_eq!(
+        //     s.diodes["white"],
+        //     Diode::Pattern {
+        //         name: "christmas".into(),
+        //         infinite: true,
+        //     }
+        // );
+    }
+
     // impl FromTelemetry for Data {
     //     fn from_telemetry(val: TelemetryValue) -> GraphResult<Self> {
     //         if let TelemetryValue::Map(table) = val {
@@ -383,35 +570,35 @@ mod tests {
     //     }
     // }
 
-    #[test]
-    fn test_telemetry_serde_tokens() {
-        let data = Telemetry::from_iter(maplit::hashmap! {
-            "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_telemetry(),
-            // "cluster.is_deploying".to_string() => false.to_telemetry(),
-            // "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".to_telemetry(),
-        });
-
-        assert_tokens(
-            &data,
-            &vec![
-                Token::NewtypeStruct { name: "Telemetry" },
-                Token::Map { len: Some(1) },
-                Token::Str("task.last_failure"),
-                Token::NewtypeVariant {
-                    name: "TelemetryValue",
-                    variant: "Text",
-                },
-                Token::Str("2014-11-28T12:45:59.324310806Z"),
-                // Token::Str("cluster.is_deploying"),
-                // Token::NewtypeVariant { name:"TelemetryValue", variant:"Boolean"},
-                // Token::Bool(false),
-                // Token::Str("cluster.last_deployment"),
-                // Token::NewtypeVariant { name:"TelemetryValue", variant:"Text"},
-                // Token::Str("2014-11-28T10:11:37.246310806Z",),
-                Token::MapEnd,
-            ],
-        );
-    }
+    // #[test]
+    // fn test_telemetry_serde_tokens() {
+    //     let data = Telemetry::from_iter(maplit::hashmap! {
+    //         "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_telemetry(),
+    //         // "cluster.is_deploying".to_string() => false.to_telemetry(),
+    //         // "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".to_telemetry(),
+    //     });
+    //
+    //     assert_tokens(
+    //         &data,
+    //         &vec![
+    //             Token::NewtypeStruct { name: "Telemetry" },
+    //             Token::Map { len: Some(1) },
+    //             Token::Str("task.last_failure"),
+    //             Token::NewtypeVariant {
+    //                 name: "TelemetryValue",
+    //                 variant: "Text",
+    //             },
+    //             Token::Str("2014-11-28T12:45:59.324310806Z"),
+    //             // Token::Str("cluster.is_deploying"),
+    //             // Token::NewtypeVariant { name:"TelemetryValue", variant:"Boolean"},
+    //             // Token::Bool(false),
+    //             // Token::Str("cluster.last_deployment"),
+    //             // Token::NewtypeVariant { name:"TelemetryValue", variant:"Text"},
+    //             // Token::Str("2014-11-28T10:11:37.246310806Z",),
+    //             Token::MapEnd,
+    //         ],
+    //     );
+    // }
 
     #[test]
     fn test_telemetry_try_into_tokens() {
@@ -442,38 +629,41 @@ mod tests {
         // )
     }
 
-    #[test]
-    fn test_telemetry_identity_try_into() -> anyhow::Result<()> {
-        lazy_static::initialize(&crate::tracing::TEST_TRACING);
-        let data = Telemetry::from_iter(maplit::hashmap! {
-            "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_telemetry(),
-            // "cluster.is_deploying".to_string() => false.to_telemetry(),
-            // "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".to_telemetry(),
-        });
-
-        // let foo: Option<bool> = data
-        //     .get("cluster.is_deploying")
-        //     .map(|f| bool::from_telemetry(f.clone()).unwrap());
-        // assert_eq!(foo, Some(false));
-
-        let expected = Telemetry(
-            maplit::hashmap! {
-                "task.last_failure".to_string() => TelemetryValue::Text("2014-11-28T12:45:59.324310806Z".to_string()),
-                // "cluster.is_deploying".to_string() => TelemetryValue::Boolean(false),
-                // "cluster.last_deployment".to_string() => TelemetryValue::Text("2014-11-28T10:11:37.246310806Z".to_string()),
-            }
-            .to_telemetry(),
-        );
-        tracing::info!(telemetry=?data, ?expected, "expected conversion from telemetry data.");
-        let actual = data.try_into::<Telemetry>();
-        tracing::info!(?actual, "actual conversion from telemetry data.");
-        assert_eq!(actual?, expected);
-        Ok(())
-    }
+    // #[test]
+    // fn test_telemetry_identity_try_into() -> anyhow::Result<()> {
+    //     lazy_static::initialize(&crate::tracing::TEST_TRACING);
+    //     let data = Telemetry::from_iter(maplit::hashmap! {
+    //         "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_telemetry(),
+    //         // "cluster.is_deploying".to_string() => false.to_telemetry(),
+    //         // "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".to_telemetry(),
+    //     });
+    //
+    //     // let foo: Option<bool> = data
+    //     //     .get("cluster.is_deploying")
+    //     //     .map(|f| bool::from_telemetry(f.clone()).unwrap());
+    //     // assert_eq!(foo, Some(false));
+    //
+    //     let expected = Telemetry(
+    //         maplit::hashmap! {
+    //             "task.last_failure".to_string() => TelemetryValue::Text("2014-11-28T12:45:59.324310806Z".to_string()),
+    //             // "cluster.is_deploying".to_string() => TelemetryValue::Boolean(false),
+    //             // "cluster.last_deployment".to_string() => TelemetryValue::Text("2014-11-28T10:11:37.246310806Z".to_string()),
+    //         }
+    //         .to_telemetry(),
+    //     );
+    //     tracing::info!(telemetry=?data, ?expected, "expected conversion from telemetry data.");
+    //     let actual = data.try_into::<Telemetry>();
+    //     tracing::info!(?actual, "actual conversion from telemetry data.");
+    //     assert_eq!(actual?, expected);
+    //     Ok(())
+    // }
 
     #[test]
     fn test_telemetry_data_try_into_deserializer() -> anyhow::Result<()> {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_telemetry_data_try_into_deserializer");
+        let _main_span_guard = main_span.enter();
+
         let data = Telemetry::from_iter(maplit::btreemap! {
             "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_telemetry(),
             "cluster.is_deploying".to_string() => false.to_telemetry(),

@@ -1,9 +1,9 @@
 use crate::graph::GraphResult;
 use serde::ser;
-use std::fmt::Display;
 use regex::Regex;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
+use std::fmt::Debug;
 
 use super::{Telemetry, TelemetryValue};
 use crate::error::GraphError;
@@ -27,29 +27,29 @@ const TABLE_PREFIX: &str = "__TABLE_";
 const SEQ_TABLE_PREFIX: &str = "__SEQ_TABLE_";
 
 impl TelemetrySerializer {
-    #[tracing::instrument(level="trace", skip(value), fields(%value))]
+    #[tracing::instrument(level="trace", skip(), )]
     fn serialize_primitive<T>(&mut self, value: T) -> GraphResult<()>
     where
-        T: Into<TelemetryValue> + Display,
+        T: Into<TelemetryValue> + Debug,
     {
         let full_key = match self.last_key_index_pair() {
             Some((key, Some(index))) => Ok(format!("{}{}[{}]", SEQ_PREFIX, key, index)),
             Some((key, None)) => Ok(key.to_string()),
-            None => Err(GraphError::GraphSerde(format!("key is not found for value {}", value))),
+            None => Err(GraphError::GraphSerde(format!("key is not found for value {:?}", value))),
         }?;
 
         let (key, value) = self.refine_key_value(full_key, value)?;
-        tracing::trace!(?key, %value, "inserting into serialization output.");
+        tracing::trace!(?key, ?value, "inserting into serialization output.");
         let _ = self.output.insert(key, value);
         Ok(())
     }
 
-    #[tracing::instrument(level="trace", skip(value), fields(%value))]
+    #[tracing::instrument(level="trace", skip(), )]
     fn refine_key_value<T>(&mut self, full_key: String, value: T) -> GraphResult<(String, TelemetryValue)>
     where
-        T: Into<TelemetryValue> + Display,
+        T: Into<TelemetryValue> + Debug,
     {
-        tracing::trace!(?full_key, %value, "refining full_key and value...");
+        tracing::trace!(?full_key, ?value, "refining full_key and value...");
 
         let (key, key_type) = Self::do_refine_key(full_key)?;
         let value = match key_type {
@@ -100,18 +100,18 @@ impl TelemetrySerializer {
         }
     }
 
-    #[tracing::instrument(level="trace", skip(value), fields(%value))]
+    #[tracing::instrument(level="trace", skip(), )]
     fn do_refine_primitive_key_type<T>(value: T) -> GraphResult<TelemetryValue>
         where
-            T: Into<TelemetryValue> + Display,
+            T: Into<TelemetryValue> + Debug,
     {
         Ok(value.into())
     }
 
-    #[tracing::instrument(level="trace", skip(value), fields(%value))]
+    #[tracing::instrument(level="trace")]
     fn do_refine_seq_key_type<T>(_idx: usize, telemetry: Option<&TelemetryValue>, value: T) -> GraphResult<TelemetryValue>
         where
-            T: Into<TelemetryValue> + Display,
+            T: Into<TelemetryValue> + Debug,
     {
         let seq_value = match telemetry {
             None => TelemetryValue::Seq(vec![value.into()]),
@@ -133,10 +133,10 @@ impl TelemetrySerializer {
         Ok(seq_value)
     }
 
-    #[tracing::instrument(level="trace", skip(value), fields(%value))]
+    #[tracing::instrument(level="trace", skip(),)]
     fn do_refine_table_key_type<T>(key: &str, telemetry: Option<&TelemetryValue>, value: T) -> GraphResult<TelemetryValue>
         where
-            T: Into<TelemetryValue> + Display,
+            T: Into<TelemetryValue> + Debug,
     {
         let table_value = match telemetry {
             None => TelemetryValue::Table(maplit::hashmap! {key.to_string() => value.into()}),
@@ -157,7 +157,7 @@ impl TelemetrySerializer {
         Ok(table_value)
     }
 
-    #[tracing::instrument(level="trace", skip(value), fields(%value))]
+    #[tracing::instrument(level="trace", skip(), )]
     fn do_refine_seq_table_key_type<T>(
         idx: usize,
         key: &str,
@@ -165,7 +165,7 @@ impl TelemetrySerializer {
         value: T
     ) -> GraphResult<TelemetryValue>
         where
-            T: Into<TelemetryValue> + Display,
+            T: Into<TelemetryValue> + Debug,
     {
         let seq_table_value = match telemetry {
             None => {
