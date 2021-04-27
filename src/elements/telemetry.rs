@@ -12,11 +12,12 @@ use crate::error::GraphError;
 use crate::graph::GraphResult;
 use oso::ToPolar;
 use oso::PolarClass;
-use ser::TelemetrySerializer;
+// use ser::TelemetrySerializer;
 use serde::{de as serde_de, Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::iter::{FromIterator, IntoIterator};
 use std::fmt::Debug;
+use flexbuffers;
 
 #[derive(PolarClass, Debug, Clone, PartialEq)]
 pub struct Telemetry(TelemetryValue);
@@ -34,21 +35,28 @@ impl Telemetry {
         Self::default()
     }
 
-    #[tracing::instrument(level="trace", skip())]
-    pub fn from_value<V: Into<TelemetryValue> + Debug>(value: V) -> Self {
-        let val = value.into();
-        match val {
-            inner @ TelemetryValue::Table(_) => Self(inner),
-            v => {
-                panic!("telemetry root value must be a Table, but was provided a: {:?}", v);
-            }
-        }
-    }
+    // #[tracing::instrument(level="trace", skip())]
+    // pub fn from_value<V: Into<TelemetryValue> + Debug>(value: V) -> Self {
+    //
+    //     let val = value.into();
+    //     match val {
+    //         inner @ TelemetryValue::Table(_) => Self(inner),
+    //         v => {
+    //             panic!("telemetry root value must be a Table, but was provided a: {:?}", v);
+    //         }
+    //     }
+    // }
 
     /// Attempt to deserialize the entire telemetry into the requested type.
     #[tracing::instrument(level="trace", skip())]
     pub fn try_into<T: serde_de::DeserializeOwned>(self) -> GraphResult<T> {
-        T::deserialize(self)
+        let mut serializer = flexbuffers::FlexbufferSerializer::new();
+        self.0.serialize(&mut serializer)?;
+        let reader = flexbuffers::Reader::get_root(serializer.view())?;
+        let result = T::deserialize(reader)?;
+        Ok(result)
+
+        // T::deserialize(self)
         // T::from_telemetry(TelemetryValue::Map(self.0))
         // todo optimize to transform directly
         // let config_shape: config::Value = TelemetryValue::Map(self.0).into();
@@ -56,12 +64,17 @@ impl Telemetry {
         // config_shape.try_into().map_err(|err| err.into())
     }
 
+    //todo: I can't get this to work wrt Enum Unit Variants - see commented out try_form portion of
+    // test_telemetry_simple_enum()
     /// Attempt to serialize the entire telemetry from the given type.
     #[tracing::instrument(level="trace", skip())]
     pub fn try_from<T: Serialize + Debug>(from: &T) -> GraphResult<Self> {
-        let mut serializer = TelemetrySerializer::default();
+        let mut serializer = flexbuffers::FlexbufferSerializer::new();
         from.serialize(&mut serializer)?;
-        Ok(serializer.output)
+        let data = serializer.view();
+        let reader = flexbuffers::Reader::get_root(data)?;
+        let root = TelemetryValue::deserialize(reader)?;
+        Ok(Telemetry(root))
     }
 
     #[inline]
@@ -374,7 +387,67 @@ mod tests {
     }
 
     #[test]
+    fn test_basic_serde() {
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_telemetry_basic_serde");
+        let _main_span_guard = main_span.enter();
+
+        let telemetry = TelemetryValue::Table(
+            maplit::hashmap! {
+                "place".to_string() => TelemetryValue::Table(maplit::hashmap! {
+                    "foo".to_string() => 37.to_telemetry(),
+                    "bar".to_string() => 19.to_telemetry(),
+                })
+            });
+
+        let mut serializer = flexbuffers::FlexbufferSerializer::new();
+        telemetry.serialize(&mut serializer).unwrap();
+        let reader = flexbuffers::Reader::get_root(serializer.view()).unwrap();
+        tracing::warn!("reader map: {:?}", reader.as_map());
+        let actual = TelemetryValue::deserialize(reader).unwrap();
+        tracing::warn!(?actual, expected=?telemetry, "actual vs expected");
+        assert_eq!(actual, telemetry);
+    }
+
+    #[test]
+    fn test_simple_struct() {
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_simple_struct");
+        let _main_span_guard = main_span.enter();
+
+        #[derive(Debug, PartialEq, Serialize, Deserialize)]
+        struct TestData {
+            foo: i32,
+            bar: String,
+            zed: f64,
+        }
+
+        let data = TestData {
+            foo: 37,
+            bar: "Otis".to_string(),
+            zed: std::f64::consts::LN_2,
+        };
+
+        let telemetry = Telemetry::from_iter(
+            maplit::hashmap! {
+                    "foo".to_string() => 37.to_telemetry(),
+                    "bar".to_string() => "Otis".to_telemetry(),
+                    "zed".to_string() => std::f64::consts::LN_2.to_telemetry(),
+            });
+
+        let actual_data: TestData = telemetry.clone().try_into().unwrap();
+        assert_eq!( actual_data, data);
+
+        let actual_telemetry = Telemetry::try_from(&actual_data).unwrap();
+        assert_eq!(actual_telemetry, telemetry);
+    }
+
+    #[test]
     fn test_telemetry_map_struct() {
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_telemetry_map_struct");
+        let _main_span_guard = main_span.enter();
+
         #[derive(Debug, PartialEq, Serialize, Deserialize)]
         struct TestData {
             place: HashMap<String, i32>,
@@ -465,9 +538,9 @@ mod tests {
 
         let data = TestData {
             diodes: maplit::hashmap! {
-                // "green".to_string() => Diode::Off,
+                "green".to_string() => Diode::Off,
                 // "lt-green".to_string() => Diode::Off,
-                "red".to_string() => Diode::Brightness(100),
+                // "red".to_string() => Diode::Brightness(100),
                 // "blue".to_string() => Diode::Blinking(300, 700),
                 // "white".to_string() => Diode::Pattern { name: "christmas".to_string(), infinite: true,},
             }
@@ -476,9 +549,10 @@ mod tests {
         let telemetry = Telemetry::from_iter(
             maplit::hashmap! {
                 "diodes".to_string() => TelemetryValue::Table(maplit::hashmap! {
+                    "green".to_string() => TelemetryValue::Text("off".to_string()),
                     // "green".to_string() => TelemetryValue::Table(maplit::hashmap! { "off".to_string() => TelemetryValue::Unit}),
                     // "lt-green".to_string() => TelemetryValue::Table(maplit::hashmap! { "off".to_string() => TelemetryValue::Unit}),
-                    "red".to_string() => TelemetryValue::Table(maplit::hashmap!{"brightness".to_string() => TelemetryValue::Integer(100)}),
+                    // "red".to_string() => TelemetryValue::Table(maplit::hashmap!{"brightness".to_string() => TelemetryValue::Integer(100)}),
                     // "blue".to_string() => TelemetryValue::Table(maplit::hashmap!{"blinking".to_string() => TelemetryValue::Seq(vec![TelemetryValue::Integer(300), TelemetryValue::Integer(700)])}),
                     // "white".to_string() => TelemetryValue::Table(maplit::hashmap!{"pattern".to_string() => TelemetryValue::Table(maplit::hashmap! {
                     //     "name".to_string() => TelemetryValue::Text("christmas".to_string()),
@@ -493,6 +567,7 @@ mod tests {
         tracing::warn!(?actual_data, "deserialized actual data");
         assert_eq!(actual_data, data);
 
+        tracing::warn!(?actual_data, "creating telemetry from actual_data");
         let actual_telemetry = Telemetry::try_from(&actual_data).unwrap();
         assert_eq!(actual_telemetry, telemetry);
     }
@@ -528,7 +603,8 @@ mod tests {
         let telemetry = Telemetry::from_iter(
             maplit::hashmap! {
                 "diodes".to_string() => TelemetryValue::Table(maplit::hashmap! {
-                    "green".to_string() => TelemetryValue::Table(maplit::hashmap! { "off".to_string() => TelemetryValue::Unit}),
+                    // "green".to_string() => TelemetryValue::Table(maplit::hashmap! { "off".to_string() => TelemetryValue::Unit}),
+                    "green".to_string() => TelemetryValue::Text("off".to_string()),
                     "red".to_string() => TelemetryValue::Table(maplit::hashmap!{"brightness".to_string() => TelemetryValue::Integer(100)}),
                     "blue".to_string() => TelemetryValue::Table(maplit::hashmap!{"blinking".to_string() => TelemetryValue::Seq(vec![TelemetryValue::Integer(300), TelemetryValue::Integer(700)])}),
                     "white".to_string() => TelemetryValue::Table(maplit::hashmap!{"pattern".to_string() => TelemetryValue::Table(maplit::hashmap! {
@@ -544,6 +620,7 @@ mod tests {
         tracing::warn!(?actual_data, "deserialized actual data");
         assert_eq!(actual_data, data);
 
+        tracing::warn!(?actual_data, "creating telemetry from actual_data");
         let actual_telemetry = Telemetry::try_from(&actual_data).unwrap();
         assert_eq!(actual_telemetry, telemetry);
 

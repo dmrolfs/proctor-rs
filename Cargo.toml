@@ -44,7 +44,7 @@ num_cpus = "1"
 reqwest = { version = "0", features = ["blocking", "json"] }
 serde = "1"
 serde_json = "1"
-serde_cbor = "0"
+flexbuffers = "0"
 serde-aux = "2"
 sonyflake = "0"
 thiserror = "1"
