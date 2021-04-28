@@ -107,7 +107,7 @@ impl<T> SinkShape for Broadcast<T> {
 
 #[dyn_upcast]
 #[async_trait]
-impl<T: AppData + Clone + Sync> Stage for Broadcast<T> {
+impl<T: AppData + Clone> Stage for Broadcast<T> {
     #[inline]
     fn name(&self) -> &str {
         self.name.as_str()

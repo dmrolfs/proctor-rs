@@ -92,7 +92,7 @@ pub struct CompositeThrough<In, Out> {
     outlet: Outlet<Out>,
 }
 
-impl<In: AppData + Sync, Out: AppData + Sync> CompositeThrough<In, Out> {
+impl<In: AppData, Out: AppData> CompositeThrough<In, Out> {
     pub async fn new<S>(name: S, graph: Graph, graph_inlet: Inlet<In>, graph_outlet: Outlet<Out>) -> Self
     where
         S: Into<String>,

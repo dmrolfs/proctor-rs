@@ -1,6 +1,7 @@
 mod fixtures;
 
 use cast_trait_object::DynCastExt;
+use proctor::elements::Telemetry;
 use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use proctor::phases::collection;
 use proctor::phases::collection::TelemetrySubscription;
@@ -12,7 +13,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Data {
     #[serde(default)]
-    pub pos: Option<usize>,
+    pub pos: Option<i64>,
     #[serde(default)]
     pub value: Option<f64>,
     #[serde(default)]
@@ -42,8 +43,17 @@ async fn test_basic_1_clearinghouse_subscription() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_basic_1_clearinghouse_subscription");
     let _main_span_guard = main_span.enter();
 
+    let d = Data {
+        pos: Some(3),
+        value: Some(2.71828),
+        cat: "Apollo".to_string(),
+    };
+    let t = Telemetry::try_from(&d);
+    tracing::warn!(?d, ?t, "DMR: Direct try_from.");
+
     let test_focus = maplit::hashset! { POS_FIELD.to_string() };
     let (actual_count, actual_sum) = test_scenario(test_focus).await?;
+    tracing::warn!(%actual_count, %actual_sum, "DMR: Results are in!");
     assert_eq!(actual_count, 3);
     assert_eq!(actual_sum, 8);
     Ok(())
@@ -67,17 +77,17 @@ async fn test_basic_2_clearinghouse_subscription() -> anyhow::Result<()> {
 }
 
 /// returns pos field (count, sum)
-async fn test_scenario(focus: HashSet<String>) -> anyhow::Result<(usize, usize)> {
+async fn test_scenario(focus: HashSet<String>) -> anyhow::Result<(i64, i64)> {
     let base_path = std::env::current_dir()?;
     let cvs_path = base_path.join(PathBuf::from("tests/data/cats.csv"));
     let cvs_setting = SourceSetting::Csv { path: cvs_path };
-    let cvs = collection::make_telemetry_cvs_source("cvs", &cvs_setting)?;
+    let cvs = collection::make_telemetry_cvs_source::<Data, _>("cvs", &cvs_setting)?;
 
     let mut clearinghouse = collection::Clearinghouse::new("clearinghouse");
     let pos_channel = collection::SubscriptionChannel::<Data>::new("pos_channel").await?;
 
     // let pos_stats_fields = focus.clone();
-    let mut pos_stats = stage::Fold::<_, Data, (usize, usize)>::new("pos_stats", (0, 0), move |(count, sum), data| {
+    let mut pos_stats = stage::Fold::<_, Data, (i64, i64)>::new("pos_stats", (0, 0), move |(count, sum), data| {
         let pos = data.pos.unwrap_or(0);
         // let delivered = data.keys().cloned().collect::<HashSet<_>>();
         // let unexpected = delivered.difference(&pos_stats_fields).collect::<HashSet<_>>();

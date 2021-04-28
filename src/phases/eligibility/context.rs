@@ -79,7 +79,6 @@ mod tests {
     use crate::elements::ToTelemetry;
     use chrono::{DateTime, Utc};
     use lazy_static::lazy_static;
-    use oso::{PolarClass, PolarValue, ToPolar};
     use serde_test::{assert_tokens, Token};
     use std::iter::FromIterator;
 

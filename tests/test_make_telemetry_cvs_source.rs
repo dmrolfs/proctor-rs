@@ -1,18 +1,24 @@
 mod fixtures;
 
-use anyhow::Result;
-use cast_trait_object::DynCastExt;
-use chrono::{DateTime, TimeZone, Utc};
+use ::anyhow::Result;
+use ::cast_trait_object::DynCastExt;
+use ::chrono::{DateTime, TimeZone, Utc};
+use ::serde::{Deserialize, Serialize};
+use ::serde_with::{serde_as, TimestampSeconds};
+use ::std::path::PathBuf;
 use proctor::elements::{FromTelemetry, Telemetry};
 use proctor::graph::{stage, Connect, Graph, SinkShape};
 use proctor::phases::collection::make_telemetry_cvs_source;
 use proctor::settings::SourceSetting;
-use std::path::PathBuf;
 
-#[derive(Debug, Clone, PartialEq)]
+#[serde_as]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Data {
+    #[serde_as(as = "Option<TimestampSeconds<i64>>")]
+    #[serde(default)]
     pub last_failure: Option<DateTime<Utc>>,
     pub is_deploying: bool,
+    #[serde_as(as = "TimestampSeconds<i64>")]
     pub latest_deployment: DateTime<Utc>,
 }
 
@@ -39,7 +45,7 @@ async fn test_make_telemetry_cvs_source() -> Result<()> {
     let path = base_path.join(PathBuf::from("tests/data/eligibility.csv"));
     let setting = SourceSetting::Csv { path };
 
-    let source = make_telemetry_cvs_source("local", &setting)?;
+    let source = make_telemetry_cvs_source::<Data, _>("local", &setting)?;
 
     let mut sink = stage::Fold::<_, Telemetry, (Data, bool)>::new(
         "sink",

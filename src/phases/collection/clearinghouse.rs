@@ -212,18 +212,11 @@ impl TelemetrySubscription {
             } => {
                 let mut interested = false;
                 for changed in changed_fields {
-                    tracing::trace!(
-                        "DMR: looking for interest in {:?} within req:{:?} OR opt:{:?}",
-                        changed,
-                        required_fields,
-                        optional_fields
-                    );
                     if required_fields.contains(changed) || optional_fields.contains(changed) {
                         interested = true;
                         break;
                     }
                 }
-                tracing::trace!("DMR: interested in {:?}? => {}", changed_fields, interested);
                 interested
             }
         }
@@ -348,6 +341,7 @@ impl TelemetrySubscription {
 
 impl TelemetrySubscription {
     pub async fn close(self) {
+        tracing::error!(?self, "DMR: CLOSING SUBSCRIPTION!!!");
         match self {
             Self::All {
                 name: _,
@@ -466,7 +460,7 @@ impl Clearinghouse {
             .filter(|s| {
                 let is_interested = s.any_interest(&available, &changed);
                 tracing::trace!(
-                    "DMR: is subscription, {}, interested in changed:{:?} => {}",
+                    "is subscription, {}, interested in changed fields:{:?} => {}",
                     s.name(),
                     changed,
                     is_interested
@@ -478,6 +472,7 @@ impl Clearinghouse {
         tracing::info!(
             nr_subscriptions=%subscriptions.len(),
             nr_interested=%interested.len(),
+            ?interested,
             "interested subscriptions {}.",
             if interested.is_empty() { "not found"} else { "found" }
         );
@@ -485,7 +480,11 @@ impl Clearinghouse {
         interested
     }
 
-    #[tracing::instrument(level = "trace", skip(database, subscribers))]
+    #[tracing::instrument(
+        level = "trace",
+        skip(database, subscribers),
+        fields(subscribers = ?subscribers.iter().map(|s| s.name()).collect::<Vec<_>>(), ),
+    )]
     async fn push_to_subscribers(database: &Telemetry, subscribers: Vec<&TelemetrySubscription>) -> GraphResult<()> {
         if subscribers.is_empty() {
             tracing::info!("not publishing - no subscribers corresponding to field changes.");
@@ -696,7 +695,7 @@ impl Stage for Clearinghouse {
     }
 
     async fn close(mut self: Box<Self>) -> GraphResult<()> {
-        tracing::trace!("closing clearinghouse.");
+        tracing::warn!("DMR: closing clearinghouse.");
         self.inlet.close().await;
         for s in self.subscriptions {
             s.close().await;
@@ -721,11 +720,10 @@ impl stage::WithApi for Clearinghouse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::elements::{TelemetryValue, ToTelemetry};
+    use crate::elements::ToTelemetry;
     use crate::graph::stage::{self, Stage, WithApi};
     use crate::graph::{Connect, SinkShape, SourceShape};
     use lazy_static::lazy_static;
-    use oso::{FromPolar, PolarClass, PolarValue, ToPolar};
     use std::collections::HashMap;
     use std::iter::FromIterator;
     use std::time::Duration;

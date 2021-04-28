@@ -1,21 +1,37 @@
 mod fixtures;
 
+use ::serde::{Deserialize, Serialize};
+use ::serde_with::{serde_as, TimestampSeconds};
 use chrono::*;
 use lazy_static::lazy_static;
-use oso::{Oso, PolarClass};
+use oso::{Oso, PolarClass, ToPolar};
+use pretty_assertions::assert_eq;
 use proctor::elements::PolicyFilterEvent;
 use proctor::elements::{self, Policy, PolicySource, Telemetry, ToTelemetry};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape, UniformFanInShape};
 use proctor::phases::collection;
 use proctor::phases::collection::TelemetrySubscription;
-use proctor::phases::eligibility::{self, Eligibility};
+use proctor::phases::eligibility::Eligibility;
+use proctor::AppData;
 use proctor::{ProctorContext, ProctorResult};
-use serde::{Deserialize, Serialize};
+use ::serde::de::DeserializeOwned;
+use serde_test::{assert_tokens, Token};
 use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
 use std::iter::FromIterator;
+use std::marker::PhantomData;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
+
+#[serde_as]
+#[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Data {
+    pub input_messages_per_sec: f64,
+    #[serde_as(as = "TimestampSeconds<i64>")]
+    pub timestamp: DateTime<Utc>,
+    pub inbox_lag: i64,
+}
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TestFlinkEligibilityContext {
@@ -84,8 +100,6 @@ impl TestClusterStatus {
     }
 }
 
-use serde_test::{assert_tokens, Token};
-
 lazy_static! {
     static ref DT_1: DateTime<Utc> = Utc::now();
     static ref DT_1_STR: String = format!("{}", DT_1.format("%+"));
@@ -118,17 +132,19 @@ fn test_context_serde() {
 }
 
 #[derive(Debug)]
-struct TestEligibilityPolicy {
+struct TestEligibilityPolicy<D> {
     custom_fields: Option<HashSet<String>>,
     policy: PolicySource,
+    data_marker: PhantomData<D>,
 }
 
-impl TestEligibilityPolicy {
+impl<D> TestEligibilityPolicy<D> {
     pub fn new(policy: PolicySource) -> Self {
         policy.validate().expect("failed to parse policy");
         Self {
             custom_fields: None,
             policy,
+            data_marker: PhantomData,
         }
     }
 
@@ -140,8 +156,8 @@ impl TestEligibilityPolicy {
     }
 }
 
-impl Policy for TestEligibilityPolicy {
-    type Item = Telemetry;
+impl<D: AppData + ToPolar> Policy for TestEligibilityPolicy<D> {
+    type Item = D;
     type Context = TestFlinkEligibilityContext;
 
     fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
@@ -196,18 +212,18 @@ impl Policy for TestEligibilityPolicy {
     }
 }
 
-struct TestFlow {
+struct TestFlow<D> {
     pub graph_handle: JoinHandle<()>,
     pub tx_data_source_api: stage::ActorSourceApi<Telemetry>,
     pub tx_context_source_api: stage::ActorSourceApi<Telemetry>,
     pub tx_clearinghouse_api: collection::ClearinghouseApi,
     pub tx_eligibility_api: elements::PolicyFilterApi<TestFlinkEligibilityContext>,
-    pub rx_eligibility_monitor: elements::PolicyFilterMonitor<Telemetry, TestFlinkEligibilityContext>,
-    pub tx_sink_api: stage::FoldApi<Vec<Telemetry>>,
-    pub rx_sink: Option<oneshot::Receiver<Vec<Telemetry>>>,
+    pub rx_eligibility_monitor: elements::PolicyFilterMonitor<D, TestFlinkEligibilityContext>,
+    pub tx_sink_api: stage::FoldApi<Vec<D>>,
+    pub rx_sink: Option<oneshot::Receiver<Vec<D>>>,
 }
 
-impl TestFlow {
+impl<D: AppData + Clone + DeserializeOwned + ToPolar> TestFlow<D> {
     pub async fn new<S: Into<String>>(telemetry_subscription: TelemetrySubscription, policy: S) -> ProctorResult<Self> {
         let telemetry_source = stage::ActorSource::<Telemetry>::new("telemetry_source");
         let tx_data_source_api = telemetry_source.tx_api();
@@ -225,14 +241,13 @@ impl TestFlow {
         let context_channel =
             collection::SubscriptionChannel::<TestFlinkEligibilityContext>::new("eligibility_context").await?;
 
-        //todo:: WORK HERE TO RESOLVE ONCE Telement try_[into|from] settled
-        // let telemetry_channel = collection::SubscriptionChannel::<Telemetry>::new("data_channel").await?;
-        let eligibility = Eligibility::<TestFlinkEligibilityContext>::new("test_flink_eligibility", policy);
+        let telemetry_channel = collection::SubscriptionChannel::<D>::new("data_channel").await?;
+        let eligibility = Eligibility::<D, TestFlinkEligibilityContext>::new("test_flink_eligibility", policy);
 
         let tx_eligibility_api = eligibility.tx_api();
         let rx_eligibility_monitor = eligibility.rx_monitor();
 
-        let mut sink = stage::Fold::<_, Telemetry, _>::new("sink", Vec::new(), |mut acc, item| {
+        let mut sink = stage::Fold::<_, D, _>::new("sink", Vec::new(), |mut acc, item| {
             acc.push(item);
             acc
         });
@@ -246,16 +261,14 @@ impl TestFlow {
             .connect()
             .await;
         (merge.outlet(), clearinghouse.inlet()).connect().await;
-        //todo: WORK HERE SEE ABOVE
-        // clearinghouse
-        //     .add_subscription(telemetry_subscription, &telemetry_channel.subscription_receiver)
-        //     .await;
+        clearinghouse
+            .add_subscription(telemetry_subscription, &telemetry_channel.subscription_receiver)
+            .await;
         clearinghouse
             .add_subscription(context_subscription, &context_channel.subscription_receiver)
             .await;
         (context_channel.outlet(), eligibility.context_inlet()).connect().await;
-        //todo WORK HERE SEE ABOVE
-        // (telemetry_channel.outlet(), eligibility.inlet()).connect().await;
+        (telemetry_channel.outlet(), eligibility.inlet()).connect().await;
         (eligibility.outlet(), sink.inlet()).connect().await;
 
         assert!(eligibility.context_inlet.is_attached().await);
@@ -321,7 +334,7 @@ impl TestFlow {
 
     pub async fn recv_policy_event(
         &mut self,
-    ) -> GraphResult<elements::PolicyFilterEvent<Telemetry, TestFlinkEligibilityContext>> {
+    ) -> GraphResult<elements::PolicyFilterEvent<D, TestFlinkEligibilityContext>> {
         self.rx_eligibility_monitor.recv().await.map_err(|err| err.into())
     }
 
@@ -339,7 +352,7 @@ impl TestFlow {
             .map_err(|err| err.into())
     }
 
-    pub async fn inspect_sink(&self) -> GraphResult<Vec<Telemetry>> {
+    pub async fn inspect_sink(&self) -> GraphResult<Vec<D>> {
         let (cmd, acc) = stage::FoldCmd::get_accumulation();
         self.tx_sink_api.send(cmd)?;
         acc.await
@@ -350,7 +363,8 @@ impl TestFlow {
             .map_err(|err| err.into())
     }
 
-    pub async fn close(mut self) -> GraphResult<Vec<Telemetry>> {
+    #[tracing::instrument(level="warn", skip(self))]
+    pub async fn close(mut self) -> GraphResult<Vec<D>> {
         let (stop, _) = stage::ActorSourceCmd::stop();
         self.tx_data_source_api.send(stop)?;
 
@@ -370,25 +384,41 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
     let _ = main_span.enter();
 
     tracing::warn!("test_eligibility_before_context_baseline_A");
-    let mut flow = TestFlow::new(
+    let mut flow: TestFlow<Data> = TestFlow::new(
         TelemetrySubscription::new("all_data"),
         r#"eligible(item, environment) if environment.location_code == 33;"#,
     )
     .await?;
     tracing::warn!("test_eligibility_before_context_baseline_B");
-    let data = Telemetry::from_iter(maplit::hashmap! {
-       "input_messages_per_sec".to_string() => std::f64::consts::PI.to_telemetry(),
-        "timestamp".to_string() => format!("{}", Utc::now().format("%+")).to_telemetry(),
-        "inbox_lag".to_string() => 3.to_telemetry(),
+    let now_utc = Utc::now();
+    // let now_ts = now_utc.timestamp();
 
-    });
+    let data = Data {
+        input_messages_per_sec: std::f64::consts::PI,
+        timestamp: now_utc,
+        inbox_lag: 3,
+    };
+    // let expected_data_telemetry = Telemetry::from_iter(maplit::hashmap! {
+    //    "input_messages_per_sec".to_string() => std::f64::consts::PI.to_telemetry(),
+    //     "timestamp".to_string() => now_ts.to_telemetry(),
+    //     "inbox_lag".to_string() => 3.to_telemetry(),
+    //
+    // });
+
+    let data_telemetry = Telemetry::try_from(&data)?;
+    // assert_eq!(data_telemetry, expected_data_telemetry);
     tracing::warn!("test_eligibility_before_context_baseline_C");
 
-    flow.push_telemetry(data.clone()).await?;
+    flow.push_telemetry(data_telemetry).await?;
     tracing::warn!("test_eligibility_before_context_baseline_D");
     let actual = flow.inspect_sink().await?;
     tracing::warn!("test_eligibility_before_context_baseline_E");
     assert!(actual.is_empty());
+
+    tracing::warn!("sleeping awhile before closing shop...");
+    // tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+    tracing::warn!(".. done sleeping -- closing shop.");
+
     tracing::warn!("test_eligibility_before_context_baseline_F");
 
     match flow.rx_eligibility_monitor.recv().await? {
@@ -415,7 +445,12 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_eligibility_happy_context");
     let _ = main_span.enter();
 
-    let mut flow = TestFlow::new(
+    #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
+    pub struct MeasurementData {
+        measurement: f64,
+    }
+
+    let mut flow: TestFlow<MeasurementData> = TestFlow::new(
         TelemetrySubscription::new("measurements").with_required_fields(maplit::hashset! {"measurement".to_string()}),
         r#"eligible(_, context) if context.cluster_status.is_deploying == false;"#,
     )
@@ -469,6 +504,12 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
 
     tracing::warn!("DMR: 04. Push Item...");
 
+    let t1 = Telemetry::from_iter(maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_telemetry()});
+    assert_eq!(
+        MeasurementData { measurement: std::f64::consts::PI,},
+        t1.try_into::<MeasurementData>()?
+    );
+
     // let ts = Utc::now().into();
     flow.push_telemetry(maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_telemetry()}.into())
         .await?;
@@ -477,12 +518,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
 
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     let actual = flow.inspect_sink().await?;
-    assert_eq!(
-        actual,
-        vec![Telemetry::from_iter(
-            maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_telemetry(),}
-        ),]
-    );
+    assert_eq!( actual, vec![MeasurementData { measurement: std::f64::consts::PI,},] );
 
     tracing::warn!("DMR: 06. Push another Item...");
 
@@ -499,8 +535,8 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     assert_eq!(
         actual,
         vec![
-            Telemetry::from_iter(maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_telemetry()}),
-            Telemetry::from_iter(maplit::hashmap! {"measurement".to_string() => std::f64::consts::TAU.to_telemetry()}),
+            MeasurementData { measurement: std::f64::consts::PI, },
+            MeasurementData { measurement: std::f64::consts::TAU, },
         ]
     );
     Ok(())

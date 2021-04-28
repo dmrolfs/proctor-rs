@@ -312,15 +312,21 @@ impl From<std::io::Error> for GraphError {
 }
 
 impl From<flexbuffers::SerializationError> for GraphError {
-    fn from(that: flexbuffers::SerializationError) -> Self { GraphError::GraphBoundary(that.into())}
+    fn from(that: flexbuffers::SerializationError) -> Self {
+        GraphError::GraphBoundary(that.into())
+    }
 }
 
 impl From<flexbuffers::DeserializationError> for GraphError {
-    fn from(that: flexbuffers::DeserializationError) -> Self { GraphError::GraphBoundary(that.into())}
+    fn from(that: flexbuffers::DeserializationError) -> Self {
+        GraphError::GraphBoundary(that.into())
+    }
 }
 
 impl From<flexbuffers::ReaderError> for GraphError {
-    fn from(that: flexbuffers::ReaderError) -> Self { GraphError::GraphBoundary(that.into())}
+    fn from(that: flexbuffers::ReaderError) -> Self {
+        GraphError::GraphBoundary(that.into())
+    }
 }
 
 impl From<std::num::TryFromIntError> for GraphError {

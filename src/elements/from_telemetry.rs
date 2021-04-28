@@ -13,21 +13,22 @@ impl<Out, T> FromTelemetryStage<Out> for T where T: Stage + ThroughShape<In = Te
 #[tracing::instrument(level = "info", skip(name))]
 pub async fn make_from_telemetry<Out, S>(name: S, log_conversion_failure: bool) -> GraphResult<FromTelemetryShape<Out>>
 where
-    Out: AppData + Sync + DeserializeOwned,
+    Out: AppData + DeserializeOwned,
     S: AsRef<str>,
 {
     let from_telemetry =
         stage::Map::<_, Telemetry, GraphResult<Out>>::new(format!("{}_from_telemetry", name.as_ref()), |telemetry| {
-            let converted = telemetry.clone().try_into::<Out>();
+            tracing::trace!(?telemetry, "converting telemetry into data item...");
+            let converted = telemetry.try_into::<Out>();
             if let Err(ref err) = converted {
                 tracing::error!(error=?err, "failed to convert an entity from telemetry data");
             }
-            tracing::trace!(?telemetry, ?converted, "data item conversion from telemetry.");
+            tracing::trace!(?converted, "data item conversion from telemetry.");
             converted
         });
 
     let mut filter_failures = stage::FilterMap::new(
-        format!("{}_filter_ok_items", name.as_ref()),
+        format!("{}_filter_ok_conversions", name.as_ref()),
         |item: GraphResult<Out>| item.ok(),
     );
     if log_conversion_failure {

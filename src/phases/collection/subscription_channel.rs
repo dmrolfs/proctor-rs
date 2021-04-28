@@ -18,7 +18,7 @@ pub struct SubscriptionChannel<T> {
     outlet: Outlet<T>,
 }
 
-impl<T: AppData + Sync + DeserializeOwned> SubscriptionChannel<T> {
+impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
     pub async fn new<S: Into<String>>(name: S) -> GraphResult<Self> {
         let name = name.into();
         let inner_stage = make_from_telemetry(name.as_str(), true).await?;

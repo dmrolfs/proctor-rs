@@ -190,7 +190,7 @@ impl<T: Debug> Inlet<T> {
 
             item
         } else {
-            tracing::trace!(inlet=%self.0, "Inlet not attached");
+            // tracing::trace!(inlet=%self.0, "Inlet not attached");
             None
         }
     }

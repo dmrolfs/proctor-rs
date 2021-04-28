@@ -8,7 +8,7 @@ use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use proctor::tracing::{get_subscriber, init_subscriber};
 use reqwest::Url;
 use serde::de;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::fmt::{self, Display};
 use std::iter::FromIterator;
 use std::time::Duration;

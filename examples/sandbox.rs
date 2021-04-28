@@ -1,3 +1,4 @@
+use ::serde::{Deserialize, Serialize};
 use anyhow::Result;
 use cast_trait_object::DynCastExt;
 use proctor::elements::{self, FromTelemetry};
@@ -11,7 +12,7 @@ use proctor::tracing::{get_subscriber, init_subscriber};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Data {
     pub pos: Option<usize>,
     pub value: Option<f64>,
@@ -43,7 +44,7 @@ async fn main() -> Result<()> {
     let base_path = std::env::current_dir()?;
     let cvs_path = base_path.join(PathBuf::from("tests/data/cats.csv"));
     let cvs_setting = SourceSetting::Csv { path: cvs_path };
-    let cvs = collection::make_telemetry_cvs_source("cvs", &cvs_setting)?;
+    let cvs = collection::make_telemetry_cvs_source::<Data, _>("cvs", &cvs_setting)?;
 
     let mut clearinghouse = collection::Clearinghouse::new("clearinghouse");
 

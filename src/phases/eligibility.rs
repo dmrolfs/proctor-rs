@@ -1,8 +1,8 @@
-use crate::elements::{Policy, PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, Telemetry};
+use crate::elements::{Policy, PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor};
 use crate::error::GraphError;
-use crate::graph::stage::{self, Stage, WithApi, WithMonitor};
-use crate::graph::{Connect, Graph, GraphResult, Inlet, Outlet, Port, SinkShape, SourceShape, ThroughShape};
-use crate::ProctorContext;
+use crate::graph::stage::{Stage, WithApi, WithMonitor};
+use crate::graph::{GraphResult, Inlet, Outlet, Port, SinkShape, SourceShape, ThroughShape};
+use crate::{AppData, ProctorContext};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt::{self, Debug};
@@ -11,24 +11,22 @@ use tokio::sync::broadcast;
 mod context;
 mod policy;
 
-pub struct Eligibility<C> {
+pub struct Eligibility<D, C> {
     name: String,
     // pub subscription: TelemetrySubscription,
-    inner_stage: Option<Box<dyn InnerStage>>,
+    inner_stage: Option<Box<dyn InnerStage<D>>>,
     pub context_inlet: Inlet<C>,
-    inlet: Inlet<Telemetry>,
-    outlet: Outlet<Telemetry>,
+    inlet: Inlet<D>,
+    outlet: Outlet<D>,
     tx_policy_api: PolicyFilterApi<C>,
-    tx_policy_monitor: broadcast::Sender<PolicyFilterEvent<Telemetry, C>>,
+    tx_policy_monitor: broadcast::Sender<PolicyFilterEvent<D, C>>,
 }
 
-//todo extract subscriptions (data and context) from eligibility into SubscriptionSource stage.
-
-impl<C: ProctorContext> Eligibility<C> {
+impl<D: AppData + Clone, C: ProctorContext> Eligibility<D, C> {
     #[tracing::instrument(level = "info", skip(name))]
-    pub fn new<S: Into<String>>(name: S, policy: impl Policy<Item = Telemetry, Context = C> + 'static) -> Self {
+    pub fn new<S: Into<String>>(name: S, policy: impl Policy<Item = D, Context = C> + 'static) -> Self {
         let name = name.into();
-        let policy_filter: PolicyFilter<Telemetry, C> =
+        let policy_filter: PolicyFilter<D, C> =
             PolicyFilter::new(format!("{}_eligibility_policy", name), Box::new(policy));
         let context_inlet = policy_filter.context_inlet();
         let inlet = policy_filter.inlet();
@@ -149,7 +147,7 @@ impl<C: ProctorContext> Eligibility<C> {
     }
 }
 
-impl<C: Debug> Debug for Eligibility<C> {
+impl<D, C: Debug> Debug for Eligibility<D, C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Eligibility")
             .field("name", &self.name)
@@ -162,19 +160,19 @@ impl<C: Debug> Debug for Eligibility<C> {
     }
 }
 
-trait InnerStage: Stage + ThroughShape<In = Telemetry, Out = Telemetry> + 'static {}
-impl<T: 'static + Stage + ThroughShape<In = Telemetry, Out = Telemetry>> InnerStage for T {}
+trait InnerStage<D>: Stage + ThroughShape<In = D, Out = D> + 'static {}
+impl<D, T: 'static + Stage + ThroughShape<In = D, Out = D>> InnerStage<D> for T {}
 
-impl<C> SinkShape for Eligibility<C> {
-    type In = Telemetry;
+impl<D, C> SinkShape for Eligibility<D, C> {
+    type In = D;
     #[inline]
     fn inlet(&self) -> Inlet<Self::In> {
         self.inlet.clone()
     }
 }
 
-impl<C> SourceShape for Eligibility<C> {
-    type Out = Telemetry;
+impl<D, C> SourceShape for Eligibility<D, C> {
+    type Out = D;
     #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()
@@ -183,7 +181,7 @@ impl<C> SourceShape for Eligibility<C> {
 
 #[dyn_upcast]
 #[async_trait]
-impl<C: ProctorContext> Stage for Eligibility<C> {
+impl<D: AppData, C: ProctorContext> Stage for Eligibility<D, C> {
     #[inline]
     fn name(&self) -> &str {
         self.name.as_ref()
@@ -223,7 +221,7 @@ impl<C: ProctorContext> Stage for Eligibility<C> {
     }
 }
 
-impl<C> WithApi for Eligibility<C> {
+impl<D, C> WithApi for Eligibility<D, C> {
     type Sender = PolicyFilterApi<C>;
     #[inline]
     fn tx_api(&self) -> Self::Sender {
@@ -231,8 +229,8 @@ impl<C> WithApi for Eligibility<C> {
     }
 }
 
-impl<C> WithMonitor for Eligibility<C> {
-    type Receiver = PolicyFilterMonitor<Telemetry, C>;
+impl<D, C> WithMonitor for Eligibility<D, C> {
+    type Receiver = PolicyFilterMonitor<D, C>;
     #[inline]
     fn rx_monitor(&self) -> Self::Receiver {
         self.tx_policy_monitor.subscribe()

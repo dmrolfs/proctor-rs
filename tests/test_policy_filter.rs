@@ -1,12 +1,12 @@
 mod fixtures;
 
+use ::serde::{Deserialize, Serialize};
 use chrono::*;
 use oso::{Oso, PolarClass};
 use proctor::elements::{self, Policy};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
 use proctor::ProctorContext;
-use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;

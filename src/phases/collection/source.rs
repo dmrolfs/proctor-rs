@@ -1,13 +1,12 @@
-use crate::elements::{Telemetry, TelemetryValue, ToTelemetry};
+use crate::elements::Telemetry;
 use crate::error::{ConfigError, GraphError, ProctorError};
 use crate::graph::stage::{tick, Stage, WithApi};
 use crate::graph::{stage, Connect, Graph, GraphResult, SinkShape, SourceShape};
 use crate::settings::SourceSetting;
 use crate::ProctorResult;
 use futures::future::FutureExt;
-use serde::de::DeserializeOwned;
-use std::collections::HashMap;
-use std::iter::FromIterator;
+use serde::{de::DeserializeOwned, Serialize};
+use std::fmt::Debug;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -25,8 +24,9 @@ impl<T: 'static + Stage + SourceShape<Out = Telemetry>> TelemetrySourceStage for
     skip(name, setting),
     fields(name=%name.as_ref(), ?setting),
 )]
-pub fn make_telemetry_cvs_source<S>(name: S, setting: &SourceSetting) -> ProctorResult<TelemetrySource>
+pub fn make_telemetry_cvs_source<D, S>(name: S, setting: &SourceSetting) -> ProctorResult<TelemetrySource>
 where
+    D: Debug + Serialize + DeserializeOwned,
     S: AsRef<str>,
 {
     if let SourceSetting::Csv { path } = setting {
@@ -42,11 +42,14 @@ where
 
         let mut reader = csv::Reader::from_path(path).map_err::<ProctorError, _>(|err| err.into())?;
 
-        for data in reader.deserialize::<HashMap<String, String>>() {
-            let data: HashMap<String, TelemetryValue> = data?.into_iter().map(|(k, v)| (k, v.to_telemetry())).collect();
-            let mut telemetry = Telemetry::from_iter(data);
-            telemetry.retain(|_, v| !v.is_empty());
-            records.push(telemetry);
+        for record in reader.deserialize() {
+            // let data: D = record?;
+            // let data: HashMap<String, TelemetryValue> = data?.into_iter().map(|(k, v)| (k, v.to_telemetry())).collect();
+            tracing::info!(?record, "DMR: looking at CVS record...");
+            let telemetry = Telemetry::try_from::<D>(&record?);
+            tracing::info!(?telemetry, "DMR: pulled CVS telemetry.");
+            // telemetry.retain(|_, v| !v.is_empty());
+            records.push(telemetry?);
         }
         let source = stage::Sequence::new(name, records);
 

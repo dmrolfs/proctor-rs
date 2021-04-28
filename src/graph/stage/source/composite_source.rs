@@ -152,7 +152,7 @@ pub struct CompositeSource<Out> {
     outlet: Outlet<Out>,
 }
 
-impl<Out: AppData + Sync> CompositeSource<Out> {
+impl<Out: AppData> CompositeSource<Out> {
     pub async fn new<S>(name: S, graph: Graph, graph_outlet: Outlet<Out>) -> Self
     where
         S: Into<String>,
