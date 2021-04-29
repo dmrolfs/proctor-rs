@@ -4,21 +4,24 @@ use ::anyhow::Result;
 use ::cast_trait_object::DynCastExt;
 use ::chrono::{DateTime, TimeZone, Utc};
 use ::serde::{Deserialize, Serialize};
-use ::serde_with::{serde_as, TimestampSeconds};
 use ::std::path::PathBuf;
 use proctor::elements::{FromTelemetry, Telemetry};
 use proctor::graph::{stage, Connect, Graph, SinkShape};
 use proctor::phases::collection::make_telemetry_cvs_source;
 use proctor::settings::SourceSetting;
 
-#[serde_as]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Data {
-    #[serde_as(as = "Option<TimestampSeconds<i64>>")]
-    #[serde(default)]
+    #[serde(
+        rename = "task.last_failure",
+        default,
+        serialize_with = "proctor::serde::serialize_optional_datetime",
+        deserialize_with = "proctor::serde::deserialize_optional_datetime"
+    )]
     pub last_failure: Option<DateTime<Utc>>,
+    #[serde(rename = "cluster.is_deploying")]
     pub is_deploying: bool,
-    #[serde_as(as = "TimestampSeconds<i64>")]
+    #[serde(rename = "cluster.last_deployment", with = "proctor::serde")]
     pub latest_deployment: DateTime<Utc>,
 }
 
@@ -53,7 +56,7 @@ async fn test_make_telemetry_cvs_source() -> Result<()> {
         |(acc, mut is_first), rec: Telemetry| {
             let dt_format = "%+";
 
-            let rec_last_failure = rec.get("task_last_failure").and_then(|r| {
+            let rec_last_failure = rec.get("task.last_failure").and_then(|r| {
                 let rep = String::from_telemetry(r.clone()).unwrap();
                 if rep.is_empty() {
                     None
@@ -76,7 +79,7 @@ async fn test_make_telemetry_cvs_source() -> Result<()> {
             };
 
             let rec_latest_deployment = DateTime::parse_from_str(
-                String::from_telemetry(rec.get("cluster_last_deployment").unwrap().clone())
+                String::from_telemetry(rec.get("cluster.last_deployment").unwrap().clone())
                     .unwrap()
                     .as_str(),
                 dt_format,

@@ -49,11 +49,11 @@ async fn test_basic_1_clearinghouse_subscription() -> anyhow::Result<()> {
         cat: "Apollo".to_string(),
     };
     let t = Telemetry::try_from(&d);
-    tracing::warn!(?d, ?t, "DMR: Direct try_from.");
+    tracing::info!(?d, ?t, "telemetry try_from data result.");
 
     let test_focus = maplit::hashset! { POS_FIELD.to_string() };
     let (actual_count, actual_sum) = test_scenario(test_focus).await?;
-    tracing::warn!(%actual_count, %actual_sum, "DMR: Results are in!");
+    tracing::info!(%actual_count, %actual_sum, "Results are in!");
     assert_eq!(actual_count, 3);
     assert_eq!(actual_sum, 8);
     Ok(())

@@ -637,29 +637,29 @@ mod tests {
         // ];
 
         // let result = std::panic::catch_unwind(|| {
-            assert_tokens(
-                &data,
-                &vec![
-                    // Token::NewtypeVariant {
-                    //     name: "TelemetryValue",
-                    //     variant: "Map",
-                    // },
-                    Token::Map { len: Some(1) },
-                    Token::Str("foo"),
-                    // Token::NewtypeVariant {
-                    //     name: "TelemetryValue",
-                    //     variant: "Text",
-                    // },
-                    Token::Str("bar"),
-                    // Token::Str("zed"),
-                    // Token::Str("Unit"),
-                    // Token::UnitVariant {
-                    //     name: "TelemetryValue",
-                    //     variant: "Unit",
-                    // },
-                    Token::MapEnd,
-                ],
-            );
+        assert_tokens(
+            &data,
+            &vec![
+                // Token::NewtypeVariant {
+                //     name: "TelemetryValue",
+                //     variant: "Map",
+                // },
+                Token::Map { len: Some(1) },
+                Token::Str("foo"),
+                // Token::NewtypeVariant {
+                //     name: "TelemetryValue",
+                //     variant: "Text",
+                // },
+                Token::Str("bar"),
+                // Token::Str("zed"),
+                // Token::Str("Unit"),
+                // Token::UnitVariant {
+                //     name: "TelemetryValue",
+                //     variant: "Unit",
+                // },
+                Token::MapEnd,
+            ],
+        );
         // });
         // result.unwrap();
 

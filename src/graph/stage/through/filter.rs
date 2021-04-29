@@ -131,7 +131,7 @@ where
             if (self.predicate)(&item) {
                 outlet.send(item).await?;
             } else if self.log_blocks {
-                tracing::error!(?item, "filter blocking item.");
+                tracing::error!("filter blocking item.");
             }
         }
 

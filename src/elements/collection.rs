@@ -27,7 +27,8 @@ use std::fmt::{self, Debug};
 /// use serde::Deserialize;
 /// use std::collections::{BTreeMap, HashMap};
 /// use std::time::Duration;
-/// use serde_cbor::Value;
+/// use proctor::elements::ToTelemetry;
+/// use std::iter::FromIterator;
 ///
 /// #[derive(Debug, Clone, Deserialize)]
 /// pub struct HttpBinResponse {
@@ -58,9 +59,10 @@ use std::fmt::{self, Debug};
 ///         *cnt += 1;
 ///         let mut data = BTreeMap::new();
 ///         for (k, v) in &r.args {
-///             data.insert(format!("args.{}.{}", cnt, k), Value::Text(v.to_string()));
+///             let tv = v.as_str().to_telemetry();
+///             data.insert(format!("args.{}.{}", cnt, k), tv);
 ///         }
-///         elements::Telemetry::from_data(data)
+///         elements::Telemetry::try_from(&data).unwrap()
 ///     };
 ///
 ///     let mut collect = elements::Collect::new(
@@ -93,10 +95,10 @@ use std::fmt::{self, Debug};
 ///         Some(resp) => {
 ///             let mut exp = BTreeMap::new();
 ///             for i in 1..=3 {
-///                 exp.insert(format!("args.{}.f", i), Value::Text("foo".to_string()));
-///                 exp.insert(format!("args.{}.b", i), Value::Text("bar".to_string()));
+///                 exp.insert(format!("args.{}.f", i), "foo".to_telemetry());
+///                 exp.insert(format!("args.{}.b", i), "bar".to_telemetry());
 ///             }
-///             let exp = elements::Telemetry::from_data(exp);
+///             let exp = elements::Telemetry::from_iter(exp);
 ///             assert_eq!(resp, exp);
 ///         }
 ///         None => panic!("did not expect no response"),

@@ -26,7 +26,7 @@ use std::fmt::Debug;
 /// use std::time::Duration;
 /// use tokio::sync::Mutex;
 /// use proctor::tracing::{get_subscriber, init_subscriber};
-/// use serde_cbor::Value;
+/// use std::iter::FromIterator;
 ///
 /// #[derive(Debug, Clone, Deserialize)]
 /// pub struct HttpBinResponse {
@@ -38,7 +38,8 @@ use std::fmt::Debug;
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
-///     let subscriber = get_subscriber("eth_scan", "trace");
+///     use proctor::elements::ToTelemetry;
+/// let subscriber = get_subscriber("eth_scan", "trace");
 ///     init_subscriber(subscriber);
 ///
 ///     let main_span = tracing::info_span!("main");
@@ -66,9 +67,10 @@ use std::fmt::Debug;
 ///             *cnt += 1;
 ///             let mut data = BTreeMap::new();
 ///             for (k, v) in &r.args {
-///                 data.insert(format!("args.{}.{}", cnt, k), Value::Text(v.to_owned()));
+///                 let tv = v.as_str().to_telemetry();
+///                 data.insert(format!("args.{}.{}", cnt, k), tv);
 ///             }
-///             Telemetry::from_data(data)
+///             Telemetry::try_from(&data).unwrap()
 ///         };
 ///
 ///         async move {
@@ -91,31 +93,20 @@ use std::fmt::Debug;
 ///     };
 ///
 ///     let mut generator = stage::TriggeredGenerator::new("generator", gen);
-///     let mut distill = stage::Map::<_, Telemetry,_>::new(
-///         "distill",
-///         |mc| {
-///             mc.values()
-///               .into_iter()
-///               .map(|(k, v)| (k, Telemetry::from_cbor::<String>(v).unwrap()))
-///               .collect()
-///         });
 ///
-///     // let generator_outlet = generator.outlet().clone();
-///     let composite_outlet = distill.outlet().clone();
+///     let composite_outlet = generator.outlet().clone();
 ///
 ///     (tick.outlet(), generator.inlet()).connect().await;
-///     (generator.outlet(), distill.inlet()).connect().await;
 ///
 ///     let mut cg = Graph::default();
 ///     cg.push_back(Box::new(tick)).await;
 ///     cg.push_back(Box::new(generator)).await;
-///     cg.push_back(Box::new(distill)).await;
 ///     let mut composite = stage::CompositeSource::new("composite_source", cg, composite_outlet).await;
 ///
-///     let mut fold = stage::Fold::<_, BTreeMap<String, String>, _>::new(
+///     let mut fold = stage::Fold::<_, Telemetry, _>::new(
 ///         "gather latest",
-///         HashMap::new(),
-///         |mut acc: HashMap<String, String>, mg| {
+///         Telemetry::new(),
+///         |mut acc, mg| {
 ///             acc.extend(mg);
 ///             acc
 ///         }
@@ -132,14 +123,16 @@ use std::fmt::Debug;
 ///     let actual = rx_gather.await.expect("fold didn't release");
 ///     assert_eq!(
 ///         actual,
-///         maplit::hashmap! {
-///             "args.1.f".to_string() => "foo".to_string(),
-///             "args.1.b".to_string() => "bar".to_string(),
-///             "args.2.f".to_string() => "foo".to_string(),
-///             "args.2.b".to_string() => "bar".to_string(),
-///             "args.3.f".to_string() => "foo".to_string(),
-///             "args.3.b".to_string() => "bar".to_string(),
-///         }
+///         Telemetry::from_iter(
+///           maplit::hashmap! {
+///               "args.1.f".to_string() => "foo".to_telemetry(),
+///               "args.1.b".to_string() => "bar".to_telemetry(),
+///               "args.2.f".to_string() => "foo".to_telemetry(),
+///               "args.2.b".to_string() => "bar".to_telemetry(),
+///               "args.3.f".to_string() => "foo".to_telemetry(),
+///               "args.3.b".to_string() => "bar".to_telemetry(),
+///           }
+///         )
 ///     );
 ///
 ///     Ok(())

@@ -16,8 +16,9 @@ where
     Out: AppData + DeserializeOwned,
     S: AsRef<str>,
 {
-    let from_telemetry =
-        stage::Map::<_, Telemetry, GraphResult<Out>>::new(format!("{}_from_telemetry", name.as_ref()), |telemetry| {
+    let from_telemetry = stage::Map::<_, Telemetry, GraphResult<Out>>::new(
+        format!("{}_convert_telemetry", name.as_ref()),
+        |telemetry| {
             tracing::trace!(?telemetry, "converting telemetry into data item...");
             let converted = telemetry.try_into::<Out>();
             if let Err(ref err) = converted {
@@ -25,7 +26,8 @@ where
             }
             tracing::trace!(?converted, "data item conversion from telemetry.");
             converted
-        });
+        },
+    );
 
     let mut filter_failures = stage::FilterMap::new(
         format!("{}_filter_ok_conversions", name.as_ref()),

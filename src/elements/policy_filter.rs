@@ -154,8 +154,8 @@ where
                         }
                     },
                     None => {
-                        // tracing::info!("PolicyFilter item_inlet dropped - completing.");
-                        // break; DMR ___WORK HERE temp comment
+                        tracing::info!("PolicyFilter item_inlet dropped - completing.");
+                        break;
                     }
                 },
 
@@ -187,7 +187,7 @@ where
     }
 
     async fn close(mut self: Box<Self>) -> GraphResult<()> {
-        tracing::error!("DMR: closing policy_filter ports");
+        tracing::info!("closing policy_filter ports");
         self.inlet.close().await;
         self.outlet.close().await;
         Ok(())

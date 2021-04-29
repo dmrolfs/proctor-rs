@@ -1,7 +1,7 @@
 mod fixtures;
 
+use ::serde::de::DeserializeOwned;
 use ::serde::{Deserialize, Serialize};
-use ::serde_with::{serde_as, TimestampSeconds};
 use chrono::*;
 use lazy_static::lazy_static;
 use oso::{Oso, PolarClass, ToPolar};
@@ -15,7 +15,6 @@ use proctor::phases::collection::TelemetrySubscription;
 use proctor::phases::eligibility::Eligibility;
 use proctor::AppData;
 use proctor::{ProctorContext, ProctorResult};
-use ::serde::de::DeserializeOwned;
 use serde_test::{assert_tokens, Token};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -24,11 +23,10 @@ use std::marker::PhantomData;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
-#[serde_as]
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Data {
     pub input_messages_per_sec: f64,
-    #[serde_as(as = "TimestampSeconds<i64>")]
+    #[serde(with = "proctor::serde")]
     pub timestamp: DateTime<Utc>,
     pub inbox_lag: i64,
 }
@@ -281,8 +279,7 @@ impl<D: AppData + Clone + DeserializeOwned + ToPolar> TestFlow<D> {
         graph.push_back(Box::new(merge)).await;
         graph.push_back(Box::new(clearinghouse)).await;
         graph.push_back(Box::new(context_channel)).await;
-        //todo WORK HERE SEE ABOVE
-        // graph.push_back(Box::new(telemetry_channel)).await;
+        graph.push_back(Box::new(telemetry_channel)).await;
         graph.push_back(Box::new(eligibility)).await;
         graph.push_back(Box::new(sink)).await;
 
@@ -363,7 +360,7 @@ impl<D: AppData + Clone + DeserializeOwned + ToPolar> TestFlow<D> {
             .map_err(|err| err.into())
     }
 
-    #[tracing::instrument(level="warn", skip(self))]
+    #[tracing::instrument(level = "warn", skip(self))]
     pub async fn close(mut self) -> GraphResult<Vec<D>> {
         let (stop, _) = stage::ActorSourceCmd::stop();
         self.tx_data_source_api.send(stop)?;
@@ -495,18 +492,20 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
         PolicyFilterEvent::ContextChanged(None) => panic!("did not expect to clear context"),
         PolicyFilterEvent::ItemBlocked(item) => panic!("unexpected item receipt - blocked: {:?}", item),
     };
-    tracing::warn!("DMR: 03. environment change verified.");
+    tracing::warn!("DMR: 04. environment change verified.");
 
     // tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     let detail = flow.inspect_policy_context().await?;
     tracing::warn!("DMR: policy detail = {:?}", detail);
     assert!(detail.context.is_some());
 
-    tracing::warn!("DMR: 04. Push Item...");
+    tracing::warn!("DMR: 05. Push Item...");
 
     let t1 = Telemetry::from_iter(maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_telemetry()});
     assert_eq!(
-        MeasurementData { measurement: std::f64::consts::PI,},
+        MeasurementData {
+            measurement: std::f64::consts::PI,
+        },
         t1.try_into::<MeasurementData>()?
     );
 
@@ -514,29 +513,37 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     flow.push_telemetry(maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_telemetry()}.into())
         .await?;
 
-    tracing::warn!("DMR: 05. Look for Item in sink...");
+    tracing::warn!("DMR: 06. Look for Item in sink...");
 
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     let actual = flow.inspect_sink().await?;
-    assert_eq!( actual, vec![MeasurementData { measurement: std::f64::consts::PI,},] );
+    assert_eq!(
+        actual,
+        vec![MeasurementData {
+            measurement: std::f64::consts::PI,
+        },]
+    );
 
-    tracing::warn!("DMR: 06. Push another Item...");
+    tracing::warn!("DMR: 07. Push another Item...");
 
-    // flow.push_telemetry(maplit::hashmap! {"measurement".to_string() => std::f64::consts::TAU.to_string()}.into())
     flow.push_telemetry(maplit::hashmap! {"measurement".to_string() => std::f64::consts::TAU.to_telemetry()}.into())
         .await?;
 
-    tracing::warn!("DMR: 07. Close flow...");
+    tracing::warn!("DMR: 08. Close flow...");
 
     let actual = flow.close().await?;
 
-    tracing::warn!(?actual, "DMR: 08. Verify final accumulation...");
+    tracing::warn!(?actual, "DMR: 09. Verify final accumulation...");
 
     assert_eq!(
         actual,
         vec![
-            MeasurementData { measurement: std::f64::consts::PI, },
-            MeasurementData { measurement: std::f64::consts::TAU, },
+            MeasurementData {
+                measurement: std::f64::consts::PI,
+            },
+            MeasurementData {
+                measurement: std::f64::consts::TAU,
+            },
         ]
     );
     Ok(())

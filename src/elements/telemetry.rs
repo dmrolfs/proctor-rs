@@ -64,7 +64,7 @@ impl Telemetry {
         // config_shape.try_into().map_err(|err| err.into())
     }
 
-    //todo: I can't get this to work wrt Enum Unit Variants - see commented out try_form portion of
+    //todo: DMR - I can't get this to work wrt Enum Unit Variants - see commented out try_form portion of
     // test_telemetry_simple_enum()
     /// Attempt to serialize the entire telemetry from the given type.
     #[tracing::instrument(level = "trace", skip())]
@@ -78,7 +78,6 @@ impl Telemetry {
     }
 
     #[inline]
-    #[tracing::instrument(level = "trace", skip())]
     pub fn extend(&mut self, that: Self) {
         self.0.extend(&that.0);
     }
@@ -668,35 +667,35 @@ mod tests {
     //     );
     // }
 
-    #[test]
-    #[ignore]
-    fn test_telemetry_try_into_tokens() {
-        // lazy_static::initialize(&crate::tracing::TEST_TRACING);
-        // let data = Telemetry::from_iter(maplit::hashmap! {
-        //     "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_telemetry(),
-        //     // "cluster.is_deploying".to_string() => false.to_telemetry(),
-        //     // "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".to_telemetry(),
-        // });
-        //
-        // let config_shape: config::Value = data.0.into();
-        // assert_tokens(
-        //     &config_shape,
-        //    &vec![
-        //        Token::NewtypeStruct { name:"Telemetry" },
-        //        Token::Map{ len: Some(1), },
-        //        Token::Str("task.last_failure"),
-        //        Token::NewtypeVariant { name:"TelemetryValue", variant:"Text"},
-        //        Token::Str("2014-11-28T12:45:59.324310806Z"),
-        //        // Token::Str("cluster.is_deploying"),
-        //        // Token::NewtypeVariant { name:"TelemetryValue", variant:"Boolean"},
-        //        // Token::Bool(false),
-        //        // Token::Str("cluster.last_deployment"),
-        //        // Token::NewtypeVariant { name:"TelemetryValue", variant:"Text"},
-        //        // Token::Str("2014-11-28T10:11:37.246310806Z",),
-        //        Token::MapEnd,
-        //    ]
-        // )
-    }
+    //  #[test]
+    // #[ignore]
+    // fn test_telemetry_try_into_tokens() {
+    // lazy_static::initialize(&crate::tracing::TEST_TRACING);
+    // let data = Telemetry::from_iter(maplit::hashmap! {
+    //     "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_telemetry(),
+    //     // "cluster.is_deploying".to_string() => false.to_telemetry(),
+    //     // "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".to_telemetry(),
+    // });
+    //
+    // let config_shape: config::Value = data.0.into();
+    // assert_tokens(
+    //     &config_shape,
+    //    &vec![
+    //        Token::NewtypeStruct { name:"Telemetry" },
+    //        Token::Map{ len: Some(1), },
+    //        Token::Str("task.last_failure"),
+    //        Token::NewtypeVariant { name:"TelemetryValue", variant:"Text"},
+    //        Token::Str("2014-11-28T12:45:59.324310806Z"),
+    //        // Token::Str("cluster.is_deploying"),
+    //        // Token::NewtypeVariant { name:"TelemetryValue", variant:"Boolean"},
+    //        // Token::Bool(false),
+    //        // Token::Str("cluster.last_deployment"),
+    //        // Token::NewtypeVariant { name:"TelemetryValue", variant:"Text"},
+    //        // Token::Str("2014-11-28T10:11:37.246310806Z",),
+    //        Token::MapEnd,
+    //    ]
+    // )
+    // }
 
     // #[test]
     // fn test_telemetry_identity_try_into() -> anyhow::Result<()> {

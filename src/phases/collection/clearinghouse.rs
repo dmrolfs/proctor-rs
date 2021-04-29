@@ -304,23 +304,10 @@ impl TelemetrySubscription {
         }
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
     pub async fn connect_to_receiver(&self, receiver: &Inlet<Telemetry>) {
-        match self {
-            Self::All {
-                name: _,
-                outlet_to_subscription,
-            } => {
-                (outlet_to_subscription, receiver).connect().await;
-            }
-            Self::Explicit {
-                name: _,
-                required_fields: _,
-                optional_fields: _,
-                outlet_to_subscription,
-            } => {
-                (outlet_to_subscription, receiver).connect().await;
-            }
-        }
+        let outlet = self.outlet_to_subscription();
+        (&outlet, receiver).connect().await;
     }
 
     pub async fn send(&self, telemetry: Telemetry) -> GraphResult<()> {
@@ -340,8 +327,8 @@ impl TelemetrySubscription {
 }
 
 impl TelemetrySubscription {
+    #[tracing::instrument()]
     pub async fn close(self) {
-        tracing::error!(?self, "DMR: CLOSING SUBSCRIPTION!!!");
         match self {
             Self::All {
                 name: _,
@@ -420,6 +407,7 @@ impl Clearinghouse {
         }
     }
 
+    #[tracing::instrument(level = "info", skip(self))]
     pub async fn add_subscription(&mut self, subscription: TelemetrySubscription, receiver: &Inlet<Telemetry>) {
         tracing::info!(stage=%self.name, ?subscription, "adding clearinghouse subscription.");
         subscription.connect_to_receiver(receiver).await;
@@ -437,7 +425,6 @@ impl Clearinghouse {
                     Self::find_interested_subscriptions(subscriptions, database.keys().collect(), updated_fields);
 
                 database.extend(d);
-                // database.extend(d);
                 Self::push_to_subscribers(database, interested).await?;
                 Ok(true)
             }
@@ -481,7 +468,7 @@ impl Clearinghouse {
     }
 
     #[tracing::instrument(
-        level = "trace",
+        level = "info",
         skip(database, subscribers),
         fields(subscribers = ?subscribers.iter().map(|s| s.name()).collect::<Vec<_>>(), ),
     )]
@@ -516,7 +503,7 @@ impl Clearinghouse {
             nr_fulfilled=%nr_fulfilled,
             nr_not_fulfilled=%(nr_subscribers - nr_fulfilled),
             sent_ok=%result.is_ok(),
-            "publishing impacted subscriptions"
+            "published to subscriptions"
         );
 
         result

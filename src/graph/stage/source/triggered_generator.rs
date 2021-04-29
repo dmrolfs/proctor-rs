@@ -21,7 +21,6 @@
 /// use std::sync::Arc;
 /// use std::time::Duration;
 /// use tokio::sync::Mutex;
-/// use serde_cbor::Value;
 ///
 /// #[derive(Debug, Clone, Deserialize)]
 /// pub struct HttpBinResponse {
@@ -33,7 +32,8 @@
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
-///     let subscriber = get_subscriber("sandbox", "trace");
+///     use proctor::elements::ToTelemetry;
+/// let subscriber = get_subscriber("sandbox", "trace");
 ///     init_subscriber(subscriber);
 ///
 ///     let main_span = tracing::info_span!("main");
@@ -76,7 +76,7 @@
 ///
 ///             let mut data = Telemetry::new();
 ///             for (k, v) in resp.args {
-///                 data.insert(format!("args.{}.{}", my_count, k).as_str(), v);
+///                 data.insert(format!("args.{}.{}", my_count, k), v.to_telemetry());
 ///             }
 ///
 ///             data
@@ -103,8 +103,8 @@
 ///         Some(resp) => {
 ///             let mut exp = Telemetry::new();
 ///             for i in 1..=3 {
-///                 exp.insert(format!("args.{}.f", i).as_str(), "foo".to_string());
-///                 exp.insert(format!("args.{}.b", i).as_str(), "bar".to_string());
+///                 exp.insert(format!("args.{}.f", i), "foo".to_telemetry());
+///                 exp.insert(format!("args.{}.b", i), "bar".to_telemetry());
 ///             }
 ///             tracing::warn!(actual=?resp,expected=?exp, "validating results");
 ///             assert_eq!(resp, exp);
