@@ -381,9 +381,9 @@ mod tests {
     use oso::PolarClass;
     use pretty_assertions::assert_eq;
     use serde::{Deserialize, Serialize};
-    use std::collections::HashMap;
     use tokio::sync::mpsc;
     use tokio_test::block_on;
+    use crate::elements::telemetry::{self, ToTelemetry};
 
     // Make sure the `PolicyFilter` object is threadsafe
     // #[test]
@@ -401,15 +401,15 @@ mod tests {
         pub location_code: u32,
         #[polar(attribute)]
         #[serde(flatten)]
-        pub qualities: HashMap<String, String>,
+        pub qualities: telemetry::Table,
     }
 
     impl ProctorContext for TestContext {
-        fn required_context_fields() -> HashSet<String> {
-            maplit::hashset! {"location_code".to_string(),}
+        fn required_context_fields() -> HashSet<&'static str> {
+            maplit::hashset! {"location_code", }
         }
 
-        fn custom(&self) -> HashMap<String, String> {
+        fn custom(&self) -> telemetry::Table {
             self.qualities.clone()
         }
     }
@@ -480,8 +480,8 @@ mod tests {
             let context = TestContext {
                 location_code: 17,
                 qualities: maplit::hashmap! {
-                    "foo".to_string() => "bar".to_string(),
-                    "score".to_string() => 13.to_string(),
+                    "foo".to_string() => "bar".to_telemetry(),
+                    "score".to_string() => 13.to_telemetry(),
                 },
             };
 

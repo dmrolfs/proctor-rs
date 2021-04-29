@@ -1,23 +1,23 @@
 pub use collection::Collect;
 pub use from_telemetry::*;
 pub use policy_filter::*;
-pub use telemetry::*;
+pub use telemetry::{Telemetry, ToTelemetry, FromTelemetry, TelemetryValue};
 
 mod collection;
 mod from_telemetry;
 mod performance_history;
 mod policy_filter;
-mod telemetry;
+pub mod telemetry;
 
 use crate::AppData;
 use oso::PolarClass;
 use serde::{de::DeserializeOwned, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
-pub trait ProctorContext: AppData + PolarClass + Clone + PartialEq + Serialize + DeserializeOwned {
-    fn required_context_fields() -> HashSet<String>;
-    fn optional_context_fields() -> HashSet<String> {
+pub trait ProctorContext: AppData + Clone + PolarClass + Serialize + DeserializeOwned {
+    fn required_context_fields() -> HashSet<&'static str>;
+    fn optional_context_fields() -> HashSet<&'static str> {
         HashSet::default()
     }
-    fn custom(&self) -> HashMap<String, String>;
+    fn custom(&self) -> telemetry::Table;
 }

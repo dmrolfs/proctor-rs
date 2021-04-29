@@ -2,8 +2,9 @@ use crate::ProctorContext;
 use chrono::{DateTime, Utc};
 use oso::PolarClass;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt::Debug;
+use crate::elements::telemetry;
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FlinkEligibilityContext {
@@ -16,19 +17,19 @@ pub struct FlinkEligibilityContext {
 
     #[polar(attribute)]
     #[serde(flatten)]
-    pub custom: HashMap<String, String>,
+    pub custom: telemetry::Table,
 }
 
 impl ProctorContext for FlinkEligibilityContext {
-    fn required_context_fields() -> HashSet<String> {
+    fn required_context_fields() -> HashSet<&'static str> {
         maplit::hashset! {
-            "task.last_failure".to_string(),
-            "cluster.is_deploying".to_string(),
-            "cluster.last_deployment".to_string(),
+            "task.last_failure",
+            "cluster.is_deploying",
+            "cluster.last_deployment",
         }
     }
 
-    fn custom(&self) -> HashMap<String, String> {
+    fn custom(&self) -> telemetry::Table {
         self.custom.clone()
     }
 }
@@ -75,8 +76,7 @@ impl ClusterStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::elements::Telemetry;
-    use crate::elements::ToTelemetry;
+    use crate::elements::{Telemetry, ToTelemetry};
     use chrono::{DateTime, Utc};
     use lazy_static::lazy_static;
     use serde_test::{assert_tokens, Token};
@@ -100,8 +100,8 @@ mod tests {
                 last_deployment: DT_2.clone(),
             },
             custom: maplit::hashmap! {
-                "custom_foo".to_string() => "fred flintstone".to_string(),
-                "custom_bar".to_string() => "The Happy Barber".to_string(),
+                "custom_foo".to_string() => "fred flintstone".to_telemetry(),
+                "custom_bar".to_string() => "The Happy Barber".to_telemetry(),
             },
         };
 
@@ -154,7 +154,7 @@ mod tests {
                 is_deploying: false,
                 last_deployment: DT_2.clone(),
             },
-            custom: maplit::hashmap! {"foo".to_string() => "bar".to_string(),},
+            custom: maplit::hashmap! {"foo".to_string() => "bar".to_telemetry(),},
         };
         tracing::info!("actual: {:?}", actual);
         tracing::info!("expected: {:?}", expected);

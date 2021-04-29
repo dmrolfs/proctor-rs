@@ -3,13 +3,14 @@ mod fixtures;
 use ::serde::{Deserialize, Serialize};
 use chrono::*;
 use oso::{Oso, PolarClass};
-use proctor::elements::{self, Policy};
+use proctor::elements::{self, telemetry, Policy, ToTelemetry};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
 use proctor::ProctorContext;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
+
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct TestItem {
@@ -53,31 +54,28 @@ struct TestFlowMetrics {
 struct TestContext {
     #[polar(attribute)]
     pub location_code: u32,
-    custom: HashMap<String, String>,
+    custom: telemetry::Table,
 }
 
 impl TestContext {
     pub fn new(location_code: u32) -> Self {
         Self {
             location_code,
-            custom: HashMap::default(),
+            custom: telemetry::Table::default(),
         }
     }
 
-    pub fn with_custom(self, custom: HashMap<String, String>) -> Self {
+    pub fn with_custom(self, custom: telemetry::Table) -> Self {
         Self { custom, ..self }
     }
 }
 
 impl proctor::ProctorContext for TestContext {
-    fn required_context_fields() -> HashSet<String> {
-        maplit::hashset! {
-            "location_code".to_string(),
-            "input_messages_per_sec".to_string(),
-        }
+    fn required_context_fields() -> HashSet<&'static str> {
+        maplit::hashset! { "location_code", "input_messages_per_sec", }
     }
 
-    fn custom(&self) -> HashMap<String, String> {
+    fn custom(&self) -> telemetry::Table  {
         self.custom.clone()
     }
 }
@@ -407,7 +405,7 @@ async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
     )
     .await;
 
-    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
+    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}))
         .await?;
     let event = flow.recv_policy_event().await?;
     tracing::info!(?event, "verifying context update...");
@@ -453,7 +451,7 @@ lag_2(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
     .await;
 
     tracing::info!("DMR-B:push env...");
-    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
+    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}))
         .await?;
     tracing::info!("DMR-C:verify enviornment...");
 
@@ -483,7 +481,7 @@ and item.input_messages_per_sec(item.inbox_lag) < 36;"#,
     )
     .await;
 
-    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
+    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}))
         .await?;
 
     let ts = Utc::now().into();
@@ -515,7 +513,7 @@ async fn test_replace_policy() -> anyhow::Result<()> {
 
     let flow = TestFlow::new(policy_1).await;
 
-    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
+    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}))
         .await?;
 
     let item_1 = TestItem::new(std::f64::consts::PI, too_old_ts, 1);
@@ -555,7 +553,7 @@ async fn test_append_policy() -> anyhow::Result<()> {
 
     let flow = TestFlow::new(policy_1).await;
 
-    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
+    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}))
         .await?;
 
     let ts = Utc::now().into();
@@ -599,7 +597,7 @@ async fn test_reset_policy() -> anyhow::Result<()> {
 
     let flow = TestFlow::new(policy_1).await;
 
-    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}))
+    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}))
         .await?;
 
     let ts = Utc::now().into();

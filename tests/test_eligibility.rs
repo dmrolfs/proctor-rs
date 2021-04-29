@@ -2,12 +2,12 @@ mod fixtures;
 
 use ::serde::de::DeserializeOwned;
 use ::serde::{Deserialize, Serialize};
+use ::serde_with::{serde_as, TimestampMilliSeconds};
 use chrono::*;
 use lazy_static::lazy_static;
 use oso::{Oso, PolarClass, ToPolar};
 use pretty_assertions::assert_eq;
-use proctor::elements::PolicyFilterEvent;
-use proctor::elements::{self, Policy, PolicySource, Telemetry, ToTelemetry};
+use proctor::elements::{self, telemetry, Policy, PolicySource, PolicyFilterEvent, Telemetry, ToTelemetry};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape, UniformFanInShape};
 use proctor::phases::collection;
@@ -42,22 +42,22 @@ pub struct TestFlinkEligibilityContext {
 
     #[polar(attribute)]
     #[serde(flatten)]
-    pub custom: HashMap<String, String>,
+    pub custom: telemetry::Table,
 }
 
 impl ProctorContext for TestFlinkEligibilityContext {
-    fn required_context_fields() -> HashSet<String> {
+    fn required_context_fields() -> HashSet<&'static str> {
         maplit::hashset! {
-            "cluster.is_deploying".to_string(),
-            "cluster.last_deployment".to_string(),
+            "cluster.is_deploying",
+            "cluster.last_deployment",
         }
     }
 
-    fn optional_context_fields() -> HashSet<String> {
-        maplit::hashset! { "task.last_failure".to_string(), }
+    fn optional_context_fields() -> HashSet<&'static str> {
+        maplit::hashset! { "task.last_failure", }
     }
 
-    fn custom(&self) -> HashMap<String, String> {
+    fn custom(&self) -> telemetry::Table {
         self.custom.clone()
     }
 }
@@ -536,10 +536,118 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[serde_as]
+#[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct TestItem {
+    #[polar(attribute)]
+    pub flow: TestFlowMetrics,
+
+    #[polar(attribute)]
+    pub inbox_lag: u32,
+
+    #[serde_as(as = "TimestampMilliSeconds")]
+    pub timestamp: DateTime<Utc>,
+}
+
+impl TestItem {
+    pub fn new(input_messages_per_sec: f64, inbox_lag: u32, ts: DateTime<Utc>,) -> Self {
+        Self {
+            flow: TestFlowMetrics { input_messages_per_sec },
+            inbox_lag,
+            timestamp: ts,
+        }
+    }
+
+    pub fn within_seconds(&self, secs: i64) -> bool {
+        let now = Utc::now();
+        let boundary = now - chrono::Duration::seconds(secs);
+        boundary < self.timestamp
+    }
+
+    pub fn lag_duration_secs_f64(&self, message_lag: u32) -> f64 {
+        (message_lag as f64) / self.flow.input_messages_per_sec
+    }
+}
+
+#[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct TestFlowMetrics {
+    #[polar(attribute)]
+    pub input_messages_per_sec: f64
+}
+
+#[derive(PolarClass, Debug, Clone, Serialize, Deserialize)]
+struct TestContext {
+    #[polar(attribute)]
+    pub location_code: u32,
+    custom: telemetry::Table,
+}
+
+impl TestContext {
+    pub fn new(location_code: u32) -> Self {
+        Self { location_code, custom: telemetry::Table::default(), }
+    }
+
+    pub fn with_custom(self, custom: telemetry::Table) -> Self { Self { custom, ..self } }
+}
+
+impl proctor::ProctorContext for TestContext {
+    fn required_context_fields() -> HashSet<&'static str> {
+        maplit::hashset! { "location_code", "input_messages_per_sec" }
+    }
+
+    fn custom(&self) -> telemetry::Table { self.custom.clone() }
+}
+
+#[derive(Debug)]
+struct TestPolicy {
+    policy: String,
+}
+
+impl TestPolicy {
+    pub fn new<S: AsRef<str>>(policy: S) -> Self {
+        let polar = polar_core::polar::Polar::new();
+        polar.load_str(policy.as_ref()).expect("failed to parse policy text");
+        Self { policy: policy.as_ref().to_string(), }
+    }
+}
+
+impl Policy for TestPolicy {
+    type Item = TestItem;
+    type Context = TestContext;
+
+    fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
+        oso.load_str(self.policy.as_str()).map_err(|err| err.into())
+    }
+
+    fn initialize_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
+        oso.register_class(
+            TestItem::get_polar_class_builder()
+                .name("TestMetricCatalog")
+                .add_method("lag_duration", TestItem::lag_duration_secs_f64)
+                .add_method("within_seconds", TestItem::within_seconds)
+                .build(),
+        )?;
+
+        oso.register_class(
+            TestContext::get_polar_class_builder()
+                .name("TestContext")
+                .add_method("custom", ProctorContext::custom)
+                // .add_method("custom", |ctx: &TestContext| ctx.custom())
+                .build(),
+        )?;
+
+        Ok(())
+    }
+
+    fn query_knowledge_base(&self, oso: &Oso, item_env: (Self::Item, Self::Context)) -> GraphResult<oso::Query> {
+        oso.query_rule("eligible", item_env).map_err(|err| err.into())
+    }
+}
+
 // #[ignore]
 // #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 // async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
-//     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
+//     lazy_static::initialize(&proctor::tracing::TEST_TRACING);
 //     let main_span = tracing::info_span!("test_policy_filter_happy_environment");
 //     let _ = main_span.enter();
 //
@@ -596,7 +704,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
 //     );
 //     Ok(())
 // }
-//
+
 // #[ignore]
 // // #[tokio::test(flavor="multi_thread", worker_threads = 4)]
 // #[tokio::test]

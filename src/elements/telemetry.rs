@@ -1,6 +1,6 @@
 pub use from_telemetry::FromTelemetry;
 pub use to_telemetry::ToTelemetry;
-pub use value::TelemetryValue;
+pub use value::{TelemetryValue, Table, Seq};
 
 mod de;
 mod from_telemetry;

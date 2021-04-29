@@ -7,7 +7,7 @@ use serde::{de, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum TelemetryValue {
     Integer(i64),
     Float(f64),
@@ -72,6 +72,22 @@ impl fmt::Display for TelemetryValue {
         }
     }
 }
+
+impl PartialEq for TelemetryValue {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Boolean(lhs), Self::Boolean(rhs)) => lhs == rhs,
+            (Self::Integer(lhs), Self::Integer(rhs)) => lhs == rhs,
+            (Self::Float(lhs), Self::Float(rhs)) => lhs == rhs,
+            (Self::Text(lhs), Self::Text(rhs)) => lhs == rhs,
+            (Self::Seq(lhs), Self::Seq(rhs)) => lhs == rhs,
+            (Self::Table(lhs), Self::Table(rhs)) => lhs == rhs,
+            _ => false
+        }
+    }
+}
+
+impl Eq for TelemetryValue {}
 
 impl FromTelemetry for TelemetryValue {
     #[tracing::instrument(level = "trace", skip())]
