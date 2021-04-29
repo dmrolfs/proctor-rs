@@ -10,10 +10,9 @@ mod value;
 
 use crate::error::GraphError;
 use crate::graph::GraphResult;
+use flexbuffers;
 use oso::PolarClass;
 use oso::ToPolar;
-// use ser::TelemetrySerializer;
-use flexbuffers;
 use serde::{de as serde_de, Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
@@ -35,18 +34,6 @@ impl Telemetry {
         Self::default()
     }
 
-    // #[tracing::instrument(level="trace", skip())]
-    // pub fn from_value<V: Into<TelemetryValue> + Debug>(value: V) -> Self {
-    //
-    //     let val = value.into();
-    //     match val {
-    //         inner @ TelemetryValue::Table(_) => Self(inner),
-    //         v => {
-    //             panic!("telemetry root value must be a Table, but was provided a: {:?}", v);
-    //         }
-    //     }
-    // }
-
     /// Attempt to deserialize the entire telemetry into the requested type.
     #[tracing::instrument(level = "trace", skip())]
     pub fn try_into<T: serde_de::DeserializeOwned>(self) -> GraphResult<T> {
@@ -55,13 +42,6 @@ impl Telemetry {
         let reader = flexbuffers::Reader::get_root(serializer.view())?;
         let result = T::deserialize(reader)?;
         Ok(result)
-
-        // T::deserialize(self)
-        // T::from_telemetry(TelemetryValue::Map(self.0))
-        // todo optimize to transform directly
-        // let config_shape: config::Value = TelemetryValue::Map(self.0).into();
-        // tracing::info!(?config_shape, "after conversion into config");
-        // config_shape.try_into().map_err(|err| err.into())
     }
 
     //todo: DMR - I can't get this to work wrt Enum Unit Variants - see commented out try_form portion of
@@ -81,153 +61,6 @@ impl Telemetry {
     pub fn extend(&mut self, that: Self) {
         self.0.extend(&that.0);
     }
-
-    // pub fn is_empty(&self) -> bool {
-    //     if let Value::Map(my_data) = &self.0 {
-    //         my_data.is_empty()
-    //     } else {
-    //         panic!(
-    //             "{:?}",
-    //             GraphError::GraphPrecondition(format!("telemetry data not a Map but a {:?}", self.0))
-    //         );
-    //     }
-    // }
-
-    // /// Returns a reference to the value corresponding to the key.
-    // ///
-    // /// # Examples
-    // ///
-    // /// Basic usage:
-    // ///
-    // /// ```
-    // /// use proctor::elements::TelemetryData;
-    // /// use serde_cbor::Value;
-    // ///
-    // /// let mut telemetry = TelemetryData::new();
-    // /// telemetry.insert("a", Value::Integer(1));
-    // /// assert_eq!(telemetry.get::<i32>("a").unwrap(), Some(1));
-    // /// assert_eq!(telemetry.get::<i32>("b").unwrap(), None);
-    // /// ```
-    // pub fn get<V: DeserializeOwned>(&self, key: &str) -> GraphResult<Option<V>> {
-    //     let cbor_key = serde_cbor::value::to_value(key)?;
-    //     let my_data: BTreeMap<Value, Value> = serde_cbor::value::from_value(self.0.clone())?;
-    //     match my_data.get(&cbor_key) {
-    //         Some(v) => serde_cbor::value::from_value::<V>(v.clone())
-    //             .map_err(|err| err.into())
-    //             .map(|r| Some(r)),
-    //         None => Ok(None),
-    //     }
-    // }
-    //
-    // /// Inserts a key-value pair into telemetry.
-    // ///
-    // /// If telemetry did not have this key present, `None` is returned.
-    // ///
-    // /// If telemetry did have this key present, the value is updated, and the old
-    // /// value is returned. The key is not updated, though; this matters for
-    // /// types that can be `==` without being identical.
-    // ///
-    // /// # Examples
-    // ///
-    // /// Basic usage:
-    // ///
-    // /// ```
-    // /// use proctor::elements::TelemetryData;
-    // /// use serde_cbor::Value;
-    // ///
-    // /// let mut telemetry = TelemetryData::new();
-    // /// assert_eq!(telemetry.insert("a", 37), None);
-    // /// assert_eq!(telemetry.is_empty(), false);
-    // ///
-    // /// telemetry.insert("a", 54);
-    // /// assert_eq!(telemetry.insert("a", 75), Some(54));
-    // /// ```
-    // pub fn insert<V: Serialize + DeserializeOwned>(&mut self, key: &str, value: V) -> Option<V> {
-    //     let mut my_data: BTreeMap<Value, Value> = serde_cbor::value::from_value(self.0.clone()).unwrap();
-    //     let cbor_key = serde_cbor::value::to_value(key).unwrap();
-    //     let cbor_value = serde_cbor::value::to_value(value).unwrap();
-    //     let replaced = my_data.insert(cbor_key, cbor_value);
-    //     self.0 = Value::Map(my_data);
-    //
-    //     match replaced {
-    //         Some(replaced) => serde_cbor::value::from_value::<V>(replaced).map(|r| Some(r)).unwrap(),
-    //         None => None,
-    //     }
-    // }
-    //
-    // /// Returns `true` if the telemetry contains a value for the specified key.
-    // ///
-    // /// The key may be anything that can implements `Into<String>`.
-    // ///
-    // /// # Examples
-    // ///
-    // /// Basic usage:
-    // ///
-    // /// ```
-    // /// use proctor::elements::TelemetryData;
-    // ///
-    // /// let mut telemetry = TelemetryData::new();
-    // /// telemetry.insert("foo", 17);
-    // /// assert_eq!(telemetry.contains_key("foo"), true);
-    // /// assert_eq!(telemetry.contains_key("bar"), false);
-    // /// ```
-    // pub fn remove<V: DeserializeOwned>(&mut self, key: &str) -> GraphResult<Option<V>> {
-    //     let mut my_data: BTreeMap<Value, Value> = serde_cbor::value::from_value(self.0.clone())?;
-    //     let cbor_key = serde_cbor::value::to_value(key)?;
-    //     let removed_value = my_data.remove(&cbor_key);
-    //     self.0 = Value::Map(my_data);
-    //     match removed_value {
-    //         Some(removed) => serde_cbor::value::from_value::<V>(removed)
-    //             .map(|r| Some(r))
-    //             .map_err(|err| err.into()),
-    //         None => Ok(None),
-    //     }
-    // }
-    //
-    // pub fn contains_key(&self, key: &str) -> bool {
-    //     if let Ok(cbor_key) = serde_cbor::value::to_value(key) {
-    //         match &self.0 {
-    //             Value::Map(my_data) => my_data.contains_key(&cbor_key),
-    //             _ => false,
-    //         }
-    //     } else {
-    //         false
-    //     }
-    // }
-    //
-    // /// Retains only the elements specified by the predicate.
-    // ///
-    // /// In other words, remove all pairs `(k, v)` such that `f(&k, &mut v)` returns `false`.
-    // ///
-    // /// # Examples
-    // ///
-    // /// ```
-    // /// use proctor::elements::TelemetryData;
-    // /// use serde_cbor::Value;
-    // ///
-    // /// let mut telemetry: TelemetryData = (0..8).map(|x| (x.to_string(), Value::Integer(x*10))).collect();
-    // /// // Keep only the elements with even-numbered keys.
-    // /// telemetry.retain(|key, _| {
-    // ///     let key = TelemetryData::from_cbor::<String>(key.clone()).unwrap().parse::<i32>().unwrap();
-    // ///     key % 2 == 0
-    // /// });
-    // /// assert!(telemetry.values().into_iter().eq(vec![
-    // ///     (0.to_string(), Value::Integer(0)),
-    // ///     (2.to_string(), Value::Integer(20)),
-    // ///     (4.to_string(), Value::Integer(40)),
-    // ///     (6.to_string(), Value::Integer(60))
-    // /// ]));
-    // /// ```
-    // pub fn retain<F>(&mut self, mut f: F)
-    // where
-    //     F: FnMut(&Value, &Value) -> bool,
-    // {
-    //     let my_data: BTreeMap<Value, Value> = serde_cbor::value::from_value(self.0.clone()).unwrap();
-    //     let retained = my_data.into_iter().filter(|(k, v)| f(k, v)).collect();
-    //     self.0 = Value::Map(retained);
-    //
-    //     // self.drain_filter(|k, v| !f(k, v));
-    // }
 
     #[tracing::instrument(level = "trace", skip(oso))]
     pub fn load_knowledge_base(oso: &mut oso::Oso) -> GraphResult<()> {
@@ -626,106 +459,6 @@ mod tests {
         // );
     }
 
-    // impl FromTelemetry for Data {
-    //     fn from_telemetry(val: TelemetryValue) -> GraphResult<Self> {
-    //         if let TelemetryValue::Map(table) = val {
-    //             let last_failure = table.get(&"task.last_failure".to_string()).map(|t| );
-    //             let is_deploying
-    //         } else {
-    //             Err(crate::error::GraphError::TypeError("TelemetryValue::Map".to_string()))
-    //         }
-    //     }
-    // }
-
-    // #[test]
-    // fn test_telemetry_serde_tokens() {
-    //     let data = Telemetry::from_iter(maplit::hashmap! {
-    //         "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_telemetry(),
-    //         // "cluster.is_deploying".to_string() => false.to_telemetry(),
-    //         // "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".to_telemetry(),
-    //     });
-    //
-    //     assert_tokens(
-    //         &data,
-    //         &vec![
-    //             Token::NewtypeStruct { name: "Telemetry" },
-    //             Token::Map { len: Some(1) },
-    //             Token::Str("task.last_failure"),
-    //             Token::NewtypeVariant {
-    //                 name: "TelemetryValue",
-    //                 variant: "Text",
-    //             },
-    //             Token::Str("2014-11-28T12:45:59.324310806Z"),
-    //             // Token::Str("cluster.is_deploying"),
-    //             // Token::NewtypeVariant { name:"TelemetryValue", variant:"Boolean"},
-    //             // Token::Bool(false),
-    //             // Token::Str("cluster.last_deployment"),
-    //             // Token::NewtypeVariant { name:"TelemetryValue", variant:"Text"},
-    //             // Token::Str("2014-11-28T10:11:37.246310806Z",),
-    //             Token::MapEnd,
-    //         ],
-    //     );
-    // }
-
-    //  #[test]
-    // #[ignore]
-    // fn test_telemetry_try_into_tokens() {
-    // lazy_static::initialize(&crate::tracing::TEST_TRACING);
-    // let data = Telemetry::from_iter(maplit::hashmap! {
-    //     "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_telemetry(),
-    //     // "cluster.is_deploying".to_string() => false.to_telemetry(),
-    //     // "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".to_telemetry(),
-    // });
-    //
-    // let config_shape: config::Value = data.0.into();
-    // assert_tokens(
-    //     &config_shape,
-    //    &vec![
-    //        Token::NewtypeStruct { name:"Telemetry" },
-    //        Token::Map{ len: Some(1), },
-    //        Token::Str("task.last_failure"),
-    //        Token::NewtypeVariant { name:"TelemetryValue", variant:"Text"},
-    //        Token::Str("2014-11-28T12:45:59.324310806Z"),
-    //        // Token::Str("cluster.is_deploying"),
-    //        // Token::NewtypeVariant { name:"TelemetryValue", variant:"Boolean"},
-    //        // Token::Bool(false),
-    //        // Token::Str("cluster.last_deployment"),
-    //        // Token::NewtypeVariant { name:"TelemetryValue", variant:"Text"},
-    //        // Token::Str("2014-11-28T10:11:37.246310806Z",),
-    //        Token::MapEnd,
-    //    ]
-    // )
-    // }
-
-    // #[test]
-    // fn test_telemetry_identity_try_into() -> anyhow::Result<()> {
-    //     lazy_static::initialize(&crate::tracing::TEST_TRACING);
-    //     let data = Telemetry::from_iter(maplit::hashmap! {
-    //         "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_telemetry(),
-    //         // "cluster.is_deploying".to_string() => false.to_telemetry(),
-    //         // "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".to_telemetry(),
-    //     });
-    //
-    //     // let foo: Option<bool> = data
-    //     //     .get("cluster.is_deploying")
-    //     //     .map(|f| bool::from_telemetry(f.clone()).unwrap());
-    //     // assert_eq!(foo, Some(false));
-    //
-    //     let expected = Telemetry(
-    //         maplit::hashmap! {
-    //             "task.last_failure".to_string() => TelemetryValue::Text("2014-11-28T12:45:59.324310806Z".to_string()),
-    //             // "cluster.is_deploying".to_string() => TelemetryValue::Boolean(false),
-    //             // "cluster.last_deployment".to_string() => TelemetryValue::Text("2014-11-28T10:11:37.246310806Z".to_string()),
-    //         }
-    //         .to_telemetry(),
-    //     );
-    //     tracing::info!(telemetry=?data, ?expected, "expected conversion from telemetry data.");
-    //     let actual = data.try_into::<Telemetry>();
-    //     tracing::info!(?actual, "actual conversion from telemetry data.");
-    //     assert_eq!(actual?, expected);
-    //     Ok(())
-    // }
-
     #[test]
     fn test_telemetry_data_try_into_deserializer() -> anyhow::Result<()> {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
@@ -782,147 +515,246 @@ mod tests {
             ])
         );
     }
-
-    // #[test]
-    // fn test_zero_capacities() {
-    //     type HM = TelemetryData;
-    //
-    //     let m = HM::new();
-    //     assert_eq!(m.capacity(), 0);
-    //
-    //     let m = HM::default();
-    //     assert_eq!(m.capacity(), 0);
-    //
-    //     let m = HM::with_capacity(0);
-    //     assert_eq!(m.capacity(), 0);
-    //
-    //     let mut m = HM::new();
-    //     m.insert("1", 1);
-    //     m.insert("2", 2);
-    //     m.remove("1");
-    //     m.remove("2");
-    //     m.shrink_to_fit();
-    //     assert_eq!(m.capacity(), 0);
-    //
-    //     let mut m = HM::new();
-    //     m.reserve(0);
-    //     assert_eq!(m.capacity(), 0);
-    // }
-
-    // #[test]
-    // fn test_create_capacity_zero() {
-    //     let mut m = HashMap::with_capacity(0);
-    //
-    //     assert!(m.insert("1".to_string(), "1".to_string()).is_none());
-    //
-    //     assert!(m.contains_key(&"1".to_string()));
-    //     assert!(!m.contains_key(&"0".to_string()));
-    // }
-
-    // #[test]
-    // fn test_insert() {
-    //     let mut m = HashMap::new();
-    //     assert_eq!(m.len(), 0);
-    //     assert!(m.insert("1".to_string(), "2".to_string()).is_none());
-    //     assert_eq!(m.len(), 1);
-    //     assert!(m.insert("2".to_string(), "4".to_string()).is_none());
-    //     assert_eq!(m.len(), 2);
-    //     assert_eq!(*m.get(&"1".to_string()).unwrap(), "2".to_string());
-    //     assert_eq!(*m.get(&"2".to_string()).unwrap(), "4".to_string());
-    // }
-
-    // #[test]
-    // fn test_clone() {
-    //     let mut m = HashMap::new();
-    //     assert_eq!(m.len(), 0);
-    //     assert!(m.insert("1".to_string(), "2".to_string()).is_none());
-    //     assert_eq!(m.len(), 1);
-    //     assert!(m.insert("2".to_string(), "4".to_string()).is_none());
-    //     assert_eq!(m.len(), 2);
-    //     let m2 = m.clone();
-    //     assert_eq!(*m2.get(&"1".to_string()).unwrap(), "2".to_string());
-    //     assert_eq!(*m2.get(&"2".to_string()).unwrap(), "4".to_string());
-    //     assert_eq!(m2.len(), 2);
-    // }
-
-    // #[test]
-    // fn test_empty_iter() {
-    //     let mut m: TelemetryData = TelemetryData::new();
-    //     assert_eq!(m.drain().next(), None);
-    //     assert_eq!(m.keys().next(), None);
-    //     assert_eq!(m.values().next(), None);
-    //     assert_eq!(m.values_mut().next(), None);
-    //     assert_eq!(m.iter().next(), None);
-    //     assert_eq!(m.iter_mut().next(), None);
-    //     assert_eq!(m.len(), 0);
-    //     assert!(m.is_empty());
-    //     assert_eq!(m.into_iter().next(), None);
-    // }
-
-    // #[test]
-    // fn test_iterate() {
-    //     let mut m = TelemetryData::with_capacity(4);
-    //     for i in 0..32 {
-    //         assert!(m.insert(i.to_string(), (i * 2).to_string()).is_none());
-    //     }
-    //     assert_eq!(m.len(), 32);
-    //
-    //     let mut observed: u32 = 0;
-    //
-    //     for (k, v) in &m {
-    //         let k_val = i32::from_str((*k).as_str()).unwrap();
-    //         assert_eq!(*v, (k_val * 2).to_string());
-    //         observed |= 1 << k_val;
-    //     }
-    //     assert_eq!(observed, 0xFFFF_FFFF);
-    // }
-
-    // #[test]
-    // fn test_keys() {
-    //     let vec = vec![
-    //         ("1".to_string(), "a".to_string()),
-    //         ("2".to_string(), "b".to_string()),
-    //         ("3".to_string(), "c".to_string()),
-    //     ];
-    //     let map = TelemetryData(vec.into_iter().collect());
-    //     let keys: Vec<_> = map.keys().cloned().collect();
-    //     assert_eq!(keys.len(), 3);
-    //     assert!(keys.contains(&"1".to_string()));
-    //     assert!(keys.contains(&"2".to_string()));
-    //     assert!(keys.contains(&"3".to_string()));
-    // }
-
-    // #[test]
-    // fn test_values() {
-    //     let vec = vec![
-    //         ("1".to_string(), "a".to_string()),
-    //         ("2".to_string(), "b".to_string()),
-    //         ("3".to_string(), "c".to_string()),
-    //     ];
-    //     let map = TelemetryData(vec.into_iter().collect());
-    //     let values: Vec<_> = map.values().cloned().collect();
-    //     assert_eq!(values.len(), 3);
-    //     assert!(values.contains(&"a".to_string()));
-    //     assert!(values.contains(&"b".to_string()));
-    //     assert!(values.contains(&"c".to_string()));
-    // }
-
-    // #[test]
-    // fn test_values_mut() {
-    //     let vec = vec![
-    //         ("1".to_string(), "1".to_string()),
-    //         ("2".to_string(), "2".to_string()),
-    //         ("3".to_string(), "3".to_string()),
-    //     ];
-    //     let mut map = TelemetryData(vec.into_iter().collect());
-    //     for value in map.values_mut() {
-    //         let val = i32::from_str((*value).as_str()).unwrap();
-    //         *value = (val * 2).to_string();
-    //     }
-    //     let values: Vec<_> = map.values().cloned().collect();
-    //     assert_eq!(values.len(), 3);
-    //     assert!(values.contains(&"2".to_string()));
-    //     assert!(values.contains(&"4".to_string()));
-    //     assert!(values.contains(&"6".to_string()));
-    // }
 }
+
+// #[test]
+// fn test_zero_capacities() {
+//     type HM = TelemetryData;
+//
+//     let m = HM::new();
+//     assert_eq!(m.capacity(), 0);
+//
+//     let m = HM::default();
+//     assert_eq!(m.capacity(), 0);
+//
+//     let m = HM::with_capacity(0);
+//     assert_eq!(m.capacity(), 0);
+//
+//     let mut m = HM::new();
+//     m.insert("1", 1);
+//     m.insert("2", 2);
+//     m.remove("1");
+//     m.remove("2");
+//     m.shrink_to_fit();
+//     assert_eq!(m.capacity(), 0);
+//
+//     let mut m = HM::new();
+//     m.reserve(0);
+//     assert_eq!(m.capacity(), 0);
+// }
+
+// #[test]
+// fn test_create_capacity_zero() {
+//     let mut m = HashMap::with_capacity(0);
+//
+//     assert!(m.insert("1".to_string(), "1".to_string()).is_none());
+//
+//     assert!(m.contains_key(&"1".to_string()));
+//     assert!(!m.contains_key(&"0".to_string()));
+// }
+
+// #[test]
+// fn test_insert() {
+//     let mut m = HashMap::new();
+//     assert_eq!(m.len(), 0);
+//     assert!(m.insert("1".to_string(), "2".to_string()).is_none());
+//     assert_eq!(m.len(), 1);
+//     assert!(m.insert("2".to_string(), "4".to_string()).is_none());
+//     assert_eq!(m.len(), 2);
+//     assert_eq!(*m.get(&"1".to_string()).unwrap(), "2".to_string());
+//     assert_eq!(*m.get(&"2".to_string()).unwrap(), "4".to_string());
+// }
+
+// #[test]
+// fn test_clone() {
+//     let mut m = HashMap::new();
+//     assert_eq!(m.len(), 0);
+//     assert!(m.insert("1".to_string(), "2".to_string()).is_none());
+//     assert_eq!(m.len(), 1);
+//     assert!(m.insert("2".to_string(), "4".to_string()).is_none());
+//     assert_eq!(m.len(), 2);
+//     let m2 = m.clone();
+//     assert_eq!(*m2.get(&"1".to_string()).unwrap(), "2".to_string());
+//     assert_eq!(*m2.get(&"2".to_string()).unwrap(), "4".to_string());
+//     assert_eq!(m2.len(), 2);
+// }
+
+// #[test]
+// fn test_empty_iter() {
+//     let mut m: TelemetryData = TelemetryData::new();
+//     assert_eq!(m.drain().next(), None);
+//     assert_eq!(m.keys().next(), None);
+//     assert_eq!(m.values().next(), None);
+//     assert_eq!(m.values_mut().next(), None);
+//     assert_eq!(m.iter().next(), None);
+//     assert_eq!(m.iter_mut().next(), None);
+//     assert_eq!(m.len(), 0);
+//     assert!(m.is_empty());
+//     assert_eq!(m.into_iter().next(), None);
+// }
+
+// #[test]
+// fn test_iterate() {
+//     let mut m = TelemetryData::with_capacity(4);
+//     for i in 0..32 {
+//         assert!(m.insert(i.to_string(), (i * 2).to_string()).is_none());
+//     }
+//     assert_eq!(m.len(), 32);
+//
+//     let mut observed: u32 = 0;
+//
+//     for (k, v) in &m {
+//         let k_val = i32::from_str((*k).as_str()).unwrap();
+//         assert_eq!(*v, (k_val * 2).to_string());
+//         observed |= 1 << k_val;
+//     }
+//     assert_eq!(observed, 0xFFFF_FFFF);
+// }
+
+// #[test]
+// fn test_keys() {
+//     let vec = vec![
+//         ("1".to_string(), "a".to_string()),
+//         ("2".to_string(), "b".to_string()),
+//         ("3".to_string(), "c".to_string()),
+//     ];
+//     let map = TelemetryData(vec.into_iter().collect());
+//     let keys: Vec<_> = map.keys().cloned().collect();
+//     assert_eq!(keys.len(), 3);
+//     assert!(keys.contains(&"1".to_string()));
+//     assert!(keys.contains(&"2".to_string()));
+//     assert!(keys.contains(&"3".to_string()));
+// }
+
+// #[test]
+// fn test_values() {
+//     let vec = vec![
+//         ("1".to_string(), "a".to_string()),
+//         ("2".to_string(), "b".to_string()),
+//         ("3".to_string(), "c".to_string()),
+//     ];
+//     let map = TelemetryData(vec.into_iter().collect());
+//     let values: Vec<_> = map.values().cloned().collect();
+//     assert_eq!(values.len(), 3);
+//     assert!(values.contains(&"a".to_string()));
+//     assert!(values.contains(&"b".to_string()));
+//     assert!(values.contains(&"c".to_string()));
+// }
+
+// #[test]
+// fn test_values_mut() {
+//     let vec = vec![
+//         ("1".to_string(), "1".to_string()),
+//         ("2".to_string(), "2".to_string()),
+//         ("3".to_string(), "3".to_string()),
+//     ];
+//     let mut map = TelemetryData(vec.into_iter().collect());
+//     for value in map.values_mut() {
+//         let val = i32::from_str((*value).as_str()).unwrap();
+//         *value = (val * 2).to_string();
+//     }
+//     let values: Vec<_> = map.values().cloned().collect();
+//     assert_eq!(values.len(), 3);
+//     assert!(values.contains(&"2".to_string()));
+//     assert!(values.contains(&"4".to_string()));
+//     assert!(values.contains(&"6".to_string()));
+// }
+// impl FromTelemetry for Data {
+//     fn from_telemetry(val: TelemetryValue) -> GraphResult<Self> {
+//         if let TelemetryValue::Map(table) = val {
+//             let last_failure = table.get(&"task.last_failure".to_string()).map(|t| );
+//             let is_deploying
+//         } else {
+//             Err(crate::error::GraphError::TypeError("TelemetryValue::Map".to_string()))
+//         }
+//     }
+// }
+
+// #[test]
+// fn test_telemetry_serde_tokens() {
+//     let data = Telemetry::from_iter(maplit::hashmap! {
+//         "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_telemetry(),
+//         // "cluster.is_deploying".to_string() => false.to_telemetry(),
+//         // "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".to_telemetry(),
+//     });
+//
+//     assert_tokens(
+//         &data,
+//         &vec![
+//             Token::NewtypeStruct { name: "Telemetry" },
+//             Token::Map { len: Some(1) },
+//             Token::Str("task.last_failure"),
+//             Token::NewtypeVariant {
+//                 name: "TelemetryValue",
+//                 variant: "Text",
+//             },
+//             Token::Str("2014-11-28T12:45:59.324310806Z"),
+//             // Token::Str("cluster.is_deploying"),
+//             // Token::NewtypeVariant { name:"TelemetryValue", variant:"Boolean"},
+//             // Token::Bool(false),
+//             // Token::Str("cluster.last_deployment"),
+//             // Token::NewtypeVariant { name:"TelemetryValue", variant:"Text"},
+//             // Token::Str("2014-11-28T10:11:37.246310806Z",),
+//             Token::MapEnd,
+//         ],
+//     );
+// }
+
+//  #[test]
+// #[ignore]
+// fn test_telemetry_try_into_tokens() {
+// lazy_static::initialize(&crate::tracing::TEST_TRACING);
+// let data = Telemetry::from_iter(maplit::hashmap! {
+//     "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_telemetry(),
+//     // "cluster.is_deploying".to_string() => false.to_telemetry(),
+//     // "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".to_telemetry(),
+// });
+//
+// let config_shape: config::Value = data.0.into();
+// assert_tokens(
+//     &config_shape,
+//    &vec![
+//        Token::NewtypeStruct { name:"Telemetry" },
+//        Token::Map{ len: Some(1), },
+//        Token::Str("task.last_failure"),
+//        Token::NewtypeVariant { name:"TelemetryValue", variant:"Text"},
+//        Token::Str("2014-11-28T12:45:59.324310806Z"),
+//        // Token::Str("cluster.is_deploying"),
+//        // Token::NewtypeVariant { name:"TelemetryValue", variant:"Boolean"},
+//        // Token::Bool(false),
+//        // Token::Str("cluster.last_deployment"),
+//        // Token::NewtypeVariant { name:"TelemetryValue", variant:"Text"},
+//        // Token::Str("2014-11-28T10:11:37.246310806Z",),
+//        Token::MapEnd,
+//    ]
+// )
+// }
+
+// #[test]
+// fn test_telemetry_identity_try_into() -> anyhow::Result<()> {
+//     lazy_static::initialize(&crate::tracing::TEST_TRACING);
+//     let data = Telemetry::from_iter(maplit::hashmap! {
+//         "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_telemetry(),
+//         // "cluster.is_deploying".to_string() => false.to_telemetry(),
+//         // "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".to_telemetry(),
+//     });
+//
+//     // let foo: Option<bool> = data
+//     //     .get("cluster.is_deploying")
+//     //     .map(|f| bool::from_telemetry(f.clone()).unwrap());
+//     // assert_eq!(foo, Some(false));
+//
+//     let expected = Telemetry(
+//         maplit::hashmap! {
+//             "task.last_failure".to_string() => TelemetryValue::Text("2014-11-28T12:45:59.324310806Z".to_string()),
+//             // "cluster.is_deploying".to_string() => TelemetryValue::Boolean(false),
+//             // "cluster.last_deployment".to_string() => TelemetryValue::Text("2014-11-28T10:11:37.246310806Z".to_string()),
+//         }
+//         .to_telemetry(),
+//     );
+//     tracing::info!(telemetry=?data, ?expected, "expected conversion from telemetry data.");
+//     let actual = data.try_into::<Telemetry>();
+//     tracing::info!(?actual, "actual conversion from telemetry data.");
+//     assert_eq!(actual?, expected);
+//     Ok(())
+// }

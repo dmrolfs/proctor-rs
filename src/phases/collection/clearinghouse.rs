@@ -296,7 +296,6 @@ impl TelemetrySubscription {
 
                     None
                 } else {
-                    // let foo: std::collections::HashMap<String, oso::PolarValue> = ready.into_iter().cloned().collect();
                     let ready = ready.into_iter().map(|(k, v)| (k, v.clone()));
                     Some(Telemetry::from_iter(ready))
                 }
@@ -311,36 +310,14 @@ impl TelemetrySubscription {
     }
 
     pub async fn send(&self, telemetry: Telemetry) -> GraphResult<()> {
-        match self {
-            Self::All {
-                name: _,
-                outlet_to_subscription,
-            } => outlet_to_subscription.send(telemetry).await,
-            Self::Explicit {
-                name: _,
-                required_fields: _,
-                optional_fields: _,
-                outlet_to_subscription,
-            } => outlet_to_subscription.send(telemetry).await,
-        }
+        self.outlet_to_subscription().send(telemetry).await
     }
 }
 
 impl TelemetrySubscription {
     #[tracing::instrument()]
     pub async fn close(self) {
-        match self {
-            Self::All {
-                name: _,
-                mut outlet_to_subscription,
-            } => outlet_to_subscription.close().await,
-            Self::Explicit {
-                name: _,
-                required_fields: _,
-                optional_fields: _,
-                mut outlet_to_subscription,
-            } => outlet_to_subscription.close().await,
-        }
+        self.outlet_to_subscription().close().await;
     }
 }
 
@@ -711,6 +688,7 @@ mod tests {
     use crate::graph::stage::{self, Stage, WithApi};
     use crate::graph::{Connect, SinkShape, SourceShape};
     use lazy_static::lazy_static;
+    use pretty_assertions::assert_eq;
     use std::collections::HashMap;
     use std::iter::FromIterator;
     use std::time::Duration;

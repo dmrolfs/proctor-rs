@@ -73,19 +73,6 @@ impl fmt::Display for TelemetryValue {
     }
 }
 
-// impl TryFrom<bool> for TelemetryValue {
-//     type Error = GraphError;
-//     fn try_from(value: bool) -> Result<Self, Self::Error> {
-//         Ok(TelemetryValue::Boolean(value))
-//     }
-// }
-
-// impl<T: ToTelemetry> From<T> for TelemetryValue {
-//     fn from(that: T) -> Self {
-//         that.to_telemetry()
-//     }
-// }
-
 impl FromTelemetry for TelemetryValue {
     #[tracing::instrument(level = "trace", skip())]
     fn from_telemetry(val: TelemetryValue) -> GraphResult<Self> {
@@ -260,12 +247,6 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
                 Ok(TelemetryValue::Integer(v as i64))
             }
 
-            // #[inline]
-            // fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E> {
-            //     let smaller: u32 = v as u32;
-            //     Ok(smaller.into())
-            // }
-
             #[inline]
             #[tracing::instrument(level = "trace", skip())]
             fn visit_f32<E>(self, v: f32) -> Result<Self::Value, E> {
@@ -351,66 +332,17 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
 
                 Ok(TelemetryValue::Table(table))
             }
-
-            // #[tracing::instrument(level="trace", skip())]
-            // fn visit_enum<A>(self, data: A) -> Result<Self::Value, <A as EnumAccess<'_>>::Error> where
-            //     A: EnumAccess<'de>, {
-            //     todo!()
-            // }
         }
 
         deserializer.deserialize_any(ValueVisitor)
     }
 }
 
-// pub fn polar_to_config(polar: PolarValue) -> ConfigValue {
-//     match polar {
-//         PolarValue::Integer(value) => ConfigValue::new(None, value),
-//         PolarValue::Float(value) => ConfigValue::new(None, value),
-//         PolarValue::Boolean(value) => ConfigValue::new(None, value),
-//         PolarValue::String(value) => ConfigValue::new(None, value),
-//         PolarValue::List(values) => {
-//             let vs: Vec<ConfigValue> = values.into_iter().map(|v| polar_to_config(v)).collect();
-//             ConfigValue::new(None, vs)
-//         },
-//         PolarValue::Map(table) => {
-//             let tbl = table
-//                 .into_iter()
-//                 .map(|(k,v)| { (k, polar_to_config(v)) })
-//                 .collect::<HashMap<_, _>>();
-//             ConfigValue::new(None, tbl)
-//         },
-//         PolarValue::Variable(_) => ConfigValue::new(None, Option::<String>::None),
-//         PolarValue::Instance(_) => ConfigValue::new(None, Option::<String>::None),
-//     }
-// }
-//
-// pub fn config_to_polar(config: ConfigValue) -> PolarValue {
-//     match config {
-//         PolarValue::Integer(value) => ConfigValue::new(None, value),
-//         PolarValue::Float(value) => ConfigValue::new(None, value),
-//         PolarValue::Boolean(value) => ConfigValue::new(None, value),
-//         PolarValue::String(value) => ConfigValue::new(None, value),
-//         PolarValue::List(values) => {
-//             let vs: Vec<ConfigValue> = values.into_iter().map(|v| polar_to_config(v)).collect();
-//             ConfigValue::new(None, vs)
-//         },
-//         PolarValue::Map(table) => {
-//             let tbl = table
-//                 .into_iter()
-//                 .map(|(k,v)| { (k, polar_to_config(v)) })
-//                 .collect::<HashMap<_, _>>();
-//             ConfigValue::new(None, tbl)
-//         },
-//         PolarValue::Variable(_) => ConfigValue::new(None, Option::<String>::None),
-//         PolarValue::Instance(_) => ConfigValue::new(None, Option::<String>::None),
-//     }
-// }
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use fmt::Debug;
+    use pretty_assertions::assert_eq;
     use serde::{Deserialize, Serialize};
     use serde_test::{assert_tokens, Token};
 
@@ -425,24 +357,12 @@ mod tests {
         let main_span = tracing::info_span!("test_telemetry_value_integer_serde");
         let _main_span_guard = main_span.enter();
 
-        // let tel = Telemetry::from_iter(maplit::hashmap! {"foo".to_string() => TelemetryValue::Integer(42)});
-        // let tel_json = serde_json::to_string(&tel).unwrap();
-        // // assert_eq!(tel_json, r#"{"Table":{"foo":{"Integer":42}}}"#);
-        // assert_eq!(tel_json, r#"{"Table":{"foo":{"Integer":42}}}"#);
-        // tracing::warn!("testing deser from json: {}", tel_json);
-        // let actual_tel: Telemetry = serde_json::from_str(tel_json.as_str()).unwrap();
-        // assert_eq!(actual_tel, tel);
-
         let foo = Foo {
             bar: TelemetryValue::Integer(37),
         };
         let json_foo = serde_json::to_string(&foo).unwrap();
-        // assert_eq!(json_foo, r#"{"bar":{"Integer":37}}"#);
         assert_eq!(json_foo, r#"{"bar":37}"#);
         tracing::warn!("deserialize: {}", json_foo);
-        // let actual_foo: Foo = serde_json::from_str(json_foo.as_str()).unwrap();
-        // tracing::warn!(actual=?actual_foo, expected=?foo, "checking result");
-        // assert_eq!(actual_foo, foo);
 
         // tracing::warn!("asserting tokens...");
         // assert_tokens(
@@ -458,34 +378,6 @@ mod tests {
         //     ],
         // );
     }
-
-    // #[test]
-    // fn test_telemetry_value_float_serde() {
-    //     let value = TelemetryValue::Float(std::f64::consts::LN_2);
-    //
-    //     let foo = Foo { bar: value.clone() };
-    //     let json_foo = serde_json::to_string(&foo).unwrap();
-    //     assert_eq!(json_foo, format!(r#"{{"bar":{{"Float":{}}}}}"#, std::f64::consts::LN_2));
-    //     let actual_foo: Foo = serde_json::from_str(json_foo.as_str()).unwrap();
-    //     assert_eq!(actual_foo, foo);
-    //
-    //     let data = Telemetry::from_iter(maplit::hashmap! {"data".to_string() => value.clone()});
-    //     let data_json = serde_json::to_string(&data).unwrap();
-    //     assert_eq!(data_json, format!(r#"{{"Table":{{"foo":{{"Integer":{}}}}}}}"#, std::f64::consts::LN_2));
-    //     let actual_data: Telemetry = serde_json::from_str(data_json.as_str()).unwrap();
-    //     assert_eq!(actual_data, data);
-    //
-    //     assert_tokens(
-    //         &data,
-    //         &vec![
-    //             // Token::NewtypeVariant {
-    //             //     name: "TelemetryValue",
-    //             //     variant: "Float",
-    //             // },
-    //             Token::F64(std::f64::consts::LN_2),
-    //         ],
-    //     )
-    // }
 
     #[test]
     fn test_telemetry_value_boolean_serde() {
@@ -517,16 +409,6 @@ mod tests {
         )
     }
 
-    #[test]
-    // fn test_telemetry_value_nil_serde() {
-    //     let data = TelemetryValue::Unit;
-    //     assert_tokens(
-    //         &data,
-    //         &vec![
-    //             Token::UnitVariant { name: "TelemetryValue", variant: "Unit",}
-    //         ],
-    //     )
-    // }
     #[test]
     fn test_telemetry_value_list_serde() {
         let data = TelemetryValue::Seq(vec![

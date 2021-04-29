@@ -395,15 +395,8 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
         timestamp: now_utc,
         inbox_lag: 3,
     };
-    // let expected_data_telemetry = Telemetry::from_iter(maplit::hashmap! {
-    //    "input_messages_per_sec".to_string() => std::f64::consts::PI.to_telemetry(),
-    //     "timestamp".to_string() => now_ts.to_telemetry(),
-    //     "inbox_lag".to_string() => 3.to_telemetry(),
-    //
-    // });
 
     let data_telemetry = Telemetry::try_from(&data)?;
-    // assert_eq!(data_telemetry, expected_data_telemetry);
     tracing::warn!("test_eligibility_before_context_baseline_C");
 
     flow.push_telemetry(data_telemetry).await?;
@@ -411,10 +404,6 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
     let actual = flow.inspect_sink().await?;
     tracing::warn!("test_eligibility_before_context_baseline_E");
     assert!(actual.is_empty());
-
-    tracing::warn!("sleeping awhile before closing shop...");
-    // tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-    tracing::warn!(".. done sleeping -- closing shop.");
 
     tracing::warn!("test_eligibility_before_context_baseline_F");
 
@@ -494,7 +483,6 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     };
     tracing::warn!("DMR: 04. environment change verified.");
 
-    // tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     let detail = flow.inspect_policy_context().await?;
     tracing::warn!("DMR: policy detail = {:?}", detail);
     assert!(detail.context.is_some());
@@ -509,7 +497,6 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
         t1.try_into::<MeasurementData>()?
     );
 
-    // let ts = Utc::now().into();
     flow.push_telemetry(maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_telemetry()}.into())
         .await?;
 

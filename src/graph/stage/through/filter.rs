@@ -165,6 +165,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
     use tokio::sync::mpsc;
     use tokio_test::block_on;
 

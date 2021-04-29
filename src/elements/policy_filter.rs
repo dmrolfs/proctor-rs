@@ -125,12 +125,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(
-        level="info",
-        name="run policy_filter through",
-        skip(self),
-        // fields(stage=%self.name,)
-    )]
+    #[tracing::instrument(level = "info", name = "run policy_filter through", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
         let name = self.name().to_owned();
         let mut oso = self.oso()?;
@@ -384,6 +379,7 @@ mod tests {
     use super::*;
     use crate::error::GraphError;
     use oso::PolarClass;
+    use pretty_assertions::assert_eq;
     use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
     use tokio::sync::mpsc;

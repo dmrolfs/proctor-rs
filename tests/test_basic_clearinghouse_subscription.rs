@@ -1,6 +1,7 @@
 mod fixtures;
 
 use cast_trait_object::DynCastExt;
+use pretty_assertions::assert_eq;
 use proctor::elements::Telemetry;
 use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use proctor::phases::collection;
@@ -39,7 +40,6 @@ const CAT_FIELD: &str = "cat";
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_basic_1_clearinghouse_subscription() -> anyhow::Result<()> {
     lazy_static::initialize(&proctor::tracing::TEST_TRACING);
-    // fixtures::init_tracing("test_basic_1_clearinghouse_subscription");
     let main_span = tracing::info_span!("test_basic_1_clearinghouse_subscription");
     let _main_span_guard = main_span.enter();
 
@@ -65,7 +65,6 @@ async fn test_basic_1_clearinghouse_subscription() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_basic_2_clearinghouse_subscription() -> anyhow::Result<()> {
     lazy_static::initialize(&proctor::tracing::TEST_TRACING);
-    // fixtures::init_tracing("test_basic_2_clearinghouse_subscription");
     let main_span = tracing::info_span!("test_basic_2_clearinghouse_subscription");
     let _main_span_guard = main_span.enter();
 
@@ -86,16 +85,8 @@ async fn test_scenario(focus: HashSet<String>) -> anyhow::Result<(i64, i64)> {
     let mut clearinghouse = collection::Clearinghouse::new("clearinghouse");
     let pos_channel = collection::SubscriptionChannel::<Data>::new("pos_channel").await?;
 
-    // let pos_stats_fields = focus.clone();
     let mut pos_stats = stage::Fold::<_, Data, (i64, i64)>::new("pos_stats", (0, 0), move |(count, sum), data| {
         let pos = data.pos.unwrap_or(0);
-        // let delivered = data.keys().cloned().collect::<HashSet<_>>();
-        // let unexpected = delivered.difference(&pos_stats_fields).collect::<HashSet<_>>();
-        // assert!(unexpected.is_empty());
-        // let pos = data.get(POS_FIELD).map_or(0, |pos| {
-        //     tracing::warn!(?pos, "parsing pos...");
-        //     pos.parse::<usize>().expect("failed to parse pos field")
-        // });
         (count + 1, sum + pos)
     });
     let rx_pos_stats = pos_stats.take_final_rx().unwrap();
