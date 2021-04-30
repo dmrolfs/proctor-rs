@@ -377,13 +377,13 @@ impl<T, C> Debug for PolicyFilter<T, C> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::elements::telemetry;
     use crate::error::GraphError;
     use oso::PolarClass;
     use pretty_assertions::assert_eq;
     use serde::{Deserialize, Serialize};
     use tokio::sync::mpsc;
     use tokio_test::block_on;
-    use crate::elements::telemetry::{self, ToTelemetry};
 
     // Make sure the `PolicyFilter` object is threadsafe
     // #[test]
@@ -480,8 +480,8 @@ mod tests {
             let context = TestContext {
                 location_code: 17,
                 qualities: maplit::hashmap! {
-                    "foo".to_string() => "bar".to_telemetry(),
-                    "score".to_string() => 13.to_telemetry(),
+                    "foo".to_string() => "bar".into(),
+                    "score".to_string() => 13.into(),
                 },
             };
 

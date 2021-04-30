@@ -6,10 +6,11 @@ use ::chrono::{DateTime, TimeZone, Utc};
 use ::serde::{Deserialize, Serialize};
 use ::std::path::PathBuf;
 use pretty_assertions::assert_eq;
-use proctor::elements::{FromTelemetry, Telemetry};
+use proctor::elements::Telemetry;
 use proctor::graph::{stage, Connect, Graph, SinkShape};
 use proctor::phases::collection::make_telemetry_cvs_source;
 use proctor::settings::SourceSetting;
+use std::convert::TryFrom;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Data {
@@ -57,7 +58,7 @@ async fn test_make_telemetry_cvs_source() -> Result<()> {
             let dt_format = "%+";
 
             let rec_last_failure = rec.get("task.last_failure").and_then(|r| {
-                let rep = String::from_telemetry(r.clone()).unwrap();
+                let rep = String::try_from(r.clone()).unwrap();
                 if rep.is_empty() {
                     None
                 } else {
@@ -72,14 +73,14 @@ async fn test_make_telemetry_cvs_source() -> Result<()> {
                 tracing::info!("first record - set is_deploying.");
                 is_first = false;
                 rec.get("cluster.is_deploying")
-                    .map(|v| bool::from_telemetry(v.clone()).unwrap())
+                    .map(|v| bool::try_from(v.clone()).unwrap())
             } else {
                 tracing::info!("not first record - skip parsing is_deploying.");
                 None
             };
 
             let rec_latest_deployment = DateTime::parse_from_str(
-                String::from_telemetry(rec.get("cluster.last_deployment").unwrap().clone())
+                String::try_from(rec.get("cluster.last_deployment").unwrap().clone())
                     .unwrap()
                     .as_str(),
                 dt_format,

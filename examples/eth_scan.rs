@@ -3,7 +3,8 @@ extern crate enum_display_derive;
 
 use anyhow::anyhow;
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
-use proctor::elements::{Collect, Telemetry, ToTelemetry};
+use proctor::elements::telemetry::ToTelemetry;
+use proctor::elements::{Collect, Telemetry};
 use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use proctor::tracing::{get_subscriber, init_subscriber};
 use reqwest::Url;

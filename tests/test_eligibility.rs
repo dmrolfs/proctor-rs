@@ -7,7 +7,8 @@ use chrono::*;
 use lazy_static::lazy_static;
 use oso::{Oso, PolarClass, ToPolar};
 use pretty_assertions::assert_eq;
-use proctor::elements::{self, telemetry, Policy, PolicySource, PolicyFilterEvent, Telemetry, ToTelemetry};
+use proctor::elements::telemetry::ToTelemetry;
+use proctor::elements::{self, telemetry, Policy, PolicyFilterEvent, PolicySource, Telemetry};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape, UniformFanInShape};
 use proctor::phases::collection;
@@ -489,7 +490,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
 
     tracing::warn!("DMR: 05. Push Item...");
 
-    let t1 = Telemetry::from_iter(maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_telemetry()});
+    let t1 = Telemetry::from_iter(maplit::hashmap! {"measurement" => std::f64::consts::PI.to_telemetry()});
     assert_eq!(
         MeasurementData {
             measurement: std::f64::consts::PI,
@@ -550,7 +551,7 @@ struct TestItem {
 }
 
 impl TestItem {
-    pub fn new(input_messages_per_sec: f64, inbox_lag: u32, ts: DateTime<Utc>,) -> Self {
+    pub fn new(input_messages_per_sec: f64, inbox_lag: u32, ts: DateTime<Utc>) -> Self {
         Self {
             flow: TestFlowMetrics { input_messages_per_sec },
             inbox_lag,
@@ -572,7 +573,7 @@ impl TestItem {
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct TestFlowMetrics {
     #[polar(attribute)]
-    pub input_messages_per_sec: f64
+    pub input_messages_per_sec: f64,
 }
 
 #[derive(PolarClass, Debug, Clone, Serialize, Deserialize)]
@@ -584,10 +585,15 @@ struct TestContext {
 
 impl TestContext {
     pub fn new(location_code: u32) -> Self {
-        Self { location_code, custom: telemetry::Table::default(), }
+        Self {
+            location_code,
+            custom: telemetry::Table::default(),
+        }
     }
 
-    pub fn with_custom(self, custom: telemetry::Table) -> Self { Self { custom, ..self } }
+    pub fn with_custom(self, custom: telemetry::Table) -> Self {
+        Self { custom, ..self }
+    }
 }
 
 impl proctor::ProctorContext for TestContext {
@@ -595,7 +601,9 @@ impl proctor::ProctorContext for TestContext {
         maplit::hashset! { "location_code", "input_messages_per_sec" }
     }
 
-    fn custom(&self) -> telemetry::Table { self.custom.clone() }
+    fn custom(&self) -> telemetry::Table {
+        self.custom.clone()
+    }
 }
 
 #[derive(Debug)]
@@ -607,7 +615,9 @@ impl TestPolicy {
     pub fn new<S: AsRef<str>>(policy: S) -> Self {
         let polar = polar_core::polar::Polar::new();
         polar.load_str(policy.as_ref()).expect("failed to parse policy text");
-        Self { policy: policy.as_ref().to_string(), }
+        Self {
+            policy: policy.as_ref().to_string(),
+        }
     }
 }
 

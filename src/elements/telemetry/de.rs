@@ -1,3 +1,7 @@
+//todo This file tried to define Telemetry as a Deserializer; meaning values could be directly
+// deserialized from it. I ran into problems getting Enum Variants right and particular trouble with
+// recursive structures; e.g., Seq of Tables, etc.
+
 // use super::{Telemetry, TelemetryValue, FromTelemetry};
 // use crate::elements::telemetry::value::Table;
 // use crate::error::GraphError;

@@ -1,6 +1,6 @@
 pub use from_telemetry::FromTelemetry;
 pub use to_telemetry::ToTelemetry;
-pub use value::{TelemetryValue, Table, Seq};
+pub use value::{Seq, Table, TelemetryValue};
 
 mod de;
 mod from_telemetry;
@@ -8,7 +8,6 @@ mod ser;
 mod to_telemetry;
 mod value;
 
-use crate::error::GraphError;
 use crate::graph::GraphResult;
 use flexbuffers;
 use oso::PolarClass;
@@ -76,19 +75,11 @@ impl Telemetry {
     }
 }
 
-impl ToTelemetry for Telemetry {
-    #[tracing::instrument(level = "trace", skip())]
-    fn to_telemetry(self) -> TelemetryValue {
-        self.0
-    }
-}
-
-impl FromTelemetry for Telemetry {
-    #[tracing::instrument(level = "trace", skip())]
-    fn from_telemetry(val: TelemetryValue) -> GraphResult<Self> {
-        match val {
-            inner @ TelemetryValue::Table(_) => Ok(Telemetry(inner)),
-            _ => Err(GraphError::TypeError("Table".to_string())),
+impl From<TelemetryValue> for Telemetry {
+    fn from(value: TelemetryValue) -> Self {
+        match value {
+            inner @ TelemetryValue::Table(_) => Self(inner),
+            tv => unreachable!("can only convert Tables into Telemetry, not {:?}", tv),
         }
     }
 }
@@ -139,9 +130,16 @@ impl std::ops::Add for Telemetry {
 }
 
 impl FromIterator<(String, TelemetryValue)> for Telemetry {
-    #[tracing::instrument(level = "trace", skip(iter))]
     fn from_iter<T: IntoIterator<Item = (String, TelemetryValue)>>(iter: T) -> Self {
         Telemetry(TelemetryValue::Table(HashMap::from_iter(iter)))
+    }
+}
+
+impl<'a> FromIterator<(&'a str, TelemetryValue)> for Telemetry {
+    fn from_iter<T: IntoIterator<Item = (&'a str, TelemetryValue)>>(iter: T) -> Self {
+        Telemetry(TelemetryValue::Table(
+            iter.into_iter().map(|(k, v)| (k.to_string(), v)).collect(),
+        ))
     }
 }
 
@@ -225,8 +223,8 @@ mod tests {
 
         let telemetry = TelemetryValue::Table(maplit::hashmap! {
             "place".to_string() => TelemetryValue::Table(maplit::hashmap! {
-                "foo".to_string() => 37.to_telemetry(),
-                "bar".to_string() => 19.to_telemetry(),
+                "foo".to_string() => 37.into(),
+                "bar".to_string() => 19.into(),
             })
         });
 
@@ -259,9 +257,9 @@ mod tests {
         };
 
         let telemetry = Telemetry::from_iter(maplit::hashmap! {
-                "foo".to_string() => 37.to_telemetry(),
-                "bar".to_string() => "Otis".to_telemetry(),
-                "zed".to_string() => std::f64::consts::LN_2.to_telemetry(),
+                "foo".to_string() => 37.into(),
+                "bar".to_string() => "Otis".into(),
+                "zed".to_string() => std::f64::consts::LN_2.into(),
         });
 
         let actual_data: TestData = telemetry.clone().try_into().unwrap();
@@ -291,8 +289,8 @@ mod tests {
 
         let telemetry = Telemetry::from_iter(maplit::hashmap! {
             "place".to_string() => TelemetryValue::Table(maplit::hashmap! {
-                "foo".to_string() => 37.to_telemetry(),
-                "bar".to_string() => 19.to_telemetry(),
+                "foo".to_string() => 37.into(),
+                "bar".to_string() => 19.into(),
             })
         });
 
@@ -459,6 +457,9 @@ mod tests {
         // );
     }
 
+    use crate::elements::TelemetryValue;
+    use std::convert::TryFrom;
+
     #[test]
     fn test_telemetry_data_try_into_deserializer() -> anyhow::Result<()> {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
@@ -466,14 +467,14 @@ mod tests {
         let _main_span_guard = main_span.enter();
 
         let data = Telemetry::from_iter(maplit::btreemap! {
-            "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_telemetry(),
-            "cluster.is_deploying".to_string() => false.to_telemetry(),
-            "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".to_telemetry(),
+            "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".into(),
+            "cluster.is_deploying".to_string() => false.into(),
+            "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".into(),
         });
 
         let foo: Option<bool> = data
             .get("cluster.is_deploying")
-            .map(|f| bool::from_telemetry(f.clone()).unwrap());
+            .and_then(|f| bool::try_from(f.clone()).ok()); //bool::from_telemetry(f.clone()).unwrap());
         assert_eq!(foo, Some(false));
 
         let expected = Data {
@@ -673,9 +674,9 @@ mod tests {
 // #[test]
 // fn test_telemetry_serde_tokens() {
 //     let data = Telemetry::from_iter(maplit::hashmap! {
-//         "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_telemetry(),
-//         // "cluster.is_deploying".to_string() => false.to_telemetry(),
-//         // "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".to_telemetry(),
+//         "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".into(),
+//         // "cluster.is_deploying".to_string() => false.into(),
+//         // "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".into(),
 //     });
 //
 //     assert_tokens(
@@ -705,9 +706,9 @@ mod tests {
 // fn test_telemetry_try_into_tokens() {
 // lazy_static::initialize(&crate::tracing::TEST_TRACING);
 // let data = Telemetry::from_iter(maplit::hashmap! {
-//     "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_telemetry(),
-//     // "cluster.is_deploying".to_string() => false.to_telemetry(),
-//     // "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".to_telemetry(),
+//     "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".into(),
+//     // "cluster.is_deploying".to_string() => false.into(),
+//     // "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".into(),
 // });
 //
 // let config_shape: config::Value = data.0.into();
@@ -734,9 +735,9 @@ mod tests {
 // fn test_telemetry_identity_try_into() -> anyhow::Result<()> {
 //     lazy_static::initialize(&crate::tracing::TEST_TRACING);
 //     let data = Telemetry::from_iter(maplit::hashmap! {
-//         "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".to_telemetry(),
-//         // "cluster.is_deploying".to_string() => false.to_telemetry(),
-//         // "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".to_telemetry(),
+//         "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".into(),
+//         // "cluster.is_deploying".to_string() => false.into(),
+//         // "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".into(),
 //     });
 //
 //     // let foo: Option<bool> = data
@@ -750,7 +751,7 @@ mod tests {
 //             // "cluster.is_deploying".to_string() => TelemetryValue::Boolean(false),
 //             // "cluster.last_deployment".to_string() => TelemetryValue::Text("2014-11-28T10:11:37.246310806Z".to_string()),
 //         }
-//         .to_telemetry(),
+//         .into(),
 //     );
 //     tracing::info!(telemetry=?data, ?expected, "expected conversion from telemetry data.");
 //     let actual = data.try_into::<Telemetry>();

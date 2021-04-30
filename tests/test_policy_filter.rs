@@ -3,14 +3,14 @@ mod fixtures;
 use ::serde::{Deserialize, Serialize};
 use chrono::*;
 use oso::{Oso, PolarClass};
-use proctor::elements::{self, telemetry, Policy, ToTelemetry};
+use proctor::elements::telemetry::ToTelemetry;
+use proctor::elements::{self, telemetry, Policy};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
 use proctor::ProctorContext;
 use std::collections::HashSet;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
-
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct TestItem {
@@ -75,7 +75,7 @@ impl proctor::ProctorContext for TestContext {
         maplit::hashset! { "location_code", "input_messages_per_sec", }
     }
 
-    fn custom(&self) -> telemetry::Table  {
+    fn custom(&self) -> telemetry::Table {
         self.custom.clone()
     }
 }

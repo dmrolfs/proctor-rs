@@ -1,7 +1,7 @@
 use ::serde::{Deserialize, Serialize};
 use anyhow::Result;
 use cast_trait_object::DynCastExt;
-use proctor::elements::{self, FromTelemetry};
+use proctor::elements;
 use proctor::graph::stage;
 use proctor::graph::SinkShape;
 use proctor::graph::{Connect, Graph};
@@ -10,6 +10,7 @@ use proctor::phases::collection::TelemetrySubscription;
 use proctor::settings::SourceSetting;
 use proctor::tracing::{get_subscriber, init_subscriber};
 use std::collections::HashSet;
+use std::convert::TryFrom;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -58,7 +59,7 @@ async fn main() -> Result<()> {
                 tracing::error!(?unexpected, "fields delivered beyond allowed.");
                 panic!("fields fields beyond allowed: {:?}", unexpected);
             }
-            let pos = usize::from_telemetry(data.get(POS_FIELD).unwrap().clone()).unwrap();
+            let pos = usize::try_from(data.get(POS_FIELD).unwrap().clone()).unwrap();
             // .parse::<usize>()
             // .expect("failed to parse pos field");
             (count + 1, sum + pos)

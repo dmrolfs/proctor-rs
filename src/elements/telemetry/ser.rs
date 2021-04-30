@@ -1,3 +1,8 @@
+//todo This file was part of the direct Serializer/Deserializer approach that didn't pan out well on the first attempt.
+// tried to define Telemetry as a Deserializer; meaning values could be directly
+// deserialized from it. I ran into problems getting Enum Variants right and particular trouble with
+// recursive structures; e.g., Seq of Tables, etc.
+
 // use crate::graph::GraphResult;
 // use serde::ser;
 // use regex::Regex;

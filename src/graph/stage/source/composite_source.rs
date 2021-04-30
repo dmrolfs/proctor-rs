@@ -14,6 +14,7 @@ use std::fmt::Debug;
 /// extern crate proctor_derive;
 ///
 /// use proctor::elements::Telemetry;
+/// use proctor::elements::telemetry::ToTelemetry;
 /// use proctor::error::GraphError;
 /// use proctor::graph::stage::{self, tick, Stage};
 /// use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
@@ -38,8 +39,7 @@ use std::fmt::Debug;
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
-///     use proctor::elements::ToTelemetry;
-/// let subscriber = get_subscriber("eth_scan", "trace");
+///     let subscriber = get_subscriber("eth_scan", "trace");
 ///     init_subscriber(subscriber);
 ///
 ///     let main_span = tracing::info_span!("main");
@@ -125,12 +125,12 @@ use std::fmt::Debug;
 ///         actual,
 ///         Telemetry::from_iter(
 ///           maplit::hashmap! {
-///               "args.1.f".to_string() => "foo".to_telemetry(),
-///               "args.1.b".to_string() => "bar".to_telemetry(),
-///               "args.2.f".to_string() => "foo".to_telemetry(),
-///               "args.2.b".to_string() => "bar".to_telemetry(),
-///               "args.3.f".to_string() => "foo".to_telemetry(),
-///               "args.3.b".to_string() => "bar".to_telemetry(),
+///               "args.1.f" => "foo".to_telemetry(),
+///               "args.1.b" => "bar".to_telemetry(),
+///               "args.2.f" => "foo".to_telemetry(),
+///               "args.2.b" => "bar".to_telemetry(),
+///               "args.3.f" => "foo".to_telemetry(),
+///               "args.3.b" => "bar".to_telemetry(),
 ///           }
 ///         )
 ///     );

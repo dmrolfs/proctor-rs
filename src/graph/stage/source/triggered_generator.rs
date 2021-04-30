@@ -9,6 +9,7 @@
 /// extern crate proctor_derive;
 ///
 /// use proctor::elements::Telemetry;
+/// use proctor::elements::telemetry::ToTelemetry;
 /// use proctor::error::GraphError;
 /// use proctor::graph::stage::{self, tick, Stage};
 /// use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
@@ -32,8 +33,7 @@
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
-///     use proctor::elements::ToTelemetry;
-/// let subscriber = get_subscriber("sandbox", "trace");
+///     let subscriber = get_subscriber("sandbox", "trace");
 ///     init_subscriber(subscriber);
 ///
 ///     let main_span = tracing::info_span!("main");
@@ -76,7 +76,7 @@
 ///
 ///             let mut data = Telemetry::new();
 ///             for (k, v) in resp.args {
-///                 data.insert(format!("args.{}.{}", my_count, k), v.to_telemetry());
+///                 data.insert(format!("args.{}.{}", my_count, k), v.into());
 ///             }
 ///
 ///             data
@@ -103,8 +103,8 @@
 ///         Some(resp) => {
 ///             let mut exp = Telemetry::new();
 ///             for i in 1..=3 {
-///                 exp.insert(format!("args.{}.f", i), "foo".to_telemetry());
-///                 exp.insert(format!("args.{}.b", i), "bar".to_telemetry());
+///                 exp.insert(format!("args.{}.f", i), "foo".into());
+///                 exp.insert(format!("args.{}.b", i), "bar".into());
 ///             }
 ///             tracing::warn!(actual=?resp,expected=?exp, "validating results");
 ///             assert_eq!(resp, exp);

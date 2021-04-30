@@ -3,14 +3,15 @@ mod fixtures;
 use anyhow::Result;
 use cast_trait_object::DynCastExt;
 use chrono::{DateTime, TimeZone, Utc};
-use proctor::elements::ToTelemetry;
-use proctor::elements::{FromTelemetry, Telemetry};
+use proctor::elements::Telemetry;
+// use proctor::elements::telemetry::ToTelemetry;
 use proctor::graph::stage::{self, tick};
 use proctor::graph::{Connect, Graph, SinkShape};
 use proctor::phases::collection::make_telemetry_rest_api_source;
 use proctor::settings::{HttpQuery, SourceSetting};
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::time::Duration;
 use tokio::sync::oneshot;
 
@@ -26,7 +27,7 @@ impl Into<Telemetry> for HttpBinResponse {
     fn into(self) -> Telemetry {
         let mut data = Telemetry::default();
         if let Some(last_failure) = self.args.get("last_failure") {
-            let _ = data.insert("last_failure".to_string(), last_failure.clone().to_telemetry());
+            let _ = data.insert("last_failure".to_string(), last_failure.clone().into());
         }
 
         data.insert(
@@ -35,7 +36,7 @@ impl Into<Telemetry> for HttpBinResponse {
                 .get("is_deploying")
                 .map(|rep| rep.parse::<bool>().unwrap_or(false))
                 .unwrap_or(false)
-                .to_telemetry(),
+                .into(),
         );
 
         data.insert(
@@ -44,7 +45,7 @@ impl Into<Telemetry> for HttpBinResponse {
                 .get("last_deployment")
                 .unwrap_or(&"1970-08-30 11:32:09".to_string())
                 .clone()
-                .to_telemetry(),
+                .into(),
         );
 
         data
@@ -99,7 +100,7 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
             let dt_format = "%+";
             let rec_last_failure = rec
                 .get("last_failure")
-                .map(|r| String::from_telemetry(r.clone()).unwrap())
+                .map(|r| String::try_from(r.clone()).unwrap())
                 .and_then(|r| {
                     if r.is_empty() {
                         None
@@ -112,11 +113,11 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
                 });
             tracing::info!(?rec_last_failure, "parsed first record field.");
 
-            let is_deploying = bool::from_telemetry(rec.get("is_deploying").unwrap().clone()).unwrap();
+            let is_deploying = bool::try_from(rec.get("is_deploying").unwrap().clone()).unwrap();
             tracing::info!(%is_deploying, "parsed second record field.");
 
             let rec_latest_deployment = DateTime::parse_from_str(
-                String::from_telemetry(rec.get("last_deployment").unwrap().clone())
+                String::try_from(rec.get("last_deployment").unwrap().clone())
                     .unwrap()
                     .as_str(),
                 dt_format,

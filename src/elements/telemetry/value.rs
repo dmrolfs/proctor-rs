@@ -1,10 +1,10 @@
-use super::{FromTelemetry, ToTelemetry};
-use crate::graph::GraphResult;
+use crate::error::GraphError;
 use config::Value as ConfigValue;
 use oso::{FromPolar, PolarValue, ToPolar};
 use serde::ser::{SerializeMap, SerializeSeq};
 use serde::{de, Serialize, Serializer};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque};
+use std::convert::TryFrom;
 use std::fmt;
 
 #[derive(Debug, Clone)]
@@ -82,19 +82,12 @@ impl PartialEq for TelemetryValue {
             (Self::Text(lhs), Self::Text(rhs)) => lhs == rhs,
             (Self::Seq(lhs), Self::Seq(rhs)) => lhs == rhs,
             (Self::Table(lhs), Self::Table(rhs)) => lhs == rhs,
-            _ => false
+            _ => false,
         }
     }
 }
 
 impl Eq for TelemetryValue {}
-
-impl FromTelemetry for TelemetryValue {
-    #[tracing::instrument(level = "trace", skip())]
-    fn from_telemetry(val: TelemetryValue) -> GraphResult<Self> {
-        Ok(val)
-    }
-}
 
 impl ToPolar for TelemetryValue {
     #[tracing::instrument(level = "trace", skip())]
@@ -119,8 +112,8 @@ impl ToPolar for TelemetryValue {
 
 impl FromPolar for TelemetryValue {
     #[tracing::instrument(level = "trace", skip())]
-    fn from_polar(val: PolarValue) -> oso::Result<Self> {
-        Ok(val.to_telemetry())
+    fn from_polar(polar: PolarValue) -> oso::Result<Self> {
+        TelemetryValue::try_from(polar).map_err(|_| oso::errors::OsoError::FromPolar)
     }
 }
 
@@ -142,6 +135,397 @@ impl Into<ConfigValue> for TelemetryValue {
                 ConfigValue::new(None, tbl)
             }
             Self::Unit => ConfigValue::new(None, Option::<String>::None),
+        }
+    }
+}
+
+impl From<bool> for TelemetryValue {
+    fn from(value: bool) -> Self {
+        TelemetryValue::Boolean(value)
+    }
+}
+
+impl From<usize> for TelemetryValue {
+    fn from(value: usize) -> Self {
+        TelemetryValue::Integer(value as i64)
+    }
+}
+
+macro_rules! from_int_to_telemetry {
+    ($i:ty) => {
+        impl From<$i> for TelemetryValue {
+            fn from(value: $i) -> Self {
+                Self::Integer(value.into())
+            }
+        }
+    };
+}
+
+from_int_to_telemetry!(u8);
+from_int_to_telemetry!(i8);
+from_int_to_telemetry!(u16);
+from_int_to_telemetry!(i16);
+from_int_to_telemetry!(u32);
+from_int_to_telemetry!(i32);
+from_int_to_telemetry!(i64);
+
+macro_rules! from_float_to_telemetry {
+    ($f:ty) => {
+        impl From<$f> for TelemetryValue {
+            fn from(value: $f) -> Self {
+                Self::Float(value.into())
+            }
+        }
+    };
+}
+
+from_float_to_telemetry!(f32);
+from_float_to_telemetry!(f64);
+
+impl From<String> for TelemetryValue {
+    fn from(rep: String) -> Self {
+        Self::Text(rep)
+    }
+}
+
+impl<'a> From<&'a str> for TelemetryValue {
+    fn from(rep: &'a str) -> Self {
+        Self::Text(rep.to_string())
+    }
+}
+
+impl<T: Into<TelemetryValue>> From<Vec<T>> for TelemetryValue {
+    fn from(values: Vec<T>) -> Self {
+        Self::Seq(values.into_iter().map(|v| v.into()).collect())
+    }
+}
+
+impl<T: Into<TelemetryValue>> From<VecDeque<T>> for TelemetryValue {
+    fn from(values: VecDeque<T>) -> Self {
+        Self::Seq(values.into_iter().map(|v| v.into()).collect())
+    }
+}
+
+impl<T: Into<TelemetryValue>> From<LinkedList<T>> for TelemetryValue {
+    fn from(values: LinkedList<T>) -> Self {
+        Self::Seq(values.into_iter().map(|v| v.into()).collect())
+    }
+}
+
+impl<T: Into<TelemetryValue>> From<HashSet<T>> for TelemetryValue {
+    fn from(values: HashSet<T>) -> Self {
+        Self::Seq(values.into_iter().map(|v| v.into()).collect())
+    }
+}
+
+impl<T: Into<TelemetryValue>> From<BTreeSet<T>> for TelemetryValue {
+    fn from(values: BTreeSet<T>) -> Self {
+        Self::Seq(values.into_iter().map(|v| v.into()).collect())
+    }
+}
+
+impl<T: Into<TelemetryValue>> From<BinaryHeap<T>> for TelemetryValue {
+    fn from(values: BinaryHeap<T>) -> Self {
+        Self::Seq(values.into_iter().map(|v| v.into()).collect())
+    }
+}
+
+impl<'a, T: Clone + Into<TelemetryValue>> From<&'a [T]> for TelemetryValue {
+    fn from(values: &'a [T]) -> Self {
+        Self::Seq(values.iter().cloned().map(|v| v.into()).collect())
+    }
+}
+
+impl<T: Into<TelemetryValue>> From<HashMap<String, T>> for TelemetryValue {
+    fn from(table: HashMap<String, T>) -> Self {
+        Self::Table(table.into_iter().map(|(k, v)| (k, v.into())).collect())
+    }
+}
+
+impl<T: Into<TelemetryValue>> From<HashMap<&str, T>> for TelemetryValue {
+    fn from(table: HashMap<&str, T>) -> Self {
+        Self::Table(table.into_iter().map(|(k, v)| (k.to_string(), v.into())).collect())
+    }
+}
+
+impl<T: Into<TelemetryValue>> From<BTreeMap<String, T>> for TelemetryValue {
+    fn from(table: BTreeMap<String, T>) -> Self {
+        Self::Table(table.into_iter().map(|(k, v)| (k, v.into())).collect())
+    }
+}
+
+impl<T: Into<TelemetryValue>> From<BTreeMap<&str, T>> for TelemetryValue {
+    fn from(table: BTreeMap<&str, T>) -> Self {
+        Self::Table(table.into_iter().map(|(k, v)| (k.to_string(), v.into())).collect())
+    }
+}
+
+impl From<PolarValue> for TelemetryValue {
+    fn from(polar: PolarValue) -> Self {
+        // Self::from_polar(polar).expect("failed to convert polar value into telemetry")
+        match polar {
+            PolarValue::Boolean(value) => Self::Boolean(value),
+            PolarValue::Integer(value) => Self::Integer(value),
+            PolarValue::Float(value) => Self::Float(value),
+            PolarValue::String(rep) => Self::Text(rep),
+            PolarValue::List(values) => {
+                let vs = values.into_iter().map(|v| v.into()).collect();
+                Self::Seq(vs)
+            }
+            PolarValue::Map(table) => {
+                let vs = table.into_iter().map(|(k, v)| (k, v.into())).collect();
+                Self::Table(vs)
+            }
+            PolarValue::Instance(_) => {
+                Self::Unit
+                // maybe Unit?
+                // Err(GraphError::TypeError("PolarValue::Instance is not a supported telemetry type.".to_string()))
+            }
+            PolarValue::Variable(_) => {
+                Self::Unit
+                // maybe Unit?
+                // Err(GraphError::TypeError("PolarValue::Variable is not a supported telemetry type.".to_string()))
+            }
+        }
+    }
+}
+
+// impl TryFrom<PolarValue> for TelemetryValue {
+//     type Error = GraphError;
+//
+//     fn try_from(value: PolarValue) -> Result<Self, Self::Error> {
+//         match value {
+//             PolarValue::Boolean(value) => Ok(TelemetryValue::Boolean(value)),
+//             PolarValue::Integer(value) => Ok(TelemetryValue::Integer(value)),
+//             PolarValue::Float(value) => Ok(TelemetryValue::Float(value)),
+//             PolarValue::String(rep) => Ok(TelemetryValue::Text(rep)),
+//             PolarValue::List(values) => {
+//                 let vs = values.into_iter().map(|v| v.into()).collect();
+//                 Ok(TelemetryValue::Seq(vs))
+//             },
+//             PolarValue::Map(table) => {
+//                 let vs = table.into_iter().map(|(k, v)| (k, v.into())).collect();
+//                 Ok(TelemetryValue::Table(vs))
+//             },
+//             PolarValue::Instance(_) => {
+//                 // maybe Unit?
+//                 Err(GraphError::TypeError("PolarValue::Instance is not a supported telemetry type.".to_string()))
+//             },
+//             PolarValue::Variable(_) => {
+//                 // maybe Unit?
+//                 Err(GraphError::TypeError("PolarValue::Variable is not a supported telemetry type.".to_string()))
+//             },
+//         }
+//     }
+// }
+
+impl TryFrom<TelemetryValue> for bool {
+    type Error = GraphError;
+
+    fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
+        match telemetry {
+            TelemetryValue::Boolean(value) => Ok(value),
+            TelemetryValue::Integer(value) => Ok(value != 0),
+            TelemetryValue::Float(value) => Ok(value != 0.0),
+
+            TelemetryValue::Text(ref value) => {
+                match value.to_lowercase().as_ref() {
+                    "1" | "true" | "on" | "yes" => Ok(true),
+                    "0" | "false" | "off" | "no" => Ok(false),
+
+                    // Unexpected string value
+                    s => Err(GraphError::TypeError(format!(
+                        "expected a boolean string but was \"{}\"",
+                        s
+                    ))),
+                }
+            }
+
+            TelemetryValue::Unit => Err(GraphError::TypeError("expected a boolean but was a Unit".to_string())),
+            TelemetryValue::Table(value) => {
+                Err(GraphError::TypeError(format!("expected a boolean but was {:?}", value)))
+            }
+            TelemetryValue::Seq(value) => Err(GraphError::TypeError(format!("expected a boolean but was {:?}", value))),
+        }
+    }
+}
+
+macro_rules! try_from_telemetry_into_int {
+    ($i:ty) => {
+        impl TryFrom<TelemetryValue> for $i {
+            type Error = GraphError;
+            fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
+                if let TelemetryValue::Integer(value) = telemetry {
+                    <$i>::try_from(value).map_err(|err| err.into())
+                } else {
+                    Err(GraphError::TypeError(format!(
+                        "expected an integer type but was {:?}",
+                        telemetry
+                    )))
+                }
+            }
+        }
+    };
+}
+
+try_from_telemetry_into_int!(usize);
+try_from_telemetry_into_int!(u8);
+try_from_telemetry_into_int!(i8);
+try_from_telemetry_into_int!(u16);
+try_from_telemetry_into_int!(i16);
+try_from_telemetry_into_int!(u32);
+try_from_telemetry_into_int!(i32);
+try_from_telemetry_into_int!(i64);
+
+impl TryFrom<TelemetryValue> for f64 {
+    type Error = GraphError;
+    fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
+        if let TelemetryValue::Float(value) = telemetry {
+            Ok(value)
+        } else {
+            Err(GraphError::TypeError(format!(
+                "expected a float type but was {:?}",
+                telemetry
+            )))
+        }
+    }
+}
+
+impl TryFrom<TelemetryValue> for String {
+    type Error = GraphError;
+
+    fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
+        match telemetry {
+            TelemetryValue::Text(value) => Ok(value),
+            TelemetryValue::Boolean(value) => Ok(value.to_string()),
+            TelemetryValue::Integer(value) => Ok(value.to_string()),
+            TelemetryValue::Float(value) => Ok(value.to_string()),
+
+            TelemetryValue::Unit => Err(GraphError::TypeError("expected a string but was a Unit".to_string())),
+            TelemetryValue::Table(value) => {
+                Err(GraphError::TypeError(format!("expected a string but was {:?}", value)))
+            }
+            TelemetryValue::Seq(value) => Err(GraphError::TypeError(format!("expected a string but was {:?}", value))),
+        }
+    }
+}
+
+impl<T: From<TelemetryValue>> TryFrom<TelemetryValue> for HashMap<String, T> {
+    type Error = GraphError;
+
+    fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
+        if let TelemetryValue::Table(value) = telemetry {
+            Ok(value.into_iter().map(|(k, v)| (k, v.into())).collect())
+        } else {
+            Err(GraphError::TypeError(format!(
+                "expected a table type but was {:?}",
+                telemetry
+            )))
+        }
+    }
+}
+
+impl<T: From<TelemetryValue>> TryFrom<TelemetryValue> for BTreeMap<String, T> {
+    type Error = GraphError;
+
+    fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
+        if let TelemetryValue::Table(value) = telemetry {
+            Ok(value.into_iter().map(|(k, v)| (k, v.into())).collect())
+        } else {
+            Err(GraphError::TypeError(format!(
+                "expected a table type but was {:?}",
+                telemetry
+            )))
+        }
+    }
+}
+
+impl<T: From<TelemetryValue>> TryFrom<TelemetryValue> for Vec<T> {
+    type Error = GraphError;
+
+    fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
+        if let TelemetryValue::Seq(value) = telemetry {
+            Ok(value.into_iter().map(|v| v.into()).collect())
+        } else {
+            Err(GraphError::TypeError(format!(
+                "expected a sequence type but was {:?}",
+                telemetry
+            )))
+        }
+    }
+}
+
+impl<T: From<TelemetryValue>> TryFrom<TelemetryValue> for VecDeque<T> {
+    type Error = GraphError;
+
+    fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
+        if let TelemetryValue::Seq(value) = telemetry {
+            Ok(value.into_iter().map(|v| v.into()).collect())
+        } else {
+            Err(GraphError::TypeError(format!(
+                "expected a sequence type but was {:?}",
+                telemetry
+            )))
+        }
+    }
+}
+
+impl<T: From<TelemetryValue>> TryFrom<TelemetryValue> for LinkedList<T> {
+    type Error = GraphError;
+
+    fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
+        if let TelemetryValue::Seq(value) = telemetry {
+            Ok(value.into_iter().map(|v| v.into()).collect())
+        } else {
+            Err(GraphError::TypeError(format!(
+                "expected a sequence type but was {:?}",
+                telemetry
+            )))
+        }
+    }
+}
+
+impl<T: Eq + std::hash::Hash + From<TelemetryValue>> TryFrom<TelemetryValue> for HashSet<T> {
+    type Error = GraphError;
+
+    fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
+        if let TelemetryValue::Seq(value) = telemetry {
+            Ok(value.into_iter().map(|v| v.into()).collect())
+        } else {
+            Err(GraphError::TypeError(format!(
+                "expected a sequence type but was {:?}",
+                telemetry
+            )))
+        }
+    }
+}
+
+impl<T: Ord + From<TelemetryValue>> TryFrom<TelemetryValue> for BTreeSet<T> {
+    type Error = GraphError;
+
+    fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
+        if let TelemetryValue::Seq(value) = telemetry {
+            Ok(value.into_iter().map(|v| v.into()).collect())
+        } else {
+            Err(GraphError::TypeError(format!(
+                "expected a sequence type but was {:?}",
+                telemetry
+            )))
+        }
+    }
+}
+
+impl<T: Ord + From<TelemetryValue>> TryFrom<TelemetryValue> for BinaryHeap<T> {
+    type Error = GraphError;
+
+    fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
+        if let TelemetryValue::Seq(value) = telemetry {
+            Ok(value.into_iter().map(|v| v.into()).collect())
+        } else {
+            Err(GraphError::TypeError(format!(
+                "expected a sequence type but was {:?}",
+                telemetry
+            )))
         }
     }
 }
@@ -396,6 +780,26 @@ mod tests {
     }
 
     #[test]
+    fn test_from_into_telemetry_bool() {
+        use std::convert::TryFrom;
+
+        let actual_true: TelemetryValue = true.into();
+        assert_eq!(actual_true, TelemetryValue::Boolean(true));
+        let actual_true_back = bool::try_from(actual_true).unwrap();
+        assert_eq!(actual_true_back, true);
+
+        let actual_no: TelemetryValue = "no".into();
+        assert_eq!(actual_no, TelemetryValue::Text("no".to_string()));
+        let actual_no_back = bool::try_from(actual_no).unwrap();
+        assert_eq!(actual_no_back, false);
+
+        let actual_yes: TelemetryValue = "yes".into();
+        assert_eq!(actual_yes, TelemetryValue::Text("yes".to_string()));
+        let actual_yes_back = bool::try_from(actual_yes).unwrap();
+        assert_eq!(actual_yes_back, true);
+    }
+
+    #[test]
     fn test_telemetry_value_boolean_serde() {
         let data = TelemetryValue::Boolean(true);
         assert_tokens(
@@ -428,12 +832,17 @@ mod tests {
     #[test]
     fn test_telemetry_value_list_serde() {
         let data = TelemetryValue::Seq(vec![
-            12.to_telemetry(),
-            std::f64::consts::FRAC_2_SQRT_PI.to_telemetry(),
-            false.to_telemetry(),
-            "2014-11-28T12:45:59.324310806Z".to_telemetry(),
-            vec![37.to_telemetry(), 3.14.to_telemetry(), "Otis".to_telemetry()].to_telemetry(),
-            maplit::btreemap! { "foo".to_string() => "bar".to_telemetry(), }.to_telemetry(),
+            12.into(),
+            std::f64::consts::FRAC_2_SQRT_PI.into(),
+            false.into(),
+            "2014-11-28T12:45:59.324310806Z".into(),
+            vec![
+                TelemetryValue::Integer(37),
+                TelemetryValue::Float(3.14),
+                TelemetryValue::Text("Otis".to_string()),
+            ]
+            .into(),
+            maplit::btreemap! { "foo" => "bar", }.into(),
             // TelemetryValue::Unit,
         ]);
         assert_tokens(
@@ -508,10 +917,13 @@ mod tests {
 
     #[test]
     fn test_telemetry_value_map_serde() {
-        let data = TelemetryValue::Table(maplit::hashmap! {
-            "foo".to_string() => "bar".to_telemetry(),
-            // "zed".to_string() => TelemetryValue::Unit,
-        });
+        let data = TelemetryValue::Table(
+            maplit::hashmap! {
+                "foo".to_string() => "bar".into(),
+                // "zed".to_string() => TelemetryValue::Unit,
+            }
+            .into(),
+        );
 
         // let expected = vec![
         //     // Token::NewtypeVariant {

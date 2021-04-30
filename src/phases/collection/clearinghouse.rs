@@ -684,7 +684,7 @@ impl stage::WithApi for Clearinghouse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::elements::ToTelemetry;
+    use crate::elements::telemetry::ToTelemetry;
     use crate::graph::stage::{self, Stage, WithApi};
     use crate::graph::{Connect, SinkShape, SourceShape};
     use lazy_static::lazy_static;
@@ -719,16 +719,16 @@ mod tests {
         ];
         static ref DB_ROWS: Vec<Telemetry> = vec![
             Telemetry::from_iter(
-                maplit::btreemap! {"pos".to_string() => 1.to_telemetry(), "cat".to_string() => "Stella".to_telemetry(), "extra".to_string() => "Ripley".to_telemetry(),}
+                maplit::btreemap! {"pos".to_string() => 1.into(), "cat".to_string() => "Stella".into(), "extra".to_string() => "Ripley".into(),}
             ),
             Telemetry::from_iter(
-                maplit::btreemap! {"value".to_string() => 3.14159.to_telemetry(), "cat".to_string() => "Otis".to_telemetry(), "extra".to_string() => "Ripley".to_telemetry(),}
+                maplit::btreemap! {"value".to_string() => 3.14159.into(), "cat".to_string() => "Otis".into(), "extra".to_string() => "Ripley".into(),}
             ),
             Telemetry::from_iter(
-                maplit::btreemap! {"pos".to_string() => 3.to_telemetry(), "cat".to_string() => "Neo".to_telemetry(), "extra".to_string() => "Ripley".to_telemetry(),}
+                maplit::btreemap! {"pos".to_string() => 3.into(), "cat".to_string() => "Neo".into(), "extra".to_string() => "Ripley".into(),}
             ),
             Telemetry::from_iter(
-                maplit::btreemap! {"pos".to_string() => 4.to_telemetry(), "value".to_string() => 2.71828.to_telemetry(), "cat".to_string() => "Apollo".to_telemetry(), "extra".to_string() => "Ripley".to_telemetry(),}
+                maplit::btreemap! {"pos".to_string() => 4.into(), "value".to_string() => 2.71828.into(), "cat".to_string() => "Apollo".into(), "extra".to_string() => "Ripley".into(),}
             ),
         ];
         static ref EXPECTED: HashMap<String, Vec<Option<Telemetry>>> = maplit::hashmap! {
@@ -739,16 +739,16 @@ mod tests {
                 None,
             ],
             SUBSCRIPTIONS[1].name().to_string() => vec![
-                Some(Telemetry::from_iter(maplit::btreemap! {"pos".to_string() => 1.to_telemetry(), "cat".to_string() => "Stella".to_telemetry(), "extra".to_string() => "Ripley".to_telemetry(),})),
+                Some(Telemetry::from_iter(maplit::btreemap! {"pos".to_string() => 1.into(), "cat".to_string() => "Stella".into(), "extra".to_string() => "Ripley".into(),})),
                 None,
-                Some(Telemetry::from_iter(maplit::btreemap! {"pos".to_string() => 3.to_telemetry(), "cat".to_string() => "Neo".to_telemetry(), "extra".to_string() => "Ripley".to_telemetry(),})),
-                Some(Telemetry::from_iter(maplit::btreemap! {"pos".to_string() => 4.to_telemetry(), "cat".to_string() => "Apollo".to_telemetry(), "extra".to_string() => "Ripley".to_telemetry(),})),
+                Some(Telemetry::from_iter(maplit::btreemap! {"pos".to_string() => 3.into(), "cat".to_string() => "Neo".into(), "extra".to_string() => "Ripley".into(),})),
+                Some(Telemetry::from_iter(maplit::btreemap! {"pos".to_string() => 4.into(), "cat".to_string() => "Apollo".into(), "extra".to_string() => "Ripley".into(),})),
             ],
             SUBSCRIPTIONS[2].name().to_string() => vec![
                 None,
                 None,
                 None,
-                Some(Telemetry::from_iter(maplit::btreemap! {"pos".to_string() => 4.to_telemetry(), "value".to_string() => 2.71828.to_telemetry(), "cat".to_string() => "Apollo".to_telemetry(),})),
+                Some(Telemetry::from_iter(maplit::btreemap! {"pos".to_string() => 4.into(), "value".to_string() => 2.71828.into(), "cat".to_string() => "Apollo".into(),})),
 
             ],
         };
@@ -865,7 +865,7 @@ mod tests {
         let _main_span_guard = main_span.enter();
 
         block_on(async move {
-            let data = Telemetry::from_iter(maplit::hashmap! { "dr".to_string() => 17.to_telemetry() });
+            let data: Telemetry = Telemetry::from_iter(maplit::hashmap! { "dr".to_string() => 17.to_telemetry() });
             let mut tick = stage::Tick::new("tick", Duration::from_nanos(0), Duration::from_millis(5), data);
             let tx_tick_api = tick.tx_api();
             let mut clearinghouse = Clearinghouse::new("test-clearinghouse");
@@ -1041,13 +1041,13 @@ mod tests {
                 None, //Some(HashMap::default()),
             ],
             SUBSCRIPTIONS[1].name().to_string() => vec![
-                Some(Telemetry::from_iter(maplit::hashmap! {"pos".to_string() => 1.to_telemetry(), "cat".to_string() => "Stella".to_telemetry(), "extra".to_string() => "Ripley".to_telemetry(),})),
-                Some(Telemetry::from_iter(maplit::hashmap! {"pos".to_string() => 3.to_telemetry(), "cat".to_string() => "Neo".to_telemetry(), "extra".to_string() => "Ripley".to_telemetry(),})),
-                Some(Telemetry::from_iter(maplit::hashmap! {"pos".to_string() => 4.to_telemetry(), "cat".to_string() => "Apollo".to_telemetry(), "extra".to_string() => "Ripley".to_telemetry(),})),
+                Some(Telemetry::from_iter(maplit::hashmap! {"pos".to_string() => 1.into(), "cat".to_string() => "Stella".into(), "extra".to_string() => "Ripley".into(),})),
+                Some(Telemetry::from_iter(maplit::hashmap! {"pos".to_string() => 3.into(), "cat".to_string() => "Neo".into(), "extra".to_string() => "Ripley".into(),})),
+                Some(Telemetry::from_iter(maplit::hashmap! {"pos".to_string() => 4.into(), "cat".to_string() => "Apollo".into(), "extra".to_string() => "Ripley".into(),})),
                 None,
             ],
             SUBSCRIPTIONS[2].name().to_string() => vec![
-                Some(Telemetry::from_iter(maplit::hashmap! {"pos".to_string() => 4.to_telemetry(), "value".to_string() => 2.71828.to_telemetry(), "cat".to_string() => "Apollo".to_telemetry(),})),
+                Some(Telemetry::from_iter(maplit::hashmap! {"pos".to_string() => 4.into(), "value".to_string() => 2.71828.into(), "cat".to_string() => "Apollo".into(),})),
                 None,
                 None,
                 None,

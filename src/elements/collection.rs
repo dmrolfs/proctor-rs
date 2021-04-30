@@ -27,7 +27,7 @@ use std::fmt::{self, Debug};
 /// use serde::Deserialize;
 /// use std::collections::{BTreeMap, HashMap};
 /// use std::time::Duration;
-/// use proctor::elements::ToTelemetry;
+/// use proctor::elements::telemetry::ToTelemetry;
 /// use std::iter::FromIterator;
 ///
 /// #[derive(Debug, Clone, Deserialize)]
@@ -95,8 +95,8 @@ use std::fmt::{self, Debug};
 ///         Some(resp) => {
 ///             let mut exp = BTreeMap::new();
 ///             for i in 1..=3 {
-///                 exp.insert(format!("args.{}.f", i), "foo".to_telemetry());
-///                 exp.insert(format!("args.{}.b", i), "bar".to_telemetry());
+///                 exp.insert(format!("args.{}.f", i), "foo".into());
+///                 exp.insert(format!("args.{}.b", i), "bar".into());
 ///             }
 ///             let exp = elements::Telemetry::from_iter(exp);
 ///             assert_eq!(resp, exp);
