@@ -2,6 +2,7 @@ use tracing::{subscriber::set_global_default, Subscriber};
 use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
 use tracing_log::LogTracer;
 use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
+use tracing_flame::FlameLayer;
 
 lazy_static::lazy_static! {
     pub static ref TEST_TRACING: () = {
@@ -26,9 +27,13 @@ where
 {
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(env_filter));
 
+    let (flame_subscriber, _guard) = FlameLayer::with_file("./tracing.folded").unwrap();
+
     let formatting_layer = BunyanFormattingLayer::new(name.into(), std::io::stdout);
+
     Registry::default()
         .with(env_filter)
+        .with(flame_subscriber)
         .with(JsonStorageLayer)
         .with(formatting_layer)
 }
