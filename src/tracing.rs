@@ -1,8 +1,8 @@
 use tracing::{subscriber::set_global_default, Subscriber};
 use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
+use tracing_flame::FlameLayer;
 use tracing_log::LogTracer;
 use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
-use tracing_flame::FlameLayer;
 
 lazy_static::lazy_static! {
     pub static ref TEST_TRACING: () = {

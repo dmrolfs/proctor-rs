@@ -576,7 +576,7 @@ impl<'de> Serialize for TelemetryValue {
 
 impl<'de> de::Deserialize<'de> for TelemetryValue {
     #[inline]
-    #[tracing::instrument(level = "trace", skip(deserializer))]
+    #[tracing::instrument(level = "info", skip(deserializer))]
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<TelemetryValue, D::Error>
     where
         D: de::Deserializer<'de>,
@@ -592,114 +592,117 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
             }
 
             #[inline]
-            #[tracing::instrument(level = "trace", skip())]
-            fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E> {
-                tracing::trace!(value=?v, "deserializing bool value");
-                Ok(TelemetryValue::Boolean(v))
+            #[tracing::instrument(level = "info", skip())]
+            fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E> {
+                tracing::info!(?value, "deserializing bool value");
+                Ok(TelemetryValue::Boolean(value))
             }
 
             #[inline]
-            #[tracing::instrument(level = "trace", skip())]
-            fn visit_i8<E>(self, v: i8) -> Result<Self::Value, E> {
-                tracing::trace!(value=?v, "deserializing i8 value");
-                Ok(TelemetryValue::Integer(v as i64))
+            #[tracing::instrument(level = "info", skip())]
+            fn visit_i8<E>(self, value: i8) -> Result<Self::Value, E> {
+                tracing::info!(?value, "deserializing i8 value");
+                Ok(TelemetryValue::Integer(value as i64))
             }
 
             #[inline]
-            #[tracing::instrument(level = "trace", skip())]
-            fn visit_i16<E>(self, v: i16) -> Result<Self::Value, E> {
-                tracing::trace!(value=?v, "deserializing i16 value");
-                Ok(TelemetryValue::Integer(v as i64))
+            #[tracing::instrument(level = "info", skip())]
+            fn visit_i16<E>(self, value: i16) -> Result<Self::Value, E> {
+                tracing::info!(?value, "deserializing i16 value");
+                Ok(TelemetryValue::Integer(value as i64))
             }
 
             #[inline]
-            #[tracing::instrument(level = "trace", skip())]
-            fn visit_i32<E>(self, v: i32) -> Result<Self::Value, E> {
-                tracing::trace!(value=?v, "deserializing i32 value");
-                Ok(TelemetryValue::Integer(v as i64))
+            #[tracing::instrument(level = "info", skip())]
+            fn visit_i32<E>(self, value: i32) -> Result<Self::Value, E> {
+                tracing::info!(?value, "deserializing i32 value");
+                Ok(TelemetryValue::Integer(value as i64))
             }
 
             #[inline]
-            #[tracing::instrument(level = "trace", skip())]
-            fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E> {
-                tracing::trace!(value=?v, "deserializing i64 value");
-                Ok(TelemetryValue::Integer(v))
+            #[tracing::instrument(level = "info", skip())]
+            fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E> {
+                tracing::info!(?value, "deserializing i64 value");
+                Ok(TelemetryValue::Integer(value))
             }
 
             #[inline]
-            #[tracing::instrument(level = "trace", skip())]
-            fn visit_u8<E>(self, v: u8) -> Result<Self::Value, E> {
-                tracing::trace!(value=?v, "deserializing u8 value");
-                Ok(TelemetryValue::Integer(v as i64))
+            #[tracing::instrument(level = "info", skip())]
+            fn visit_u8<E>(self, value: u8) -> Result<Self::Value, E> {
+                tracing::info!(?value, "deserializing u8 value");
+                Ok(TelemetryValue::Integer(value as i64))
             }
 
             #[inline]
-            #[tracing::instrument(level = "trace", skip())]
-            fn visit_u16<E>(self, v: u16) -> Result<Self::Value, E> {
-                tracing::trace!(value=?v, "deserializing u16 value");
-                Ok(TelemetryValue::Integer(v as i64))
+            #[tracing::instrument(level = "info", skip())]
+            fn visit_u16<E>(self, value: u16) -> Result<Self::Value, E> {
+                tracing::info!(?value, "deserializing u16 value");
+                Ok(TelemetryValue::Integer(value as i64))
             }
 
             #[inline]
-            #[tracing::instrument(level = "trace", skip())]
-            fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E> {
-                tracing::trace!(value=?v, "deserializing u32 value");
-                Ok(TelemetryValue::Integer(v as i64))
+            #[tracing::instrument(level = "error", skip())]
+            fn visit_u32<E>(self, value: u32) -> Result<Self::Value, E> {
+                tracing::error!(?value, "deserializing u32 value");
+                Ok(TelemetryValue::Integer(value as i64))
             }
 
             #[inline]
-            #[tracing::instrument(level = "trace", skip())]
-            fn visit_f32<E>(self, v: f32) -> Result<Self::Value, E> {
-                tracing::trace!(value=?v, "deserializing f32 value");
-                Ok(TelemetryValue::Float(v as f64))
+            #[tracing::instrument(level = "info", skip())]
+            fn visit_f32<E>(self, value: f32) -> Result<Self::Value, E> {
+                tracing::info!(?value, "deserializing f32 value");
+                Ok(TelemetryValue::Float(value as f64))
             }
             #[inline]
-            #[tracing::instrument(level = "trace", skip())]
-            fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E> {
-                tracing::trace!(value=?v, "deserializing f64 value");
-                Ok(TelemetryValue::Float(v))
+            #[tracing::instrument(level = "info", skip())]
+            fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E> {
+                tracing::info!(?value, "deserializing f64 value");
+                Ok(TelemetryValue::Float(value))
             }
 
             #[inline]
-            #[tracing::instrument(level = "trace", skip())]
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            #[tracing::instrument(level = "info", skip())]
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
-                tracing::trace!(value=?v, "deserializing &str value");
-                self.visit_string(String::from(v))
+                tracing::info!(?value, "deserializing &str value");
+                self.visit_string(String::from(value))
             }
 
             #[inline]
-            #[tracing::instrument(level = "trace", skip())]
-            fn visit_string<E>(self, v: String) -> Result<Self::Value, E> {
-                tracing::trace!(value=?v, "deserializing string value");
-                Ok(TelemetryValue::Text(v))
+            #[tracing::instrument(level = "info", skip())]
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E> {
+                tracing::info!(?value, "deserializing string value");
+                Ok(TelemetryValue::Text(value))
             }
 
             #[inline]
-            #[tracing::instrument(level = "trace", skip())]
+            #[tracing::instrument(level = "info", skip())]
             fn visit_none<E>(self) -> ::std::result::Result<TelemetryValue, E> {
+                tracing::info!("deserializing None value");
                 Ok(TelemetryValue::Unit)
             }
 
             #[inline]
-            #[tracing::instrument(level = "trace", skip(deserializer))]
+            #[tracing::instrument(level = "info", skip(deserializer))]
             fn visit_some<D>(self, deserializer: D) -> ::std::result::Result<TelemetryValue, D::Error>
             where
                 D: de::Deserializer<'de>,
             {
+                tracing::info!("deserializing Some value");
                 de::Deserialize::deserialize(deserializer)
             }
 
             #[inline]
-            #[tracing::instrument(level = "trace", skip())]
+            #[tracing::instrument(level = "info", skip())]
             fn visit_unit<E>(self) -> ::std::result::Result<TelemetryValue, E> {
+                tracing::info!("deserializing unit value");
                 Ok(TelemetryValue::Unit)
             }
 
             #[inline]
-            #[tracing::instrument(level = "trace", skip(visitor))]
+            #[tracing::instrument(level = "info", skip(visitor))]
             fn visit_seq<V>(self, mut visitor: V) -> ::std::result::Result<TelemetryValue, V::Error>
             where
                 V: de::SeqAccess<'de>,
@@ -707,24 +710,25 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
                 let mut vec = Seq::new();
 
                 while let Some(elem) = visitor.next_element()? {
-                    tracing::trace!(value=?elem, "adding deserialized seq item");
+                    tracing::info!(value=?elem, "adding deserialized seq item");
                     vec.push(elem);
                 }
 
                 Ok(TelemetryValue::Seq(vec))
             }
 
-            #[tracing::instrument(level = "trace", skip(visitor))]
+            #[tracing::instrument(level = "info", skip(visitor))]
             fn visit_map<V>(self, mut visitor: V) -> ::std::result::Result<TelemetryValue, V::Error>
             where
                 V: de::MapAccess<'de>,
             {
                 let mut table = Table::new();
                 while let Some((key, value)) = visitor.next_entry()? {
+                    tracing::info!(?key, ?value, "visiting next entry");
                     match value {
                         TelemetryValue::Unit => (),
                         val => {
-                            tracing::trace!(?key, value=?val, "adding deserialized entry.");
+                            tracing::info!(?key, value=?val, "adding deserialized entry.");
                             table.insert(key, val);
                         }
                     }

@@ -2,7 +2,7 @@ mod fixtures;
 
 use ::serde::de::DeserializeOwned;
 use ::serde::{Deserialize, Serialize};
-use ::serde_with::{serde_as, TimestampMilliSeconds};
+use ::serde_with::{serde_as, TimestampSeconds};
 use chrono::*;
 use lazy_static::lazy_static;
 use oso::{Oso, PolarClass, ToPolar};
@@ -46,6 +46,20 @@ pub struct TestEligibilityContext {
     pub custom: telemetry::Table,
 }
 
+// impl TestEligibilityContext {
+//     pub fn yesterday(location_code: u32, custom: telemetry::Table ) -> Self {
+//         Self {
+//             task_status: TestTaskStatus { last_failure: None },
+//             cluster_status: TestClusterStatus {
+//                 location_code,
+//                 is_deploying: false,
+//                 last_deployment: Utc::now() - chrono::Duration::days(1),
+//             },
+//             custom,
+//         }
+//     }
+// }
+
 impl ProctorContext for TestEligibilityContext {
     fn required_context_fields() -> HashSet<&'static str> {
         //todo: DMR SERDE_REFLECTION
@@ -88,7 +102,7 @@ impl TestTaskStatus {
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TestClusterStatus {
     #[polar(attribute)]
-    #[serde(rename="cluster.location_code")]
+    #[serde(rename = "cluster.location_code")]
     pub location_code: u32,
 
     #[polar(attribute)]
@@ -107,8 +121,11 @@ impl TestClusterStatus {
 }
 
 lazy_static! {
-    static ref DT_1: DateTime<Utc> = Utc::now();
+    static ref DT_1: DateTime<Utc> = DateTime::parse_from_str("2021-05-05T17:11:07.246310806Z", "%+")
+        .unwrap()
+        .with_timezone(&Utc);
     static ref DT_1_STR: String = format!("{}", DT_1.format("%+"));
+    static ref DT_1_TS: i64 = DT_1.timestamp();
 }
 
 #[test]
@@ -148,7 +165,7 @@ struct TestEligibilityPolicy<D> {
 }
 
 impl<D> TestEligibilityPolicy<D> {
-    pub fn new( policy: PolicySource, ) -> Self {
+    pub fn new(policy: PolicySource) -> Self {
         policy.validate().expect("failed to parse policy");
         Self {
             custom_fields: None,
@@ -175,7 +192,7 @@ impl<D: AppData + ToPolar> Policy for TestEligibilityPolicy<D> {
             subscription
         );
 
-        let mut result = if let Some(ref custom_fields) = self.custom_fields {
+        let result = if let Some(ref custom_fields) = self.custom_fields {
             tracing::error!(
                 "DMR: TestEligibilityPolicy::subscription: custom_fields:{:?}",
                 custom_fields
@@ -239,8 +256,7 @@ where
     C: ProctorContext,
 {
     pub async fn new(
-        telemetry_subscription: TelemetrySubscription,
-        policy: impl Policy<Item = D, Context = C> + 'static,
+        telemetry_subscription: TelemetrySubscription, policy: impl Policy<Item = D, Context = C> + 'static,
     ) -> ProctorResult<Self> {
         let telemetry_source = stage::ActorSource::<Telemetry>::new("telemetry_source");
         let tx_data_source_api = telemetry_source.tx_api();
@@ -254,8 +270,7 @@ where
         let tx_clearinghouse_api = clearinghouse.tx_api();
 
         let context_subscription = policy.subscription("eligibility_context");
-        let context_channel =
-            collection::SubscriptionChannel::<C>::new("eligibility_context").await?;
+        let context_channel = collection::SubscriptionChannel::<C>::new("eligibility_context").await?;
 
         let telemetry_channel = collection::SubscriptionChannel::<D>::new("data_channel").await?;
         let eligibility = Eligibility::<D, C>::new("test_flink_eligibility", policy);
@@ -332,7 +347,7 @@ where
 
     pub async fn push_context<'a, I>(&self, context_data: I) -> GraphResult<()>
     where
-        I: IntoIterator<Item = (&'a str, TelemetryValue)>
+        I: IntoIterator<Item = (&'a str, TelemetryValue)>,
     {
         let telemetry = context_data.into_iter().collect();
         let (cmd, ack) = stage::ActorSourceCmd::push(telemetry);
@@ -341,25 +356,17 @@ where
     }
 
     pub async fn tell_policy(
-        &self,
-        command_rx: (
-            elements::PolicyFilterCmd<C>,
-            oneshot::Receiver<proctor::Ack>,
-        ),
+        &self, command_rx: (elements::PolicyFilterCmd<C>, oneshot::Receiver<proctor::Ack>),
     ) -> GraphResult<proctor::Ack> {
         self.tx_eligibility_api.send(command_rx.0)?;
         command_rx.1.await.map_err(|err| err.into())
     }
 
-    pub async fn recv_policy_event(
-        &mut self,
-    ) -> GraphResult<elements::PolicyFilterEvent<D, C>> {
+    pub async fn recv_policy_event(&mut self) -> GraphResult<elements::PolicyFilterEvent<D, C>> {
         self.rx_eligibility_monitor.recv().await.map_err(|err| err.into())
     }
 
-    pub async fn inspect_policy_context(
-        &self,
-    ) -> GraphResult<elements::PolicyFilterDetail<C>> {
+    pub async fn inspect_policy_context(&self) -> GraphResult<elements::PolicyFilterDetail<C>> {
         let (cmd, detail) = elements::PolicyFilterCmd::inspect();
         self.tx_eligibility_api.send(cmd)?;
         detail
@@ -406,11 +413,8 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
     let policy = TestEligibilityPolicy::new(PolicySource::String(
         r#"eligible(item, environment) if environment.location_code == 33;"#.to_string(),
     ));
-    let mut flow: TestFlow<Data, TestEligibilityContext> = TestFlow::new(
-        TelemetrySubscription::new("all_data"),
-        policy,
-    )
-    .await?;
+    let mut flow: TestFlow<Data, TestEligibilityContext> =
+        TestFlow::new(TelemetrySubscription::new("all_data"), policy).await?;
     tracing::warn!("test_eligibility_before_context_baseline_B");
     let now_utc = Utc::now();
     // let now_ts = now_utc.timestamp();
@@ -480,13 +484,11 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     let now = Utc::now();
     let t1 = now - chrono::Duration::days(1);
     let t1_rep = format!("{}", t1.format("%+"));
-    flow.push_context(
-        maplit::hashmap! {
-            "cluster.location_code" => 3.to_telemetry(),
-            "cluster.is_deploying" => false.to_telemetry(),
-            "cluster.last_deployment" => t1_rep.to_telemetry(),
-        }
-    )
+    flow.push_context(maplit::hashmap! {
+        "cluster.location_code" => 3.to_telemetry(),
+        "cluster.is_deploying" => false.to_telemetry(),
+        "cluster.last_deployment" => t1_rep.to_telemetry(),
+    })
     .await?;
 
     tracing::warn!("DMR: 03. Verify environment set...");
@@ -518,7 +520,9 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
 
     tracing::warn!("DMR: 05. Push Item...");
 
-    let t1 = Telemetry::from_iter(maplit::hashmap! {"measurement" => std::f64::consts::PI.to_telemetry()});
+    let t1: Telemetry = maplit::hashmap! {"measurement" => std::f64::consts::PI.to_telemetry()}
+        .into_iter()
+        .collect();
     assert_eq!(
         MeasurementData {
             measurement: std::f64::consts::PI,
@@ -532,6 +536,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     tracing::warn!("DMR: 06. Look for Item in sink...");
 
     let actual = flow.inspect_sink().await?;
+    // assert_eq!(actual.len(), 1);
 
     tracing::warn!("DMR: 07. Push another Item...");
 
@@ -562,17 +567,19 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct TestItem {
     #[polar(attribute)]
+    #[serde(flatten)]
     pub flow: TestFlowMetrics,
 
     #[polar(attribute)]
-    pub inbox_lag: u32,
+    pub inbox_lag: i32, //todo: TelemetryValue cannot deser U32!!!!  why!?
 
-    #[serde_as(as = "TimestampMilliSeconds")]
+    #[serde_as(as = "TimestampSeconds")]
+    // #[serde(with = "proctor::serde")]
     pub timestamp: DateTime<Utc>,
 }
 
 impl TestItem {
-    pub fn new(input_messages_per_sec: f64, inbox_lag: u32, ts: DateTime<Utc>) -> Self {
+    pub fn new(input_messages_per_sec: f64, inbox_lag: i32, ts: DateTime<Utc>) -> Self {
         Self {
             flow: TestFlowMetrics { input_messages_per_sec },
             inbox_lag,
@@ -589,6 +596,53 @@ impl TestItem {
     pub fn lag_duration_secs_f64(&self, message_lag: u32) -> f64 {
         (message_lag as f64) / self.flow.input_messages_per_sec
     }
+}
+
+// #[ignore]
+#[test]
+fn test_item_serde() {
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
+    let main_span = tracing::info_span!("test_item_serde");
+    let _ = main_span.enter();
+
+    let item = TestItem::new(std::f64::consts::PI, 3, DT_1.clone());
+    let json = serde_json::to_string(&item).unwrap();
+    assert_eq!(
+        json,
+        format!(
+            r#"{{"input_messages_per_sec":{},"inbox_lag":3,"timestamp":{}}}"#,
+            std::f64::consts::PI,
+            *DT_1_TS
+        )
+    );
+
+    let telemetry = Telemetry::try_from(&item).unwrap();
+    assert_eq!(
+        telemetry,
+        maplit::hashmap! {
+            "input_messages_per_sec" => std::f64::consts::PI.to_telemetry(),
+            "inbox_lag" => 3.to_telemetry(),
+            "timestamp" => DT_1_TS.to_telemetry(),
+        }
+        .into_iter()
+        .collect()
+    );
+
+    //dmr comented out since full round trip not poissible due to lost timestamp precision with
+    //dmr timestamp serde approach.
+    // assert_tokens(
+    //     &item,
+    //     &vec![
+    //         Token::Map { len: None },
+    //         Token::Str("input_messages_per_sec"),
+    //         Token::F64(std::f64::consts::PI),
+    //         Token::Str("inbox_lag"),
+    //         Token::I32(3),
+    //         Token::Str("timestamp"),
+    //         Token::I64(*DT_1_TS),
+    //         Token::MapEnd,
+    //     ],
+    // );
 }
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -617,9 +671,9 @@ struct TestFlowMetrics {
 //     }
 // }
 
-// impl proctor::ProctorContext for TestEligibilityContext {
+// impl proctor::ProctorContext for TestContext {
 //     fn required_context_fields() -> HashSet<&'static str> {
-//         maplit::hashset! { "location_code", "input_messages_per_sec" }
+//         maplit::hashset! { "location_code" }
 //     }
 //
 //     fn custom(&self) -> telemetry::Table {
@@ -630,14 +684,26 @@ struct TestFlowMetrics {
 #[derive(Debug)]
 struct TestPolicy {
     policy: String,
+    subscription_extension: HashSet<String>,
 }
 
 impl TestPolicy {
     pub fn new<S: AsRef<str>>(policy: S) -> Self {
+        Self::new_with_extension(policy, HashSet::<String>::new())
+    }
+
+    pub fn new_with_extension<S0, S1>(policy: S0, subscription_extension: HashSet<S1>) -> Self
+    where
+        S0: AsRef<str>,
+        S1: Into<String>,
+    {
+        let subscription_extension = subscription_extension.into_iter().map(|s| s.into()).collect();
+
         let polar = polar_core::polar::Polar::new();
         polar.load_str(policy.as_ref()).expect("failed to parse policy text");
         Self {
             policy: policy.as_ref().to_string(),
+            subscription_extension,
         }
     }
 }
@@ -645,6 +711,10 @@ impl TestPolicy {
 impl Policy for TestPolicy {
     type Item = TestItem;
     type Context = TestEligibilityContext;
+
+    fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
+        subscription.with_optional_fields(self.subscription_extension.clone())
+    }
 
     fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
         oso.load_str(self.policy.as_str()).map_err(|err| err.into())
@@ -675,157 +745,253 @@ impl Policy for TestPolicy {
     }
 }
 
-// #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-// async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
-//     lazy_static::initialize(&proctor::tracing::TEST_TRACING);
-//     let main_span = tracing::info_span!("test_policy_filter_happy_environment");
-//     let _ = main_span.enter();
-//
-//     let subscription =
-//         TelemetrySubscription::new("measurements")
-//             .with_required_fields(maplit::hashset! {"measurement"});
-//
-//     let mut flow = TestFlow::new(
-//         subscription,
-//         r#"eligible(item, environment) if environment.location_code == 33;"#
-//     ).await?;
-//
-//     flow.push_context(TestEligibilityContext::new(33)).await?;
-//     let event = flow.recv_policy_event().await?;
-//     assert!(matches!(event, elements::PolicyFilterEvent::EnvironmentChanged(_)));
-//     tracing::info!(?event, "DMR-A: environment changed confirmed");
-//
-//     let ts = Utc::now().into();
-//     let item = TestItem::new(std::f64::consts::PI, 1, ts);
-//     flow.push_item(item).await?;
-//
-//     flow.push_context(TestEligibilityContext::new(19)).await?;
-//     let event = flow.recv_policy_event().await?;
-//     assert!(matches!(event, elements::PolicyFilterEvent::EnvironmentChanged(_)));
-//     tracing::info!(?event, "DMR-B: environment changed confirmed");
-//
-//     let item = TestItem::new(std::f64::consts::E, 2, ts);
-//     flow.push_item(item).await?;
-//     let event = flow.recv_policy_event().await?;
-//     assert!(matches!(event, elements::PolicyFilterEvent::ItemBlocked(_)));
-//     tracing::info!(?event, "DMR-C: item dropped confirmed");
-//
-//     let item = TestItem::new(std::f64::consts::FRAC_1_PI, 3, ts);
-//     flow.push_item(item).await?;
-//     let event = flow.recv_policy_event().await?;
-//     assert!(matches!(event, elements::PolicyFilterEvent::ItemBlocked(_)));
-//     tracing::info!(?event, "DMR-D: item dropped confirmed");
-//
-//     let item = TestItem::new(std::f64::consts::FRAC_1_SQRT_2, 4, ts);
-//     flow.push_item(item).await?;
-//     let event = flow.recv_policy_event().await?;
-//     assert!(matches!(event, elements::PolicyFilterEvent::ItemBlocked(_)));
-//     tracing::info!(?event, "DMR-E: item dropped confirmed");
-//
-//     flow.push_context(TestEligibilityContext::new(33)).await?;
-//     let event = flow.recv_policy_event().await?;
-//     assert!(matches!(event, elements::PolicyFilterEvent::EnvironmentChanged(_)));
-//     tracing::info!(?event, "DMR-F: environment changed confirmed");
-//
-//     let item = TestItem::new(std::f64::consts::LN_2, 5, ts);
-//     flow.push_item(item).await?;
-//
-//     let actual = flow.close().await?;
-//
-//     tracing::info!(?actual, "DMR: 08. Verify final accumulation...");
-//     assert_eq!(
-//         actual,
-//         vec![
-//             TestItem::new(std::f64::consts::PI, 1, ts),
-//             TestItem::new(std::f64::consts::LN_2, 5, ts),
-//         ]
-//     );
-//     Ok(())
-// }
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
+    let main_span = tracing::info_span!("test_eligibility_w_pass_and_blocks");
+    let _ = main_span.enter();
 
-// #[ignore]
-// // #[tokio::test(flavor="multi_thread", worker_threads = 4)]
-// #[tokio::test]
-// async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
-//     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
-//     let main_span = tracing::info_span!("test_policy_w_custom_fields");
-//     let _ = main_span.enter();
-//
-//     let mut flow = TestFlow::new(
-//         r#"eligible(item, environment) if
-//             c = environment.custom() and
-//             c.cat = "Otis";"#,
-//     )
-//     .await;
-//
-//     flow.push_environment(
-//         TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
-//     )
-//     .await?;
-//     let event = flow.recv_policy_event().await?;
-//     tracing::info!(?event, "verifying environment update...");
-//     assert!(matches!(event, elements::PolicyFilterEvent::EnvironmentChanged(_)));
-//
-//     let ts = Utc::now().into();
-//     let item = TestItem::new(std::f64::consts::PI, ts, 1);
-//     flow.push_item(item).await?;
-//
-//     let item = TestItem::new(std::f64::consts::TAU, ts, 2);
-//     flow.push_item(item).await?;
-//
-//     let actual = flow.close().await?;
-//     tracing::info!(?actual, "verifying actual result...");
-//     assert_eq!(
-//         actual,
-//         vec![
-//             TestItem::new(std::f64::consts::PI, ts, 1),
-//             TestItem::new(std::f64::consts::TAU, ts, 2),
-//         ],
-//     );
-//     Ok(())
-// }
-//
-// #[ignore]
-// #[tokio::test]
-// async fn test_policy_w_item_n_env() -> anyhow::Result<()> {
-//     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
-//     let main_span = tracing::info_span!("test_policy_w_custom_fields");
-//     let _ = main_span.enter();
-//
-//     tracing::info!("DMR-A:create flow...");
-//     // another form for policy that works
-//     // r#"
-//     //     eligible(item, env) if proper_cat(item, env) and lag_2(item, env);
-//     //     proper_cat(_, env) if env.custom.cat = "Otis";
-//     //     lag_2(item, _) if item.inbox_lag = 2;
-//     // "#,
-//     let flow = TestFlow::new(
-//         r#"eligible(item, env) if proper_cat(item, env) and lag_2(item, env);
-// proper_cat(_, env) if env.custom().cat = "Otis";
-// lag_2(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
-//     )
-//     .await;
-//
-//     tracing::info!("DMR-B:push env...");
-//     flow.push_environment(
-//         TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
-//     )
-//     .await?;
-//     tracing::info!("DMR-C:verify enviornment...");
-//
-//     let ts = Utc::now().into();
-//     let item = TestItem::new(std::f64::consts::PI, ts, 1);
-//     flow.push_item(item).await?;
-//
-//     let item = TestItem::new(std::f64::consts::TAU, ts, 2);
-//     flow.push_item(item).await?;
-//
-//     let actual = flow.close().await?;
-//     tracing::info!(?actual, "verifying actual result...");
-//     assert_eq!(actual, vec![TestItem::new(std::f64::consts::TAU, ts, 2),]);
-//     Ok(())
-// }
-//
+    let subscription = TelemetrySubscription::new("measurements").with_required_fields(maplit::hashset! {
+        "input_messages_per_sec",
+        "inbox_lag",
+        "timestamp",
+    });
+
+    let policy = TestPolicy::new(r#"eligible(item, environment) if environment.cluster_status.location_code == 33;"#);
+
+    let mut flow = TestFlow::new(subscription, policy).await?;
+
+    flow.push_context(maplit::hashmap! {
+        "cluster.location_code" => 33.to_telemetry(),
+        "cluster.is_deploying" => false.to_telemetry(),
+        "cluster.last_deployment" => DT_1_STR.as_str().to_telemetry(),
+    })
+    .await?;
+
+    let event = flow.recv_policy_event().await?;
+    assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
+    tracing::warn!(?event, "DMR-A: environment changed confirmed");
+
+    let ts = *DT_1 + chrono::Duration::hours(1);
+    let item = TestItem::new(std::f64::consts::PI, 1, ts);
+    tracing::warn!(?item, "DMR-A.1: created item to push.");
+    let telemetry = Telemetry::try_from(&item);
+    tracing::warn!(?item, ?telemetry, "DMR-A.2: converted item to telemetry and pushing...");
+    flow.push_telemetry(telemetry?).await?;
+
+    tracing::info!("waiting for item to reach sink...");
+    while let Ok(acc) = flow.inspect_sink().await {
+        tracing::info!(?acc, len=?acc.len(), "inspecting sink");
+
+        if acc.len() < 1 {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        } else {
+            break;
+        }
+    }
+
+    tracing::warn!("DMR-A.3: pushed telemetry and now pushing context update...");
+
+    flow.push_context(maplit::hashmap! {
+        "cluster.location_code" => 19.to_telemetry(),
+        // "cluster.is_deploying" => false.to_telemetry(),
+        // "cluster.last_deployment" => t1_rep.to_telemetry(),
+    })
+    .await?;
+    let event = flow.recv_policy_event().await?;
+    assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
+    tracing::warn!(?event, "DMR-B: environment changed confirmed");
+
+    let item = TestItem::new(std::f64::consts::E, 2, ts);
+    let telemetry = Telemetry::try_from(&item);
+    flow.push_telemetry(telemetry?).await?;
+    let event = flow.recv_policy_event().await?;
+    assert!(matches!(event, elements::PolicyFilterEvent::ItemBlocked(_)));
+    tracing::warn!(?event, "DMR-C: item dropped confirmed");
+
+    let item = TestItem::new(std::f64::consts::FRAC_1_PI, 3, ts);
+    let telemetry = Telemetry::try_from(&item)?;
+    flow.push_telemetry(telemetry).await?;
+    let event = flow.recv_policy_event().await?;
+    assert!(matches!(event, elements::PolicyFilterEvent::ItemBlocked(_)));
+    tracing::warn!(?event, "DMR-D: item dropped confirmed");
+
+    let item = TestItem::new(std::f64::consts::FRAC_1_SQRT_2, 4, ts);
+    let telemetry = Telemetry::try_from(&item)?;
+    flow.push_telemetry(telemetry).await?;
+    let event = flow.recv_policy_event().await?;
+    assert!(matches!(event, elements::PolicyFilterEvent::ItemBlocked(_)));
+    tracing::warn!(?event, "DMR-E: item dropped confirmed");
+
+    flow.push_context(maplit::hashmap! { "cluster.location_code" => 33.to_telemetry(), })
+        .await?;
+
+    let event = flow.recv_policy_event().await?;
+    tracing::info!(?event, "DMR-E.1: policy event received.");
+    assert_eq!(
+        event,
+        elements::PolicyFilterEvent::ContextChanged(Some(TestEligibilityContext {
+            task_status: TestTaskStatus { last_failure: None },
+            cluster_status: TestClusterStatus {
+                location_code: 33,
+                is_deploying: false,
+                last_deployment: DT_1.clone(),
+            },
+            custom: HashMap::new(),
+        }))
+    );
+    assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
+    tracing::warn!(?event, "DMR-F: environment changed confirmed");
+
+    let item = TestItem::new(std::f64::consts::LN_2, 5, ts);
+    let telemetry = Telemetry::try_from(&item)?;
+    flow.push_telemetry(telemetry).await?;
+
+    tracing::info!("waiting for item to reach sink...");
+    while let Ok(acc) = flow.inspect_sink().await {
+        tracing::info!(?acc, len=?acc.len(), "inspecting sink");
+
+        if acc.len() < 2 {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        } else {
+            break;
+        }
+    }
+
+    let actual: Vec<TestItem> = flow.close().await?;
+
+    tracing::warn!(?actual, "DMR: 08. Verify final accumulation...");
+    let actual_vals: Vec<(f64, i32)> = actual
+        .into_iter()
+        .map(|a| (a.flow.input_messages_per_sec, a.inbox_lag))
+        .collect();
+
+    assert_eq!(
+        actual_vals,
+        vec![(std::f64::consts::PI, 1,), (std::f64::consts::LN_2, 5,),]
+    );
+    Ok(())
+}
+
+// #[tokio::test(flavor="multi_thread", worker_threads = 4)]
+#[tokio::test]
+async fn test_eligibility_w_custom_fields() -> anyhow::Result<()> {
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
+    let main_span = tracing::info_span!("test_eligibility_w_custom_fields");
+    let _ = main_span.enter();
+
+    let subscription = TelemetrySubscription::new("measurements").with_required_fields(maplit::hashset! {
+        "input_messages_per_sec",
+        "inbox_lag",
+        "timestamp",
+    });
+
+    let policy = TestPolicy::new_with_extension(
+        r#"eligible(item, environment) if
+            c = environment.custom() and
+            c.cat = "Otis";"#,
+        maplit::hashset! {"cat"},
+    );
+
+    let mut flow = TestFlow::new(subscription, policy).await?;
+
+    // TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
+    flow.push_context(maplit::hashmap! {
+        "cluster.location_code" => 33.to_telemetry(),
+        "cluster.is_deploying" => false.to_telemetry(),
+        "cluster.last_deployment" => DT_1_STR.as_str().to_telemetry(),
+        "cat" => "Otis".to_telemetry(),
+    })
+    .await?;
+
+    let event = flow.recv_policy_event().await?;
+    tracing::info!(?event, "verifying environment update...");
+    assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
+
+    let ts = Utc::now().into();
+    let item = TestItem::new(std::f64::consts::PI, 1, ts);
+    let telemetry = Telemetry::try_from(&item);
+    tracing::info!(?telemetry, ?item, "pushing item telemetry");
+    flow.push_telemetry(telemetry?).await?;
+
+    let item = TestItem::new(std::f64::consts::TAU, 2, ts);
+    let telemetry = Telemetry::try_from(&item);
+    flow.push_telemetry(telemetry?).await?;
+
+    let actual = flow.close().await?;
+    tracing::info!(?actual, "verifying actual result...");
+
+    let actual_vals: Vec<(f64, i32)> = actual
+        .into_iter()
+        .map(|a| (a.flow.input_messages_per_sec, a.inbox_lag))
+        .collect();
+
+    assert_eq!(
+        actual_vals,
+        vec![(std::f64::consts::PI, 1), (std::f64::consts::TAU, 2),],
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_eligibility_w_item_n_env() -> anyhow::Result<()> {
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
+    let main_span = tracing::info_span!("test_eligibility_w_item_n_env");
+    let _ = main_span.enter();
+
+    tracing::info!("DMR-A:create flow...");
+
+    let subscription = TelemetrySubscription::new("data").with_required_fields(maplit::hashset! {
+        "input_messages_per_sec",
+        "inbox_lag",
+        "timestamp",
+    });
+
+    let policy = TestPolicy::new_with_extension(
+        r#"eligible(item, env) if proper_cat(item, env) and lag_2(item, env);
+proper_cat(_, env) if env.custom.cat = "Otis";
+lag_2(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
+        maplit::hashset! { "cat" },
+    );
+
+    // another form for policy that works
+    // r#"
+    //     eligible(item, env) if proper_cat(item, env) and lag_2(item, env);
+    //     proper_cat(_, env) if env.custom.cat = "Otis";
+    //     lag_2(item, _) if item.inbox_lag = 2;
+    // "#,
+    let flow = TestFlow::new(subscription, policy).await?;
+
+    tracing::info!("DMR-B:push env...");
+    flow.push_context(maplit::hashmap! {
+        "cluster.location_code" => 23.to_telemetry(),
+        "cluster.is_deploying" => false.to_telemetry(),
+        "cluster.last_deployment" => DT_1_STR.as_str().to_telemetry(),
+        "cat" => "Otis".to_telemetry(),
+    })
+    .await?;
+    tracing::info!("DMR-C:verify context...");
+
+    let ts = Utc::now().into();
+    let item = TestItem::new(std::f64::consts::PI, 1, ts);
+    let telemetry = Telemetry::try_from(&item);
+    flow.push_telemetry(telemetry?).await?;
+
+    let item = TestItem::new(std::f64::consts::TAU, 2, ts);
+    let telemetry = Telemetry::try_from(&item);
+    flow.push_telemetry(telemetry?).await?;
+
+    let actual = flow.close().await?;
+    tracing::info!(?actual, "verifying actual result...");
+    let actual_vals: Vec<(f64, i32)> = actual
+        .into_iter()
+        .map(|a| (a.flow.input_messages_per_sec, a.inbox_lag))
+        .collect();
+
+    assert_eq!(actual_vals, vec![(std::f64::consts::TAU, 2),]);
+    Ok(())
+}
+
 // #[ignore]
 // #[tokio::test]
 // async fn test_policy_w_method() -> anyhow::Result<()> {
@@ -840,7 +1006,7 @@ impl Policy for TestPolicy {
 //     )
 //     .await;
 //
-//     flow.push_environment(
+//     flow.push_context(
 //         TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
 //     )
 //     .await?;
@@ -875,7 +1041,7 @@ impl Policy for TestPolicy {
 //
 //     let flow = TestFlow::new(policy_1).await;
 //
-//     flow.push_environment(
+//     flow.push_context(
 //         TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
 //     )
 //     .await?;
@@ -918,7 +1084,7 @@ impl Policy for TestPolicy {
 //
 //     let flow = TestFlow::new(policy_1).await;
 //
-//     flow.push_environment(
+//     flow.push_context(
 //         TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
 //     )
 //     .await?;
@@ -965,7 +1131,7 @@ impl Policy for TestPolicy {
 //
 //     let flow = TestFlow::new(policy_1).await;
 //
-//     flow.push_environment(
+//     flow.push_context(
 //         TestEnvironment::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_string()}),
 //     )
 //     .await?;
