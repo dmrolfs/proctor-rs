@@ -23,6 +23,7 @@ use std::iter::FromIterator;
 use std::marker::PhantomData;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
+use std::time::Duration;
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Data {
@@ -389,6 +390,45 @@ where
             .map_err(|err| err.into())
     }
 
+    #[tracing::instrument(level="info", skip(self, check_size))]
+    pub async fn check_sink_accumulation(
+        &self,
+        label: &str,
+        timeout: Duration,
+        mut check_size: impl FnMut(Vec<D>) -> bool
+    ) -> GraphResult<bool> {
+        use std::time::Instant;
+        let deadline = Instant::now() + timeout;
+        let step = Duration::from_millis(50);
+        let mut result = false;
+
+        loop{
+            if Instant::now() < deadline {
+                let acc = self.inspect_sink().await;
+                if acc.is_ok() {
+                    let acc = acc?;
+                    tracing::info!(?acc, len=?acc.len(), "inspecting sink");
+                    result = check_size(acc);
+                    if !result {
+                        tracing::warn!(?result, "sink length failed check predicate - retrying after {:?}.", step);
+                        tokio::time::sleep(step).await;
+                    } else {
+                        tracing::info!(?result, "sink length passed check predicate.");
+                        break;
+                    }
+                } else {
+                    tracing::error!(?acc, "failed to inspect sink");
+                    break;
+                }
+            } else {
+                tracing::error!(?timeout, "check timeout exceeded - stopping check.");
+                break;
+            }
+        }
+
+        Ok(result)
+    }
+
     #[tracing::instrument(level = "warn", skip(self))]
     pub async fn close(mut self) -> GraphResult<Vec<D>> {
         let (stop, _) = stage::ActorSourceCmd::stop();
@@ -535,8 +575,11 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
 
     tracing::warn!("DMR: 06. Look for Item in sink...");
 
-    let actual = flow.inspect_sink().await?;
-    // assert_eq!(actual.len(), 1);
+    assert!(flow.check_sink_accumulation(
+        "first",
+        Duration::from_secs(2),
+        |acc| acc.len() == 1).await?
+    );
 
     tracing::warn!("DMR: 07. Push another Item...");
 
@@ -780,15 +823,11 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
     flow.push_telemetry(telemetry?).await?;
 
     tracing::info!("waiting for item to reach sink...");
-    while let Ok(acc) = flow.inspect_sink().await {
-        tracing::info!(?acc, len=?acc.len(), "inspecting sink");
-
-        if acc.len() < 1 {
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        } else {
-            break;
-        }
-    }
+    assert!(flow.check_sink_accumulation(
+        "first",
+        Duration::from_secs(2),
+        |acc| acc.len() == 1).await?
+    );
 
     tracing::warn!("DMR-A.3: pushed telemetry and now pushing context update...");
 
@@ -848,15 +887,11 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
     flow.push_telemetry(telemetry).await?;
 
     tracing::info!("waiting for item to reach sink...");
-    while let Ok(acc) = flow.inspect_sink().await {
-        tracing::info!(?acc, len=?acc.len(), "inspecting sink");
-
-        if acc.len() < 2 {
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        } else {
-            break;
-        }
-    }
+    assert!(flow.check_sink_accumulation(
+        "second",
+        Duration::from_secs(2),
+        |acc| acc.len() == 2).await?
+    );
 
     let actual: Vec<TestItem> = flow.close().await?;
 
