@@ -98,8 +98,7 @@ use std::fmt::{self, Debug};
 ///                 exp.insert(format!("args.{}.f", i), "foo".into());
 ///                 exp.insert(format!("args.{}.b", i), "bar".into());
 ///             }
-///             let exp = elements::Telemetry::from_iter(exp);
-///             assert_eq!(resp, exp);
+///             assert_eq!(resp, exp.into_iter().collect());
 ///         }
 ///         None => panic!("did not expect no response"),
 ///     }

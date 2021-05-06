@@ -123,16 +123,14 @@ use std::fmt::Debug;
 ///     let actual = rx_gather.await.expect("fold didn't release");
 ///     assert_eq!(
 ///         actual,
-///         Telemetry::from_iter(
-///           maplit::hashmap! {
-///               "args.1.f" => "foo".to_telemetry(),
-///               "args.1.b" => "bar".to_telemetry(),
-///               "args.2.f" => "foo".to_telemetry(),
-///               "args.2.b" => "bar".to_telemetry(),
-///               "args.3.f" => "foo".to_telemetry(),
-///               "args.3.b" => "bar".to_telemetry(),
-///           }
-///         )
+///         maplit::hashmap! {
+///             "args.1.f" => "foo".to_telemetry(),
+///             "args.1.b" => "bar".to_telemetry(),
+///             "args.2.f" => "foo".to_telemetry(),
+///             "args.2.b" => "bar".to_telemetry(),
+///             "args.3.f" => "foo".to_telemetry(),
+///             "args.3.b" => "bar".to_telemetry(),
+///         }.into_iter().collect()
 ///     );
 ///
 ///     Ok(())

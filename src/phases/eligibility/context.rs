@@ -81,7 +81,6 @@ mod tests {
     use chrono::{DateTime, Utc};
     use lazy_static::lazy_static;
     use serde_test::{assert_tokens, Token};
-    use std::iter::FromIterator;
 
     lazy_static! {
         static ref DT_1: DateTime<Utc> = Utc::now();
@@ -137,12 +136,15 @@ mod tests {
     fn test_serde_flink_eligibility_context_from_telemetry() {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
 
-        let data = Telemetry::from_iter(maplit::hashmap! {
+        let data: Telemetry = maplit::hashmap! {
             "task.last_failure" => DT_1_STR.as_str().to_telemetry(),
             "cluster.is_deploying" => false.to_telemetry(),
             "cluster.last_deployment" => DT_2_STR.as_str().to_telemetry(),
             "foo" => "bar".to_telemetry(),
-        });
+        }
+        .into_iter()
+        .collect();
+
         tracing::info!(telemetry=?data, "created telemetry");
 
         let actual = data.try_into::<FlinkEligibilityContext>();

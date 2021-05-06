@@ -4,14 +4,13 @@ extern crate enum_display_derive;
 use anyhow::anyhow;
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use proctor::elements::telemetry::ToTelemetry;
-use proctor::elements::{Collect, Telemetry};
+use proctor::elements::Collect;
 use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use proctor::tracing::{get_subscriber, init_subscriber};
 use reqwest::Url;
 use serde::de;
 use std::collections::HashMap;
 use std::fmt::{self, Display};
-use std::iter::FromIterator;
 use std::time::Duration;
 
 #[derive(Debug, Display, PartialEq)]
@@ -303,7 +302,8 @@ async fn main() -> anyhow::Result<()> {
         );
         // data.insert("currency".to_string(), ex.from_currency.name);
         // data.insert("value".to_string(), ex.rate.to_string());
-        Telemetry::from_iter(data)
+        // Telemetry::from_iter(data);
+        data.into_iter().collect()
     };
 
     let collect = Collect::new("collect", url, default_headers, to_metric_group).await;

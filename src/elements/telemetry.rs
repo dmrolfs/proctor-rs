@@ -50,8 +50,8 @@ impl Telemetry {
     pub fn try_from<T: Serialize + Debug>(from: &T) -> GraphResult<Self> {
         let mut serializer = flexbuffers::FlexbufferSerializer::new();
         from.serialize(&mut serializer)?;
-        let data = serializer.view();
-        let reader = flexbuffers::Reader::get_root(data)?;
+        let data = serializer.take_buffer();
+        let reader = flexbuffers::Reader::get_root(&data)?;
         let root = TelemetryValue::deserialize(reader)?;
         Ok(Telemetry(root))
     }
@@ -116,7 +116,7 @@ impl Into<Telemetry> for HashMap<String, TelemetryValue> {
 impl Into<Telemetry> for BTreeMap<String, TelemetryValue> {
     #[tracing::instrument(level = "trace", skip())]
     fn into(self) -> Telemetry {
-        Telemetry::from_iter(self)
+        self.into_iter().collect()
     }
 }
 
@@ -131,7 +131,7 @@ impl std::ops::Add for Telemetry {
 
 impl FromIterator<(String, TelemetryValue)> for Telemetry {
     fn from_iter<T: IntoIterator<Item = (String, TelemetryValue)>>(iter: T) -> Self {
-        Telemetry(TelemetryValue::Table(HashMap::from_iter(iter)))
+        Telemetry(TelemetryValue::Table(iter.into_iter().collect()))
     }
 }
 
@@ -198,7 +198,6 @@ mod tests {
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
     use serde::{Deserialize, Serialize};
-    use std::iter::FromIterator;
 
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
     struct Data {
@@ -256,11 +255,13 @@ mod tests {
             zed: std::f64::consts::LN_2,
         };
 
-        let telemetry = Telemetry::from_iter(maplit::hashmap! {
+        let telemetry: Telemetry = maplit::hashmap! {
                 "foo".to_string() => 37.into(),
                 "bar".to_string() => "Otis".into(),
                 "zed".to_string() => std::f64::consts::LN_2.into(),
-        });
+        }
+        .into_iter()
+        .collect();
 
         let actual_data: TestData = telemetry.clone().try_into().unwrap();
         assert_eq!(actual_data, data);
@@ -287,12 +288,14 @@ mod tests {
             },
         };
 
-        let telemetry = Telemetry::from_iter(maplit::hashmap! {
+        let telemetry: Telemetry = maplit::hashmap! {
             "place".to_string() => TelemetryValue::Table(maplit::hashmap! {
                 "foo".to_string() => 37.into(),
                 "bar".to_string() => 19.into(),
             })
-        });
+        }
+        .into_iter()
+        .collect();
 
         let actual_data: TestData = telemetry.clone().try_into().unwrap();
         assert_eq!(actual_data, data);
@@ -327,13 +330,15 @@ mod tests {
             elements: vec!["Otis".to_string(), "Stella".to_string(), "Neo".to_string()],
         };
 
-        let telemetry = Telemetry::from_iter(maplit::hashmap! {
+        let telemetry: Telemetry = maplit::hashmap! {
             "arr".to_string() => TelemetryValue::Seq(vec![
                 TelemetryValue::Text("Otis".to_string()),
                 TelemetryValue::Text("Stella".to_string()),
                 TelemetryValue::Text("Neo".to_string()),
             ])
-        });
+        }
+        .into_iter()
+        .collect();
 
         let actual_data: TestData = telemetry.clone().try_into().unwrap();
         assert_eq!(actual_data, data);
@@ -371,7 +376,7 @@ mod tests {
             },
         };
 
-        let telemetry = Telemetry::from_iter(maplit::hashmap! {
+        let telemetry: Telemetry = maplit::hashmap! {
             "diodes".to_string() => TelemetryValue::Table(maplit::hashmap! {
                 "green".to_string() => TelemetryValue::Text("off".to_string()),
                 // "green".to_string() => TelemetryValue::Table(maplit::hashmap! { "off".to_string() => TelemetryValue::Unit}),
@@ -383,7 +388,9 @@ mod tests {
                 //     "infinite".to_string() => TelemetryValue::Boolean(true),
                 // })})
             }),
-        });
+        }
+        .into_iter()
+        .collect();
 
         tracing::warn!("deserializing actual data from telemetry...");
         let actual_data: TestData = telemetry.clone().try_into().unwrap();
@@ -423,7 +430,7 @@ mod tests {
             },
         };
 
-        let telemetry = Telemetry::from_iter(maplit::hashmap! {
+        let telemetry: Telemetry = maplit::hashmap! {
             "diodes".to_string() => TelemetryValue::Table(maplit::hashmap! {
                 // "green".to_string() => TelemetryValue::Table(maplit::hashmap! { "off".to_string() => TelemetryValue::Unit}),
                 "green".to_string() => TelemetryValue::Text("off".to_string()),
@@ -434,7 +441,7 @@ mod tests {
                     "infinite".to_string() => TelemetryValue::Boolean(true),
                 })})
             }),
-        });
+        }.into_iter().collect();
 
         tracing::warn!("deserializing actual data from telemetry...");
         let actual_data: TestData = telemetry.clone().try_into().unwrap();
@@ -466,11 +473,13 @@ mod tests {
         let main_span = tracing::info_span!("test_telemetry_data_try_into_deserializer");
         let _main_span_guard = main_span.enter();
 
-        let data = Telemetry::from_iter(maplit::btreemap! {
+        let data: Telemetry = maplit::btreemap! {
             "task.last_failure".to_string() => "2014-11-28T12:45:59.324310806Z".into(),
             "cluster.is_deploying".to_string() => false.into(),
             "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".into(),
-        });
+        }
+        .into_iter()
+        .collect();
 
         let foo: Option<bool> = data
             .get("cluster.is_deploying")
@@ -508,12 +517,14 @@ mod tests {
 
         assert_eq!(
             telemetry,
-            Telemetry::from_iter(vec![
+            vec![
                 (0.to_string(), TelemetryValue::Integer(0)),
                 (2.to_string(), TelemetryValue::Integer(20)),
                 (4.to_string(), TelemetryValue::Integer(40)),
                 (6.to_string(), TelemetryValue::Integer(60)),
-            ])
+            ]
+            .into_iter()
+            .collect()
         );
     }
 }

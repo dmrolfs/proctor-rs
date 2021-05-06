@@ -7,7 +7,6 @@ use cast_trait_object::dyn_upcast;
 use futures::future::FutureExt;
 use std::collections::HashSet;
 use std::fmt::{self, Debug};
-use std::iter::FromIterator;
 use tokio::sync::{mpsc, oneshot};
 
 pub type ClearinghouseApi = mpsc::UnboundedSender<ClearinghouseCmd>;
@@ -108,7 +107,8 @@ impl TelemetrySubscription {
     }
 
     pub fn with_required_fields<S: Into<String>>(self, required_fields: HashSet<S>) -> Self {
-        let required_fields: HashSet<String> = required_fields.into_iter().map(|s| s.into()).collect();
+        let required_fields = required_fields.into_iter().map(|s| s.into()).collect();
+
         match self {
             Self::All {
                 name,
@@ -137,7 +137,7 @@ impl TelemetrySubscription {
     }
 
     pub fn with_optional_fields<S: Into<String>>(self, optional_fields: HashSet<S>) -> Self {
-        let optional_fields: HashSet<String> = optional_fields.into_iter().map(|s| s.into()).collect();
+        let optional_fields = optional_fields.into_iter().map(|s| s.into()).collect();
         match self {
             Self::All {
                 name,
@@ -296,8 +296,8 @@ impl TelemetrySubscription {
 
                     None
                 } else {
-                    let ready = ready.into_iter().map(|(k, v)| (k, v.clone()));
-                    Some(Telemetry::from_iter(ready))
+                    let ready = ready.into_iter().map(|(k, v)| (k, v.clone())).collect();
+                    Some(ready)
                 }
             }
         }
@@ -690,7 +690,6 @@ mod tests {
     use lazy_static::lazy_static;
     use pretty_assertions::assert_eq;
     use std::collections::HashMap;
-    use std::iter::FromIterator;
     use std::time::Duration;
     use tokio::sync::oneshot;
     use tokio_test::block_on;
@@ -718,18 +717,10 @@ mod tests {
             },
         ];
         static ref DB_ROWS: Vec<Telemetry> = vec![
-            Telemetry::from_iter(
-                maplit::btreemap! {"pos".to_string() => 1.into(), "cat".to_string() => "Stella".into(), "extra".to_string() => "Ripley".into(),}
-            ),
-            Telemetry::from_iter(
-                maplit::btreemap! {"value".to_string() => 3.14159.into(), "cat".to_string() => "Otis".into(), "extra".to_string() => "Ripley".into(),}
-            ),
-            Telemetry::from_iter(
-                maplit::btreemap! {"pos".to_string() => 3.into(), "cat".to_string() => "Neo".into(), "extra".to_string() => "Ripley".into(),}
-            ),
-            Telemetry::from_iter(
-                maplit::btreemap! {"pos".to_string() => 4.into(), "value".to_string() => 2.71828.into(), "cat".to_string() => "Apollo".into(), "extra".to_string() => "Ripley".into(),}
-            ),
+            maplit::btreemap! {"pos".to_string() => 1.into(), "cat".to_string() => "Stella".into(), "extra".to_string() => "Ripley".into(),}.into_iter().collect(),
+            maplit::btreemap! {"value".to_string() => 3.14159.into(), "cat".to_string() => "Otis".into(), "extra".to_string() => "Ripley".into(),}.into_iter().collect(),
+            maplit::btreemap! {"pos".to_string() => 3.into(), "cat".to_string() => "Neo".into(), "extra".to_string() => "Ripley".into(),}.into_iter().collect(),
+            maplit::btreemap! {"pos".to_string() => 4.into(), "value".to_string() => 2.71828.into(), "cat".to_string() => "Apollo".into(), "extra".to_string() => "Ripley".into(),}.into_iter().collect(),
         ];
         static ref EXPECTED: HashMap<String, Vec<Option<Telemetry>>> = maplit::hashmap! {
             SUBSCRIPTIONS[0].name().to_string() => vec![
@@ -739,17 +730,16 @@ mod tests {
                 None,
             ],
             SUBSCRIPTIONS[1].name().to_string() => vec![
-                Some(Telemetry::from_iter(maplit::btreemap! {"pos".to_string() => 1.into(), "cat".to_string() => "Stella".into(), "extra".to_string() => "Ripley".into(),})),
+                Some(maplit::btreemap! {"pos".to_string() => 1.into(), "cat".to_string() => "Stella".into(), "extra".to_string() => "Ripley".into(),}.into_iter().collect()),
                 None,
-                Some(Telemetry::from_iter(maplit::btreemap! {"pos".to_string() => 3.into(), "cat".to_string() => "Neo".into(), "extra".to_string() => "Ripley".into(),})),
-                Some(Telemetry::from_iter(maplit::btreemap! {"pos".to_string() => 4.into(), "cat".to_string() => "Apollo".into(), "extra".to_string() => "Ripley".into(),})),
+                Some(maplit::btreemap! {"pos".to_string() => 3.into(), "cat".to_string() => "Neo".into(), "extra".to_string() => "Ripley".into(),}.into_iter().collect()),
+                Some(maplit::btreemap! {"pos".to_string() => 4.into(), "cat".to_string() => "Apollo".into(), "extra".to_string() => "Ripley".into(),}.into_iter().collect()),
             ],
             SUBSCRIPTIONS[2].name().to_string() => vec![
                 None,
                 None,
                 None,
-                Some(Telemetry::from_iter(maplit::btreemap! {"pos".to_string() => 4.into(), "value".to_string() => 2.71828.into(), "cat".to_string() => "Apollo".into(),})),
-
+                Some(maplit::btreemap! {"pos".to_string() => 4.into(), "value".to_string() => 2.71828.into(), "cat".to_string() => "Apollo".into(),}.into_iter().collect()),
             ],
         };
     }
@@ -792,7 +782,9 @@ mod tests {
         let _main_span_guard = main_span.enter();
 
         block_on(async move {
-            let data = Telemetry::from_iter(maplit::hashmap! { "aaa".to_string() => 17.to_telemetry() });
+            let data: Telemetry = maplit::hashmap! { "aaa".to_string() => 17.to_telemetry() }
+                .into_iter()
+                .collect();
             let mut tick = stage::Tick::new("tick", Duration::from_nanos(0), Duration::from_millis(5), data);
             let tx_tick_api = tick.tx_api();
             let mut clearinghouse = Clearinghouse::new("test-clearinghouse");
@@ -865,7 +857,9 @@ mod tests {
         let _main_span_guard = main_span.enter();
 
         block_on(async move {
-            let data: Telemetry = Telemetry::from_iter(maplit::hashmap! { "dr".to_string() => 17.to_telemetry() });
+            let data: Telemetry = maplit::hashmap! { "dr".to_string() => 17.to_telemetry() }
+                .into_iter()
+                .collect();
             let mut tick = stage::Tick::new("tick", Duration::from_nanos(0), Duration::from_millis(5), data);
             let tx_tick_api = tick.tx_api();
             let mut clearinghouse = Clearinghouse::new("test-clearinghouse");
@@ -1041,13 +1035,13 @@ mod tests {
                 None, //Some(HashMap::default()),
             ],
             SUBSCRIPTIONS[1].name().to_string() => vec![
-                Some(Telemetry::from_iter(maplit::hashmap! {"pos".to_string() => 1.into(), "cat".to_string() => "Stella".into(), "extra".to_string() => "Ripley".into(),})),
-                Some(Telemetry::from_iter(maplit::hashmap! {"pos".to_string() => 3.into(), "cat".to_string() => "Neo".into(), "extra".to_string() => "Ripley".into(),})),
-                Some(Telemetry::from_iter(maplit::hashmap! {"pos".to_string() => 4.into(), "cat".to_string() => "Apollo".into(), "extra".to_string() => "Ripley".into(),})),
+                Some(maplit::hashmap! {"pos".to_string() => 1.into(), "cat".to_string() => "Stella".into(), "extra".to_string() => "Ripley".into(),}.into_iter().collect()),
+                Some(maplit::hashmap! {"pos".to_string() => 3.into(), "cat".to_string() => "Neo".into(), "extra".to_string() => "Ripley".into(),}.into_iter().collect()),
+                Some(maplit::hashmap! {"pos".to_string() => 4.into(), "cat".to_string() => "Apollo".into(), "extra".to_string() => "Ripley".into(),}.into_iter().collect()),
                 None,
             ],
             SUBSCRIPTIONS[2].name().to_string() => vec![
-                Some(Telemetry::from_iter(maplit::hashmap! {"pos".to_string() => 4.into(), "value".to_string() => 2.71828.into(), "cat".to_string() => "Apollo".into(),})),
+                Some(maplit::hashmap! {"pos".to_string() => 4.into(), "value".to_string() => 2.71828.into(), "cat".to_string() => "Apollo".into(),}.into_iter().collect()),
                 None,
                 None,
                 None,
