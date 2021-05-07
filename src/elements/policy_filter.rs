@@ -239,8 +239,6 @@ where
             Some(Ok(result_set)) => {
                 tracing::info!(
                     ?result_set,
-                    ?item,
-                    ?context,
                     "item and context passed policy review - sending via outlet."
                 );
                 outlet
@@ -258,9 +256,7 @@ where
 
             None => {
                 tracing::info!(
-                    ?item,
-                    ?context,
-                    "item and context did not pass policy review - skipping item."
+                    "item and context did not pass policy review (no passing result from knowledge base) - skipping item."
                 );
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
                 Ok(())
