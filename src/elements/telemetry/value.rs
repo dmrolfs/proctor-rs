@@ -290,35 +290,6 @@ impl From<PolarValue> for TelemetryValue {
     }
 }
 
-// impl TryFrom<PolarValue> for TelemetryValue {
-//     type Error = GraphError;
-//
-//     fn try_from(value: PolarValue) -> Result<Self, Self::Error> {
-//         match value {
-//             PolarValue::Boolean(value) => Ok(TelemetryValue::Boolean(value)),
-//             PolarValue::Integer(value) => Ok(TelemetryValue::Integer(value)),
-//             PolarValue::Float(value) => Ok(TelemetryValue::Float(value)),
-//             PolarValue::String(rep) => Ok(TelemetryValue::Text(rep)),
-//             PolarValue::List(values) => {
-//                 let vs = values.into_iter().map(|v| v.into()).collect();
-//                 Ok(TelemetryValue::Seq(vs))
-//             },
-//             PolarValue::Map(table) => {
-//                 let vs = table.into_iter().map(|(k, v)| (k, v.into())).collect();
-//                 Ok(TelemetryValue::Table(vs))
-//             },
-//             PolarValue::Instance(_) => {
-//                 // maybe Unit?
-//                 Err(GraphError::TypeError("PolarValue::Instance is not a supported telemetry type.".to_string()))
-//             },
-//             PolarValue::Variable(_) => {
-//                 // maybe Unit?
-//                 Err(GraphError::TypeError("PolarValue::Variable is not a supported telemetry type.".to_string()))
-//             },
-//         }
-//     }
-// }
-
 impl TryFrom<TelemetryValue> for bool {
     type Error = GraphError;
 
@@ -996,3 +967,34 @@ mod tests {
         // }
     }
 }
+
+
+// impl TryFrom<PolarValue> for TelemetryValue {
+//     type Error = GraphError;
+//
+//     fn try_from(value: PolarValue) -> Result<Self, Self::Error> {
+//         match value {
+//             PolarValue::Boolean(value) => Ok(TelemetryValue::Boolean(value)),
+//             PolarValue::Integer(value) => Ok(TelemetryValue::Integer(value)),
+//             PolarValue::Float(value) => Ok(TelemetryValue::Float(value)),
+//             PolarValue::String(rep) => Ok(TelemetryValue::Text(rep)),
+//             PolarValue::List(values) => {
+//                 let vs = values.into_iter().map(|v| v.into()).collect();
+//                 Ok(TelemetryValue::Seq(vs))
+//             },
+//             PolarValue::Map(table) => {
+//                 let vs = table.into_iter().map(|(k, v)| (k, v.into())).collect();
+//                 Ok(TelemetryValue::Table(vs))
+//             },
+//             PolarValue::Instance(_) => {
+//                 // maybe Unit?
+//                 Err(GraphError::TypeError("PolarValue::Instance is not a supported telemetry type.".to_string()))
+//             },
+//             PolarValue::Variable(_) => {
+//                 // maybe Unit?
+//                 Err(GraphError::TypeError("PolarValue::Variable is not a supported telemetry type.".to_string()))
+//             },
+//         }
+//     }
+// }
+
