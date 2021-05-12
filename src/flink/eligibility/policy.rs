@@ -1,4 +1,4 @@
-use super::context::*;
+use crate::flink::eligibility::context::*;
 use crate::elements::{Policy, PolicySettings, PolicySource, Telemetry};
 use crate::graph::GraphResult;
 use crate::phases::collection::TelemetrySubscription;

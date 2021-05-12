@@ -1,15 +1,14 @@
-use crate::elements::{Policy, PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor};
-use crate::error::GraphError;
-use crate::graph::stage::{Stage, WithApi, WithMonitor};
-use crate::graph::{GraphResult, Inlet, Outlet, Port, SinkShape, SourceShape, ThroughShape};
-use crate::{AppData, ProctorContext};
+use std::fmt::{self, Debug};
+
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
-use std::fmt::{self, Debug};
 use tokio::sync::broadcast;
 
-mod context;
-mod policy;
+use crate::{AppData, ProctorContext};
+use crate::elements::{Policy, PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor};
+use crate::error::GraphError;
+use crate::graph::{GraphResult, Inlet, Outlet, Port, SinkShape, SourceShape, ThroughShape};
+use crate::graph::stage::{Stage, WithApi, WithMonitor};
 
 pub struct Eligibility<D, C> {
     name: String,
