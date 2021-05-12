@@ -1,3 +1,4 @@
+use crate::elements::TelemetryValue;
 use std::fmt;
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
@@ -170,8 +171,8 @@ pub enum GraphError {
     #[error("{0}")]
     GraphPrecondition(String),
     ///Invalid Type used in application
-    #[error("invalid type used, expected {0}")]
-    TypeError(String),
+    #[error("invalid type used, expected {0} type but was: {1}")]
+    TypeError(String, String),
     ///Unexpected Type
     #[error("type {0} unexpected")]
     Unexpected(UnexpectedType),
@@ -179,25 +180,41 @@ pub enum GraphError {
 
 #[derive(Debug)]
 pub enum UnexpectedType {
-    Bool(bool),
+    Boolean(bool),
     Integer(i64),
     Float(f64),
     Text(String),
     Unit,
-    List,
-    Map,
+    Seq,
+    Table,
 }
 
 impl fmt::Display for UnexpectedType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            UnexpectedType::Bool(b) => write!(f, "boolean `{}`", b),
+            UnexpectedType::Boolean(b) => write!(f, "boolean `{}`", b),
             UnexpectedType::Integer(i) => write!(f, "integer `{}`", i),
             UnexpectedType::Float(v) => write!(f, "floating point `{}`", v),
             UnexpectedType::Text(ref s) => write!(f, "text {:?}", s),
             UnexpectedType::Unit => write!(f, "unit value"),
-            UnexpectedType::List => write!(f, "list"),
-            UnexpectedType::Map => write!(f, "map"),
+            UnexpectedType::Seq => write!(f, "list"),
+            UnexpectedType::Table => write!(f, "map"),
+        }
+    }
+}
+
+impl From<crate::elements::TelemetryValue> for UnexpectedType {
+    fn from(value: TelemetryValue) -> Self {
+        use crate::elements::TelemetryValue as TV;
+
+        match value {
+            TV::Boolean(b) => UnexpectedType::Boolean(b),
+            TV::Integer(i64) => UnexpectedType::Integer(i64),
+            TV::Float(f64) => UnexpectedType::Float(f64),
+            TV::Text(rep) => UnexpectedType::Text(rep),
+            TV::Unit => UnexpectedType::Unit,
+            TV::Seq(_) => UnexpectedType::Seq,
+            TV::Table(_) => UnexpectedType::Table,
         }
     }
 }
@@ -330,13 +347,13 @@ impl From<flexbuffers::ReaderError> for GraphError {
 }
 
 impl From<std::num::TryFromIntError> for GraphError {
-    fn from(_that: std::num::TryFromIntError) -> Self {
-        GraphError::TypeError("Integer".to_string())
+    fn from(that: std::num::TryFromIntError) -> Self {
+        GraphError::TypeError("Integer".to_string(), format!("{:?}", that))
     }
 }
 
 impl From<std::convert::Infallible> for GraphError {
-    fn from(_that: std::convert::Infallible) -> Self {
-        GraphError::TypeError("Integer".to_string())
+    fn from(that: std::convert::Infallible) -> Self {
+        GraphError::TypeError("Integer".to_string(), format!("{:?}", that))
     }
 }

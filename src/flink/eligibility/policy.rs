@@ -1,5 +1,6 @@
-use crate::flink::eligibility::context::*;
 use crate::elements::{Policy, PolicySettings, PolicySource, Telemetry};
+use crate::flink::eligibility::context::*;
+use crate::flink::MetricCatalog;
 use crate::graph::GraphResult;
 use crate::phases::collection::TelemetrySubscription;
 use crate::settings::EligibilitySettings;
@@ -25,7 +26,7 @@ impl EligibilityPolicy {
 }
 
 impl Policy for EligibilityPolicy {
-    type Item = Telemetry;
+    type Item = MetricCatalog;
     type Context = FlinkEligibilityContext;
 
     fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
