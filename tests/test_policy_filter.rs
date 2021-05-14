@@ -4,7 +4,7 @@ use ::serde::{Deserialize, Serialize};
 use chrono::*;
 use oso::{Oso, PolarClass};
 use proctor::elements::telemetry::ToTelemetry;
-use proctor::elements::{self, telemetry, PolicySubscription, PolicyEngine};
+use proctor::elements::{self, telemetry, PolicyEngine, PolicySubscription};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
 use proctor::ProctorContext;

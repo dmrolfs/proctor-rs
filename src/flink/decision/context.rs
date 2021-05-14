@@ -11,6 +11,9 @@ pub struct FlinkDecisionContext {
     pub all_sinks_healthy: bool,
 
     #[polar(attribute)]
+    pub nr_task_managers: i32,
+
+    #[polar(attribute)]
     #[serde(flatten)]
     pub custom: telemetry::Table,
 }
@@ -19,6 +22,7 @@ impl ProctorContext for FlinkDecisionContext {
     fn required_context_fields() -> HashSet<&'static str> {
         maplit::hashset! {
             "all_sinks_healthy",
+            "nr_task_managers",
         }
     }
 
@@ -26,7 +30,6 @@ impl ProctorContext for FlinkDecisionContext {
         self.custom.clone()
     }
 }
-
 
 // /////////////////////////////////////////////////////
 // // Unit Tests ///////////////////////////////////////
@@ -40,11 +43,11 @@ mod tests {
     use lazy_static::lazy_static;
     use serde_test::{assert_tokens, Token};
 
-
     #[test]
     fn test_serde_flink_decision_context() {
         let context = FlinkDecisionContext {
             all_sinks_healthy: true,
+            nr_task_managers: 4,
             custom: maplit::hashmap! {
                 "custom_foo".to_string() => "fred flintstone".into(),
                 "custom_bar".to_string() => "The Happy Barber".into(),
@@ -55,6 +58,8 @@ mod tests {
             Token::Map { len: None },
             Token::Str("all_sinks_healthy"),
             Token::Bool(true),
+            Token::Str("nr_task_managers"),
+            Token::I32(4),
             Token::Str("custom_foo"),
             Token::Str("fred flintstone"),
             Token::Str("custom_bar"),
@@ -67,8 +72,8 @@ mod tests {
         });
 
         if result.is_err() {
-            expected.swap(3, 5);
-            expected.swap(4, 6);
+            expected.swap(5, 7);
+            expected.swap(6, 8);
             assert_tokens(&context, expected.as_slice());
         }
     }
@@ -79,10 +84,11 @@ mod tests {
 
         let data: Telemetry = maplit::hashmap! {
             "all_sinks_healthy" => false.to_telemetry(),
+            "nr_task_managers" => 4.to_telemetry(),
             "foo" => "bar".to_telemetry(),
         }
-            .into_iter()
-            .collect();
+        .into_iter()
+        .collect();
 
         tracing::info!(telemetry=?data, "created telemetry");
 
@@ -90,6 +96,7 @@ mod tests {
         tracing::info!(?actual, "converted into FlinkDecisionContext");
         let expected = FlinkDecisionContext {
             all_sinks_healthy: false,
+            nr_task_managers: 4,
             custom: maplit::hashmap! {"foo".to_string() => "bar".into(),},
         };
         tracing::info!("actual: {:?}", actual);

@@ -25,12 +25,9 @@ pub trait PolicySettings {
 
 pub trait Policy<I, C>: PolicySubscription<Context = C> + PolicyEngine<Item = I, Context = C> {}
 
-impl<P, I, C> Policy<I, C> for P
-where
-    P: PolicySubscription<Context = C> + PolicyEngine<Item = I, Context = C>
-{}
+impl<P, I, C> Policy<I, C> for P where P: PolicySubscription<Context = C> + PolicyEngine<Item = I, Context = C> {}
 
-pub trait PolicySubscription: Debug + Send + Sync  {
+pub trait PolicySubscription: Debug + Send + Sync {
     type Context: ProctorContext;
 
     fn subscription(&self, name: &str) -> TelemetrySubscription {
@@ -61,9 +58,7 @@ pub trait PolicyEngine: Debug + Send + Sync {
 
     fn initialize_policy_engine(&self, engine: &mut oso::Oso) -> GraphResult<()>;
 
-    fn query_policy(
-        &self, engine: &oso::Oso, item_context: (Self::Item, Self::Context),
-    ) -> GraphResult<oso::Query>;
+    fn query_policy(&self, engine: &oso::Oso, item_context: (Self::Item, Self::Context)) -> GraphResult<oso::Query>;
 }
 
 pub struct PolicyFilter<T, C> {
@@ -462,9 +457,7 @@ mod tests {
             Ok(())
         }
 
-        fn query_policy(
-            &self, oso: &Oso, item_context: (Self::Item, Self::Context),
-        ) -> GraphResult<oso::Query> {
+        fn query_policy(&self, oso: &Oso, item_context: (Self::Item, Self::Context)) -> GraphResult<oso::Query> {
             oso.query_rule("allow", (item_context.0, "foo", "bar"))
                 .map_err(|err| err.into())
         }

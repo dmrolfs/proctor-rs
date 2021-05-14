@@ -8,7 +8,10 @@ use lazy_static::lazy_static;
 use oso::{Oso, PolarClass, ToPolar};
 use pretty_assertions::assert_eq;
 use proctor::elements::telemetry::ToTelemetry;
-use proctor::elements::{self, telemetry, Policy, PolicyFilterEvent, PolicySource, Telemetry, TelemetryValue, PolicySubscription, PolicyEngine};
+use proctor::elements::{
+    self, telemetry, Policy, PolicyEngine, PolicyFilterEvent, PolicySource, PolicySubscription, Telemetry,
+    TelemetryValue,
+};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape, UniformFanInShape};
 use proctor::phases::collection;
