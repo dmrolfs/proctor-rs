@@ -4,7 +4,7 @@ use ::serde::{Deserialize, Serialize};
 use chrono::*;
 use oso::{Oso, PolarClass};
 use proctor::elements::telemetry::ToTelemetry;
-use proctor::elements::{self, telemetry, Policy};
+use proctor::elements::{self, telemetry, PolicySubscription, PolicyEngine};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
 use proctor::ProctorContext;
@@ -95,20 +95,24 @@ impl TestPolicy {
     }
 }
 
-impl Policy for TestPolicy {
-    type Item = TestItem;
+impl PolicySubscription for TestPolicy {
     type Context = TestContext;
 
     //todo test optional fields
     // fn subscription_fields(&self) -> HashSet<String> {
     //     Self::Context::subscription_fields_nucleus()
     // }
+}
 
-    fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
+impl PolicyEngine for TestPolicy {
+    type Item = TestItem;
+    type Context = TestContext;
+
+    fn load_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
         oso.load_str(self.policy.as_str()).map_err(|err| err.into())
     }
 
-    fn initialize_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
+    fn initialize_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
         oso.register_class(
             TestItem::get_polar_class_builder()
                 .name("TestMetricCatalog")
@@ -128,7 +132,7 @@ impl Policy for TestPolicy {
         Ok(())
     }
 
-    fn query_knowledge_base(&self, oso: &Oso, item_env: (Self::Item, Self::Context)) -> GraphResult<oso::Query> {
+    fn query_policy(&self, oso: &Oso, item_env: (Self::Item, Self::Context)) -> GraphResult<oso::Query> {
         oso.query_rule("eligible", item_env).map_err(|err| err.into())
     }
 }

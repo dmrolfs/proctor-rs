@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use tokio::sync::broadcast;
 
-use crate::elements::{Policy, PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor};
+use crate::elements::{PolicyEngine, PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor};
 use crate::error::GraphError;
 use crate::graph::stage::{Stage, WithApi, WithMonitor};
 use crate::graph::{GraphResult, Inlet, Outlet, Port, SinkShape, SourceShape, ThroughShape};
@@ -22,7 +22,7 @@ pub struct Eligibility<D, C> {
 
 impl<D: AppData + Clone, C: ProctorContext> Eligibility<D, C> {
     #[tracing::instrument(level = "info", skip(name))]
-    pub fn new<S: Into<String>>(name: S, policy: impl Policy<Item = D, Context = C> + 'static) -> Self {
+    pub fn new<S: Into<String>>(name: S, policy: impl PolicyEngine<Item = D, Context = C> + 'static) -> Self {
         let name = name.into();
         let policy_filter: PolicyFilter<D, C> =
             PolicyFilter::new(format!("{}_eligibility_policy", name), Box::new(policy));

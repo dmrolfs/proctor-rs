@@ -1,4 +1,4 @@
-use crate::elements::{Policy, PolicySettings, PolicySource, Telemetry};
+use crate::elements::{PolicySubscription, PolicyEngine, PolicySettings, PolicySource, Telemetry};
 use crate::flink::eligibility::context::*;
 use crate::flink::MetricCatalog;
 use crate::graph::GraphResult;
@@ -25,8 +25,7 @@ impl EligibilityPolicy {
     }
 }
 
-impl Policy for EligibilityPolicy {
-    type Item = MetricCatalog;
+impl PolicySubscription for EligibilityPolicy {
     type Context = FlinkEligibilityContext;
 
     fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
@@ -34,12 +33,17 @@ impl Policy for EligibilityPolicy {
             .with_required_fields(self.required_subscription_fields.clone())
             .with_optional_fields(self.optional_subscription_fields.clone())
     }
+}
 
-    fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
+impl PolicyEngine for EligibilityPolicy {
+    type Item = MetricCatalog;
+    type Context = FlinkEligibilityContext;
+
+    fn load_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
         self.policy_source.load_into(oso)
     }
 
-    fn initialize_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
+    fn initialize_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
         oso.register_class(Telemetry::get_polar_class())?;
         oso.register_class(FlinkEligibilityContext::get_polar_class())?;
         oso.register_class(
@@ -61,7 +65,7 @@ impl Policy for EligibilityPolicy {
         Ok(())
     }
 
-    fn query_knowledge_base(&self, oso: &Oso, item_env: (Self::Item, Self::Context)) -> GraphResult<oso::Query> {
+    fn query_policy(&self, oso: &Oso, item_env: (Self::Item, Self::Context)) -> GraphResult<oso::Query> {
         oso.query_rule("eligible", item_env).map_err(|err| err.into())
     }
 }

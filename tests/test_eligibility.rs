@@ -8,7 +8,7 @@ use lazy_static::lazy_static;
 use oso::{Oso, PolarClass, ToPolar};
 use pretty_assertions::assert_eq;
 use proctor::elements::telemetry::ToTelemetry;
-use proctor::elements::{self, telemetry, Policy, PolicyFilterEvent, PolicySource, Telemetry, TelemetryValue};
+use proctor::elements::{self, telemetry, Policy, PolicyFilterEvent, PolicySource, Telemetry, TelemetryValue, PolicySubscription, PolicyEngine};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape, UniformFanInShape};
 use proctor::phases::collection;
@@ -19,7 +19,6 @@ use proctor::{ProctorContext, ProctorResult};
 use serde_test::{assert_tokens, Token};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use std::iter::FromIterator;
 use std::marker::PhantomData;
 use std::time::Duration;
 use tokio::sync::oneshot;
@@ -204,8 +203,7 @@ impl<D> TestEligibilityPolicy<D> {
     }
 }
 
-impl<D: AppData + ToPolar> Policy for TestEligibilityPolicy<D> {
-    type Item = D;
+impl<D: AppData> PolicySubscription for TestEligibilityPolicy<D> {
     type Context = TestEligibilityContext;
 
     fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
@@ -230,12 +228,17 @@ impl<D: AppData + ToPolar> Policy for TestEligibilityPolicy<D> {
         );
         result
     }
+}
 
-    fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
+impl<D: AppData + ToPolar> PolicyEngine for TestEligibilityPolicy<D> {
+    type Item = D;
+    type Context = TestEligibilityContext;
+
+    fn load_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
         self.policy.load_into(oso)
     }
 
-    fn initialize_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
+    fn initialize_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
         oso.register_class(
             TestEligibilityContext::get_polar_class_builder()
                 .name("TestEnvironment")
@@ -256,7 +259,7 @@ impl<D: AppData + ToPolar> Policy for TestEligibilityPolicy<D> {
         Ok(())
     }
 
-    fn query_knowledge_base(&self, oso: &Oso, item_env: (Self::Item, Self::Context)) -> GraphResult<oso::Query> {
+    fn query_policy(&self, oso: &Oso, item_env: (Self::Item, Self::Context)) -> GraphResult<oso::Query> {
         oso.query_rule("eligible", item_env).map_err(|err| err.into())
     }
 }
@@ -278,7 +281,7 @@ where
     C: ProctorContext,
 {
     pub async fn new(
-        telemetry_subscription: TelemetrySubscription, policy: impl Policy<Item = D, Context = C> + 'static,
+        telemetry_subscription: TelemetrySubscription, policy: impl Policy<D, C> + 'static,
     ) -> ProctorResult<Self> {
         let telemetry_source = stage::ActorSource::<Telemetry>::new("telemetry_source");
         let tx_data_source_api = telemetry_source.tx_api();
@@ -705,19 +708,23 @@ impl TestPolicy {
     }
 }
 
-impl Policy for TestPolicy {
-    type Item = TestItem;
+impl PolicySubscription for TestPolicy {
     type Context = TestEligibilityContext;
 
     fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
         subscription.with_optional_fields(self.subscription_extension.clone())
     }
+}
 
-    fn load_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
+impl PolicyEngine for TestPolicy {
+    type Item = TestItem;
+    type Context = TestEligibilityContext;
+
+    fn load_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
         oso.load_str(self.policy.as_str()).map_err(|err| err.into())
     }
 
-    fn initialize_knowledge_base(&self, oso: &mut Oso) -> GraphResult<()> {
+    fn initialize_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
         oso.register_class(
             TestItem::get_polar_class_builder()
                 .name("TestMetricCatalog")
@@ -737,7 +744,7 @@ impl Policy for TestPolicy {
         Ok(())
     }
 
-    fn query_knowledge_base(&self, oso: &Oso, item_env: (Self::Item, Self::Context)) -> GraphResult<oso::Query> {
+    fn query_policy(&self, oso: &Oso, item_env: (Self::Item, Self::Context)) -> GraphResult<oso::Query> {
         oso.query_rule("eligible", item_env).map_err(|err| err.into())
     }
 }
