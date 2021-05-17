@@ -3,7 +3,6 @@ use crate::flink::eligibility::context::*;
 use crate::flink::MetricCatalog;
 use crate::graph::GraphResult;
 use crate::phases::collection::TelemetrySubscription;
-use crate::settings::EligibilitySettings;
 use oso::{Oso, PolarClass};
 use std::collections::HashSet;
 
@@ -15,8 +14,8 @@ pub struct EligibilityPolicy {
 }
 
 impl EligibilityPolicy {
-    pub fn new(settings: &EligibilitySettings) -> Self {
-        let policy_source = PolicySource::File(settings.policy_path.clone());
+    pub fn new(settings: &impl PolicySettings) -> Self {
+        let policy_source = settings.source();
         Self {
             required_subscription_fields: settings.required_subscription_fields(),
             optional_subscription_fields: settings.optional_subscription_fields(),

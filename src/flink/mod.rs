@@ -1,5 +1,5 @@
 pub use metric_catalog::*;
 
-mod decision;
-mod eligibility;
+pub mod decision;
+pub mod eligibility;
 mod metric_catalog;

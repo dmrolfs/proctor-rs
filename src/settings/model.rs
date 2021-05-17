@@ -9,6 +9,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
+use crate::elements::PolicySource;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -57,13 +58,13 @@ impl HttpQuery {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EligibilitySettings {
+pub struct SimplePolicySettings {
     pub required_subscription_fields: HashSet<String>,
     pub optional_subscription_fields: HashSet<String>,
-    pub policy_path: PathBuf,
+    pub policy_source: PolicySource,
 }
 
-impl crate::elements::PolicySettings for EligibilitySettings {
+impl crate::elements::PolicySettings for SimplePolicySettings {
     #[inline]
     fn required_subscription_fields(&self) -> HashSet<String> {
         self.required_subscription_fields.clone()
@@ -72,9 +73,10 @@ impl crate::elements::PolicySettings for EligibilitySettings {
     fn optional_subscription_fields(&self) -> HashSet<String> {
         self.optional_subscription_fields.clone()
     }
+
     #[inline]
-    fn specification_path(&self) -> PathBuf {
-        self.policy_path.clone()
+    fn source(&self) -> PolicySource {
+        self.policy_source.clone()
     }
 }
 
@@ -288,15 +290,15 @@ mod tests {
 
     #[test]
     fn test_serde_eligibility_settings() {
-        let settings = EligibilitySettings {
+        let settings = SimplePolicySettings {
             required_subscription_fields: maplit::hashset! { "foo".to_string(), "bar".to_string() },
             optional_subscription_fields: maplit::hashset! { "Otis".to_string(), "Stella".to_string() },
-            policy_path: PathBuf::from("./tests/policies/eligibility.polar"),
+            policy_source: PolicySource::File(PathBuf::from("./tests/policies/eligibility.polar")),
         };
 
         let mut expected = vec![
             Token::Struct {
-                name: "EligibilitySettings",
+                name: "SimplePolicySettings",
                 len: 3,
             },
             Token::Str("required_subscription_fields"),
@@ -309,7 +311,8 @@ mod tests {
             Token::Str("Otis"),
             Token::Str("Stella"),
             Token::SeqEnd,
-            Token::Str("policy_path"),
+            Token::Str("policy_source"),
+            Token::NewtypeVariant{ name: "PolicySource", variant: "File", },
             Token::Str("./tests/policies/eligibility.polar"),
             Token::StructEnd,
         ];

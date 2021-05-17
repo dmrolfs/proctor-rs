@@ -5,9 +5,8 @@ use cast_trait_object::dyn_upcast;
 use tokio::sync::broadcast;
 
 use crate::elements::{PolicyEngine, PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor};
-use crate::error::GraphError;
-use crate::graph::stage::{Stage, WithApi, WithMonitor, ThroughStage};
-use crate::graph::{GraphResult, Inlet, Outlet, Port, SinkShape, SourceShape, ThroughShape};
+use crate::graph::stage::{Stage, WithApi, WithMonitor};
+use crate::graph::{GraphResult, Inlet, Outlet, Port, SinkShape, SourceShape};
 use crate::{AppData, ProctorContext};
 
 pub struct Eligibility<D, C> {
