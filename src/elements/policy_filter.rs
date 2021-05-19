@@ -1,8 +1,8 @@
-pub use protocol::*;
 pub use policy::*;
+pub use protocol::*;
 
-mod protocol;
 mod policy;
+mod protocol;
 
 use crate::graph::stage::{self, Stage};
 use crate::graph::{GraphResult, Inlet, Outlet, Port};
@@ -10,14 +10,13 @@ use crate::graph::{SinkShape, SourceShape};
 use crate::{AppData, ProctorContext};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
-use oso::Oso;
+use oso::{Oso, ToPolar};
 use std::collections::HashSet;
 use std::fmt::{self, Debug};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::{broadcast, mpsc};
 use tracing::Instrument;
-
 
 pub trait PolicySettings {
     fn required_subscription_fields(&self) -> HashSet<String>;
@@ -27,7 +26,7 @@ pub trait PolicySettings {
 
 pub struct PolicyFilter<T, C> {
     name: String,
-    policy: Box<dyn PolicyEngine<Item = T, Context = C>>,
+    policy: Box<dyn QueryPolicy<Args = (T, C), QueryResult = bool>>,
     context_inlet: Inlet<C>,
     inlet: Inlet<T>,
     outlet: Outlet<T>,
@@ -41,7 +40,7 @@ where
     T: Clone,
     C: Clone,
 {
-    pub fn new<S: Into<String>>(name: S, policy: Box<dyn PolicyEngine<Item = T, Context = C>>) -> Self {
+    pub fn new<S: Into<String>>(name: S, policy: Box<dyn QueryPolicy<Args = (T, C), QueryResult = bool>>) -> Self {
         let name = name.into();
         let context_inlet = Inlet::new(format!("{}_policy_context_inlet", name.clone()));
         let inlet = Inlet::new(name.clone());
@@ -86,7 +85,7 @@ impl<T, C> SourceShape for PolicyFilter<T, C> {
 #[async_trait]
 impl<T, C> Stage for PolicyFilter<T, C>
 where
-    T: AppData + Clone + Sync,
+    T: AppData + ToPolar + Clone + Sync,
     C: ProctorContext + Debug + Clone + Send + Sync,
 {
     #[inline]
@@ -167,11 +166,11 @@ where
 
 impl<T, C> PolicyFilter<T, C>
 where
-    T: Debug + Clone,
+    T: AppData + ToPolar + Clone,
     C: ProctorContext + Debug + Clone,
 {
     #[tracing::instrument(level = "info", name = "make policy knowledge base", skip(self))]
-    fn oso(&self) -> GraphResult<Oso> {
+    fn oso(&mut self) -> GraphResult<Oso> {
         let mut oso = Oso::new();
 
         self.policy.load_policy_engine(&mut oso).map_err(|err| {
@@ -200,23 +199,19 @@ where
 
     #[tracing::instrument(level = "info", name = "policy_filter handle item", skip(oso, outlet), fields())]
     async fn handle_item(
-        item: T, context: &C, policy: &Box<dyn PolicyEngine<Item = T, Context = C>>, oso: &Oso, outlet: &Outlet<T>,
-        tx: &broadcast::Sender<PolicyFilterEvent<T, C>>,
+        item: T, context: &C, policy: &Box<dyn QueryPolicy<Args = (T, C), QueryResult = bool>>, oso: &Oso,
+        outlet: &Outlet<T>, tx: &broadcast::Sender<PolicyFilterEvent<T, C>>,
     ) -> GraphResult<()> {
         let result = {
             // query lifetime cannot span across `.await` since it cannot `Send` between threads.
-            let mut query = policy.query_policy(oso, (item.clone(), context.clone()))?;
-            query.next()
+            policy.query_policy(oso, (item.clone(), context.clone()))
         };
 
         tracing::info!(?result, "knowledge base query results");
 
         match result {
-            Some(Ok(result_set)) => {
-                tracing::info!(
-                    ?result_set,
-                    "item and context passed policy review - sending via outlet."
-                );
+            Ok(true) => {
+                tracing::info!("item and context passed policy review - sending via outlet.");
                 outlet
                     .send(item.clone())
                     .instrument(tracing::info_span!("PolicyFilter.outlet send", ?item))
@@ -224,18 +219,18 @@ where
                 Ok(())
             }
 
-            Some(Err(err)) => {
-                tracing::warn!(error=?err, ?item, ?context, "error in policy review - skipping item.");
-                Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
-                Err(err.into())
-            }
-
-            None => {
+            Ok(false) => {
                 tracing::info!(
                     "item and context did not pass policy review (no passing result from knowledge base) - skipping item."
                 );
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
                 Ok(())
+            }
+
+            Err(err) => {
+                tracing::warn!(error=?err, ?item, ?context, "error in policy review - skipping item.");
+                Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
+                Err(err.into())
             }
         }
     }
@@ -266,8 +261,8 @@ where
 
     #[tracing::instrument(level = "info", name = "policy_filter handle command", skip(oso, policy,), fields())]
     async fn handle_command(
-        command: PolicyFilterCmd<C>, oso: &mut Oso, name: &str, policy: &Box<dyn PolicyEngine<Item = T, Context = C>>,
-        context: std::sync::Arc<tokio::sync::Mutex<Option<C>>>,
+        command: PolicyFilterCmd<C>, oso: &mut Oso, name: &str,
+        policy: &Box<dyn QueryPolicy<Args = (T, C), QueryResult = bool>>, context: Arc<Mutex<Option<C>>>,
     ) -> GraphResult<bool> {
         tracing::trace!(?command, ?context, "handling policy filter command...");
 
@@ -351,12 +346,12 @@ mod tests {
     use super::*;
     use crate::elements::telemetry;
     use crate::error::GraphError;
+    use crate::phases::collection::TelemetrySubscription;
     use oso::PolarClass;
     use pretty_assertions::assert_eq;
     use serde::{Deserialize, Serialize};
     use tokio::sync::mpsc;
     use tokio_test::block_on;
-    use crate::phases::collection::TelemetrySubscription;
 
     // Make sure the `PolicyFilter` object is threadsafe
     // #[test]
@@ -406,15 +401,14 @@ mod tests {
         }
     }
 
-    impl PolicyEngine for TestPolicy {
-        type Item = User;
-        type Context = TestContext;
+    impl QueryPolicy for TestPolicy {
+        type Args = (User, TestContext);
 
         fn load_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
             oso.load_str(self.policy.as_str()).map_err(|err| err.into())
         }
 
-        fn initialize_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
+        fn initialize_policy_engine(&mut self, oso: &mut Oso) -> GraphResult<()> {
             oso.register_class(User::get_polar_class())
                 .map_err::<GraphError, _>(|err| err.into())?;
             oso.register_class(TestContext::get_polar_class())
@@ -422,9 +416,10 @@ mod tests {
             Ok(())
         }
 
-        fn query_policy(&self, oso: &Oso, item_context: (Self::Item, Self::Context)) -> GraphResult<oso::Query> {
-            oso.query_rule("allow", (item_context.0, "foo", "bar"))
-                .map_err(|err| err.into())
+        type QueryResult = bool;
+        fn query_policy(&self, oso: &Oso, args: Self::Args) -> GraphResult<Self::QueryResult> {
+            let mut q = oso.query_rule("allow", (args.0, "foo", "bar"))?;
+            Ok(q.next().is_some())
         }
     }
 
@@ -434,11 +429,11 @@ mod tests {
         let main_span = tracing::info_span!("policy_filter::test_handle_item");
         let _main_span_guard = main_span.enter();
 
-        let policy: Box<dyn PolicyEngine<Item = User, Context = TestContext>> = Box::new(TestPolicy::new(
+        let policy: Box<dyn QueryPolicy<Args = (User, TestContext), QueryResult = bool>> = Box::new(TestPolicy::new(
             r#"allow(actor, action, resource) if actor.username.ends_with("example.com");"#,
         ));
 
-        let policy_filter = PolicyFilter::new("test-policy-filter", policy);
+        let mut policy_filter = PolicyFilter::new("test-policy-filter", policy);
         let oso = policy_filter.oso()?; //.expect("failed to build policy engine");
 
         let item = User {

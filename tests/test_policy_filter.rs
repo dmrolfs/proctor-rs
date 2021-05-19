@@ -4,7 +4,7 @@ use ::serde::{Deserialize, Serialize};
 use chrono::*;
 use oso::{Oso, PolarClass};
 use proctor::elements::telemetry::ToTelemetry;
-use proctor::elements::{self, telemetry, PolicyEngine, PolicySubscription};
+use proctor::elements::{self, telemetry, PolicySubscription, QueryPolicy};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
 use proctor::ProctorContext;
@@ -104,15 +104,14 @@ impl PolicySubscription for TestPolicy {
     // }
 }
 
-impl PolicyEngine for TestPolicy {
-    type Item = TestItem;
-    type Context = TestContext;
+impl QueryPolicy for TestPolicy {
+    type Args = (TestItem, TestContext);
 
     fn load_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
         oso.load_str(self.policy.as_str()).map_err(|err| err.into())
     }
 
-    fn initialize_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
+    fn initialize_policy_engine(&mut self, oso: &mut Oso) -> GraphResult<()> {
         oso.register_class(
             TestItem::get_polar_class_builder()
                 .name("TestMetricCatalog")
@@ -132,8 +131,11 @@ impl PolicyEngine for TestPolicy {
         Ok(())
     }
 
-    fn query_policy(&self, oso: &Oso, item_env: (Self::Item, Self::Context)) -> GraphResult<oso::Query> {
-        oso.query_rule("eligible", item_env).map_err(|err| err.into())
+    type QueryResult = bool;
+
+    fn query_policy(&self, oso: &Oso, args: Self::Args) -> GraphResult<Self::QueryResult> {
+        let mut q = oso.query_rule("eligible", args)?;
+        Ok(q.next().is_some())
     }
 }
 

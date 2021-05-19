@@ -40,7 +40,6 @@ mod tests {
     use crate::elements::telemetry::ToTelemetry;
     use crate::elements::Telemetry;
     use chrono::{DateTime, Utc};
-    use lazy_static::lazy_static;
     use serde_test::{assert_tokens, Token};
 
     #[test]

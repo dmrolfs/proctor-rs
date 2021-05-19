@@ -4,10 +4,11 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use tokio::sync::broadcast;
 
-use crate::elements::{PolicyEngine, PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor};
+use crate::elements::{PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, QueryPolicy};
 use crate::graph::stage::{Stage, WithApi, WithMonitor};
 use crate::graph::{GraphResult, Inlet, Outlet, Port, SinkShape, SourceShape};
 use crate::{AppData, ProctorContext};
+use oso::ToPolar;
 
 pub struct Eligibility<D, C> {
     name: String,
@@ -19,9 +20,11 @@ pub struct Eligibility<D, C> {
     tx_policy_monitor: broadcast::Sender<PolicyFilterEvent<D, C>>,
 }
 
-impl<D: AppData + Clone, C: ProctorContext> Eligibility<D, C> {
+impl<D: AppData + ToPolar + Clone, C: ProctorContext> Eligibility<D, C> {
     #[tracing::instrument(level = "info", skip(name))]
-    pub fn new<S: Into<String>>(name: S, policy: impl PolicyEngine<Item = D, Context = C> + 'static) -> Self {
+    pub fn new<S: Into<String>>(
+        name: S, policy: impl QueryPolicy<Args = (D, C), QueryResult = bool> + 'static,
+    ) -> Self {
         let name = name.into();
         let policy_filter = PolicyFilter::new(format!("{}_eligibility_policy", name), Box::new(policy));
         let context_inlet = policy_filter.context_inlet();
@@ -58,7 +61,6 @@ impl<D, C: Debug> Debug for Eligibility<D, C> {
             .finish()
     }
 }
-
 
 impl<D, C> SinkShape for Eligibility<D, C> {
     type In = D;

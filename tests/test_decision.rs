@@ -2,12 +2,12 @@ mod fixtures;
 
 use lazy_static::lazy_static;
 use oso::{Oso, PolarClass, ToPolar};
-use std::collections::HashSet;
 use proctor::elements::{PolicySource, PolicySubscription};
-use std::marker::PhantomData;
-use proctor::{AppData, ProctorContext};
-use proctor::phases::collection::TelemetrySubscription;
 use proctor::flink::decision::context::FlinkDecisionContext;
+use proctor::phases::collection::TelemetrySubscription;
+use proctor::{AppData, ProctorContext};
+use std::collections::HashSet;
+use std::marker::PhantomData;
 
 #[derive(Debug)]
 struct TestDecisionPolicy<D> {
@@ -27,7 +27,10 @@ impl<D> TestDecisionPolicy<D> {
     }
 
     pub fn with_custom(self, custom_fields: HashSet<String>) -> Self {
-        Self { custom_fields: Some(custom_fields), ..self }
+        Self {
+            custom_fields: Some(custom_fields),
+            ..self
+        }
     }
 }
 

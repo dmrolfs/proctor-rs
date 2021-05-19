@@ -1,3 +1,4 @@
+use crate::elements::PolicySource;
 use crate::error::ConfigError;
 use crate::ProctorResult;
 use reqwest::{
@@ -9,7 +10,6 @@ use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
-use crate::elements::PolicySource;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -312,7 +312,10 @@ mod tests {
             Token::Str("Stella"),
             Token::SeqEnd,
             Token::Str("policy_source"),
-            Token::NewtypeVariant{ name: "PolicySource", variant: "File", },
+            Token::NewtypeVariant {
+                name: "PolicySource",
+                variant: "File",
+            },
             Token::Str("./tests/policies/eligibility.polar"),
             Token::StructEnd,
         ];

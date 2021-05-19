@@ -9,8 +9,8 @@ use oso::{Oso, PolarClass, ToPolar};
 use pretty_assertions::assert_eq;
 use proctor::elements::telemetry::ToTelemetry;
 use proctor::elements::{
-    self, telemetry, Policy, PolicyEngine, PolicyFilterEvent, PolicySource, PolicySubscription, Telemetry,
-    TelemetryValue,
+    self, telemetry, AssembledPolicy, Policy, PolicyFilterEvent, PolicySettings, PolicySource, PolicySubscription,
+    QueryPolicy, Telemetry, TelemetryValue,
 };
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape, UniformFanInShape};
@@ -181,6 +181,56 @@ fn test_context_serde() {
     );
 }
 
+struct TestSettings {
+    pub required_subscription_fields: HashSet<String>,
+    pub optional_subscription_fields: HashSet<String>,
+    pub source: PolicySource,
+}
+
+impl PolicySettings for TestSettings {
+    fn required_subscription_fields(&self) -> HashSet<String> {
+        self.required_subscription_fields.clone()
+    }
+
+    fn optional_subscription_fields(&self) -> HashSet<String> {
+        self.optional_subscription_fields.clone()
+    }
+
+    fn source(&self) -> PolicySource {
+        self.source.clone()
+    }
+}
+
+fn make_test_policy<D>(settings: &impl PolicySettings) -> impl Policy<D, TestEligibilityContext, QueryResult = bool>
+where
+    D: AppData + ToPolar,
+{
+    let init = |oso: &mut Oso| {
+        oso.register_class(
+            TestEligibilityContext::get_polar_class_builder()
+                .name("TestEnvironment")
+                .add_method("custom", ProctorContext::custom)
+                .build(),
+        )?;
+
+        oso.register_class(
+            TestTaskStatus::get_polar_class_builder()
+                .name("TestTaskStatus")
+                .add_method(
+                    "last_failure_within_seconds",
+                    TestTaskStatus::last_failure_within_seconds,
+                )
+                .build(),
+        )?;
+
+        Ok(())
+    };
+
+    let eval = |mut query: oso::Query| Ok(query.next().is_some());
+
+    AssembledPolicy::new("eligible", settings, init, eval)
+}
+
 #[derive(Debug)]
 struct TestEligibilityPolicy<D> {
     custom_fields: Option<HashSet<String>>,
@@ -188,23 +238,23 @@ struct TestEligibilityPolicy<D> {
     data_marker: PhantomData<D>,
 }
 
-impl<D> TestEligibilityPolicy<D> {
-    pub fn new(policy: PolicySource) -> Self {
-        policy.validate().expect("failed to parse policy");
-        Self {
-            custom_fields: None,
-            policy,
-            data_marker: PhantomData,
-        }
-    }
-
-    pub fn with_custom(self, custom_fields: HashSet<String>) -> Self {
-        Self {
-            custom_fields: Some(custom_fields),
-            ..self
-        }
-    }
-}
+// impl<D> TestEligibilityPolicy<D> {
+//     pub fn new(policy: PolicySource) -> Self {
+//         policy.validate().expect("failed to parse policy");
+//         Self {
+//             custom_fields: None,
+//             policy,
+//             data_marker: PhantomData,
+//         }
+//     }
+//
+//     pub fn with_custom(self, custom_fields: HashSet<String>) -> Self {
+//         Self {
+//             custom_fields: Some(custom_fields),
+//             ..self
+//         }
+//     }
+// }
 
 impl<D: AppData> PolicySubscription for TestEligibilityPolicy<D> {
     type Context = TestEligibilityContext;
@@ -233,15 +283,14 @@ impl<D: AppData> PolicySubscription for TestEligibilityPolicy<D> {
     }
 }
 
-impl<D: AppData + ToPolar> PolicyEngine for TestEligibilityPolicy<D> {
-    type Item = D;
-    type Context = TestEligibilityContext;
+impl<D: AppData + ToPolar> QueryPolicy for TestEligibilityPolicy<D> {
+    type Args = (D, TestEligibilityContext);
 
     fn load_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
         self.policy.load_into(oso)
     }
 
-    fn initialize_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
+    fn initialize_policy_engine(&mut self, oso: &mut Oso) -> GraphResult<()> {
         oso.register_class(
             TestEligibilityContext::get_polar_class_builder()
                 .name("TestEnvironment")
@@ -262,8 +311,11 @@ impl<D: AppData + ToPolar> PolicyEngine for TestEligibilityPolicy<D> {
         Ok(())
     }
 
-    fn query_policy(&self, oso: &Oso, item_env: (Self::Item, Self::Context)) -> GraphResult<oso::Query> {
-        oso.query_rule("eligible", item_env).map_err(|err| err.into())
+    type QueryResult = bool;
+
+    fn query_policy(&self, oso: &Oso, args: Self::Args) -> GraphResult<Self::QueryResult> {
+        let mut q = oso.query_rule("eligible", args)?;
+        Ok(q.next().is_some())
     }
 }
 
@@ -284,7 +336,7 @@ where
     C: ProctorContext,
 {
     pub async fn new(
-        telemetry_subscription: TelemetrySubscription, policy: impl Policy<D, C> + 'static,
+        telemetry_subscription: TelemetrySubscription, policy: impl Policy<D, C, QueryResult = bool> + 'static,
     ) -> ProctorResult<Self> {
         let telemetry_source = stage::ActorSource::<Telemetry>::new("telemetry_source");
         let tx_data_source_api = telemetry_source.tx_api();
@@ -478,9 +530,14 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
     let _ = main_span.enter();
 
     tracing::warn!("test_eligibility_before_context_baseline_A");
-    let policy = TestEligibilityPolicy::new(PolicySource::String(
-        r#"eligible(item, environment) if environment.location_code == 33;"#.to_string(),
-    ));
+    // let policy = TestEligibilityPolicy::new(PolicySource::String(
+    //     r#"eligible(item, environment) if environment.location_code == 33;"#.to_string(),
+    // ));
+    let policy = make_test_policy(&TestSettings {
+        required_subscription_fields: HashSet::default(),
+        optional_subscription_fields: HashSet::default(),
+        source: PolicySource::String(r#"eligible(item, environment) if environment.location_code == 33;"#.to_string()),
+    });
     let mut flow: TestFlow<Data, TestEligibilityContext> =
         TestFlow::new(TelemetrySubscription::new("all_data"), policy).await?;
     tracing::warn!("test_eligibility_before_context_baseline_B");
@@ -532,9 +589,17 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
         measurement: f64,
     }
 
-    let policy = TestEligibilityPolicy::new(PolicySource::String(
-        r#"eligible(_, context) if context.cluster_status.is_deploying == false;"#.to_string(),
-    ));
+    // let policy = TestEligibilityPolicy::new(PolicySource::String(
+    //     r#"eligible(_, context) if context.cluster_status.is_deploying == false;"#.to_string(),
+    // ));
+    let policy = make_test_policy(&TestSettings {
+        required_subscription_fields: HashSet::default(),
+        optional_subscription_fields: HashSet::default(),
+        source: PolicySource::String(
+            r#"eligible(_, context) if context.cluster_status.is_deploying == false;"#.to_string(),
+        ),
+    });
+
     let mut flow: TestFlow<MeasurementData, TestEligibilityContext> = TestFlow::new(
         TelemetrySubscription::new("measurements").with_required_fields(maplit::hashset! {"measurement"}),
         policy,
@@ -719,15 +784,14 @@ impl PolicySubscription for TestPolicy {
     }
 }
 
-impl PolicyEngine for TestPolicy {
-    type Item = TestItem;
-    type Context = TestEligibilityContext;
+impl QueryPolicy for TestPolicy {
+    type Args = (TestItem, TestEligibilityContext);
 
     fn load_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
         oso.load_str(self.policy.as_str()).map_err(|err| err.into())
     }
 
-    fn initialize_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
+    fn initialize_policy_engine(&mut self, oso: &mut Oso) -> GraphResult<()> {
         oso.register_class(
             TestItem::get_polar_class_builder()
                 .name("TestMetricCatalog")
@@ -747,8 +811,11 @@ impl PolicyEngine for TestPolicy {
         Ok(())
     }
 
-    fn query_policy(&self, oso: &Oso, item_env: (Self::Item, Self::Context)) -> GraphResult<oso::Query> {
-        oso.query_rule("eligible", item_env).map_err(|err| err.into())
+    type QueryResult = bool;
+
+    fn query_policy(&self, oso: &Oso, args: Self::Args) -> GraphResult<Self::QueryResult> {
+        let mut q = oso.query_rule("eligible", args)?;
+        Ok(q.next().is_some())
     }
 }
 

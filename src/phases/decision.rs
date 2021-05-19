@@ -1,11 +1,12 @@
-use crate::graph::{stage, Graph, Inlet, Outlet, SourceShape, Port, SinkShape, Connect, GraphResult};
-use crate::elements::{PolicyFilterApi, PolicyFilterEvent, PolicyEngine, PolicyFilter, PolicyFilterMonitor};
-use tokio::sync::broadcast;
-use crate::{AppData, ProctorContext};
+use crate::elements::{PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, QueryPolicy};
 use crate::graph::stage::{Stage, ThroughStage, WithApi, WithMonitor};
-use std::fmt::{self, Debug};
-use cast_trait_object::dyn_upcast;
+use crate::graph::{stage, Connect, Graph, GraphResult, Inlet, Outlet, Port, SinkShape, SourceShape};
+use crate::{AppData, ProctorContext};
 use async_trait::async_trait;
+use cast_trait_object::dyn_upcast;
+use oso::ToPolar;
+use std::fmt::{self, Debug};
+use tokio::sync::broadcast;
 
 pub struct Decision<In, Out, C> {
     name: String,
@@ -17,19 +18,15 @@ pub struct Decision<In, Out, C> {
     tx_policy_monitor: broadcast::Sender<PolicyFilterEvent<In, C>>,
 }
 
-impl<In: AppData + Clone, Out: AppData, C: ProctorContext> Decision<In, Out, C> {
-    #[tracing::instrument(level="info", skip(name))]
+impl<In: AppData + ToPolar + Clone, Out: AppData, C: ProctorContext> Decision<In, Out, C> {
+    #[tracing::instrument(level = "info", skip(name))]
     pub async fn new<S: Into<String>>(
-        name: S,
-        policy: impl PolicyEngine<Item = In, Context = C> + 'static,
+        name: S, policy: impl QueryPolicy<Args = (In, C), QueryResult = bool> + 'static,
         transform: impl ThroughStage<In, Out> + 'static,
     ) -> Self {
         let name = name.into();
 
-        let policy_filter = PolicyFilter::new(
-            format!("{}_decision_policy", name),
-            Box::new(policy)
-        );
+        let policy_filter = PolicyFilter::new(format!("{}_decision_policy", name), Box::new(policy));
         let context_inlet = policy_filter.context_inlet();
         let tx_policy_api = policy_filter.tx_api();
         let tx_policy_monitor = policy_filter.tx_monitor.clone();
@@ -42,12 +39,8 @@ impl<In: AppData + Clone, Out: AppData, C: ProctorContext> Decision<In, Out, C> 
         graph.push_back(Box::new(policy_filter)).await;
         graph.push_back(Box::new(transform)).await;
 
-        let inner_stage = stage::CompositeThrough::new(
-            format!("{}_inner", name),
-            graph,
-            inlet.clone(),
-            outlet.clone()
-        ).await;
+        let inner_stage =
+            stage::CompositeThrough::new(format!("{}_inner", name), graph, inlet.clone(), outlet.clone()).await;
 
         Self {
             name,
@@ -61,7 +54,9 @@ impl<In: AppData + Clone, Out: AppData, C: ProctorContext> Decision<In, Out, C> 
     }
 
     #[inline]
-    pub fn context_inlet(&self) -> Inlet<C> { self.context_inlet.clone() }
+    pub fn context_inlet(&self) -> Inlet<C> {
+        self.context_inlet.clone()
+    }
 }
 
 impl<In, Out, C: Debug> Debug for Decision<In, Out, C> {
@@ -102,7 +97,7 @@ impl<In: AppData, Out: AppData, C: ProctorContext> Stage for Decision<In, Out, C
         self.name.as_str()
     }
 
-    #[tracing::instrument(level="info", skip(self))]
+    #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> GraphResult<()> {
         self.inlet.check_attachment().await?;
         self.context_inlet.check_attachment().await?;
@@ -111,12 +106,12 @@ impl<In: AppData, Out: AppData, C: ProctorContext> Stage for Decision<In, Out, C
         Ok(())
     }
 
-    #[tracing::instrument(level="info", name="run decision phase", skip(self))]
+    #[tracing::instrument(level = "info", name = "run decision phase", skip(self))]
     async fn run(&mut self) -> GraphResult<()> {
         self.inner_stage.run().await
     }
 
-    #[tracing::instrument(level="info", skip(self))]
+    #[tracing::instrument(level = "info", skip(self))]
     async fn close(mut self: Box<Self>) -> GraphResult<()> {
         tracing::trace!("closing decision ports.");
         self.inlet.close().await;
@@ -130,11 +125,15 @@ impl<In: AppData, Out: AppData, C: ProctorContext> Stage for Decision<In, Out, C
 impl<In, Out, C> WithApi for Decision<In, Out, C> {
     type Sender = PolicyFilterApi<C>;
     #[inline]
-    fn tx_api(&self) -> Self::Sender { self.tx_policy_api.clone() }
+    fn tx_api(&self) -> Self::Sender {
+        self.tx_policy_api.clone()
+    }
 }
 
 impl<In, Out, C> WithMonitor for Decision<In, Out, C> {
     type Receiver = PolicyFilterMonitor<In, C>;
     #[inline]
-    fn rx_monitor(&self) -> Self::Receiver { self.tx_policy_monitor.subscribe() }
+    fn rx_monitor(&self) -> Self::Receiver {
+        self.tx_policy_monitor.subscribe()
+    }
 }
