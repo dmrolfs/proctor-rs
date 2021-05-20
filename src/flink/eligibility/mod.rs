@@ -1,15 +1,14 @@
 pub mod context;
 pub mod policy {
-    use crate::elements::{make_item_context_policy, Policy, PolicySettings, Telemetry};
+    use crate::elements::{make_item_context_policy, Policy, PolicySettings};
     use crate::flink::eligibility::context::{ClusterStatus, FlinkEligibilityContext, TaskStatus};
     use crate::flink::MetricCatalog;
-    use oso::{Oso, PolarClass, Query};
+    use oso::{Oso, PolarClass};
 
     pub fn make_eligibility_policy(
         settings: &impl PolicySettings,
     ) -> impl Policy<MetricCatalog, FlinkEligibilityContext> {
         let init = |engine: &mut Oso| {
-            engine.register_class(Telemetry::get_polar_class())?;
             engine.register_class(FlinkEligibilityContext::get_polar_class())?;
             engine.register_class(
                 TaskStatus::get_polar_class_builder()
@@ -30,8 +29,6 @@ pub mod policy {
             Ok(())
         };
 
-        let eval = |mut query: Query| Ok(query.next().is_some());
-
-        make_item_context_policy("eligible", settings, init, eval)
+        make_item_context_policy("eligible", settings, init)
     }
 }

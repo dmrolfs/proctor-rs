@@ -2,13 +2,15 @@ mod fixtures;
 
 use ::serde::{Deserialize, Serialize};
 use chrono::*;
-use oso::{Oso, PolarClass};
+use oso::{Oso, PolarClass, PolarValue};
+use pretty_assertions::assert_eq;
 use proctor::elements::telemetry::ToTelemetry;
-use proctor::elements::{self, telemetry, PolicySubscription, QueryPolicy};
+use proctor::elements::{self, telemetry, PolicyResult, PolicySubscription, QueryPolicy, QueryResult, TelemetryValue};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
 use proctor::ProctorContext;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::f64::consts;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
@@ -83,14 +85,21 @@ impl proctor::ProctorContext for TestContext {
 #[derive(Debug)]
 struct TestPolicy {
     policy: String,
+    query: String,
 }
 
 impl TestPolicy {
-    pub fn new<S: AsRef<str>>(policy: S) -> Self {
+    pub fn new<S: Into<String>>(policy: S) -> Self {
+        Self::with_query(policy, "eligible")
+    }
+
+    pub fn with_query<S0: Into<String>, S1: Into<String>>(policy: S0, query: S1) -> Self {
+        let policy = policy.into();
         let polar = polar_core::polar::Polar::new();
         polar.load_str(policy.as_ref()).expect("failed to parse policy");
         Self {
-            policy: policy.as_ref().to_string(),
+            policy,
+            query: query.into(),
         }
     }
 }
@@ -131,11 +140,12 @@ impl QueryPolicy for TestPolicy {
         Ok(())
     }
 
-    type QueryResult = bool;
-
-    fn query_policy(&self, oso: &Oso, args: Self::Args) -> GraphResult<Self::QueryResult> {
-        let mut q = oso.query_rule("eligible", args)?;
-        Ok(q.next().is_some())
+    fn query_policy(&self, oso: &Oso, args: Self::Args) -> GraphResult<QueryResult> {
+        let q_args = (args.0, args.1, PolarValue::Variable("custom".to_string()));
+        let q = oso.query_rule(self.query.as_str(), q_args)?;
+        let result = QueryResult::from_query(q)?;
+        tracing::info!(?result, "DMR: query policy results!");
+        Ok(result)
     }
 }
 
@@ -145,24 +155,28 @@ struct TestFlow {
     pub tx_env_source_api: stage::ActorSourceApi<TestContext>,
     pub tx_policy_api: elements::PolicyFilterApi<TestContext>,
     pub rx_policy_monitor: elements::PolicyFilterMonitor<TestItem, TestContext>,
-    pub tx_sink_api: stage::FoldApi<Vec<TestItem>>,
-    pub rx_sink: Option<oneshot::Receiver<Vec<TestItem>>>,
+    pub tx_sink_api: stage::FoldApi<Vec<PolicyResult<TestItem>>>,
+    pub rx_sink: Option<oneshot::Receiver<Vec<PolicyResult<TestItem>>>>,
 }
 
 impl TestFlow {
-    pub async fn new<S: AsRef<str>>(policy: S) -> Self {
+    pub async fn new<S: Into<String>>(policy: S) -> Self {
+        Self::with_query(policy, "eligible").await
+    }
+
+    pub async fn with_query<S0: Into<String>, S1: Into<String>>(policy: S0, query: S1) -> Self {
         let item_source = stage::ActorSource::<TestItem>::new("item_source");
         let tx_item_source_api = item_source.tx_api();
 
         let env_source = stage::ActorSource::<TestContext>::new("env_source");
         let tx_env_source_api = env_source.tx_api();
 
-        let policy = Box::new(TestPolicy::new(policy));
+        let policy = Box::new(TestPolicy::with_query(policy, query));
         let policy_filter = elements::PolicyFilter::new("eligibility", policy);
         let tx_policy_api = policy_filter.tx_api();
         let rx_policy_monitor = policy_filter.rx_monitor();
 
-        let mut sink = stage::Fold::<_, TestItem, _>::new("sink", Vec::new(), |mut acc, item| {
+        let mut sink = stage::Fold::<_, PolicyResult<TestItem>, _>::new("sink", Vec::new(), |mut acc, item| {
             acc.push(item);
             acc
         });
@@ -235,7 +249,7 @@ impl TestFlow {
             .map_err(|err| err.into())
     }
 
-    pub async fn inspect_sink(&self) -> GraphResult<Vec<TestItem>> {
+    pub async fn inspect_sink(&self) -> GraphResult<Vec<PolicyResult<TestItem>>> {
         let (cmd, acc) = stage::FoldCmd::get_accumulation();
         self.tx_sink_api.send(cmd)?;
         acc.await
@@ -246,7 +260,7 @@ impl TestFlow {
             .map_err(|err| err.into())
     }
 
-    pub async fn close(mut self) -> GraphResult<Vec<TestItem>> {
+    pub async fn close(mut self) -> GraphResult<Vec<PolicyResult<TestItem>>> {
         let (stop, _) = stage::ActorSourceCmd::stop();
         self.tx_item_source_api.send(stop)?;
 
@@ -287,7 +301,7 @@ async fn test_policy_filter_happy_context() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_policy_filter_happy_context");
     let _ = main_span.enter();
 
-    let flow = TestFlow::new(r#"eligible(item, context) if context.location_code == 33;"#).await;
+    let flow = TestFlow::new(r#"eligible(item, context, _) if context.location_code == 33;"#).await;
 
     tracing::info!("DMR: 01. Make sure empty env...");
 
@@ -307,18 +321,21 @@ async fn test_policy_filter_happy_context() -> anyhow::Result<()> {
     tracing::info!("DMR: 04. Push Item...");
 
     let ts = Utc::now().into();
-    let item = TestItem::new(std::f64::consts::PI, ts, 1);
+    let item = TestItem::new(consts::PI, ts, 1);
     flow.push_item(item).await?;
 
     tracing::info!("DMR: 05. Look for Item in sink...");
 
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     let actual = flow.inspect_sink().await?;
-    assert_eq!(actual, vec![TestItem::new(std::f64::consts::PI, ts, 1),]);
+    assert_eq!(
+        actual,
+        vec![PolicyResult::new(TestItem::new(consts::PI, ts, 1), HashMap::new()),]
+    );
 
     tracing::info!("DMR: 06. Push another Item...");
 
-    let item = TestItem::new(std::f64::consts::TAU, ts, 2);
+    let item = TestItem::new(consts::TAU, ts, 2);
     flow.push_item(item).await?;
 
     tracing::info!("DMR: 07. Close flow...");
@@ -330,8 +347,8 @@ async fn test_policy_filter_happy_context() -> anyhow::Result<()> {
     assert_eq!(
         actual,
         vec![
-            TestItem::new(std::f64::consts::PI, ts, 1),
-            TestItem::new(std::f64::consts::TAU, ts, 2),
+            PolicyResult::new(TestItem::new(consts::PI, ts, 1), HashMap::new()),
+            PolicyResult::new(TestItem::new(consts::TAU, ts, 2), HashMap::new())
         ]
     );
     Ok(())
@@ -343,14 +360,14 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_policy_filter_w_pass_and_blocks");
     let _ = main_span.enter();
 
-    let mut flow = TestFlow::new(r#"eligible(item, context) if context.location_code == 33;"#).await;
+    let mut flow = TestFlow::new(r#"eligible(item, context, _) if context.location_code == 33;"#).await;
     flow.push_context(TestContext::new(33)).await?;
     let event = flow.recv_policy_event().await?;
     assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
     tracing::info!(?event, "DMR-A: context changed confirmed");
 
     let ts = Utc::now().into();
-    let item = TestItem::new(std::f64::consts::PI, ts, 1);
+    let item = TestItem::new(consts::PI, ts, 1);
     flow.push_item(item).await?;
 
     flow.push_context(TestContext::new(19)).await?;
@@ -358,19 +375,19 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
     tracing::info!(?event, "DMR-B: context changed confirmed");
 
-    let item = TestItem::new(std::f64::consts::E, ts, 2);
+    let item = TestItem::new(consts::E, ts, 2);
     flow.push_item(item).await?;
     let event = flow.recv_policy_event().await?;
     assert!(matches!(event, elements::PolicyFilterEvent::ItemBlocked(_)));
     tracing::info!(?event, "DMR-C: item dropped confirmed");
 
-    let item = TestItem::new(std::f64::consts::FRAC_1_PI, ts, 3);
+    let item = TestItem::new(consts::FRAC_1_PI, ts, 3);
     flow.push_item(item).await?;
     let event = flow.recv_policy_event().await?;
     assert!(matches!(event, elements::PolicyFilterEvent::ItemBlocked(_)));
     tracing::info!(?event, "DMR-D: item dropped confirmed");
 
-    let item = TestItem::new(std::f64::consts::FRAC_1_SQRT_2, ts, 4);
+    let item = TestItem::new(consts::FRAC_1_SQRT_2, ts, 4);
     flow.push_item(item).await?;
     let event = flow.recv_policy_event().await?;
     assert!(matches!(event, elements::PolicyFilterEvent::ItemBlocked(_)));
@@ -381,7 +398,7 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
     tracing::info!(?event, "DMR-F: context changed confirmed");
 
-    let item = TestItem::new(std::f64::consts::LN_2, ts, 5);
+    let item = TestItem::new(consts::LN_2, ts, 5);
     flow.push_item(item).await?;
 
     let actual = flow.close().await?;
@@ -390,8 +407,8 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     assert_eq!(
         actual,
         vec![
-            TestItem::new(std::f64::consts::PI, ts, 1),
-            TestItem::new(std::f64::consts::LN_2, ts, 5),
+            PolicyResult::new(TestItem::new(consts::PI, ts, 1), HashMap::new()),
+            PolicyResult::new(TestItem::new(consts::LN_2, ts, 5), HashMap::new())
         ]
     );
     Ok(())
@@ -405,7 +422,7 @@ async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
     let _ = main_span.enter();
 
     let mut flow = TestFlow::new(
-        r#"eligible(item, context) if
+        r#"eligible(item, context, c) if
             c = context.custom() and
             c.cat = "Otis";"#,
     )
@@ -418,10 +435,10 @@ async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
     assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
 
     let ts = Utc::now().into();
-    let item = TestItem::new(std::f64::consts::PI, ts, 1);
+    let item = TestItem::new(consts::PI, ts, 1);
     flow.push_item(item).await?;
 
-    let item = TestItem::new(std::f64::consts::TAU, ts, 2);
+    let item = TestItem::new(consts::TAU, ts, 2);
     flow.push_item(item).await?;
 
     let actual = flow.close().await?;
@@ -429,8 +446,80 @@ async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
     assert_eq!(
         actual,
         vec![
-            TestItem::new(std::f64::consts::PI, ts, 1),
-            TestItem::new(std::f64::consts::TAU, ts, 2),
+            PolicyResult::new(
+                TestItem::new(consts::PI, ts, 1),
+                maplit::hashmap! {
+                    "custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
+                        "cat".to_string() => "Otis".to_telemetry(),
+                    }),
+                }
+            ),
+            PolicyResult::new(
+                TestItem::new(consts::TAU, ts, 2),
+                maplit::hashmap! {
+                    "custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
+                        "cat".to_string() => "Otis".to_telemetry(),
+                    }),
+                }
+            )
+        ],
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_policy_w_binding() -> anyhow::Result<()> {
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
+    let main_span = tracing::info_span!("test_policy_w_custom_fields");
+    let _ = main_span.enter();
+
+    let mut flow = TestFlow::with_query(
+        r#"
+        eligible(_, context, length) if length = 13;
+
+        eligible(item, context, c) if
+            c = context.custom() and
+            c.cat = "Otis" and
+            cut;
+        "#,
+        "eligible",
+    )
+    .await;
+
+    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}))
+        .await?;
+    let event = flow.recv_policy_event().await?;
+    tracing::info!(?event, "verifying context update...");
+    assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
+
+    let ts = Utc::now().into();
+    let item = TestItem::new(consts::PI, ts, 1);
+    flow.push_item(item).await?;
+
+    let item = TestItem::new(consts::TAU, ts, 2);
+    flow.push_item(item).await?;
+
+    let actual = flow.close().await?;
+    tracing::info!(?actual, "verifying actual result...");
+    assert_eq!(
+        actual,
+        vec![
+            PolicyResult::new(
+                TestItem::new(consts::PI, ts, 1),
+                maplit::hashmap! {
+                    "custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
+                        "cat".to_string() => "Otis".to_telemetry(),
+                    }),
+                }
+            ),
+            PolicyResult::new(
+                TestItem::new(consts::TAU, ts, 2),
+                maplit::hashmap! {
+                    "custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
+                        "cat".to_string() => "Otis".to_telemetry(),
+                    }),
+                }
+            ),
         ],
     );
     Ok(())
@@ -450,8 +539,11 @@ async fn test_policy_w_item_n_env() -> anyhow::Result<()> {
     //     lag_2(item, _) if item.inbox_lag = 2;
     // "#,
     let flow = TestFlow::new(
-        r#"eligible(item, env) if proper_cat(item, env) and lag_2(item, env);
-proper_cat(_, env) if env.custom().cat = "Otis";
+        r#"eligible(item, env, c) if proper_cat(item, env, c) and lag_2(item, env);
+proper_cat(_, env, c) if
+c = env.custom() and
+c.cat = "Otis";
+
 lag_2(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
     )
     .await;
@@ -462,15 +554,23 @@ lag_2(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
     tracing::info!("DMR-C:verify enviornment...");
 
     let ts = Utc::now().into();
-    let item = TestItem::new(std::f64::consts::PI, ts, 1);
+    let item = TestItem::new(consts::PI, ts, 1);
     flow.push_item(item).await?;
 
-    let item = TestItem::new(std::f64::consts::TAU, ts, 2);
+    let item = TestItem::new(consts::TAU, ts, 2);
     flow.push_item(item).await?;
 
     let actual = flow.close().await?;
     tracing::info!(?actual, "verifying actual result...");
-    assert_eq!(actual, vec![TestItem::new(std::f64::consts::TAU, ts, 2),]);
+    assert_eq!(
+        actual,
+        vec![PolicyResult::new(
+            TestItem::new(consts::TAU, ts, 2),
+            maplit::hashmap! { "custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
+                "cat".to_string() => "Otis".to_telemetry(),
+            })}
+        ),]
+    );
     Ok(())
 }
 
@@ -481,7 +581,7 @@ async fn test_policy_w_method() -> anyhow::Result<()> {
     let _ = main_span.enter();
 
     let flow = TestFlow::new(
-        r#"eligible(item, env) if
+        r#"eligible(item, env, _) if
 34 < item.input_messages_per_sec(item.inbox_lag)
 and item.input_messages_per_sec(item.inbox_lag) < 36;"#,
     )
@@ -491,7 +591,7 @@ and item.input_messages_per_sec(item.inbox_lag) < 36;"#,
         .await?;
 
     let ts = Utc::now().into();
-    let item = TestItem::new(std::f64::consts::PI, ts, 1);
+    let item = TestItem::new(consts::PI, ts, 1);
     flow.push_item(item).await?;
 
     let item = TestItem::new(17.327, ts, 2);
@@ -499,7 +599,10 @@ and item.input_messages_per_sec(item.inbox_lag) < 36;"#,
 
     let actual = flow.close().await?;
     tracing::info!(?actual, "verifying actual result...");
-    assert_eq!(actual, vec![TestItem::new(17.327, ts, 2),]);
+    assert_eq!(
+        actual,
+        vec![PolicyResult::new(TestItem::new(17.327, ts, 2), HashMap::new(),)]
+    );
     Ok(())
 }
 
@@ -513,8 +616,8 @@ async fn test_replace_policy() -> anyhow::Result<()> {
     let good_ts = Utc::now();
     let too_old_ts = Utc::now() - chrono::Duration::seconds(boundary_age_secs + 5);
 
-    let policy_1 = r#"eligible(_, env: TestContext) if env.custom().cat = "Otis";"#;
-    let policy_2 = format!("eligible(item, _) if item.within_seconds({});", boundary_age_secs);
+    let policy_1 = r#"eligible(_, env: TestContext, c) if c = env.custom() and c.cat = "Otis";"#;
+    let policy_2 = format!("eligible(item, _, _) if item.within_seconds({});", boundary_age_secs);
     tracing::info!(?policy_2, "DMR: policy with timestamp");
 
     let flow = TestFlow::new(policy_1).await;
@@ -522,7 +625,7 @@ async fn test_replace_policy() -> anyhow::Result<()> {
     flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}))
         .await?;
 
-    let item_1 = TestItem::new(std::f64::consts::PI, too_old_ts, 1);
+    let item_1 = TestItem::new(consts::PI, too_old_ts, 1);
     flow.push_item(item_1.clone()).await?;
 
     let item_2 = TestItem::new(17.327, good_ts, 2);
@@ -540,9 +643,19 @@ async fn test_replace_policy() -> anyhow::Result<()> {
     assert_eq!(
         actual,
         vec![
-            TestItem::new(std::f64::consts::PI, too_old_ts, 1),
-            TestItem::new(17.327, good_ts, 2),
-            TestItem::new(17.327, good_ts, 2),
+            PolicyResult::new(
+                TestItem::new(consts::PI, too_old_ts, 1),
+                maplit::hashmap! {"custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
+                    "cat".to_string() => "Otis".to_telemetry(),
+                })}
+            ),
+            PolicyResult::new(
+                TestItem::new(17.327, good_ts, 2),
+                maplit::hashmap! {"custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
+                    "cat".to_string() => "Otis".to_telemetry(),
+                })}
+            ),
+            PolicyResult::new(TestItem::new(17.327, good_ts, 2), HashMap::new()),
         ]
     );
     Ok(())
@@ -554,8 +667,8 @@ async fn test_append_policy() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_append_policy");
     let _ = main_span.enter();
 
-    let policy_1 = r#"eligible(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#;
-    let policy_2 = r#"eligible(_, env: TestContext) if env.custom().cat = "Otis";"#;
+    let policy_1 = r#"eligible(item: TestMetricCatalog{ inbox_lag: 2 }, _, _);"#;
+    let policy_2 = r#"eligible(_, env: TestContext, c) if c = env.custom() and c.cat = "Otis";"#;
 
     let flow = TestFlow::new(policy_1).await;
 
@@ -563,7 +676,7 @@ async fn test_append_policy() -> anyhow::Result<()> {
         .await?;
 
     let ts = Utc::now().into();
-    let item = TestItem::new(std::f64::consts::PI, ts, 1);
+    let item = TestItem::new(consts::PI, ts, 1);
     flow.push_item(item).await?;
 
     let item = TestItem::new(17.327, ts, 2);
@@ -573,7 +686,7 @@ async fn test_append_policy() -> anyhow::Result<()> {
     let cmd_rx = elements::PolicyFilterCmd::append_policy(elements::PolicySource::String(policy_2.to_string()));
     flow.tell_policy(cmd_rx).await?;
 
-    let item = TestItem::new(std::f64::consts::PI, ts, 1);
+    let item = TestItem::new(consts::PI, ts, 1);
     flow.push_item(item).await?;
 
     let item = TestItem::new(17.327, ts, 2);
@@ -584,9 +697,19 @@ async fn test_append_policy() -> anyhow::Result<()> {
     assert_eq!(
         actual,
         vec![
-            TestItem::new(17.327, ts, 2),
-            TestItem::new(std::f64::consts::PI, ts, 1),
-            TestItem::new(17.327, ts, 2),
+            PolicyResult::new(TestItem::new(17.327, ts, 2), HashMap::new()),
+            PolicyResult::new(
+                TestItem::new(consts::PI, ts, 1),
+                maplit::hashmap! {"custom".to_string() => TelemetryValue::Table(maplit::hashmap!{
+                    "cat".to_string() => "Otis".to_telemetry(),
+                })}
+            ),
+            PolicyResult::new(
+                TestItem::new(17.327, ts, 2),
+                maplit::hashmap! {"custom".to_string() => TelemetryValue::Table(maplit::hashmap!{
+                    "cat".to_string() => "Otis".to_telemetry(),
+                })}
+            ),
         ]
     );
     Ok(())
@@ -598,8 +721,8 @@ async fn test_reset_policy() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_reset_policy");
     let _ = main_span.enter();
 
-    let policy_1 = r#"eligible(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#;
-    let policy_2 = r#"eligible(_, env) if env.custom().cat = "Otis";"#;
+    let policy_1 = r#"eligible(item: TestMetricCatalog{ inbox_lag: 2 }, _, _);"#;
+    let policy_2 = r#"eligible(_, env, c) if c = env.custom() and c.cat = "Otis";"#;
 
     let flow = TestFlow::new(policy_1).await;
 
@@ -607,30 +730,30 @@ async fn test_reset_policy() -> anyhow::Result<()> {
         .await?;
 
     let ts = Utc::now().into();
-    let item = TestItem::new(std::f64::consts::PI, ts, 1);
+    let item = TestItem::new(consts::PI, ts, 1);
     flow.push_item(item).await?;
 
-    let item = TestItem::new(17.327, ts, 2);
+    let item = TestItem::new(consts::E, ts, 2);
     flow.push_item(item).await?;
 
     tracing::info!("add to policy and resend");
     let cmd_rx = elements::PolicyFilterCmd::append_policy(elements::PolicySource::String(policy_2.to_string()));
     flow.tell_policy(cmd_rx).await?;
 
-    let item = TestItem::new(std::f64::consts::PI, ts, 1);
+    let item = TestItem::new(consts::TAU, ts, 1);
     flow.push_item(item).await?;
 
-    let item = TestItem::new(17.327, ts, 2);
+    let item = TestItem::new(consts::LN_2, ts, 2);
     flow.push_item(item).await?;
 
     tracing::info!("and reset policy and resend");
     let cmd_rx = elements::PolicyFilterCmd::reset_policy();
     flow.tell_policy(cmd_rx).await?;
 
-    let item = TestItem::new(std::f64::consts::PI, ts, 1);
+    let item = TestItem::new(consts::FRAC_1_SQRT_2, ts, 1);
     flow.push_item(item).await?;
 
-    let item = TestItem::new(17.327, ts, 2);
+    let item = TestItem::new(consts::SQRT_2, ts, 2);
     flow.push_item(item).await?;
 
     let actual = flow.close().await?;
@@ -638,10 +761,20 @@ async fn test_reset_policy() -> anyhow::Result<()> {
     assert_eq!(
         actual,
         vec![
-            TestItem::new(17.327, ts, 2),
-            TestItem::new(std::f64::consts::PI, ts, 1),
-            TestItem::new(17.327, ts, 2),
-            TestItem::new(17.327, ts, 2),
+            PolicyResult::new(TestItem::new(consts::E, ts, 2), HashMap::new()),
+            PolicyResult::new(
+                TestItem::new(consts::TAU, ts, 1),
+                maplit::hashmap! { "custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
+                    "cat".to_string() => "Otis".to_telemetry(),
+                })}
+            ),
+            PolicyResult::new(
+                TestItem::new(consts::LN_2, ts, 2),
+                maplit::hashmap! { "custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
+                    "cat".to_string() => "Otis".to_telemetry(),
+                })}
+            ),
+            PolicyResult::new(TestItem::new(consts::SQRT_2, ts, 2), HashMap::new()),
         ]
     );
     Ok(())

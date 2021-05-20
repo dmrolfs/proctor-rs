@@ -1,4 +1,6 @@
-use crate::elements::{PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, QueryPolicy};
+use crate::elements::{
+    PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, PolicyResult, QueryPolicy,
+};
 use crate::graph::stage::{Stage, ThroughStage, WithApi, WithMonitor};
 use crate::graph::{stage, Connect, Graph, GraphResult, Inlet, Outlet, Port, SinkShape, SourceShape};
 use crate::{AppData, ProctorContext};
@@ -21,8 +23,8 @@ pub struct Decision<In, Out, C> {
 impl<In: AppData + ToPolar + Clone, Out: AppData, C: ProctorContext> Decision<In, Out, C> {
     #[tracing::instrument(level = "info", skip(name))]
     pub async fn new<S: Into<String>>(
-        name: S, policy: impl QueryPolicy<Args = (In, C), QueryResult = bool> + 'static,
-        transform: impl ThroughStage<In, Out> + 'static,
+        name: S, policy: impl QueryPolicy<Args = (In, C)> + 'static,
+        transform: impl ThroughStage<PolicyResult<In>, Out> + 'static,
     ) -> Self {
         let name = name.into();
 

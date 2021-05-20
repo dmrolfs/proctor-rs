@@ -1,7 +1,7 @@
 pub use collection::Collect;
 pub use from_telemetry::*;
 pub use policy_filter::*;
-pub use telemetry::{Telemetry, TelemetryValue};
+pub use telemetry::{FromTelemetry, Telemetry, TelemetryValue, ToTelemetry};
 
 mod collection;
 mod from_telemetry;

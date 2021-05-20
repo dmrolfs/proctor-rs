@@ -4,6 +4,8 @@ pub use protocol::*;
 mod policy;
 mod protocol;
 
+use crate::elements::{telemetry, TelemetryValue, ToTelemetry};
+use crate::error::GraphError;
 use crate::graph::stage::{self, Stage};
 use crate::graph::{GraphResult, Inlet, Outlet, Port};
 use crate::graph::{SinkShape, SourceShape};
@@ -12,11 +14,11 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use oso::{Oso, ToPolar};
 use std::collections::HashSet;
+use std::convert::TryFrom;
 use std::fmt::{self, Debug};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::{broadcast, mpsc};
-use tracing::Instrument;
 
 pub trait PolicySettings {
     fn required_subscription_fields(&self) -> HashSet<String>;
@@ -24,12 +26,68 @@ pub trait PolicySettings {
     fn source(&self) -> PolicySource;
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct PolicyResult<T> {
+    pub item: T,
+    pub bindings: telemetry::Table,
+}
+
+impl<T> PolicyResult<T> {
+    pub fn new(item: T, bindings: telemetry::Table) -> Self {
+        Self { item, bindings }
+    }
+}
+
+impl<T> Into<TelemetryValue> for PolicyResult<T>
+where
+    T: Into<TelemetryValue>, /*+ ToPolar*/
+{
+    fn into(self) -> TelemetryValue {
+        TelemetryValue::Table(maplit::hashmap! {
+            "item".to_string() => self.item.to_telemetry(),
+            "bindings".to_string() => self.bindings.to_telemetry(),
+        })
+    }
+}
+
+impl<T> TryFrom<TelemetryValue> for PolicyResult<T>
+where
+    T: TryFrom<TelemetryValue>, /*+ ToPolar*/
+    <T as TryFrom<TelemetryValue>>::Error: Into<GraphError>,
+{
+    type Error = GraphError;
+
+    fn try_from(value: TelemetryValue) -> Result<Self, Self::Error> {
+        if let TelemetryValue::Table(ref table) = value {
+            let item = if let Some(i) = table.get("item") {
+                T::try_from(i.clone()).map_err(|err| err.into())
+            } else {
+                Err(GraphError::GraphPrecondition(
+                    "failed to find `item` in Table".to_string(),
+                ))
+            }?;
+
+            let bindings = if let Some(b) = table.get("bindings") {
+                telemetry::Table::try_from(b.clone())
+            } else {
+                Err(GraphError::GraphPrecondition(
+                    "failed to find `bindings` in Table".to_string(),
+                ))
+            }?;
+
+            Ok(PolicyResult { item, bindings })
+        } else {
+            Err(GraphError::TypeError("Table".to_string(), format!("{:?}", value)))
+        }
+    }
+}
+
 pub struct PolicyFilter<T, C> {
     name: String,
-    policy: Box<dyn QueryPolicy<Args = (T, C), QueryResult = bool>>,
+    policy: Box<dyn QueryPolicy<Args = (T, C)>>,
     context_inlet: Inlet<C>,
     inlet: Inlet<T>,
-    outlet: Outlet<T>,
+    outlet: Outlet<PolicyResult<T>>,
     tx_api: PolicyFilterApi<C>,
     rx_api: mpsc::UnboundedReceiver<PolicyFilterCmd<C>>,
     pub tx_monitor: broadcast::Sender<PolicyFilterEvent<T, C>>,
@@ -40,7 +98,7 @@ where
     T: Clone,
     C: Clone,
 {
-    pub fn new<S: Into<String>>(name: S, policy: Box<dyn QueryPolicy<Args = (T, C), QueryResult = bool>>) -> Self {
+    pub fn new<S: Into<String>>(name: S, policy: Box<dyn QueryPolicy<Args = (T, C)>>) -> Self {
         let name = name.into();
         let context_inlet = Inlet::new(format!("{}_policy_context_inlet", name.clone()));
         let inlet = Inlet::new(name.clone());
@@ -74,7 +132,7 @@ impl<T, C> SinkShape for PolicyFilter<T, C> {
 }
 
 impl<T, C> SourceShape for PolicyFilter<T, C> {
-    type Out = T;
+    type Out = PolicyResult<T>;
     #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()
@@ -199,27 +257,30 @@ where
 
     #[tracing::instrument(level = "info", name = "policy_filter handle item", skip(oso, outlet), fields())]
     async fn handle_item(
-        item: T, context: &C, policy: &Box<dyn QueryPolicy<Args = (T, C), QueryResult = bool>>, oso: &Oso,
-        outlet: &Outlet<T>, tx: &broadcast::Sender<PolicyFilterEvent<T, C>>,
+        item: T, context: &C, policy: &Box<dyn QueryPolicy<Args = (T, C)>>, oso: &Oso,
+        outlet: &Outlet<PolicyResult<T>>, tx: &broadcast::Sender<PolicyFilterEvent<T, C>>,
     ) -> GraphResult<()> {
-        let result = {
+        let query_result: GraphResult<QueryResult> = {
             // query lifetime cannot span across `.await` since it cannot `Send` between threads.
             policy.query_policy(oso, (item.clone(), context.clone()))
         };
 
-        tracing::info!(?result, "knowledge base query results");
+        tracing::info!(?query_result, "knowledge base query results");
 
-        match result {
-            Ok(true) => {
-                tracing::info!("item and context passed policy review - sending via outlet.");
-                outlet
-                    .send(item.clone())
-                    .instrument(tracing::info_span!("PolicyFilter.outlet send", ?item))
-                    .await?;
+        match query_result {
+            Ok(QueryResult {
+                bindings: Some(bindings),
+            }) => {
+                tracing::info!(
+                    ?item,
+                    ?bindings,
+                    "item and context passed policy review - sending via outlet."
+                );
+                outlet.send(PolicyResult::new(item, bindings)).await?;
                 Ok(())
             }
 
-            Ok(false) => {
+            Ok(_) => {
                 tracing::info!(
                     "item and context did not pass policy review (no passing result from knowledge base) - skipping item."
                 );
@@ -261,8 +322,8 @@ where
 
     #[tracing::instrument(level = "info", name = "policy_filter handle command", skip(oso, policy,), fields())]
     async fn handle_command(
-        command: PolicyFilterCmd<C>, oso: &mut Oso, name: &str,
-        policy: &Box<dyn QueryPolicy<Args = (T, C), QueryResult = bool>>, context: Arc<Mutex<Option<C>>>,
+        command: PolicyFilterCmd<C>, oso: &mut Oso, name: &str, policy: &Box<dyn QueryPolicy<Args = (T, C)>>,
+        context: Arc<Mutex<Option<C>>>,
     ) -> GraphResult<bool> {
         tracing::trace!(?command, ?context, "handling policy filter command...");
 
@@ -350,6 +411,7 @@ mod tests {
     use oso::PolarClass;
     use pretty_assertions::assert_eq;
     use serde::{Deserialize, Serialize};
+    use std::collections::HashMap;
     use tokio::sync::mpsc;
     use tokio_test::block_on;
 
@@ -416,10 +478,9 @@ mod tests {
             Ok(())
         }
 
-        type QueryResult = bool;
-        fn query_policy(&self, oso: &Oso, args: Self::Args) -> GraphResult<Self::QueryResult> {
-            let mut q = oso.query_rule("allow", (args.0, "foo", "bar"))?;
-            Ok(q.next().is_some())
+        fn query_policy(&self, oso: &Oso, args: Self::Args) -> GraphResult<QueryResult> {
+            let q = oso.query_rule("allow", (args.0, "foo", "bar"))?;
+            QueryResult::from_query(q)
         }
     }
 
@@ -429,7 +490,7 @@ mod tests {
         let main_span = tracing::info_span!("policy_filter::test_handle_item");
         let _main_span_guard = main_span.enter();
 
-        let policy: Box<dyn QueryPolicy<Args = (User, TestContext), QueryResult = bool>> = Box::new(TestPolicy::new(
+        let policy: Box<dyn QueryPolicy<Args = (User, TestContext)>> = Box::new(TestPolicy::new(
             r#"allow(actor, action, resource) if actor.username.ends_with("example.com");"#,
         ));
 
@@ -465,9 +526,12 @@ mod tests {
             assert!(actual.is_some());
             assert_eq!(
                 actual.unwrap(),
-                User {
-                    username: "peter.pan@example.com".to_string()
-                }
+                PolicyResult::new(
+                    User {
+                        username: "peter.pan@example.com".to_string()
+                    },
+                    HashMap::default()
+                )
             );
 
             assert!(rx.recv().await.is_none());
