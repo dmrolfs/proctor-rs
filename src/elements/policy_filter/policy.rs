@@ -4,27 +4,26 @@ use crate::elements::{PolicySettings, PolicySource, Telemetry, TelemetryValue};
 use crate::error::GraphError;
 use crate::graph::GraphResult;
 use crate::phases::collection::TelemetrySubscription;
-use crate::AppData;
-use oso::{Oso, PolarClass, Query, ResultSet, ToPolar, ToPolarList};
+use oso::{Oso, PolarClass, Query, ResultSet, ToPolarList};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fmt::{self, Debug};
 use std::marker::PhantomData;
 
-pub fn make_item_context_policy<I, C, S, FI>(
-    query_target: S, settings: &impl PolicySettings, initialize_engine: FI,
-) -> impl Policy<I, C>
+pub fn make_item_context_policy<C, A, S, F>(
+    query_target: S, settings: &impl PolicySettings, initialize_engine: F,
+) -> impl Policy<C, A>
 where
-    I: AppData + ToPolar,
     C: ProctorContext,
+    A: ToPolarList + Send + Sync,
     S: Into<String>,
-    FI: FnOnce(&mut Oso) -> GraphResult<()> + Send + Sync,
+    F: FnOnce(&mut Oso) -> GraphResult<()> + Send + Sync,
 {
     AssembledPolicy::new(query_target, settings, initialize_engine)
 }
 
-pub trait Policy<I, C>: PolicySubscription<Context = C> + QueryPolicy<Args = (I, C)> {}
-impl<P, I, C> Policy<I, C> for P where P: PolicySubscription<Context = C> + QueryPolicy<Args = (I, C)> {}
+pub trait Policy<C, A>: PolicySubscription<Context = C> + QueryPolicy<Args = A> {}
+impl<P, C, A> Policy<C, A> for P where P: PolicySubscription<Context = C> + QueryPolicy<Args = A> {}
 
 pub trait PolicySubscription {
     type Context: ProctorContext;
@@ -105,6 +104,11 @@ impl QueryResult {
     }
 
     #[inline]
+    pub fn is_success(&self) -> bool {
+        self.is_some()
+    }
+
+    #[inline]
     pub fn is_some(&self) -> bool {
         self.bindings.is_some()
     }
@@ -134,39 +138,39 @@ pub trait QueryPolicy: Debug + Send + Sync {
     fn query_policy(&self, engine: &oso::Oso, args: Self::Args) -> GraphResult<QueryResult>;
 }
 
-pub struct AssembledPolicy<I, C, FI>
+pub struct AssembledPolicy<C, A, F>
 where
-    FI: FnOnce(&mut Oso) -> GraphResult<()>,
+    F: FnOnce(&mut Oso) -> GraphResult<()>,
 {
     required_subscription_fields: HashSet<String>,
     optional_subscription_fields: HashSet<String>,
     source: PolicySource,
     query: String,
-    initialize_engine: Option<FI>,
-    item_marker: PhantomData<I>,
+    initialize_engine: Option<F>,
     context_marker: PhantomData<C>,
+    args_marker: PhantomData<A>,
 }
 
-impl<I, C, FI> AssembledPolicy<I, C, FI>
+impl<C, A, F> AssembledPolicy<C, A, F>
 where
-    FI: FnOnce(&mut Oso) -> GraphResult<()>,
+    F: FnOnce(&mut Oso) -> GraphResult<()>,
 {
-    pub fn new<S: Into<String>>(query: S, settings: &impl PolicySettings, initialize_engine: FI) -> Self {
+    pub fn new<S: Into<String>>(query: S, settings: &impl PolicySettings, initialize_engine: F) -> Self {
         Self {
             required_subscription_fields: settings.required_subscription_fields(),
             optional_subscription_fields: settings.optional_subscription_fields(),
             source: settings.source(),
             query: query.into(),
             initialize_engine: Some(initialize_engine),
-            item_marker: PhantomData,
             context_marker: PhantomData,
+            args_marker: PhantomData,
         }
     }
 }
 
-impl<I, C, FI> Debug for AssembledPolicy<I, C, FI>
+impl<C, A, F> Debug for AssembledPolicy<C, A, F>
 where
-    FI: FnOnce(&mut Oso) -> GraphResult<()>,
+    F: FnOnce(&mut Oso) -> GraphResult<()>,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AssembledPolicy")
@@ -178,10 +182,10 @@ where
     }
 }
 
-impl<I, C, FI> PolicySubscription for AssembledPolicy<I, C, FI>
+impl<C, A, F> PolicySubscription for AssembledPolicy<C, A, F>
 where
     C: ProctorContext,
-    FI: FnOnce(&mut Oso) -> GraphResult<()>,
+    F: FnOnce(&mut Oso) -> GraphResult<()>,
 {
     type Context = C;
 
@@ -192,13 +196,13 @@ where
     }
 }
 
-impl<I, C, FI> QueryPolicy for AssembledPolicy<I, C, FI>
+impl<C, A, F> QueryPolicy for AssembledPolicy<C, A, F>
 where
-    I: AppData + ToPolar,
     C: ProctorContext,
-    FI: FnOnce(&mut Oso) -> GraphResult<()> + Send + Sync,
+    A: ToPolarList + Send + Sync,
+    F: FnOnce(&mut Oso) -> GraphResult<()> + Send + Sync,
 {
-    type Args = (I, C);
+    type Args = A;
 
     fn load_policy_engine(&self, engine: &mut Oso) -> GraphResult<()> {
         self.source.load_into(engine)

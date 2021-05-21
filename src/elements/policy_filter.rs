@@ -268,6 +268,7 @@ where
         tracing::info!(?query_result, "knowledge base query results");
 
         match query_result {
+            // a successful query has Some bindings; otherwise the policy did not pass or errored.
             Ok(QueryResult {
                 bindings: Some(bindings),
             }) => {

@@ -201,7 +201,9 @@ impl PolicySettings for TestSettings {
     }
 }
 
-fn make_test_policy<D>(settings: &impl PolicySettings) -> impl Policy<D, TestEligibilityContext>
+fn make_test_policy<D>(
+    settings: &impl PolicySettings,
+) -> impl Policy<TestEligibilityContext, (D, TestEligibilityContext)>
 where
     D: AppData + ToPolar,
 {
@@ -332,7 +334,7 @@ where
     C: ProctorContext,
 {
     pub async fn new(
-        telemetry_subscription: TelemetrySubscription, policy: impl Policy<D, C> + 'static,
+        telemetry_subscription: TelemetrySubscription, policy: impl Policy<C, (D, C)> + 'static,
     ) -> ProctorResult<Self> {
         let telemetry_source = stage::ActorSource::<Telemetry>::new("telemetry_source");
         let tx_data_source_api = telemetry_source.tx_api();

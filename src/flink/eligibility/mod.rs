@@ -7,7 +7,7 @@ pub mod policy {
 
     pub fn make_eligibility_policy(
         settings: &impl PolicySettings,
-    ) -> impl Policy<MetricCatalog, FlinkEligibilityContext> {
+    ) -> impl Policy<FlinkEligibilityContext, (MetricCatalog, FlinkEligibilityContext)> {
         let init = |engine: &mut Oso| {
             engine.register_class(FlinkEligibilityContext::get_polar_class())?;
             engine.register_class(
