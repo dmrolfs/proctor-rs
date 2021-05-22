@@ -6,7 +6,7 @@ use crate::graph::{stage, Connect, Graph, GraphResult, Inlet, Outlet, Port, Sink
 use crate::{AppData, ProctorContext};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
-use oso::ToPolar;
+use oso::{PolarValue, ToPolar};
 use std::fmt::{self, Debug};
 use tokio::sync::broadcast;
 
@@ -23,12 +23,12 @@ pub struct Decision<In, Out, C> {
 impl<In: AppData + ToPolar + Clone, Out: AppData, C: ProctorContext> Decision<In, Out, C> {
     #[tracing::instrument(level = "info", skip(name))]
     pub async fn new<S: Into<String>>(
-        name: S, policy: impl QueryPolicy<Args = (In, C)> + 'static,
+        name: S, policy: impl QueryPolicy<Item = In, Context = C, Args = (In, C, PolarValue)> + 'static,
         transform: impl ThroughStage<PolicyResult<In>, Out> + 'static,
     ) -> Self {
         let name = name.into();
 
-        let policy_filter = PolicyFilter::new(format!("{}_decision_policy", name), Box::new(policy));
+        let policy_filter = PolicyFilter::new(format!("{}_decision_policy", name), policy);
         let context_inlet = policy_filter.context_inlet();
         let tx_policy_api = policy_filter.tx_api();
         let tx_policy_monitor = policy_filter.tx_monitor.clone();

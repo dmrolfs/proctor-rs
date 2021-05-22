@@ -9,8 +9,8 @@ use oso::{Oso, PolarClass, ToPolar};
 use pretty_assertions::assert_eq;
 use proctor::elements::telemetry::ToTelemetry;
 use proctor::elements::{
-    self, telemetry, AssembledPolicy, Policy, PolicyFilterEvent, PolicyResult, PolicySettings, PolicySource,
-    PolicySubscription, QueryPolicy, QueryResult, Telemetry, TelemetryValue,
+    self, telemetry, Policy, PolicyFilterEvent, PolicyResult, PolicySettings, PolicySource, PolicySubscription,
+    QueryPolicy, QueryResult, Telemetry, TelemetryValue,
 };
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape, UniformFanInShape};
@@ -203,32 +203,33 @@ impl PolicySettings for TestSettings {
 
 fn make_test_policy<D>(
     settings: &impl PolicySettings,
-) -> impl Policy<TestEligibilityContext, (D, TestEligibilityContext)>
+) -> impl Policy<D, TestEligibilityContext, (D, TestEligibilityContext)>
 where
-    D: AppData + ToPolar,
+    D: AppData + ToPolar + Clone,
 {
-    let init = |oso: &mut Oso| {
-        oso.register_class(
-            TestEligibilityContext::get_polar_class_builder()
-                .name("TestEnvironment")
-                .add_method("custom", ProctorContext::custom)
-                .build(),
-        )?;
-
-        oso.register_class(
-            TestTaskStatus::get_polar_class_builder()
-                .name("TestTaskStatus")
-                .add_method(
-                    "last_failure_within_seconds",
-                    TestTaskStatus::last_failure_within_seconds,
-                )
-                .build(),
-        )?;
-
-        Ok(())
-    };
-
-    AssembledPolicy::new("eligible", settings, init)
+    TestEligibilityPolicy::new(settings.source())
+    //     let init = |oso: &mut Oso| {
+    //         oso.register_class(
+    //             TestEligibilityContext::get_polar_class_builder()
+    //                 .name("TestEnvironment")
+    //                 .add_method("custom", ProctorContext::custom)
+    //                 .build(),
+    //         )?;
+    //
+    //         oso.register_class(
+    //             TestTaskStatus::get_polar_class_builder()
+    //                 .name("TestTaskStatus")
+    //                 .add_method(
+    //                     "last_failure_within_seconds",
+    //                     TestTaskStatus::last_failure_within_seconds,
+    //                 )
+    //                 .build(),
+    //         )?;
+    //
+    //         Ok(())
+    //     };
+    //
+    //     AssembledPolicy::new("eligible", settings, init)
 }
 
 #[derive(Debug)]
@@ -238,23 +239,23 @@ struct TestEligibilityPolicy<D> {
     data_marker: PhantomData<D>,
 }
 
-// impl<D> TestEligibilityPolicy<D> {
-//     pub fn new(policy: PolicySource) -> Self {
-//         policy.validate().expect("failed to parse policy");
-//         Self {
-//             custom_fields: None,
-//             policy,
-//             data_marker: PhantomData,
-//         }
-//     }
-//
-//     pub fn with_custom(self, custom_fields: HashSet<String>) -> Self {
-//         Self {
-//             custom_fields: Some(custom_fields),
-//             ..self
-//         }
-//     }
-// }
+impl<D> TestEligibilityPolicy<D> {
+    pub fn new(policy: PolicySource) -> Self {
+        policy.validate().expect("failed to parse policy");
+        Self {
+            custom_fields: None,
+            policy,
+            data_marker: PhantomData,
+        }
+    }
+
+    pub fn with_custom(self, custom_fields: HashSet<String>) -> Self {
+        Self {
+            custom_fields: Some(custom_fields),
+            ..self
+        }
+    }
+}
 
 impl<D: AppData> PolicySubscription for TestEligibilityPolicy<D> {
     type Context = TestEligibilityContext;
@@ -283,8 +284,10 @@ impl<D: AppData> PolicySubscription for TestEligibilityPolicy<D> {
     }
 }
 
-impl<D: AppData + ToPolar> QueryPolicy for TestEligibilityPolicy<D> {
-    type Args = (D, TestEligibilityContext);
+impl<D: AppData + ToPolar + Clone> QueryPolicy for TestEligibilityPolicy<D> {
+    type Item = D;
+    type Context = TestEligibilityContext;
+    type Args = (Self::Item, Self::Context);
 
     fn load_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
         self.policy.load_into(oso)
@@ -311,6 +314,10 @@ impl<D: AppData + ToPolar> QueryPolicy for TestEligibilityPolicy<D> {
         Ok(())
     }
 
+    fn make_query_args(&self, item: &Self::Item, context: &Self::Context) -> Self::Args {
+        (item.clone(), context.clone())
+    }
+
     fn query_policy(&self, oso: &Oso, args: Self::Args) -> GraphResult<QueryResult> {
         let q = oso.query_rule("eligible", args)?;
         QueryResult::from_query(q)
@@ -334,7 +341,7 @@ where
     C: ProctorContext,
 {
     pub async fn new(
-        telemetry_subscription: TelemetrySubscription, policy: impl Policy<C, (D, C)> + 'static,
+        telemetry_subscription: TelemetrySubscription, policy: impl Policy<D, C, (D, C)> + 'static,
     ) -> ProctorResult<Self> {
         let telemetry_source = stage::ActorSource::<Telemetry>::new("telemetry_source");
         let tx_data_source_api = telemetry_source.tx_api();
@@ -789,7 +796,9 @@ impl PolicySubscription for TestPolicy {
 }
 
 impl QueryPolicy for TestPolicy {
-    type Args = (TestItem, TestEligibilityContext);
+    type Item = TestItem;
+    type Context = TestEligibilityContext;
+    type Args = (Self::Item, Self::Context);
 
     fn load_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
         oso.load_str(self.policy.as_str()).map_err(|err| err.into())
@@ -815,9 +824,12 @@ impl QueryPolicy for TestPolicy {
         Ok(())
     }
 
+    fn make_query_args(&self, item: &Self::Item, context: &Self::Context) -> Self::Args {
+        (item.clone(), context.clone())
+    }
+
     fn query_policy(&self, oso: &Oso, args: Self::Args) -> GraphResult<QueryResult> {
-        let q = oso.query_rule("eligible", args)?;
-        QueryResult::from_query(q)
+        QueryResult::from_query(oso.query_rule("eligible", args)?)
     }
 }
 

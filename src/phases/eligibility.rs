@@ -12,21 +12,23 @@ use crate::graph::{GraphResult, Inlet, Outlet, Port, SinkShape, SourceShape};
 use crate::{AppData, ProctorContext};
 use oso::ToPolar;
 
-pub struct Eligibility<D, C> {
+pub struct Eligibility<T, C> {
     name: String,
     policy_filter: Box<dyn Stage>,
     pub context_inlet: Inlet<C>,
-    inlet: Inlet<D>,
-    outlet: Outlet<PolicyResult<D>>,
+    inlet: Inlet<T>,
+    outlet: Outlet<PolicyResult<T>>,
     tx_policy_api: PolicyFilterApi<C>,
-    tx_policy_monitor: broadcast::Sender<PolicyFilterEvent<D, C>>,
+    tx_policy_monitor: broadcast::Sender<PolicyFilterEvent<T, C>>,
 }
 
-impl<D: AppData + ToPolar + Clone, C: ProctorContext> Eligibility<D, C> {
+impl<T: AppData + ToPolar + Clone, C: ProctorContext> Eligibility<T, C> {
     #[tracing::instrument(level = "info", skip(name))]
-    pub fn new<S: Into<String>>(name: S, policy: impl QueryPolicy<Args = (D, C)> + 'static) -> Self {
+    pub fn new<S: Into<String>>(
+        name: S, policy: impl QueryPolicy<Item = T, Context = C, Args = (T, C)> + 'static,
+    ) -> Self {
         let name = name.into();
-        let policy_filter = PolicyFilter::new(format!("{}_eligibility_policy", name), Box::new(policy));
+        let policy_filter = PolicyFilter::new(format!("{}_eligibility_policy", name), policy);
         let context_inlet = policy_filter.context_inlet();
         let inlet = policy_filter.inlet();
         let outlet = policy_filter.outlet();
@@ -50,7 +52,7 @@ impl<D: AppData + ToPolar + Clone, C: ProctorContext> Eligibility<D, C> {
     }
 }
 
-impl<D, C: Debug> Debug for Eligibility<D, C> {
+impl<T, C: Debug> Debug for Eligibility<T, C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Eligibility")
             .field("name", &self.name)
@@ -62,16 +64,16 @@ impl<D, C: Debug> Debug for Eligibility<D, C> {
     }
 }
 
-impl<D, C> SinkShape for Eligibility<D, C> {
-    type In = D;
+impl<T, C> SinkShape for Eligibility<T, C> {
+    type In = T;
     #[inline]
     fn inlet(&self) -> Inlet<Self::In> {
         self.inlet.clone()
     }
 }
 
-impl<D, C> SourceShape for Eligibility<D, C> {
-    type Out = PolicyResult<D>;
+impl<T, C> SourceShape for Eligibility<T, C> {
+    type Out = PolicyResult<T>;
     #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()
@@ -80,7 +82,7 @@ impl<D, C> SourceShape for Eligibility<D, C> {
 
 #[dyn_upcast]
 #[async_trait]
-impl<D: AppData, C: ProctorContext> Stage for Eligibility<D, C> {
+impl<T: AppData, C: ProctorContext> Stage for Eligibility<T, C> {
     #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
@@ -111,7 +113,7 @@ impl<D: AppData, C: ProctorContext> Stage for Eligibility<D, C> {
     }
 }
 
-impl<D, C> WithApi for Eligibility<D, C> {
+impl<T, C> WithApi for Eligibility<T, C> {
     type Sender = PolicyFilterApi<C>;
     #[inline]
     fn tx_api(&self) -> Self::Sender {
@@ -119,8 +121,8 @@ impl<D, C> WithApi for Eligibility<D, C> {
     }
 }
 
-impl<D, C> WithMonitor for Eligibility<D, C> {
-    type Receiver = PolicyFilterMonitor<D, C>;
+impl<T, C> WithMonitor for Eligibility<T, C> {
+    type Receiver = PolicyFilterMonitor<T, C>;
     #[inline]
     fn rx_monitor(&self) -> Self::Receiver {
         self.tx_policy_monitor.subscribe()

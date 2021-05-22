@@ -2,7 +2,7 @@ mod fixtures;
 
 use ::serde::{Deserialize, Serialize};
 use chrono::*;
-use oso::{Oso, PolarClass, PolarValue};
+use oso::{Oso, PolarClass, PolarValue, ToPolar, ToPolarList};
 use pretty_assertions::assert_eq;
 use proctor::elements::telemetry::ToTelemetry;
 use proctor::elements::{self, telemetry, PolicyResult, PolicySubscription, QueryPolicy, QueryResult, TelemetryValue};
@@ -114,7 +114,9 @@ impl PolicySubscription for TestPolicy {
 }
 
 impl QueryPolicy for TestPolicy {
-    type Args = (TestItem, TestContext);
+    type Item = TestItem;
+    type Context = TestContext;
+    type Args = (TestItem, TestContext, PolarValue);
 
     fn load_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
         oso.load_str(self.policy.as_str()).map_err(|err| err.into())
@@ -140,9 +142,16 @@ impl QueryPolicy for TestPolicy {
         Ok(())
     }
 
-    fn query_policy(&self, oso: &Oso, args: Self::Args) -> GraphResult<QueryResult> {
-        let q_args = (args.0, args.1, PolarValue::Variable("custom".to_string()));
-        let q = oso.query_rule(self.query.as_str(), q_args)?;
+    fn make_query_args(&self, item: &Self::Item, context: &Self::Context) -> Self::Args {
+        (
+            item.clone(),
+            context.clone(),
+            PolarValue::Variable("custom".to_string()),
+        )
+    }
+
+    fn query_policy(&self, engine: &Oso, args: Self::Args) -> GraphResult<QueryResult> {
+        let q = engine.query_rule(self.query.as_str(), args)?;
         let result = QueryResult::from_query(q)?;
         tracing::info!(?result, "DMR: query policy results!");
         Ok(result)
@@ -171,7 +180,7 @@ impl TestFlow {
         let env_source = stage::ActorSource::<TestContext>::new("env_source");
         let tx_env_source_api = env_source.tx_api();
 
-        let policy = Box::new(TestPolicy::with_query(policy, query));
+        let policy = TestPolicy::with_query(policy, query);
         let policy_filter = elements::PolicyFilter::new("eligibility", policy);
         let tx_policy_api = policy_filter.tx_api();
         let rx_policy_monitor = policy_filter.rx_monitor();

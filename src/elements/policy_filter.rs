@@ -82,9 +82,12 @@ where
     }
 }
 
-pub struct PolicyFilter<T, C> {
+pub struct PolicyFilter<T, C, A, P>
+where
+    P: QueryPolicy<Item = T, Context = C, Args = A>,
+{
     name: String,
-    policy: Box<dyn QueryPolicy<Args = (T, C)>>,
+    policy: P,
     context_inlet: Inlet<C>,
     inlet: Inlet<T>,
     outlet: Outlet<PolicyResult<T>>,
@@ -93,12 +96,13 @@ pub struct PolicyFilter<T, C> {
     pub tx_monitor: broadcast::Sender<PolicyFilterEvent<T, C>>,
 }
 
-impl<T, C> PolicyFilter<T, C>
+impl<T, C, A, P> PolicyFilter<T, C, A, P>
 where
     T: Clone,
     C: Clone,
+    P: QueryPolicy<Item = T, Context = C, Args = A>,
 {
-    pub fn new<S: Into<String>>(name: S, policy: Box<dyn QueryPolicy<Args = (T, C)>>) -> Self {
+    pub fn new<S: Into<String>>(name: S, policy: P) -> Self {
         let name = name.into();
         let context_inlet = Inlet::new(format!("{}_policy_context_inlet", name.clone()));
         let inlet = Inlet::new(name.clone());
@@ -123,7 +127,10 @@ where
     }
 }
 
-impl<T, C> SinkShape for PolicyFilter<T, C> {
+impl<T, C, A, P> SinkShape for PolicyFilter<T, C, A, P>
+where
+    P: QueryPolicy<Item = T, Context = C, Args = A>,
+{
     type In = T;
     #[inline]
     fn inlet(&self) -> Inlet<Self::In> {
@@ -131,7 +138,10 @@ impl<T, C> SinkShape for PolicyFilter<T, C> {
     }
 }
 
-impl<T, C> SourceShape for PolicyFilter<T, C> {
+impl<T, C, A, P> SourceShape for PolicyFilter<T, C, A, P>
+where
+    P: QueryPolicy<Item = T, Context = C, Args = A>,
+{
     type Out = PolicyResult<T>;
     #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
@@ -141,10 +151,12 @@ impl<T, C> SourceShape for PolicyFilter<T, C> {
 
 #[dyn_upcast]
 #[async_trait]
-impl<T, C> Stage for PolicyFilter<T, C>
+impl<T, C, A, P> Stage for PolicyFilter<T, C, A, P>
 where
     T: AppData + ToPolar + Clone + Sync,
     C: ProctorContext + Debug + Clone + Send + Sync,
+    A: 'static,
+    P: QueryPolicy<Item = T, Context = C, Args = A> + 'static,
 {
     #[inline]
     fn name(&self) -> &str {
@@ -222,10 +234,11 @@ where
     }
 }
 
-impl<T, C> PolicyFilter<T, C>
+impl<T, C, A, P> PolicyFilter<T, C, A, P>
 where
     T: AppData + ToPolar + Clone,
     C: ProctorContext + Debug + Clone,
+    P: QueryPolicy<Item = T, Context = C, Args = A>,
 {
     #[tracing::instrument(level = "info", name = "make policy knowledge base", skip(self))]
     fn oso(&mut self) -> GraphResult<Oso> {
@@ -257,12 +270,12 @@ where
 
     #[tracing::instrument(level = "info", name = "policy_filter handle item", skip(oso, outlet), fields())]
     async fn handle_item(
-        item: T, context: &C, policy: &Box<dyn QueryPolicy<Args = (T, C)>>, oso: &Oso,
-        outlet: &Outlet<PolicyResult<T>>, tx: &broadcast::Sender<PolicyFilterEvent<T, C>>,
+        item: T, context: &C, policy: &P, oso: &Oso, outlet: &Outlet<PolicyResult<T>>,
+        tx: &broadcast::Sender<PolicyFilterEvent<T, C>>,
     ) -> GraphResult<()> {
         let query_result: GraphResult<QueryResult> = {
             // query lifetime cannot span across `.await` since it cannot `Send` between threads.
-            policy.query_policy(oso, (item.clone(), context.clone()))
+            policy.query_policy(oso, policy.make_query_args(&item, context))
         };
 
         tracing::info!(?query_result, "knowledge base query results");
@@ -323,8 +336,7 @@ where
 
     #[tracing::instrument(level = "info", name = "policy_filter handle command", skip(oso, policy,), fields())]
     async fn handle_command(
-        command: PolicyFilterCmd<C>, oso: &mut Oso, name: &str, policy: &Box<dyn QueryPolicy<Args = (T, C)>>,
-        context: Arc<Mutex<Option<C>>>,
+        command: PolicyFilterCmd<C>, oso: &mut Oso, name: &str, policy: &P, context: Arc<Mutex<Option<C>>>,
     ) -> GraphResult<bool> {
         tracing::trace!(?command, ?context, "handling policy filter command...");
 
@@ -371,7 +383,10 @@ where
     }
 }
 
-impl<T, C> stage::WithApi for PolicyFilter<T, C> {
+impl<T, C, A, P> stage::WithApi for PolicyFilter<T, C, A, P>
+where
+    P: QueryPolicy<Item = T, Context = C, Args = A>,
+{
     type Sender = PolicyFilterApi<C>;
 
     #[inline]
@@ -380,7 +395,10 @@ impl<T, C> stage::WithApi for PolicyFilter<T, C> {
     }
 }
 
-impl<T, C> stage::WithMonitor for PolicyFilter<T, C> {
+impl<T, C, A, P> stage::WithMonitor for PolicyFilter<T, C, A, P>
+where
+    P: QueryPolicy<Item = T, Context = C, Args = A>,
+{
     type Receiver = PolicyFilterMonitor<T, C>;
     #[inline]
     fn rx_monitor(&self) -> Self::Receiver {
@@ -388,7 +406,10 @@ impl<T, C> stage::WithMonitor for PolicyFilter<T, C> {
     }
 }
 
-impl<T, C> Debug for PolicyFilter<T, C> {
+impl<T, C, A, P> Debug for PolicyFilter<T, C, A, P>
+where
+    P: QueryPolicy<Item = T, Context = C, Args = A>,
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("PolicyFilter")
             .field("name", &self.name)
@@ -409,7 +430,7 @@ mod tests {
     use crate::elements::telemetry;
     use crate::error::GraphError;
     use crate::phases::collection::TelemetrySubscription;
-    use oso::PolarClass;
+    use oso::{PolarClass, ToPolarList};
     use pretty_assertions::assert_eq;
     use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
@@ -465,7 +486,9 @@ mod tests {
     }
 
     impl QueryPolicy for TestPolicy {
-        type Args = (User, TestContext);
+        type Item = User;
+        type Context = TestContext;
+        type Args = (Self::Item, &'static str, &'static str);
 
         fn load_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
             oso.load_str(self.policy.as_str()).map_err(|err| err.into())
@@ -479,9 +502,12 @@ mod tests {
             Ok(())
         }
 
-        fn query_policy(&self, oso: &Oso, args: Self::Args) -> GraphResult<QueryResult> {
-            let q = oso.query_rule("allow", (args.0, "foo", "bar"))?;
-            QueryResult::from_query(q)
+        fn make_query_args(&self, item: &Self::Item, context: &Self::Context) -> Self::Args {
+            (item.clone(), "foo", "bar")
+        }
+
+        fn query_policy(&self, engine: &Oso, args: Self::Args) -> GraphResult<QueryResult> {
+            QueryResult::from_query(engine.query_rule("allow", args)?)
         }
     }
 
@@ -491,9 +517,7 @@ mod tests {
         let main_span = tracing::info_span!("policy_filter::test_handle_item");
         let _main_span_guard = main_span.enter();
 
-        let policy: Box<dyn QueryPolicy<Args = (User, TestContext)>> = Box::new(TestPolicy::new(
-            r#"allow(actor, action, resource) if actor.username.ends_with("example.com");"#,
-        ));
+        let policy = TestPolicy::new(r#"allow(actor, action, resource) if actor.username.ends_with("example.com");"#);
 
         let mut policy_filter = PolicyFilter::new("test-policy-filter", policy);
         let oso = policy_filter.oso()?; //.expect("failed to build policy engine");
