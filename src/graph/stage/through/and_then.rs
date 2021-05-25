@@ -178,8 +178,8 @@ mod tests {
         let mut actual = Vec::with_capacity(3);
 
         block_on(async {
-            map.inlet.attach(rx_in).await;
-            map.outlet.attach(tx_out).await;
+            map.inlet.attach("test_channel", rx_in).await;
+            map.outlet.attach("test_channel", tx_out).await;
 
             let map_handle = tokio::spawn(async move {
                 map.run().await.expect("failed to run and_then stage");
@@ -219,7 +219,7 @@ mod tests {
 
         block_on(async {
             (source.outlet(), calc.inlet()).connect().await;
-            calc.outlet.attach(tx_out).await;
+            calc.outlet.attach("test_channel", tx_out).await;
 
             let mut g = Graph::default();
             g.push_back(Box::new(source)).await;

@@ -63,19 +63,19 @@ impl<T: Debug + Send> Connect<T> for (&Inlet<T>, &Outlet<T>) {
 
 pub async fn connect_out_to_in<T: Debug>(mut lhs: Outlet<T>, mut rhs: Inlet<T>) {
     let (tx, rx) = mpsc::channel(num_cpus::get());
-    lhs.attach(tx).await;
-    rhs.attach(rx).await;
+    lhs.attach(rhs.0.clone(), tx).await;
+    rhs.attach(lhs.0.clone(), rx).await;
 }
 
-pub struct Inlet<T>(String, Arc<Mutex<Option<mpsc::Receiver<T>>>>);
+pub struct Inlet<T>(String, Arc<Mutex<Option<(String, mpsc::Receiver<T>)>>>);
 
 impl<T> Inlet<T> {
     pub fn new<S: Into<String>>(name: S) -> Self {
         Self(name.into(), Arc::new(Mutex::new(None)))
     }
 
-    pub fn with_receiver<S: Into<String>>(name: S, rx: mpsc::Receiver<T>) -> Self {
-        Self(name.into(), Arc::new(Mutex::new(Some(rx))))
+    pub fn with_receiver<S0: Into<String>, S1: Into<String>>(name: S0, receiver_name: S1, rx: mpsc::Receiver<T>) -> Self {
+        Self(name.into(), Arc::new(Mutex::new(Some((receiver_name.into(), rx)))))
     }
 }
 
@@ -91,7 +91,7 @@ impl<T: Send> Port for Inlet<T> {
         match rx.as_mut() {
             Some(r) => {
                 tracing::trace!(inlet=%self.0, "closing Inlet");
-                r.close()
+                r.1.close()
             }
             None => {
                 tracing::trace!(inlet=%self.0, "Inlet close ignored - not attached");
@@ -109,9 +109,9 @@ impl<T> Clone for Inlet<T> {
 }
 
 impl<T: Debug> Inlet<T> {
-    pub async fn attach(&mut self, rx: mpsc::Receiver<T>) {
+    pub async fn attach<S: Into<String>>(&mut self, receiver_name: S, rx: mpsc::Receiver<T>) {
         let mut port = self.1.lock().await;
-        *port = Some(rx);
+        *port = Some((receiver_name.into(), rx));
     }
 
     pub async fn is_attached(&self) -> bool {
@@ -120,6 +120,8 @@ impl<T: Debug> Inlet<T> {
 
     pub async fn check_attachment(&self) -> Result<(), GraphError> {
         if self.is_attached().await {
+            let sender = self.1.lock().await.as_ref().map(|s|s.0.clone()).unwrap();
+            tracing::trace!("inlet connected: {} -> {}", sender, self.0);
             return Ok(());
         } else {
             return Err(GraphError::GraphPortDetached(self.0.clone()));
@@ -180,11 +182,11 @@ impl<T: Debug> Inlet<T> {
         if self.is_attached().await {
             let mut rx = self.1.lock().await;
             tracing::trace!(inlet=%self.0, "Inlet awaiting next item...");
-            let item = (*rx).as_mut()?.recv().await;
+            let item = (*rx).as_mut()?.1.recv().await;
             tracing::trace!(inlet=%self.0, ?item, "Inlet received {} item.", if item.is_some() {"an"} else { "no"});
             if item.is_none() && rx.is_some() {
                 tracing::info!(inlet=%self.0, "Inlet depleted - closing receiver");
-                rx.as_mut().unwrap().close();
+                rx.as_mut().unwrap().1.close();
                 let _ = rx.take();
             }
 
@@ -202,15 +204,15 @@ impl<T> fmt::Debug for Inlet<T> {
     }
 }
 
-pub struct Outlet<T>(String, Arc<Mutex<Option<mpsc::Sender<T>>>>);
+pub struct Outlet<T>(String, Arc<Mutex<Option<(String, mpsc::Sender<T>)>>>);
 
 impl<T> Outlet<T> {
     pub fn new<S: Into<String>>(name: S) -> Self {
         Self(name.into(), Arc::new(Mutex::new(None)))
     }
 
-    pub fn with_sender<S: Into<String>>(name: S, tx: mpsc::Sender<T>) -> Outlet<T> {
-        Self(name.into(), Arc::new(Mutex::new(Some(tx))))
+    pub fn with_sender<S0: Into<String>, S1: Into<String>>(name: S0, sender_name: S1, tx: mpsc::Sender<T>) -> Outlet<T> {
+        Self(name.into(), Arc::new(Mutex::new(Some((sender_name.into(), tx)))))
     }
 }
 
@@ -234,9 +236,9 @@ impl<T> Clone for Outlet<T> {
 }
 
 impl<T> Outlet<T> {
-    pub async fn attach(&mut self, tx: mpsc::Sender<T>) {
+    pub async fn attach<S: Into<String>>(&mut self, sender_name: S, tx: mpsc::Sender<T>) {
         let mut port = self.1.lock().await;
-        *port = Some(tx);
+        *port = Some((sender_name.into(), tx));
     }
 
     pub async fn is_attached(&self) -> bool {
@@ -245,6 +247,8 @@ impl<T> Outlet<T> {
 
     pub async fn check_attachment(&self) -> Result<(), GraphError> {
         if self.is_attached().await {
+            let receiver= self.1.lock().await.as_ref().map(|s|s.0.clone()).unwrap();
+            tracing::info!("outlet connected: {} -> {}", self.0, receiver);
             return Ok(());
         } else {
             return Err(GraphError::GraphPortDetached(self.0.clone()));
@@ -303,7 +307,7 @@ impl<T> Outlet<T> {
     pub async fn send(&self, value: T) -> Result<(), GraphError> {
         self.check_attachment().await?;
         let tx = self.1.lock().await;
-        (*tx).as_ref().unwrap().send(value).await.map_err(|err| err.into())
+        (*tx).as_ref().unwrap().1.send(value).await.map_err(|err| err.into())
     }
 }
 
@@ -328,7 +332,7 @@ mod tests {
         let mut port_1 = Outlet::new("port_1");
 
         block_on(async move {
-            port_1.attach(tx).await;
+            port_1.attach("test_tx", tx).await;
             let port_2 = port_1.clone();
 
             tokio::spawn(async move {

@@ -301,7 +301,7 @@ mod tests {
         let tx_api = tick.tx_api();
 
         block_on(async {
-            tick.outlet().attach(tx).await;
+            tick.outlet().attach("test_tx", tx).await;
 
             tokio::spawn(async move {
                 tick.run().await.expect("failed to run tick source");

@@ -49,7 +49,7 @@ async fn do_via_stage(rx_control: mpsc::Receiver<i32>) -> mpsc::Receiver<String>
     (source.outlet(), stage.inlet()).connect().await;
 
     let (result_tx, result_rx) = mpsc::channel(1);
-    stage.outlet().attach(result_tx).await;
+    stage.outlet().attach("result", result_tx).await;
 
     tokio::spawn(async move { stage.run().await });
 

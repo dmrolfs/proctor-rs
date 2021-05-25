@@ -529,7 +529,7 @@ mod tests {
         block_on(async move {
             let (tx, mut rx) = mpsc::channel(4);
             let mut outlet = Outlet::new("test");
-            outlet.attach(tx).await;
+            outlet.attach("test_tx", tx).await;
 
             let (tx_monitor, _rx_monitor) = broadcast::channel(4);
 
