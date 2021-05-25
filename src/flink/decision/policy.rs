@@ -1,20 +1,20 @@
-use super::context::{ClusterStatus, FlinkEligibilityContext, TaskStatus};
+use super::context::FlinkDecisionContext;
 use crate::elements::{PolicySettings, PolicySource, PolicySubscription, QueryPolicy, QueryResult, Telemetry};
 use crate::flink::MetricCatalog;
 use crate::graph::GraphResult;
 use crate::phases::collection::TelemetrySubscription;
 use crate::ProctorContext;
-use oso::{Oso, PolarClass};
+use oso::{Oso, PolarClass, PolarValue};
 use std::collections::HashSet;
 
 #[derive(Debug)]
-pub struct EligibilityPolicy {
+pub struct DecisionPolicy {
     required_subscription_fields: HashSet<String>,
     optional_subscription_fields: HashSet<String>,
     policy_source: PolicySource,
 }
 
-impl EligibilityPolicy {
+impl DecisionPolicy {
     pub fn new(settings: &impl PolicySettings) -> Self {
         Self {
             required_subscription_fields: settings.required_subscription_fields(),
@@ -24,8 +24,8 @@ impl EligibilityPolicy {
     }
 }
 
-impl PolicySubscription for EligibilityPolicy {
-    type Context = FlinkEligibilityContext;
+impl PolicySubscription for DecisionPolicy {
+    type Context = FlinkDecisionContext;
 
     fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
         subscription
@@ -34,10 +34,10 @@ impl PolicySubscription for EligibilityPolicy {
     }
 }
 
-impl QueryPolicy for EligibilityPolicy {
+impl QueryPolicy for DecisionPolicy {
     type Item = MetricCatalog;
-    type Context = FlinkEligibilityContext;
-    type Args = (Self::Item, Self::Context);
+    type Context = FlinkDecisionContext;
+    type Args = (Self::Item, Self::Context, PolarValue);
 
     fn load_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
         self.policy_source.load_into(oso)
@@ -45,24 +45,10 @@ impl QueryPolicy for EligibilityPolicy {
 
     fn initialize_policy_engine(&mut self, oso: &mut Oso) -> GraphResult<()> {
         oso.register_class(Telemetry::get_polar_class())?;
+
         oso.register_class(
-            FlinkEligibilityContext::get_polar_class_builder()
+            FlinkDecisionContext::get_polar_class_builder()
                 .add_method("custom", ProctorContext::custom)
-                .build(),
-        )?;
-        oso.register_class(
-            TaskStatus::get_polar_class_builder()
-                .name("TaskStatus")
-                .add_method("last_failure_within_seconds", TaskStatus::last_failure_within_seconds)
-                .build(),
-        )?;
-        oso.register_class(
-            ClusterStatus::get_polar_class_builder()
-                .name("ClusterStatus")
-                .add_method(
-                    "last_deployment_within_seconds",
-                    ClusterStatus::last_deployment_within_seconds,
-                )
                 .build(),
         )?;
 
@@ -70,10 +56,14 @@ impl QueryPolicy for EligibilityPolicy {
     }
 
     fn make_query_args(&self, item: &Self::Item, context: &Self::Context) -> Self::Args {
-        (item.clone(), context.clone())
+        (
+            item.clone(),
+            context.clone(),
+            PolarValue::Variable("direction".to_string()),
+        )
     }
 
     fn query_policy(&self, engine: &Oso, args: Self::Args) -> GraphResult<QueryResult> {
-        QueryResult::from_query(engine.query_rule("eligible", args)?)
+        QueryResult::from_query(engine.query_rule("scale", args)?)
     }
 }

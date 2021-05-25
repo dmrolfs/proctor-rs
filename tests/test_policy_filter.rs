@@ -2,7 +2,7 @@ mod fixtures;
 
 use ::serde::{Deserialize, Serialize};
 use chrono::*;
-use oso::{Oso, PolarClass, PolarValue, ToPolar, ToPolarList};
+use oso::{Oso, PolarClass, PolarValue};
 use pretty_assertions::assert_eq;
 use proctor::elements::telemetry::ToTelemetry;
 use proctor::elements::{self, telemetry, PolicyResult, PolicySubscription, QueryPolicy, QueryResult, TelemetryValue};

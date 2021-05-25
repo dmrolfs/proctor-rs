@@ -1,14 +1,13 @@
 use super::ProctorContext;
 use crate::elements::telemetry;
-use crate::elements::{PolicySettings, PolicySource, Telemetry, TelemetryValue};
+use crate::elements::TelemetryValue;
 use crate::error::GraphError;
 use crate::graph::GraphResult;
 use crate::phases::collection::TelemetrySubscription;
-use oso::{Oso, PolarClass, PolarValue, Query, ResultSet, ToPolar, ToPolarList};
-use std::collections::{HashMap, HashSet};
+use oso::{Query, ResultSet, ToPolar, ToPolarList};
+use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::fmt::{self, Debug};
-use std::marker::PhantomData;
+use std::fmt::Debug;
 
 pub trait Policy<T, C, A>: PolicySubscription<Context = C> + QueryPolicy<Item = T, Context = C, Args = A> {}
 
