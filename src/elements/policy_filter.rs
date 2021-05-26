@@ -27,55 +27,66 @@ pub trait PolicySettings {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct PolicyResult<T> {
+pub struct PolicyResult<T, C> {
     pub item: T,
+    pub context: C,
     pub bindings: telemetry::Table,
 }
 
-impl<T> PolicyResult<T> {
-    pub fn new(item: T, bindings: telemetry::Table) -> Self {
-        Self { item, bindings }
+impl<T, C> PolicyResult<T, C> {
+    pub fn new(item: T, context: C, bindings: telemetry::Table) -> Self {
+        Self { item, context, bindings }
     }
 }
 
-impl<T> Into<TelemetryValue> for PolicyResult<T>
+const T_ITEM: &'static str = "item";
+const T_CONTEXT: &'static str = "context";
+const T_BINDINGS: &'static str = "bindings";
+
+impl<T, C> Into<TelemetryValue> for PolicyResult<T, C>
 where
     T: Into<TelemetryValue>, /*+ ToPolar*/
+    C: Into<TelemetryValue>, /*+ ToPolar*/
 {
     fn into(self) -> TelemetryValue {
         TelemetryValue::Table(maplit::hashmap! {
-            "item".to_string() => self.item.to_telemetry(),
-            "bindings".to_string() => self.bindings.to_telemetry(),
+            T_ITEM.to_string() => self.item.to_telemetry(),
+            T_CONTEXT.to_string() => self.context.to_telemetry(),
+            T_BINDINGS.to_string() => self.bindings.to_telemetry(),
         })
     }
 }
 
-impl<T> TryFrom<TelemetryValue> for PolicyResult<T>
+impl<T, C> TryFrom<TelemetryValue> for PolicyResult<T, C>
 where
     T: TryFrom<TelemetryValue>, /*+ ToPolar*/
     <T as TryFrom<TelemetryValue>>::Error: Into<GraphError>,
+    C: TryFrom<TelemetryValue>, /*+ ToPolar*/
+    <C as TryFrom<TelemetryValue>>::Error: Into<GraphError>,
 {
     type Error = GraphError;
 
     fn try_from(value: TelemetryValue) -> Result<Self, Self::Error> {
         if let TelemetryValue::Table(ref table) = value {
-            let item = if let Some(i) = table.get("item") {
+            let item = if let Some(i) = table.get(T_ITEM) {
                 T::try_from(i.clone()).map_err(|err| err.into())
             } else {
-                Err(GraphError::GraphPrecondition(
-                    "failed to find `item` in Table".to_string(),
-                ))
+                Err(GraphError::GraphPrecondition(format!("failed to find `{}` in Table", T_ITEM)))
             }?;
 
-            let bindings = if let Some(b) = table.get("bindings") {
+            let context = if let Some(c) = table.get(T_CONTEXT) {
+                C::try_from(c.clone()).map_err(|err| err.into())
+            } else {
+                Err(GraphError::GraphPrecondition(format!("failed to find `{}` in Table", T_CONTEXT)))
+            }?;
+
+            let bindings = if let Some(b) = table.get(T_BINDINGS) {
                 telemetry::Table::try_from(b.clone())
             } else {
-                Err(GraphError::GraphPrecondition(
-                    "failed to find `bindings` in Table".to_string(),
-                ))
+                Err(GraphError::GraphPrecondition(format!("failed to find `{}` in Table", T_BINDINGS)))
             }?;
 
-            Ok(PolicyResult { item, bindings })
+            Ok(PolicyResult { item, context, bindings })
         } else {
             Err(GraphError::TypeError("Table".to_string(), format!("{:?}", value)))
         }
@@ -90,7 +101,7 @@ where
     policy: P,
     context_inlet: Inlet<C>,
     inlet: Inlet<T>,
-    outlet: Outlet<PolicyResult<T>>,
+    outlet: Outlet<PolicyResult<T, C>>,
     tx_api: PolicyFilterApi<C>,
     rx_api: mpsc::UnboundedReceiver<PolicyFilterCmd<C>>,
     pub tx_monitor: broadcast::Sender<PolicyFilterEvent<T, C>>,
@@ -142,7 +153,7 @@ impl<T, C, A, P> SourceShape for PolicyFilter<T, C, A, P>
 where
     P: QueryPolicy<Item = T, Context = C, Args = A>,
 {
-    type Out = PolicyResult<T>;
+    type Out = PolicyResult<T, C>;
     #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()
@@ -270,7 +281,7 @@ where
 
     #[tracing::instrument(level = "info", name = "policy_filter handle item", skip(oso, outlet), fields())]
     async fn handle_item(
-        item: T, context: &C, policy: &P, oso: &Oso, outlet: &Outlet<PolicyResult<T>>,
+        item: T, context: &C, policy: &P, oso: &Oso, outlet: &Outlet<PolicyResult<T, C>>,
         tx: &broadcast::Sender<PolicyFilterEvent<T, C>>,
     ) -> GraphResult<()> {
         let query_result: GraphResult<QueryResult> = {
@@ -290,7 +301,7 @@ where
                     ?bindings,
                     "item and context passed policy review - sending via outlet."
                 );
-                outlet.send(PolicyResult::new(item, bindings)).await?;
+                outlet.send(PolicyResult::new(item, context.clone(), bindings)).await?;
                 Ok(())
             }
 
@@ -555,6 +566,7 @@ mod tests {
                     User {
                         username: "peter.pan@example.com".to_string()
                     },
+                    context,
                     HashMap::default()
                 )
             );

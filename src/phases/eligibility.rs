@@ -17,7 +17,7 @@ pub struct Eligibility<T, C> {
     policy_filter: Box<dyn Stage>,
     pub context_inlet: Inlet<C>,
     inlet: Inlet<T>,
-    outlet: Outlet<PolicyResult<T>>,
+    outlet: Outlet<PolicyResult<T, C>>,
     tx_policy_api: PolicyFilterApi<C>,
     tx_policy_monitor: broadcast::Sender<PolicyFilterEvent<T, C>>,
 }
@@ -73,7 +73,7 @@ impl<T, C> SinkShape for Eligibility<T, C> {
 }
 
 impl<T, C> SourceShape for Eligibility<T, C> {
-    type Out = PolicyResult<T>;
+    type Out = PolicyResult<T, C>;
     #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()
