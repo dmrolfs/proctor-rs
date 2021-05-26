@@ -53,7 +53,7 @@ impl<Acc> FoldCmd<Acc> {
 ///     });
 ///     let mut rx_sum = fold.take_final_rx().unwrap();
 ///
-///     fold.inlet().attach(rx).await;
+///     fold.inlet().attach("test_channel", rx).await;
 ///
 ///     let sink_handle = tokio::spawn(async move {
 ///         fold.run().await;

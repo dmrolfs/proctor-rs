@@ -149,7 +149,7 @@ impl<T: Debug> Inlet<T> {
     /// async fn main() {
     ///     let (tx, mut rx) = mpsc::channel(100);
     ///     let mut port = Inlet::new("port");
-    ///     port.attach(rx).await;
+    ///     port.attach("test_channel", rx).await;
     ///
     ///     tokio::spawn(async move {
     ///         tx.send("hello").await.unwrap();
@@ -170,7 +170,7 @@ impl<T: Debug> Inlet<T> {
     /// async fn main() {
     ///     let (tx, mut rx) = mpsc::channel(100);
     ///     let mut port = Inlet::new("port");
-    ///     port.attach(rx).await;
+    ///     port.attach("test_channel", rx).await;
     ///
     ///     tx.send("hello").await.unwrap();
     ///     tx.send("world").await.unwrap();
@@ -291,7 +291,7 @@ impl<T> Outlet<T> {
     /// async fn main() {
     ///     let (tx, mut rx) = mpsc::channel(1);
     ///     let mut port = Outlet::new("port");
-    ///     port.attach(tx).await;
+    ///     port.attach("test_channel", tx).await;
     ///
     ///     tokio::spawn(async move {
     ///         for i in 0..10 {

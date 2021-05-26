@@ -25,7 +25,7 @@ use std::fmt::{self, Debug};
 ///     let mut fold = stage::Fold::new("sum values", 0, |acc, x| acc + x );
 ///     let mut rx_sum_sq = fold.take_final_rx().unwrap();
 ///
-///     sq.inlet().attach(rx).await;
+///     sq.inlet().attach("test_channel", rx).await;
 ///     (sq.outlet(), fold.inlet()).connect().await;
 ///
 ///     let sq_handle = tokio::spawn(async move { sq.run().await; });

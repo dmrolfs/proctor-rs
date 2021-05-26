@@ -24,7 +24,7 @@ use std::fmt::{self, Debug};
 ///     let mut fold = stage::Fold::new("sum even values", 0, |acc, x| acc + x );
 ///     let mut rx_sum_sq = fold.take_final_rx().unwrap();
 ///
-///     filter.inlet().attach(rx).await;
+///     filter.inlet().attach("test_channel", rx).await;
 ///     (filter.outlet(), fold.inlet()).connect().await;
 ///
 ///     let filter_handle = tokio::spawn(async move { filter.run().await; });

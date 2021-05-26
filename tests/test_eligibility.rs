@@ -21,6 +21,7 @@ use proctor::AppData;
 use proctor::{ProctorContext, ProctorResult};
 use serde_test::{assert_tokens, Token};
 use std::collections::{HashMap, HashSet};
+use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::time::Duration;
@@ -331,8 +332,8 @@ struct TestFlow<D, C> {
     pub tx_clearinghouse_api: collection::ClearinghouseApi,
     pub tx_eligibility_api: elements::PolicyFilterApi<C>,
     pub rx_eligibility_monitor: elements::PolicyFilterMonitor<D, C>,
-    pub tx_sink_api: stage::FoldApi<Vec<PolicyResult<D>>>,
-    pub rx_sink: Option<oneshot::Receiver<Vec<PolicyResult<D>>>>,
+    pub tx_sink_api: stage::FoldApi<Vec<PolicyResult<D, C>>>,
+    pub rx_sink: Option<oneshot::Receiver<Vec<PolicyResult<D, C>>>>,
 }
 
 impl<D, C> TestFlow<D, C>
@@ -363,7 +364,7 @@ where
         let tx_eligibility_api = eligibility.tx_api();
         let rx_eligibility_monitor = eligibility.rx_monitor();
 
-        let mut sink = stage::Fold::<_, PolicyResult<D>, _>::new("sink", Vec::new(), |mut acc, item| {
+        let mut sink = stage::Fold::<_, PolicyResult<D, C>, _>::new("sink", Vec::new(), |mut acc, item| {
             acc.push(item);
             acc
         });
@@ -463,7 +464,7 @@ where
             .map_err(|err| err.into())
     }
 
-    pub async fn inspect_sink(&self) -> GraphResult<Vec<PolicyResult<D>>> {
+    pub async fn inspect_sink(&self) -> GraphResult<Vec<PolicyResult<D, C>>> {
         let (cmd, acc) = stage::FoldCmd::get_accumulation();
         self.tx_sink_api.send(cmd)?;
         acc.await
@@ -476,7 +477,7 @@ where
 
     #[tracing::instrument(level = "info", skip(self, check_size))]
     pub async fn check_sink_accumulation(
-        &self, label: &str, timeout: Duration, mut check_size: impl FnMut(Vec<PolicyResult<D>>) -> bool,
+        &self, label: &str, timeout: Duration, mut check_size: impl FnMut(Vec<PolicyResult<D, C>>) -> bool,
     ) -> GraphResult<bool> {
         use std::time::Instant;
         let deadline = Instant::now() + timeout;
@@ -515,7 +516,7 @@ where
     }
 
     #[tracing::instrument(level = "warn", skip(self))]
-    pub async fn close(mut self) -> GraphResult<Vec<PolicyResult<D>>> {
+    pub async fn close(mut self) -> GraphResult<Vec<PolicyResult<D, C>>> {
         let (stop, _) = stage::ActorSourceCmd::stop();
         self.tx_data_source_api.send(stop)?;
 
@@ -621,12 +622,15 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     let now = Utc::now();
     let t1 = now - chrono::Duration::days(1);
     let t1_rep = format!("{}", t1.format("%+"));
-    flow.push_context(maplit::hashmap! {
+
+    let context_data = maplit::hashmap! {
         "cluster.location_code" => 3.to_telemetry(),
         "cluster.is_deploying" => false.to_telemetry(),
         "cluster.last_deployment" => t1_rep.to_telemetry(),
-    })
-    .await?;
+    };
+    let context_telemetry: Telemetry = context_data.clone().into_iter().collect();
+    let context: TestEligibilityContext = context_telemetry.try_into()?;
+    flow.push_context(context_data).await?;
 
     tracing::warn!("DMR: 03. Verify environment set...");
 
@@ -695,12 +699,14 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
                 MeasurementData {
                     measurement: std::f64::consts::PI,
                 },
+                context.clone(),
                 HashMap::new()
             ),
             PolicyResult::new(
                 MeasurementData {
                     measurement: std::f64::consts::TAU,
                 },
+                context.clone(),
                 HashMap::new()
             ),
         ]
@@ -936,7 +942,7 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
             .await?
     );
 
-    let actual: Vec<PolicyResult<TestItem>> = flow.close().await?;
+    let actual: Vec<PolicyResult<TestItem, TestEligibilityContext>> = flow.close().await?;
 
     tracing::warn!(?actual, "DMR: 08. Verify final accumulation...");
     let actual_vals: Vec<(f64, i32)> = actual
@@ -1095,13 +1101,15 @@ async fn test_eligibility_replace_policy() -> anyhow::Result<()> {
 
     let mut flow = TestFlow::new(data_subscription, policy).await?;
 
-    flow.push_context(maplit::hashmap! {
+    let context_data = maplit::hashmap! {
         "cluster.location_code" => 23.to_telemetry(),
         "cluster.is_deploying" => false.to_telemetry(),
         "cluster.last_deployment" => DT_1_STR.as_str().to_telemetry(),
         "cat" => "Otis".to_telemetry(),
-    })
-    .await?;
+    };
+    let context_telemetry: Telemetry = context_data.clone().into_iter().collect();
+    let context: TestEligibilityContext = context_telemetry.try_into()?;
+    flow.push_context(context_data).await?;
 
     let event = flow.recv_policy_event().await?;
     assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
@@ -1128,9 +1136,13 @@ async fn test_eligibility_replace_policy() -> anyhow::Result<()> {
     assert_eq!(
         actual,
         vec![
-            PolicyResult::new(TestItem::new(std::f64::consts::PI, 1, too_old_ts), HashMap::new()),
-            PolicyResult::new(TestItem::new(17.327, 2, good_ts), HashMap::new()),
-            PolicyResult::new(TestItem::new(17.327, 2, good_ts), HashMap::new()),
+            PolicyResult::new(
+                TestItem::new(std::f64::consts::PI, 1, too_old_ts),
+                context.clone(),
+                HashMap::new()
+            ),
+            PolicyResult::new(TestItem::new(17.327, 2, good_ts), context.clone(), HashMap::new()),
+            PolicyResult::new(TestItem::new(17.327, 2, good_ts), context.clone(), HashMap::new()),
         ]
     );
     Ok(())

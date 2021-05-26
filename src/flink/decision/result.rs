@@ -1,15 +1,17 @@
 use crate::elements::{PolicyResult, TelemetryValue, ToTelemetry};
 use crate::error::GraphError;
 use crate::graph::stage::{self, ThroughStage};
+use crate::{AppData, ProctorContext};
 use std::convert::TryFrom;
 use std::fmt::Debug;
-use crate::{AppData, ProctorContext};
 
 pub const DECISION_BINDING: &'static str = "direction";
 pub const SCALE_UP: &'static str = "up";
 pub const SCALE_DOWN: &'static str = "down";
 
-pub fn make_decision_transform<T, C, S: Into<String>>(name: S) -> impl ThroughStage<PolicyResult<T, C>, DecisionResult<T>>
+pub fn make_decision_transform<T, C, S: Into<String>>(
+    name: S,
+) -> impl ThroughStage<PolicyResult<T, C>, DecisionResult<T>>
 where
     T: AppData + Clone + PartialEq,
     C: ProctorContext,

@@ -115,7 +115,7 @@ impl Constraint {
 ///         17,
 ///         tick::Constraint::by_count(limit)
 ///     );
-///     tick.outlet().attach(tx).await;
+///     tick.outlet().attach("test_channel", tx).await;
 ///
 ///     tokio::spawn(async move {
 ///         tick.run().await;

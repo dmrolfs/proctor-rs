@@ -164,8 +164,8 @@ struct TestFlow {
     pub tx_env_source_api: stage::ActorSourceApi<TestContext>,
     pub tx_policy_api: elements::PolicyFilterApi<TestContext>,
     pub rx_policy_monitor: elements::PolicyFilterMonitor<TestItem, TestContext>,
-    pub tx_sink_api: stage::FoldApi<Vec<PolicyResult<TestItem>>>,
-    pub rx_sink: Option<oneshot::Receiver<Vec<PolicyResult<TestItem>>>>,
+    pub tx_sink_api: stage::FoldApi<Vec<PolicyResult<TestItem, TestContext>>>,
+    pub rx_sink: Option<oneshot::Receiver<Vec<PolicyResult<TestItem, TestContext>>>>,
 }
 
 impl TestFlow {
@@ -185,10 +185,11 @@ impl TestFlow {
         let tx_policy_api = policy_filter.tx_api();
         let rx_policy_monitor = policy_filter.rx_monitor();
 
-        let mut sink = stage::Fold::<_, PolicyResult<TestItem>, _>::new("sink", Vec::new(), |mut acc, item| {
-            acc.push(item);
-            acc
-        });
+        let mut sink =
+            stage::Fold::<_, PolicyResult<TestItem, TestContext>, _>::new("sink", Vec::new(), |mut acc, item| {
+                acc.push(item);
+                acc
+            });
         let tx_sink_api = sink.tx_api();
         let rx_sink = sink.take_final_rx();
 
@@ -258,7 +259,7 @@ impl TestFlow {
             .map_err(|err| err.into())
     }
 
-    pub async fn inspect_sink(&self) -> GraphResult<Vec<PolicyResult<TestItem>>> {
+    pub async fn inspect_sink(&self) -> GraphResult<Vec<PolicyResult<TestItem, TestContext>>> {
         let (cmd, acc) = stage::FoldCmd::get_accumulation();
         self.tx_sink_api.send(cmd)?;
         acc.await
@@ -269,7 +270,7 @@ impl TestFlow {
             .map_err(|err| err.into())
     }
 
-    pub async fn close(mut self) -> GraphResult<Vec<PolicyResult<TestItem>>> {
+    pub async fn close(mut self) -> GraphResult<Vec<PolicyResult<TestItem, TestContext>>> {
         let (stop, _) = stage::ActorSourceCmd::stop();
         self.tx_item_source_api.send(stop)?;
 
@@ -339,7 +340,11 @@ async fn test_policy_filter_happy_context() -> anyhow::Result<()> {
     let actual = flow.inspect_sink().await?;
     assert_eq!(
         actual,
-        vec![PolicyResult::new(TestItem::new(consts::PI, ts, 1), HashMap::new()),]
+        vec![PolicyResult::new(
+            TestItem::new(consts::PI, ts, 1),
+            TestContext::new(33),
+            HashMap::new()
+        ),]
     );
 
     tracing::info!("DMR: 06. Push another Item...");
@@ -356,8 +361,8 @@ async fn test_policy_filter_happy_context() -> anyhow::Result<()> {
     assert_eq!(
         actual,
         vec![
-            PolicyResult::new(TestItem::new(consts::PI, ts, 1), HashMap::new()),
-            PolicyResult::new(TestItem::new(consts::TAU, ts, 2), HashMap::new())
+            PolicyResult::new(TestItem::new(consts::PI, ts, 1), TestContext::new(33), HashMap::new()),
+            PolicyResult::new(TestItem::new(consts::TAU, ts, 2), TestContext::new(33), HashMap::new())
         ]
     );
     Ok(())
@@ -416,8 +421,8 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     assert_eq!(
         actual,
         vec![
-            PolicyResult::new(TestItem::new(consts::PI, ts, 1), HashMap::new()),
-            PolicyResult::new(TestItem::new(consts::LN_2, ts, 5), HashMap::new())
+            PolicyResult::new(TestItem::new(consts::PI, ts, 1), TestContext::new(33), HashMap::new()),
+            PolicyResult::new(TestItem::new(consts::LN_2, ts, 5), TestContext::new(33), HashMap::new())
         ]
     );
     Ok(())
@@ -457,6 +462,7 @@ async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
         vec![
             PolicyResult::new(
                 TestItem::new(consts::PI, ts, 1),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
                 maplit::hashmap! {
                     "custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
                         "cat".to_string() => "Otis".to_telemetry(),
@@ -465,6 +471,7 @@ async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
             ),
             PolicyResult::new(
                 TestItem::new(consts::TAU, ts, 2),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
                 maplit::hashmap! {
                     "custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
                         "cat".to_string() => "Otis".to_telemetry(),
@@ -515,6 +522,7 @@ async fn test_policy_w_binding() -> anyhow::Result<()> {
         vec![
             PolicyResult::new(
                 TestItem::new(consts::PI, ts, 1),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
                 maplit::hashmap! {
                     "custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
                         "cat".to_string() => "Otis".to_telemetry(),
@@ -523,6 +531,7 @@ async fn test_policy_w_binding() -> anyhow::Result<()> {
             ),
             PolicyResult::new(
                 TestItem::new(consts::TAU, ts, 2),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
                 maplit::hashmap! {
                     "custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
                         "cat".to_string() => "Otis".to_telemetry(),
@@ -575,6 +584,7 @@ lag_2(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
         actual,
         vec![PolicyResult::new(
             TestItem::new(consts::TAU, ts, 2),
+            TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
             maplit::hashmap! { "custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
                 "cat".to_string() => "Otis".to_telemetry(),
             })}
@@ -610,7 +620,11 @@ and item.input_messages_per_sec(item.inbox_lag) < 36;"#,
     tracing::info!(?actual, "verifying actual result...");
     assert_eq!(
         actual,
-        vec![PolicyResult::new(TestItem::new(17.327, ts, 2), HashMap::new(),)]
+        vec![PolicyResult::new(
+            TestItem::new(17.327, ts, 2),
+            TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
+            HashMap::new(),
+        )]
     );
     Ok(())
 }
@@ -654,17 +668,23 @@ async fn test_replace_policy() -> anyhow::Result<()> {
         vec![
             PolicyResult::new(
                 TestItem::new(consts::PI, too_old_ts, 1),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
                 maplit::hashmap! {"custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
                     "cat".to_string() => "Otis".to_telemetry(),
                 })}
             ),
             PolicyResult::new(
                 TestItem::new(17.327, good_ts, 2),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
                 maplit::hashmap! {"custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
                     "cat".to_string() => "Otis".to_telemetry(),
                 })}
             ),
-            PolicyResult::new(TestItem::new(17.327, good_ts, 2), HashMap::new()),
+            PolicyResult::new(
+                TestItem::new(17.327, good_ts, 2),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
+                HashMap::new()
+            ),
         ]
     );
     Ok(())
@@ -706,15 +726,21 @@ async fn test_append_policy() -> anyhow::Result<()> {
     assert_eq!(
         actual,
         vec![
-            PolicyResult::new(TestItem::new(17.327, ts, 2), HashMap::new()),
+            PolicyResult::new(
+                TestItem::new(17.327, ts, 2),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
+                HashMap::new()
+            ),
             PolicyResult::new(
                 TestItem::new(consts::PI, ts, 1),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
                 maplit::hashmap! {"custom".to_string() => TelemetryValue::Table(maplit::hashmap!{
                     "cat".to_string() => "Otis".to_telemetry(),
                 })}
             ),
             PolicyResult::new(
                 TestItem::new(17.327, ts, 2),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
                 maplit::hashmap! {"custom".to_string() => TelemetryValue::Table(maplit::hashmap!{
                     "cat".to_string() => "Otis".to_telemetry(),
                 })}
@@ -770,20 +796,30 @@ async fn test_reset_policy() -> anyhow::Result<()> {
     assert_eq!(
         actual,
         vec![
-            PolicyResult::new(TestItem::new(consts::E, ts, 2), HashMap::new()),
+            PolicyResult::new(
+                TestItem::new(consts::E, ts, 2),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
+                HashMap::new()
+            ),
             PolicyResult::new(
                 TestItem::new(consts::TAU, ts, 1),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
                 maplit::hashmap! { "custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
                     "cat".to_string() => "Otis".to_telemetry(),
                 })}
             ),
             PolicyResult::new(
                 TestItem::new(consts::LN_2, ts, 2),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
                 maplit::hashmap! { "custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
                     "cat".to_string() => "Otis".to_telemetry(),
                 })}
             ),
-            PolicyResult::new(TestItem::new(consts::SQRT_2, ts, 2), HashMap::new()),
+            PolicyResult::new(
+                TestItem::new(consts::SQRT_2, ts, 2),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
+                HashMap::new()
+            ),
         ]
     );
     Ok(())

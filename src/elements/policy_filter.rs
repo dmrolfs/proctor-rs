@@ -35,7 +35,11 @@ pub struct PolicyResult<T, C> {
 
 impl<T, C> PolicyResult<T, C> {
     pub fn new(item: T, context: C, bindings: telemetry::Table) -> Self {
-        Self { item, context, bindings }
+        Self {
+            item,
+            context,
+            bindings,
+        }
     }
 }
 
@@ -71,22 +75,35 @@ where
             let item = if let Some(i) = table.get(T_ITEM) {
                 T::try_from(i.clone()).map_err(|err| err.into())
             } else {
-                Err(GraphError::GraphPrecondition(format!("failed to find `{}` in Table", T_ITEM)))
+                Err(GraphError::GraphPrecondition(format!(
+                    "failed to find `{}` in Table",
+                    T_ITEM
+                )))
             }?;
 
             let context = if let Some(c) = table.get(T_CONTEXT) {
                 C::try_from(c.clone()).map_err(|err| err.into())
             } else {
-                Err(GraphError::GraphPrecondition(format!("failed to find `{}` in Table", T_CONTEXT)))
+                Err(GraphError::GraphPrecondition(format!(
+                    "failed to find `{}` in Table",
+                    T_CONTEXT
+                )))
             }?;
 
             let bindings = if let Some(b) = table.get(T_BINDINGS) {
                 telemetry::Table::try_from(b.clone())
             } else {
-                Err(GraphError::GraphPrecondition(format!("failed to find `{}` in Table", T_BINDINGS)))
+                Err(GraphError::GraphPrecondition(format!(
+                    "failed to find `{}` in Table",
+                    T_BINDINGS
+                )))
             }?;
 
-            Ok(PolicyResult { item, context, bindings })
+            Ok(PolicyResult {
+                item,
+                context,
+                bindings,
+            })
         } else {
             Err(GraphError::TypeError("Table".to_string(), format!("{:?}", value)))
         }

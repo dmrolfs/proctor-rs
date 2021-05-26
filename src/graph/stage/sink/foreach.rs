@@ -34,7 +34,7 @@ use std::fmt;
 ///         }
 ///     );
 ///
-///     foreach.inlet().attach(rx).await;
+///     foreach.inlet().attach("test_channel", rx).await;
 ///
 ///     let sink_handle = tokio::spawn(async move { foreach.run().await; });
 ///
