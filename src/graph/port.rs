@@ -74,7 +74,9 @@ impl<T> Inlet<T> {
         Self(name.into(), Arc::new(Mutex::new(None)))
     }
 
-    pub fn with_receiver<S0: Into<String>, S1: Into<String>>(name: S0, receiver_name: S1, rx: mpsc::Receiver<T>) -> Self {
+    pub fn with_receiver<S0: Into<String>, S1: Into<String>>(
+        name: S0, receiver_name: S1, rx: mpsc::Receiver<T>,
+    ) -> Self {
         Self(name.into(), Arc::new(Mutex::new(Some((receiver_name.into(), rx)))))
     }
 }
@@ -120,7 +122,7 @@ impl<T: Debug> Inlet<T> {
 
     pub async fn check_attachment(&self) -> Result<(), GraphError> {
         if self.is_attached().await {
-            let sender = self.1.lock().await.as_ref().map(|s|s.0.clone()).unwrap();
+            let sender = self.1.lock().await.as_ref().map(|s| s.0.clone()).unwrap();
             tracing::trace!("inlet connected: {} -> {}", sender, self.0);
             return Ok(());
         } else {
@@ -211,7 +213,9 @@ impl<T> Outlet<T> {
         Self(name.into(), Arc::new(Mutex::new(None)))
     }
 
-    pub fn with_sender<S0: Into<String>, S1: Into<String>>(name: S0, sender_name: S1, tx: mpsc::Sender<T>) -> Outlet<T> {
+    pub fn with_sender<S0: Into<String>, S1: Into<String>>(
+        name: S0, sender_name: S1, tx: mpsc::Sender<T>,
+    ) -> Outlet<T> {
         Self(name.into(), Arc::new(Mutex::new(Some((sender_name.into(), tx)))))
     }
 }
@@ -247,7 +251,7 @@ impl<T> Outlet<T> {
 
     pub async fn check_attachment(&self) -> Result<(), GraphError> {
         if self.is_attached().await {
-            let receiver= self.1.lock().await.as_ref().map(|s|s.0.clone()).unwrap();
+            let receiver = self.1.lock().await.as_ref().map(|s| s.0.clone()).unwrap();
             tracing::info!("outlet connected: {} -> {}", self.0, receiver);
             return Ok(());
         } else {

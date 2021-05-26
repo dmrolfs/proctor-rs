@@ -5,26 +5,29 @@ use lazy_static::lazy_static;
 use oso::{Oso, PolarClass, PolarValue, ToPolar};
 use proctor::elements;
 use proctor::elements::{
-    Policy, PolicyResult, PolicySettings, PolicySource, PolicySubscription, QueryPolicy, Telemetry, TelemetryValue, ToTelemetry,
+    Policy, PolicyResult, PolicySettings, PolicySource, PolicySubscription, QueryPolicy, Telemetry, TelemetryValue,
+    ToTelemetry,
 };
 use proctor::flink::decision::context::FlinkDecisionContext;
 use proctor::flink::decision::policy::DecisionPolicy;
-use proctor::flink::{MetricCatalog, UtilizationMetrics, FlowMetrics};
+use proctor::flink::{FlowMetrics, MetricCatalog, UtilizationMetrics};
 use proctor::graph::stage::{self, ThroughStage, WithApi, WithMonitor};
-use proctor::graph::{Connect, Graph, GraphResult, Port, SinkShape, SourceShape, ThroughShape, UniformFanInShape, Inlet};
+use proctor::graph::{
+    Connect, Graph, GraphResult, Inlet, Port, SinkShape, SourceShape, ThroughShape, UniformFanInShape,
+};
 use proctor::phases::collection;
 use proctor::phases::collection::TelemetrySubscription;
 use proctor::phases::decision::Decision;
 use proctor::{AppData, ProctorContext, ProctorResult};
-use serde::{Serialize, Deserialize};
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, TimestampSeconds};
 use std::collections::HashSet;
+use std::convert::TryFrom;
 use std::marker::PhantomData;
 use std::time::Duration;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
-use serde_with::{serde_as, TimestampSeconds};
-use std::convert::TryFrom;
 
 lazy_static! {
     static ref DT_1: DateTime<Utc> = DateTime::parse_from_str("2021-05-05T17:11:07.246310806Z", "%+")
@@ -110,12 +113,9 @@ where
     C: ProctorContext,
 {
     pub async fn new(
-        telemetry_subscription: TelemetrySubscription,
-        context_subscription: TelemetrySubscription,
-        decision_stage: impl ThroughStage<In, Out>,
-        decision_context_inlet: Inlet<C>,
-        tx_decision_api: elements::PolicyFilterApi<C>,
-        rx_decision_monitor: elements::PolicyFilterMonitor<In, C>,
+        telemetry_subscription: TelemetrySubscription, context_subscription: TelemetrySubscription,
+        decision_stage: impl ThroughStage<In, Out>, decision_context_inlet: Inlet<C>,
+        tx_decision_api: elements::PolicyFilterApi<C>, rx_decision_monitor: elements::PolicyFilterMonitor<In, C>,
     ) -> ProctorResult<Self> {
         let telemetry_source = stage::ActorSource::<Telemetry>::new("telemetry_source");
         let tx_data_source_api = telemetry_source.tx_api();
@@ -153,7 +153,9 @@ where
         clearinghouse
             .add_subscription(context_subscription, &context_channel.subscription_receiver)
             .await;
-        (context_channel.outlet(), decision_context_inlet.clone()).connect().await;
+        (context_channel.outlet(), decision_context_inlet.clone())
+            .connect()
+            .await;
         (telemetry_channel.outlet(), decision_stage.inlet()).connect().await;
         (decision_stage.outlet(), sink.inlet()).connect().await;
 
@@ -298,7 +300,7 @@ where
     }
 }
 
-fn make_test_item(input_messages_per_sec: f32, inbox_lag: f32, ) -> MetricCatalog {
+fn make_test_item(input_messages_per_sec: f32, inbox_lag: f32) -> MetricCatalog {
     MetricCatalog {
         flow: FlowMetrics {
             input_messages_per_sec,
@@ -313,13 +315,13 @@ fn make_test_item(input_messages_per_sec: f32, inbox_lag: f32, ) -> MetricCatalo
         },
         utilization: UtilizationMetrics {
             task_cpu_load: 0.0,
-            network_io_utilization: 0.0
+            network_io_utilization: 0.0,
         },
         custom: std::collections::HashMap::default(),
     }
 }
 
-#[tokio::test(flavor="multi_thread", worker_threads = 4)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_decision_carry_policy_result() -> anyhow::Result<()> {
     lazy_static::initialize(&proctor::tracing::TEST_TRACING);
     let main_span = tracing::info_span!("test_decision_carry_policy_result");
@@ -349,16 +351,23 @@ async fn test_decision_carry_policy_result() -> anyhow::Result<()> {
         optional_subscription_fields: HashSet::new(),
         source: PolicySource::String(
             r#"scale_up(item, context, _) if 3.0 < item.flow.input_messages_per_sec;
-            scale_down(item, context, _) if item.flow.input_messages_per_sec < 1.0;"#.to_string()
-        )
+            scale_down(item, context, _) if item.flow.input_messages_per_sec < 1.0;"#
+                .to_string(),
+        ),
     });
 
     let context_subscription = policy.subscription("decision_context");
 
-    let decision_stage = Decision::<MetricCatalog, PolicyResult<MetricCatalog>, FlinkDecisionContext>::carry_policy_result("carry_policy_decision", policy).await;
+    let decision_stage =
+        Decision::<MetricCatalog, PolicyResult<MetricCatalog>, FlinkDecisionContext>::carry_policy_result(
+            "carry_policy_decision",
+            policy,
+        )
+        .await;
     let decision_context_inlet = decision_stage.context_inlet();
     let tx_decision_api: elements::PolicyFilterApi<FlinkDecisionContext> = decision_stage.tx_api();
-    let rx_decision_monitor: elements::PolicyFilterMonitor<MetricCatalog, FlinkDecisionContext> = decision_stage.rx_monitor();
+    let rx_decision_monitor: elements::PolicyFilterMonitor<MetricCatalog, FlinkDecisionContext> =
+        decision_stage.rx_monitor();
 
     let mut flow = TestFlow::new(
         telemetry_subscription,
@@ -367,12 +376,14 @@ async fn test_decision_carry_policy_result() -> anyhow::Result<()> {
         decision_context_inlet,
         tx_decision_api,
         rx_decision_monitor,
-    ).await?;
+    )
+    .await?;
 
     flow.push_context(maplit::hashmap! {
         "all_sinks_healthy" => true.to_telemetry(),
         "nr_task_managers" => 4.to_telemetry(),
-    }).await?;
+    })
+    .await?;
 
     let event = flow.recv_policy_event().await?;
     assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
@@ -412,10 +423,11 @@ async fn test_decision_carry_policy_result() -> anyhow::Result<()> {
     let actual_vals: Vec<(f32, Option<String>)> = actual
         .into_iter()
         .map(|a| {
-            let direction = a.bindings
+            let direction = a
+                .bindings
                 .get("direction")
                 .cloned()
-                .map(|d| String::try_from(d).expect("failed to get string from telemetry value")) ;
+                .map(|d| String::try_from(d).expect("failed to get string from telemetry value"));
 
             (a.item.flow.input_messages_per_sec, direction)
         })
@@ -423,13 +435,132 @@ async fn test_decision_carry_policy_result() -> anyhow::Result<()> {
 
     assert_eq!(
         actual_vals,
-        vec![(std::f32::consts::PI, Some("up".to_string())), (std::f32::consts::LN_2, Some("down".to_string())),]
+        vec![
+            (std::f32::consts::PI, Some("up".to_string())),
+            (std::f32::consts::LN_2, Some("down".to_string())),
+        ]
     );
 
     Ok(())
 }
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_decision_common() -> anyhow::Result<()> {
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
+    let main_span = tracing::info_span!("test_decision_basic");
+    let _ = main_span.enter();
 
+    let telemetry_subscription = TelemetrySubscription::new("measurements")
+        .with_required_fields(maplit::hashset! {
+            "input_messages_per_sec",
+            "input_consumer_lag",
+            "records_out_per_sec",
+            "max_message_latency",
+            "net_in_utilization",
+            "net_out_utilization",
+            "sink_health_metrics",
+            "task_nr_records_in_per_sec",
+            "task_nr_records_out_per_sec",
+            "task_cpu_load",
+            "network_io_utilization",
+        })
+        .with_optional_fields(maplit::hashset! {
+            "all_sinks_healthy",
+            "nr_task_managers",
+        });
 
+    let policy = make_test_policy(&TestSettings {
+        required_subscription_fields: HashSet::new(),
+        optional_subscription_fields: HashSet::new(),
+        source: PolicySource::String(
+            r#"scale_up(item, context, _) if 3.0 < item.flow.input_messages_per_sec;
+            scale_down(item, context, _) if item.flow.input_messages_per_sec < 1.0;"#
+                .to_string(),
+        ),
+    });
+
+    let context_subscription = policy.subscription("decision_context");
+
+    let decision_stage =
+        Decision::<MetricCatalog, MetricCatalog, FlinkDecisionContext>::basic("basic_decision", policy).await;
+    let decision_context_inlet = decision_stage.context_inlet();
+    let tx_decision_api: elements::PolicyFilterApi<FlinkDecisionContext> = decision_stage.tx_api();
+    let rx_decision_monitor: elements::PolicyFilterMonitor<MetricCatalog, FlinkDecisionContext> =
+        decision_stage.rx_monitor();
+
+    let mut flow = TestFlow::new(
+        telemetry_subscription,
+        context_subscription,
+        decision_stage,
+        decision_context_inlet,
+        tx_decision_api,
+        rx_decision_monitor,
+    )
+    .await?;
+
+    flow.push_context(maplit::hashmap! {
+        "all_sinks_healthy" => true.to_telemetry(),
+        "nr_task_managers" => 4.to_telemetry(),
+    })
+    .await?;
+
+    let event = flow.recv_policy_event().await?;
+    assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
+
+    // let ts = *DT_1 + chrono::Duration::hours(1);
+    let item = make_test_item(std::f32::consts::PI, 1.0);
+    tracing::warn!(?item, "DMR-A.1: created item to push.");
+    let telemetry = Telemetry::try_from(&item);
+    tracing::warn!(?item, ?telemetry, "DMR-A.2: converted item to telemetry and pushing...");
+    flow.push_telemetry(telemetry?).await?;
+    tracing::info!("waiting for item to reach sink...");
+    assert!(
+        flow.check_sink_accumulation("first", Duration::from_millis(250), |acc| acc.len() == 1)
+            .await?
+    );
+
+    let item = make_test_item(std::f32::consts::E, 2.0);
+    let telemetry = Telemetry::try_from(&item);
+    flow.push_telemetry(telemetry?).await?;
+    let event = flow.recv_policy_event().await?;
+    assert!(matches!(event, elements::PolicyFilterEvent::ItemBlocked(_)));
+    tracing::warn!(?event, "DMR-C: item dropped confirmed");
+
+    let item = make_test_item(std::f32::consts::LN_2, 1.0);
+    tracing::warn!(?item, "DMR-D.1: created item to push.");
+    let telemetry = Telemetry::try_from(&item);
+    tracing::warn!(?item, ?telemetry, "DMR-D.2: converted item to telemetry and pushing...");
+    flow.push_telemetry(telemetry?).await?;
+    tracing::info!("waiting for item to reach sink...");
+    assert!(
+        flow.check_sink_accumulation("first", Duration::from_millis(250), |acc| acc.len() == 2)
+            .await?
+    );
+
+    let actual: Vec<MetricCatalog> = flow.close().await?;
+    tracing::warn!(?actual, "DMR: 08. Verify final accumulation...");
+    let actual_vals: Vec<(f32, Option<String>)> = actual
+        .into_iter()
+        .map(|a| {
+            let direction = a
+                .bindings
+                .get("direction")
+                .cloned()
+                .map(|d| String::try_from(d).expect("failed to get string from telemetry value"));
+
+            (a.item.flow.input_messages_per_sec, direction)
+        })
+        .collect();
+
+    assert_eq!(
+        actual_vals,
+        vec![
+            (std::f32::consts::PI, Some("up".to_string())),
+            (std::f32::consts::LN_2, Some("down".to_string())),
+        ]
+    );
+
+    Ok(())
+}
 
 // #[derive(Debug)]
 // struct TestDecisionPolicy<D> {

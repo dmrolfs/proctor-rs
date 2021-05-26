@@ -1,10 +1,12 @@
-use crate::elements::{PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, PolicyResult, QueryPolicy, QueryResult};
+use crate::elements::{
+    PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, PolicyResult, QueryPolicy, QueryResult,
+};
 use crate::graph::stage::{Stage, ThroughStage, WithApi, WithMonitor};
 use crate::graph::{stage, Connect, Graph, GraphResult, Inlet, Outlet, Port, SinkShape, SourceShape};
 use crate::{AppData, ProctorContext};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
-use oso::{PolarValue, ToPolar, ToPolarList, Oso};
+use oso::{Oso, PolarValue, ToPolar, ToPolarList};
 use std::fmt::{self, Debug};
 use tokio::sync::broadcast;
 
@@ -18,24 +20,24 @@ pub struct Decision<In, Out, C> {
     tx_policy_monitor: broadcast::Sender<PolicyFilterEvent<In, C>>,
 }
 
-impl<T: AppData + ToPolar + Clone, C: ProctorContext> Decision<T, T, C> {
-    #[tracing::instrument(level = "info", skip(name))]
-    pub async fn basic<S: Into<String>>(
-        name: S, policy: impl QueryPolicy<Item = T, Context = C, Args = (T, C, PolarValue)> + 'static,
-    ) -> Self {
-        let strip_policy_result: stage::Map<_, PolicyResult<T>, T> =
-            stage::Map::new("strip_policy_result", |res: PolicyResult<T>| res.item);
-        Self::with_transform(name, policy, strip_policy_result).await
-    }
-}
+// impl<T: AppData + ToPolar + Clone, C: ProctorContext> Decision<T, T, C> {
+//     #[tracing::instrument(level = "info", skip(name))]
+//     pub async fn basic<S: Into<String>>(
+//         name: S, policy: impl QueryPolicy<Item = T, Context = C, Args = (T, C, PolarValue)> + 'static,
+//     ) -> Self {
+//         let strip_policy_result: stage::Map<_, PolicyResult<T>, T> =
+//             stage::Map::new("strip_policy_result", |res: PolicyResult<T>| res.item);
+//         Self::with_transform(name, policy, strip_policy_result).await
+//     }
+// }
 
-impl<T: AppData + ToPolar + Clone, C: ProctorContext> Decision<T, PolicyResult<T>, C> {
+impl<T: AppData + ToPolar + Clone, C: ProctorContext> Decision<T, PolicyResult<T, C>, C> {
     #[tracing::instrument(level = "info", skip(name))]
-    pub async fn carry_policy_result<S: Into<String>>(
+    pub async fn carry_policy_result<S: AsRef<str>>(
         name: S, policy: impl QueryPolicy<Item = T, Context = C, Args = (T, C, PolarValue)> + 'static,
     ) -> Self {
-        let name = "carry_policy_result";
-        let identity = stage::Identity::new(name, Inlet::new(name), Outlet::new(name));
+        let name = format!("{}_carry_policy_result", name.as_ref());
+        let identity = stage::Identity::new(&name, Inlet::new(&name), Outlet::new(&name));
         Self::with_transform(name, policy, identity).await
     }
 }
@@ -44,7 +46,7 @@ impl<In: AppData + ToPolar + Clone, Out: AppData, C: ProctorContext> Decision<In
     #[tracing::instrument(level = "info", skip(name))]
     pub async fn with_transform<S: Into<String>>(
         name: S, policy: impl QueryPolicy<Item = In, Context = C, Args = (In, C, PolarValue)> + 'static,
-        transform: impl ThroughStage<PolicyResult<In>, Out> + 'static,
+        transform: impl ThroughStage<PolicyResult<In, C>, Out> + 'static,
     ) -> Self {
         let name = name.into();
 
@@ -72,7 +74,7 @@ impl<In: AppData + ToPolar + Clone, Out: AppData, C: ProctorContext> Decision<In
             name,
             inner_stage: Box::new(inner_stage),
             context_inlet,
-            inlet: inner_inlet, //inlet,
+            inlet: inner_inlet,   //inlet,
             outlet: inner_outlet, //outlet
             tx_policy_api,
             tx_policy_monitor,
@@ -84,24 +86,23 @@ impl<In: AppData + ToPolar + Clone, Out: AppData, C: ProctorContext> Decision<In
         self.context_inlet.clone()
     }
 
-    fn policy_with_prelude(policy: impl QueryPolicy<Item = In, Context = C, Args = (In, C, PolarValue)> + 'static) -> impl QueryPolicy<Item = In, Context = C, Args = (In, C, PolarValue)> {
+    fn policy_with_prelude(
+        policy: impl QueryPolicy<Item = In, Context = C, Args = (In, C, PolarValue)> + 'static,
+    ) -> impl QueryPolicy<Item = In, Context = C, Args = (In, C, PolarValue)> {
         DecisionQueryPolicy(policy)
     }
 }
 
 struct DecisionQueryPolicy<T, C, P>(P)
 where
-    P: QueryPolicy<Item = T, Context = C, Args = (T, C, PolarValue)>,
-;
+    P: QueryPolicy<Item = T, Context = C, Args = (T, C, PolarValue)>;
 
 impl<T, C, P> Debug for DecisionQueryPolicy<T, C, P>
 where
     P: QueryPolicy<Item = T, Context = C, Args = (T, C, PolarValue)>,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("DecisionQueryPolicy")
-            .field("inner", &self.0)
-            .finish()
+        f.debug_struct("DecisionQueryPolicy").field("inner", &self.0).finish()
     }
 }
 
@@ -119,7 +120,7 @@ where
     fn load_policy_engine(&self, engine: &mut Oso) -> GraphResult<()> {
         engine.load_str(
             r#"scale(item, context, direction) if scale_up(item, context, direction) and direction = "up";
-            scale(item, context, direction) if scale_down(item, context, direction) and direction = "down";"#
+            scale(item, context, direction) if scale_down(item, context, direction) and direction = "down";"#,
         )?;
         self.0.load_policy_engine(engine)
     }

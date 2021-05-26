@@ -187,7 +187,7 @@ mod tests {
         let tx_api = src.tx_api();
 
         block_on(async move {
-            src.outlet().attach("test_tx",tx).await;
+            src.outlet().attach("test_tx", tx).await;
 
             tokio::spawn(async move {
                 src.run().await.expect("failed to run actor source");
