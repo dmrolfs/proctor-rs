@@ -388,6 +388,28 @@ impl TryFrom<TelemetryValue> for f64 {
     }
 }
 
+impl TryFrom<TelemetryValue> for f32 {
+    type Error = GraphError;
+    fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
+        match telemetry {
+            TelemetryValue::Float(f64) => Ok(f64 as f32),
+            TelemetryValue::Integer(i64) => Ok(i64 as f32),
+            TelemetryValue::Boolean(b) => Ok(if b { 1.0 } else { 0.0 }),
+            TelemetryValue::Text(ref rep) => match rep.to_lowercase().as_ref() {
+                "true" | "on" | "yes" => Ok(1.0),
+                "false" | "off" | "no" => Ok(0.0),
+                rep => rep
+                    .parse()
+                    .map_err(|_| GraphError::TypeError("a telemetry Float".to_string(), format!("{:?}", telemetry))),
+            },
+            _ => Err(GraphError::TypeError(
+                "a telemetry Float".to_string(),
+                format!("{:?}", telemetry),
+            )),
+        }
+    }
+}
+
 impl TryFrom<TelemetryValue> for String {
     type Error = GraphError;
 
