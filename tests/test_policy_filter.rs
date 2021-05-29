@@ -89,10 +89,6 @@ struct TestPolicy {
 }
 
 impl TestPolicy {
-    pub fn new<S: Into<String>>(policy: S) -> Self {
-        Self::with_query(policy, "eligible")
-    }
-
     pub fn with_query<S0: Into<String>, S1: Into<String>>(policy: S0, query: S1) -> Self {
         let policy = policy.into();
         let polar = polar_core::polar::Polar::new();

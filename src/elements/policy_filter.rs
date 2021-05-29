@@ -458,7 +458,7 @@ mod tests {
     use crate::elements::telemetry;
     use crate::error::GraphError;
     use crate::phases::collection::TelemetrySubscription;
-    use oso::{PolarClass, ToPolarList};
+    use oso::PolarClass;
     use pretty_assertions::assert_eq;
     use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
@@ -530,7 +530,7 @@ mod tests {
             Ok(())
         }
 
-        fn make_query_args(&self, item: &Self::Item, context: &Self::Context) -> Self::Args {
+        fn make_query_args(&self, item: &Self::Item, _context: &Self::Context) -> Self::Args {
             (item.clone(), "foo", "bar")
         }
 

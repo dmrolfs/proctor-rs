@@ -6,7 +6,7 @@ use crate::graph::{stage, Connect, Graph, GraphResult, Inlet, Outlet, Port, Sink
 use crate::{AppData, ProctorContext};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
-use oso::{Oso, PolarValue, ToPolar, ToPolarList};
+use oso::{Oso, PolarValue, ToPolar};
 use std::fmt::{self, Debug};
 use tokio::sync::broadcast;
 

@@ -126,7 +126,7 @@ fn benchmark_merge_5(c: &mut Criterion) {
 
 // criterion_group!(merge, benchmark_merge_5);
 
-criterion_group!{
+criterion_group! {
     name = merge;
     config = Criterion::default().with_profiler(super::super::profiler::FlamegraphProfiler::new(100));
     targets = benchmark_merge_5

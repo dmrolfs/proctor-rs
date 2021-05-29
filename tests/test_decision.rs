@@ -2,10 +2,11 @@ mod fixtures;
 
 use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
-use oso::{Oso, PolarClass, PolarValue, ToPolar};
+use oso::{PolarValue, ToPolar};
+use pretty_assertions::assert_eq;
 use proctor::elements;
 use proctor::elements::{
-    Policy, PolicyResult, PolicySettings, PolicySource, PolicySubscription, QueryPolicy, Telemetry, TelemetryValue,
+    Policy, PolicyResult, PolicySettings, PolicySource, PolicySubscription, Telemetry, TelemetryValue,
     ToTelemetry,
 };
 use proctor::flink::decision::context::FlinkDecisionContext;
@@ -13,22 +14,20 @@ use proctor::flink::decision::policy::DecisionPolicy;
 use proctor::flink::decision::result::{make_decision_transform, DecisionResult};
 use proctor::flink::{FlowMetrics, MetricCatalog, UtilizationMetrics};
 use proctor::graph::stage::{self, ThroughStage, WithApi, WithMonitor};
-use proctor::graph::{
-    Connect, Graph, GraphResult, Inlet, Port, SinkShape, SourceShape, ThroughShape, UniformFanInShape,
-};
+use proctor::graph::{ Connect, Graph, GraphResult, Inlet, SinkShape, SourceShape, UniformFanInShape, };
 use proctor::phases::collection;
 use proctor::phases::collection::TelemetrySubscription;
 use proctor::phases::decision::Decision;
 use proctor::{AppData, ProctorContext, ProctorResult};
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, TimestampSeconds};
 use std::collections::HashSet;
 use std::convert::TryFrom;
-use std::marker::PhantomData;
 use std::time::Duration;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
+use proctor::flink::perf::Benchmark;
+
+type Args<T, C> = (T, C, PolarValue);
 
 lazy_static! {
     static ref DT_1: DateTime<Utc> = DateTime::parse_from_str("2021-05-05T17:11:07.246310806Z", "%+")
@@ -60,7 +59,7 @@ impl PolicySettings for TestSettings {
 
 fn make_test_policy(
     settings: &impl PolicySettings,
-) -> impl Policy<MetricCatalog, FlinkDecisionContext, (MetricCatalog, FlinkDecisionContext, PolarValue)> {
+) -> impl Policy<MetricCatalog, FlinkDecisionContext, Args<MetricCatalog, FlinkDecisionContext>> {
     DecisionPolicy::new(settings)
 }
 
@@ -93,8 +92,6 @@ fn make_test_policy(
 //         }
 //     }
 // }
-
-type Args<T, C> = (T, C, PolarValue);
 
 struct TestFlow<In, Out, C> {
     pub graph_handle: JoinHandle<()>,
@@ -213,6 +210,7 @@ where
         ack.await.map_err(|err| err.into())
     }
 
+    #[allow(dead_code)]
     pub async fn tell_policy(
         &self, command_rx: (elements::PolicyFilterCmd<C>, oneshot::Receiver<proctor::Ack>),
     ) -> GraphResult<proctor::Ack> {
@@ -223,7 +221,8 @@ where
     pub async fn recv_policy_event(&mut self) -> GraphResult<elements::PolicyFilterEvent<In, C>> {
         self.rx_decision_monitor.recv().await.map_err(|err| err.into())
     }
-
+    
+    #[allow(dead_code)]
     pub async fn inspect_policy_context(&self) -> GraphResult<elements::PolicyFilterDetail<C>> {
         let (cmd, detail) = elements::PolicyFilterCmd::inspect();
         self.tx_decision_api.send(cmd)?;
@@ -486,7 +485,13 @@ async fn test_decision_common() -> anyhow::Result<()> {
         Decision::<MetricCatalog, DecisionResult<MetricCatalog>, FlinkDecisionContext>::with_transform(
             "common_decision",
             policy,
-            make_decision_transform("common_decision_transform"),
+            make_decision_transform(
+                "common_decision_transform",
+                |result: &PolicyResult<MetricCatalog, FlinkDecisionContext>| Benchmark {
+                    nr_task_managers: result.context.nr_task_managers,
+                    records_out_per_sec: result.item.flow.records_out_per_sec,
+                },
+            ),
         )
         .await;
     let decision_context_inlet = decision_stage.context_inlet();
@@ -545,18 +550,35 @@ async fn test_decision_common() -> anyhow::Result<()> {
 
     let actual: Vec<DecisionResult<MetricCatalog>> = flow.close().await?;
     tracing::warn!(?actual, "DMR: 08. Verify final accumulation...");
-    let actual_vals: Vec<(f32, &'static str)> = actual
+    let actual_vals: Vec<(f32, Benchmark, &'static str)> = actual
         .into_iter()
         .map(|a| match a {
-            DecisionResult::None => (0.0, "none"),
-            DecisionResult::ScaleUp(item) => (item.flow.input_messages_per_sec, "up"),
-            DecisionResult::ScaleDown(item) => (item.flow.input_messages_per_sec, "down"),
+            DecisionResult::None => (0.0, Benchmark::ZERO, "none"),
+            DecisionResult::ScaleUp(item, benchmark) => (item.flow.input_messages_per_sec, benchmark, "up"),
+            DecisionResult::ScaleDown(item, benchmark) => (item.flow.input_messages_per_sec, benchmark, "down"),
         })
         .collect();
 
     assert_eq!(
         actual_vals,
-        vec![(std::f32::consts::PI, "up"), (std::f32::consts::LN_2, "down"),]
+        vec![
+            (
+                std::f32::consts::PI,
+                Benchmark {
+                    nr_task_managers: 4,
+                    records_out_per_sec: 0.0,
+                },
+                "up"
+            ),
+            (
+                std::f32::consts::LN_2,
+                Benchmark {
+                    nr_task_managers: 4,
+                    records_out_per_sec: 0.0,
+                },
+                "down"
+            ),
+        ]
     );
 
     Ok(())

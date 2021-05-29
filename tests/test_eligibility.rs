@@ -21,7 +21,6 @@ use proctor::AppData;
 use proctor::{ProctorContext, ProctorResult};
 use serde_test::{assert_tokens, Token};
 use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::time::Duration;
@@ -250,6 +249,7 @@ impl<D> TestEligibilityPolicy<D> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_custom(self, custom_fields: HashSet<String>) -> Self {
         Self {
             custom_fields: Some(custom_fields),

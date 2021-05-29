@@ -39,7 +39,6 @@ mod tests {
     use super::*;
     use crate::elements::telemetry::ToTelemetry;
     use crate::elements::Telemetry;
-    use chrono::{DateTime, Utc};
     use serde_test::{assert_tokens, Token};
 
     #[test]
