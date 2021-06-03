@@ -25,9 +25,6 @@ pub enum CollectionError {
 
     #[error("{0}")]
     TelemetryError(#[from] TelemetryError),
-
-    #[error(transparent)]
-    Other(anyhow::Error),
 }
 
 #[derive(Debug, Error)]
@@ -62,7 +59,7 @@ pub enum PolicyError {
     DataNotFound(String),
 
     #[error("failed to publish policy event: {0}")]
-    PublishError(anyhow::Error), //todo: if only PortError then specialize via #[from]
+    PublishError(#[source] anyhow::Error), //todo: if only PortError then specialize via #[from]
 }
 
 impl From<PortError> for PolicyError {
@@ -79,7 +76,7 @@ pub enum TelemetryError {
     TypeError { expected: String, actual: Option<String> },
 
     #[error("Invalid type used, expected {0}: {1}")]
-    ExpectedTypeError(String, anyhow::Error),
+    ExpectedTypeError(String, #[source] anyhow::Error),
 
     #[error("{0}")]
     SerializationError(#[from] flexbuffers::SerializationError),
@@ -91,7 +88,7 @@ pub enum TelemetryError {
     ReaderError(#[from] flexbuffers::ReaderError),
 
     #[error("{0}")]
-    ValueParseError(anyhow::Error),
+    ValueParseError(#[source] anyhow::Error),
 }
 
 #[derive(Debug)]
@@ -141,14 +138,9 @@ pub enum StageError {
     MaterializationError(String),
 
     #[error("{0}")]
-    PortError(anyhow::Error),
+    PortError(#[from] PortError),
 }
 
-impl From<PortError> for StageError {
-    fn from(that: PortError) -> Self {
-        StageError::PortError(that.into())
-    }
-}
 
 #[derive(Debug, Error)]
 pub enum PortError {
@@ -157,7 +149,7 @@ pub enum PortError {
 
     /// error occurred while attempting to send across a sync channel.
     #[error("{0:?}")]
-    ChannelError(anyhow::Error),
+    ChannelError(#[source] anyhow::Error),
 }
 
 impl<T: 'static + Debug + Send + Sync> From<tokio::sync::mpsc::error::SendError<T>> for PortError {
@@ -183,10 +175,10 @@ pub enum SettingsError {
     Bootstrap { message: String, setting: String },
 
     #[error("{0}")]
-    HttpRequestError(anyhow::Error),
+    HttpRequestError(#[source] anyhow::Error),
 
     #[error("{0}")]
-    SourceError(anyhow::Error),
+    SourceError(#[source] anyhow::Error),
 
     #[error("{0}")]
     IOError(#[from] std::io::Error),
