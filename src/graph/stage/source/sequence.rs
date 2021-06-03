@@ -1,6 +1,7 @@
 use crate::graph::shape::SourceShape;
-use crate::graph::{GraphResult, Outlet, Port, Stage};
+use crate::graph::{Outlet, Port, Stage};
 use crate::AppData;
+use anyhow::Result;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt;
@@ -89,13 +90,13 @@ where
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> GraphResult<()> {
+    async fn check(&self) -> Result<()> {
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run sequence source", skip(self))]
-    async fn run(&mut self) -> GraphResult<()> {
+    async fn run(&mut self) -> Result<()> {
         if let Some(items) = self.items.take() {
             for (count, item) in items.enumerate() {
                 tracing::trace!(?item, %count, "sending item");
@@ -106,7 +107,7 @@ where
         Ok(())
     }
 
-    async fn close(mut self: Box<Self>) -> GraphResult<()> {
+    async fn close(mut self: Box<Self>) -> Result<()> {
         tracing::trace!("closing sequence-source outlet.");
         self.outlet.close().await;
         Ok(())

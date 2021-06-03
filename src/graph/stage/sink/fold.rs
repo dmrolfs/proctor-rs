@@ -1,7 +1,8 @@
-use crate::error::GraphError;
+use crate::error::StageError;
 use crate::graph::shape::SinkShape;
-use crate::graph::{stage, GraphResult, Inlet, Port, Stage};
+use crate::graph::{stage, Inlet, Port, Stage};
 use crate::AppData;
+use anyhow::Result;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt::{self, Debug};
@@ -168,12 +169,12 @@ where
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn complete_fold(&mut self) -> GraphResult<()> {
+    async fn complete_fold(&mut self) -> Result<(), StageError> {
         if let Some(tx_final) = self.tx_final.take() {
-            tx_final.send(self.acc.lock().await.clone()).map_err(|_err| {
-                GraphError::GraphChannel(format!(
+            tx_final.send(self.acc.lock().await.clone()).map_err(|acc| {
+                StageError::MaterializationError(format!(
                     "Fold sink final receiver detached. Failed to send accumulation: {:?}",
-                    self.acc
+                    acc
                 ))
             })?;
         }
@@ -208,19 +209,19 @@ where
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> GraphResult<()> {
+    async fn check(&self) -> Result<()> {
         self.inlet.check_attachment().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run fold sink", skip(self))]
-    async fn run(&mut self) -> GraphResult<()> {
+    async fn run(&mut self) -> Result<()> {
         self.do_run().await;
         self.complete_fold().await?;
         Ok(())
     }
 
-    async fn close(mut self: Box<Self>) -> GraphResult<()> {
+    async fn close(mut self: Box<Self>) -> Result<()> {
         tracing::trace!("closing fold-sink inlet.");
         self.inlet.close().await;
         self.complete_fold().await?;

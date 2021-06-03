@@ -1,7 +1,9 @@
 use super::Telemetry;
+use crate::error::CollectionError;
 use crate::graph::stage::{self, Stage};
-use crate::graph::{Connect, Graph, GraphResult, Inlet, Outlet, Port, SinkShape, SourceShape};
+use crate::graph::{Connect, Graph, Inlet, Outlet, Port, SinkShape, SourceShape};
 use crate::AppData;
+use anyhow::Result;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use reqwest::header::HeaderMap;
@@ -186,7 +188,7 @@ impl Collect {
         name="query url",
         fields(%url),
     )]
-    async fn do_query<T>(client: &reqwest::Client, url: Url) -> GraphResult<T>
+    async fn do_query<T>(client: &reqwest::Client, url: Url) -> Result<T, CollectionError>
     where
         T: DeserializeOwned + fmt::Debug,
     {
@@ -219,7 +221,7 @@ impl Stage for Collect {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> GraphResult<()> {
+    async fn check(&self) -> Result<()> {
         self.trigger.check_attachment().await?;
         self.outlet.check_attachment().await?;
         if let Some(ref g) = self.graph {
@@ -229,7 +231,7 @@ impl Stage for Collect {
     }
 
     #[tracing::instrument(level = "info", name = "run collect source", skip(self))]
-    async fn run(&mut self) -> GraphResult<()> {
+    async fn run(&mut self) -> Result<()> {
         let foo = match self.graph.take() {
             None => Ok(()),
             Some(g) => g.run().await,
@@ -237,7 +239,7 @@ impl Stage for Collect {
         foo
     }
 
-    async fn close(mut self: Box<Self>) -> GraphResult<()> {
+    async fn close(mut self: Box<Self>) -> Result<()> {
         tracing::trace!("closing collect inner graph and outlet.");
         self.outlet.close().await;
         Ok(())

@@ -1,5 +1,5 @@
 use crate::elements::{TelemetryValue, ToTelemetry};
-use crate::error::GraphError;
+use crate::error::{DecisionError, TelemetryError, TypeExpectation};
 use oso::PolarClass;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -34,31 +34,34 @@ impl From<Benchmark> for TelemetryValue {
     }
 }
 
+const T_NR_TASK_MANAGERS: &'static str = "nr_task_managers";
+const T_RECORDS_OUT_PER_SEC: &'static str = "records_out_per_sec";
+
 impl TryFrom<TelemetryValue> for Benchmark {
-    type Error = GraphError;
+    type Error = DecisionError;
 
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         if let TelemetryValue::Table(rep) = telemetry {
             let nr_task_managers = rep
-                .get("nr_task_managers")
+                .get(T_NR_TASK_MANAGERS)
                 .map(|v| i32::try_from(v.clone()))
-                .ok_or(GraphError::TypeError("i32".to_string(), "not found".to_string()))??;
+                .ok_or(DecisionError::DataNotFound(T_NR_TASK_MANAGERS.to_string()))??;
 
             let records_out_per_sec = rep
-                .get("records_out_per_sec")
+                .get(T_RECORDS_OUT_PER_SEC)
                 .map(|v| f32::try_from(v.clone()))
-                .ok_or(GraphError::TypeError("f32".to_string(), "not found".to_string()))??;
+                .ok_or(DecisionError::DataNotFound(T_RECORDS_OUT_PER_SEC.to_string()))??;
 
             Ok(Benchmark {
                 nr_task_managers,
                 records_out_per_sec,
             })
         } else {
-            Err(GraphError::TypeError(
-                "a telemetry Table".to_string(),
-                format!("{:?}", telemetry),
-            ))
+            Err(TelemetryError::TypeError {
+                expected: format!("{}", TypeExpectation::Table),
+                actual: Some(format!("{:?}", telemetry)),
+            }
+            .into())
         }
     }
 }
-

@@ -4,7 +4,7 @@
 
 // use super::{Telemetry, TelemetryValue, FromTelemetry};
 // use crate::elements::telemetry::value::Table;
-// use crate::error::GraphError;
+// use crate::error::StageError;
 // use serde::de;
 // use serde::forward_to_deserialize_any;
 // use std::collections::{HashMap, VecDeque};
@@ -13,7 +13,7 @@
 // use crate::elements::ToTelemetry;
 //
 // impl<'de> de::Deserializer<'de> for TelemetryValue {
-//     type Error = GraphError;
+//     type Error = StageError;
 //
 //     #[inline]
 //     #[tracing::instrument(level="trace", skip(visitor))]
@@ -157,7 +157,7 @@
 // }
 //
 // impl<'de, 'a> de::Deserializer<'de> for StrDeserializer<'a> {
-//     type Error = GraphError;
+//     type Error = StageError;
 //
 //     #[inline]
 //     #[tracing::instrument(level="trace", skip(visitor))]
@@ -187,7 +187,7 @@
 // }
 //
 // impl<'de> de::SeqAccess<'de> for SeqAccess {
-//     type Error = GraphError;
+//     type Error = StageError;
 //
 //     #[tracing::instrument(level="trace", skip(seed))]
 //     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>
@@ -229,7 +229,7 @@
 // }
 //
 // impl<'de> de::MapAccess<'de> for MapAccess {
-//     type Error = GraphError;
+//     type Error = StageError;
 //
 //     #[tracing::instrument(level="trace", skip(seed))]
 //     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Self::Error>
@@ -267,7 +267,7 @@
 //
 // impl EnumAccess {
 //     #[tracing::instrument(level="trace", skip())]
-//     fn variant_deserializer(&self, name: &str) -> Result<StrDeserializer, GraphError> {
+//     fn variant_deserializer(&self, name: &str) -> Result<StrDeserializer, StageError> {
 //         self.variants
 //             .iter()
 //             .find(|&&s| s == name)
@@ -276,7 +276,7 @@
 //     }
 //
 //     #[tracing::instrument(level="trace", skip())]
-//     fn table_deserializer(&self, table: &Table) -> Result<StrDeserializer, GraphError> {
+//     fn table_deserializer(&self, table: &Table) -> Result<StrDeserializer, StageError> {
 //         if table.len() == 1 {
 //             self.variant_deserializer(table.iter().next().unwrap().0)
 //         } else {
@@ -285,16 +285,16 @@
 //     }
 //
 //     #[tracing::instrument(level="trace", skip())]
-//     fn no_constructor_error(&self, supposed_variant: &str) -> GraphError {
-//         GraphError::GraphSerde(format!(
+//     fn no_constructor_error(&self, supposed_variant: &str) -> StageError {
+//         StageError::GraphSerde(format!(
 //             "enum {} does not have variant constructor {}",
 //             self.name, supposed_variant
 //         ))
 //     }
 //
 //     #[tracing::instrument(level="trace", skip())]
-//     fn structural_error(&self) -> GraphError {
-//         GraphError::GraphSerde(format!(
+//     fn structural_error(&self) -> StageError {
+//         StageError::GraphSerde(format!(
 //             "value of enum {} should be represented by either string or table with exactly one key",
 //             self.name
 //         ))
@@ -302,7 +302,7 @@
 // }
 //
 // impl<'de> de::EnumAccess<'de> for EnumAccess {
-//     type Error = GraphError;
+//     type Error = StageError;
 //     type Variant = Self;
 //
 //     #[tracing::instrument(level="trace", skip(seed))]
@@ -324,7 +324,7 @@
 // }
 //
 // impl<'de> de::VariantAccess<'de> for EnumAccess {
-//     type Error = GraphError;
+//     type Error = StageError;
 //
 //     #[tracing::instrument(level="trace", skip())]
 //     fn unit_variant(self) -> Result<(), Self::Error> {
@@ -360,7 +360,7 @@
 // }
 //
 // impl<'de> de::Deserializer<'de> for Telemetry {
-//     type Error = GraphError;
+//     type Error = StageError;
 //
 //     #[inline]
 //     #[tracing::instrument(level="trace", skip(visitor))]

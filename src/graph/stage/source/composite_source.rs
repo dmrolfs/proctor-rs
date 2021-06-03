@@ -1,6 +1,7 @@
 use crate::graph::shape::SourceShape;
-use crate::graph::{stage, Connect, Graph, GraphResult, Inlet, Outlet, Port, Stage};
+use crate::graph::{stage, Connect, Graph, Inlet, Outlet, Port, Stage};
 use crate::AppData;
+use anyhow::Result;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt::Debug;
@@ -15,9 +16,8 @@ use std::fmt::Debug;
 ///
 /// use proctor::elements::Telemetry;
 /// use proctor::elements::telemetry::ToTelemetry;
-/// use proctor::error::GraphError;
 /// use proctor::graph::stage::{self, tick, Stage};
-/// use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
+/// use proctor::graph::{Connect, Graph, SinkShape, SourceShape};
 /// use proctor::AppData;
 /// use futures::future::FutureExt;
 /// use reqwest::header::HeaderMap;
@@ -84,9 +84,9 @@ use std::fmt::Debug;
 ///                 .await?
 ///                 .json::<HttpBinResponse>()
 ///                 .await
-///                 .map_err::<GraphError, _>(|err| err.into())?;
+///                 .map_err::<anyhow::Error, _>(|err| err.into())?;
 ///
-///             let result: GraphResult<Telemetry> = Ok(to_telemetry_data(resp).await);
+///             let result: anyhow::Result<Telemetry> = Ok(to_telemetry_data(resp).await);
 ///             result
 ///         }
 ///         .map(|r| r.unwrap())
@@ -185,20 +185,20 @@ impl<Out: AppData> Stage for CompositeSource<Out> {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> GraphResult<()> {
+    async fn check(&self) -> Result<()> {
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run composite source", skip(self))]
-    async fn run(&mut self) -> GraphResult<()> {
+    async fn run(&mut self) -> Result<()> {
         match self.graph.take() {
             None => Ok(()),
             Some(g) => g.run().await,
         }
     }
 
-    async fn close(mut self: Box<Self>) -> GraphResult<()> {
+    async fn close(mut self: Box<Self>) -> Result<()> {
         tracing::trace!("closing composite graph and outlet.");
         self.outlet.close().await;
         Ok(())

@@ -1,4 +1,5 @@
-use crate::error::GraphError;
+use crate::error::PortError;
+use crate::AppData;
 use async_trait::async_trait;
 use std::fmt::{self, Debug};
 use std::sync::Arc;
@@ -25,7 +26,7 @@ pub trait Connect<T> {
 }
 
 #[async_trait]
-impl<T: Debug + Send> Connect<T> for (Outlet<T>, Inlet<T>) {
+impl<T: AppData> Connect<T> for (Outlet<T>, Inlet<T>) {
     async fn connect(mut self) {
         let outlet = self.0;
         let inlet = self.1;
@@ -34,8 +35,7 @@ impl<T: Debug + Send> Connect<T> for (Outlet<T>, Inlet<T>) {
 }
 
 #[async_trait]
-#[async_trait]
-impl<T: Debug + Send> Connect<T> for (&Outlet<T>, &Inlet<T>) {
+impl<T: AppData> Connect<T> for (&Outlet<T>, &Inlet<T>) {
     async fn connect(mut self) {
         let outlet = self.0.clone();
         let inlet = self.1.clone();
@@ -44,7 +44,7 @@ impl<T: Debug + Send> Connect<T> for (&Outlet<T>, &Inlet<T>) {
 }
 
 #[async_trait]
-impl<T: Debug + Send> Connect<T> for (Inlet<T>, Outlet<T>) {
+impl<T: AppData> Connect<T> for (Inlet<T>, Outlet<T>) {
     async fn connect(mut self) {
         let outlet = self.1;
         let inlet = self.0;
@@ -53,7 +53,7 @@ impl<T: Debug + Send> Connect<T> for (Inlet<T>, Outlet<T>) {
 }
 
 #[async_trait]
-impl<T: Debug + Send> Connect<T> for (&Inlet<T>, &Outlet<T>) {
+impl<T: AppData> Connect<T> for (&Inlet<T>, &Outlet<T>) {
     async fn connect(mut self) {
         let outlet = self.1.clone();
         let inlet = self.0.clone();
@@ -61,7 +61,7 @@ impl<T: Debug + Send> Connect<T> for (&Inlet<T>, &Outlet<T>) {
     }
 }
 
-pub async fn connect_out_to_in<T: Debug>(mut lhs: Outlet<T>, mut rhs: Inlet<T>) {
+pub async fn connect_out_to_in<T: AppData>(mut lhs: Outlet<T>, mut rhs: Inlet<T>) {
     let (tx, rx) = mpsc::channel(num_cpus::get());
     lhs.attach(rhs.0.clone(), tx).await;
     rhs.attach(lhs.0.clone(), rx).await;
@@ -120,13 +120,13 @@ impl<T: Debug> Inlet<T> {
         self.1.lock().await.is_some()
     }
 
-    pub async fn check_attachment(&self) -> Result<(), GraphError> {
+    pub async fn check_attachment(&self) -> Result<(), PortError> {
         if self.is_attached().await {
             let sender = self.1.lock().await.as_ref().map(|s| s.0.clone()).unwrap();
             tracing::trace!("inlet connected: {} -> {}", sender, self.0);
             return Ok(());
         } else {
-            return Err(GraphError::GraphPortDetached(self.0.clone()));
+            return Err(PortError::Detached(self.0.clone()));
         }
     }
 
@@ -239,7 +239,7 @@ impl<T> Clone for Outlet<T> {
     }
 }
 
-impl<T> Outlet<T> {
+impl<T: AppData> Outlet<T> {
     pub async fn attach<S: Into<String>>(&mut self, sender_name: S, tx: mpsc::Sender<T>) {
         let mut port = self.1.lock().await;
         *port = Some((sender_name.into(), tx));
@@ -249,13 +249,13 @@ impl<T> Outlet<T> {
         self.1.lock().await.is_some()
     }
 
-    pub async fn check_attachment(&self) -> Result<(), GraphError> {
+    pub async fn check_attachment(&self) -> Result<(), PortError> {
         if self.is_attached().await {
             let receiver = self.1.lock().await.as_ref().map(|s| s.0.clone()).unwrap();
             tracing::info!("outlet connected: {} -> {}", self.0, receiver);
             return Ok(());
         } else {
-            return Err(GraphError::GraphPortDetached(self.0.clone()));
+            return Err(PortError::Detached(self.0.clone()));
         }
     }
 
@@ -308,10 +308,11 @@ impl<T> Outlet<T> {
     /// }
     /// ```
     // #[tracing::instrument(level = "trace", skip(self), fields(?value))]
-    pub async fn send(&self, value: T) -> Result<(), GraphError> {
+    pub async fn send(&self, value: T) -> Result<(), PortError> {
         self.check_attachment().await?;
         let tx = self.1.lock().await;
-        (*tx).as_ref().unwrap().1.send(value).await.map_err(|err| err.into())
+        (*tx).as_ref().unwrap().1.send(value).await?;
+        Ok(())
     }
 }
 

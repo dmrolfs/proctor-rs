@@ -1,4 +1,5 @@
-use super::{stage::Stage, GraphResult};
+use super::stage::Stage;
+use anyhow::Result;
 use tokio::task::JoinHandle;
 use tracing::Instrument;
 
@@ -34,27 +35,17 @@ impl Node {
     //     )
     // }
 
-    pub async fn check(&self) -> GraphResult<()> {
+    pub async fn check(&self) -> Result<()> {
         self.stage
             .check()
             .instrument(tracing::info_span!("check graph node", node=%self.stage.name()))
             .await
     }
 
-    pub fn run(mut self) -> JoinHandle<GraphResult<()>> {
+    pub fn run(mut self) -> JoinHandle<Result<()>> {
         let name = self.name.clone();
         tokio::spawn(
             async move {
-                // self.stage
-                //     .prepare_for_run()
-                //     .instrument(tracing::info_span!("prepare graph node for run"))
-                //     .await
-                //     .map_err(|err| {
-                //         tracing::error!(error=?err, "node failed to prepare for run.");
-                //         err
-                //     })
-                //     .unwrap();
-
                 let run_result = self.stage.run().instrument(tracing::info_span!("run graph node")).await;
                 if let Err(err) = &run_result {
                     tracing::error!(error=?err, "node run failed.");

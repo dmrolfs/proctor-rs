@@ -1,9 +1,8 @@
 use crate::elements::Telemetry;
-use crate::error::{ConfigError, GraphError, ProctorError};
-use crate::graph::stage::{tick, Stage, WithApi};
-use crate::graph::{stage, Connect, Graph, GraphResult, SinkShape, SourceShape};
+use crate::error::{CollectionError, SettingsError};
+use crate::graph::stage::{tick, CompositeSource, Stage, WithApi};
+use crate::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use crate::settings::SourceSetting;
-use crate::ProctorResult;
 use futures::future::FutureExt;
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
@@ -24,9 +23,9 @@ impl<T: 'static + Stage + SourceShape<Out = Telemetry>> TelemetrySourceStage for
     skip(name, setting),
     fields(name=%name.as_ref(), ?setting),
 )]
-pub fn make_telemetry_cvs_source<D, S>(name: S, setting: &SourceSetting) -> ProctorResult<TelemetrySource>
+pub fn make_telemetry_cvs_source<T, S>(name: S, setting: &SourceSetting) -> Result<TelemetrySource, CollectionError>
 where
-    D: Debug + Serialize + DeserializeOwned,
+    T: Debug + Serialize + DeserializeOwned,
     S: AsRef<str>,
 {
     if let SourceSetting::Csv { path } = setting {
@@ -40,22 +39,21 @@ where
             }
         }
 
-        let mut reader = csv::Reader::from_path(path).map_err::<ProctorError, _>(|err| err.into())?;
+        let mut reader = csv::Reader::from_path(path).map_err::<CollectionError, _>(|err| err.into())?;
 
         for record in reader.deserialize() {
-            // let data: D = record?;
-            // let data: HashMap<String, TelemetryValue> = data?.into_iter().map(|(k, v)| (k, v.to_telemetry())).collect();
-            tracing::info!(?record, "DMR: looking at CVS record...");
-            let telemetry = Telemetry::try_from::<D>(&record?);
-            tracing::info!(?telemetry, "DMR: pulled CVS telemetry.");
-            // telemetry.retain(|_, v| !v.is_empty());
+            let telemetry = Telemetry::try_from::<T>(&record?);
             records.push(telemetry?);
         }
         let source = stage::Sequence::new(name, records);
 
         Ok(Box::new(source))
     } else {
-        Err(ConfigError::Bootstrap(format!("incompatible setting for local cvs source: {:?}", setting)).into())
+        Err(SettingsError::Bootstrap {
+            message: "incompatible setting for local cvs source".to_string(),
+            setting: format!("{:?}", setting),
+        }
+        .into())
     }
 }
 
@@ -64,11 +62,11 @@ where
     skip(name, setting),
     fields(name=%name.as_ref(), ?setting),
 )]
-pub async fn make_telemetry_rest_api_source<D, S>(
+pub async fn make_telemetry_rest_api_source<T, S>(
     name: S, setting: &SourceSetting,
-) -> ProctorResult<(TelemetrySource, mpsc::UnboundedSender<tick::TickMsg>)>
+) -> Result<(TelemetrySource, mpsc::UnboundedSender<tick::TickMsg>), CollectionError>
 where
-    D: DeserializeOwned + Into<Telemetry>,
+    T: DeserializeOwned + Into<Telemetry>,
     S: AsRef<str>,
 {
     if let SourceSetting::RestApi(query) = setting {
@@ -83,10 +81,8 @@ where
 
         // generator via rest api
         let headers = query.header_map()?;
-        let client = reqwest::Client::builder()
-            .default_headers(headers)
-            .build()
-            .map_err::<GraphError, _>(|err| err.into())?;
+        let client = reqwest::Client::builder().default_headers(headers).build()?;
+
         let method = query.method.clone();
         let url = query.url.clone();
 
@@ -97,18 +93,15 @@ where
             let url = url.clone();
 
             async move {
-                let resp = client
-                    // .clone()
+                let resp: T = client
                     .request(method.clone(), url.clone())
                     .send()
-                    .await
-                    .map_err::<GraphError, _>(|err| err.into())?
-                    .json::<D>()
-                    .await
-                    .map_err::<GraphError, _>(|err| err.into())?;
+                    .await?
+                    .json::<T>()
+                    .await?;
 
-                let data: GraphResult<Telemetry> = Ok(resp.into());
-                data
+                // let telemetry: Telemetry = resp.into();
+                std::result::Result::<Telemetry, CollectionError>::Ok(resp.into())
             }
             .map(|d| d.unwrap())
         };
@@ -123,13 +116,16 @@ where
         let mut cg = Graph::default();
         cg.push_back(Box::new(tick)).await;
         cg.push_back(Box::new(collect_telemetry)).await;
-        let composite = stage::CompositeSource::new(format!("telemetry_{}", name.as_ref()), cg, composite_outlet).await;
+        let composite: CompositeSource<Telemetry> =
+            stage::CompositeSource::new(format!("telemetry_{}", name.as_ref()), cg, composite_outlet).await;
         let composite: Box<dyn TelemetrySourceStage> = Box::new(composite);
 
         Ok((composite, tx_tick_api))
     } else {
-        Err(ProctorError::Bootstrap(
-            ConfigError::Bootstrap(format!("incompatible setting for rest api source: {:?}", setting)).into(),
-        ))
+        Err(SettingsError::Bootstrap {
+            message: "incompatible setting for rest api source".to_string(),
+            setting: format!("{:?}", setting),
+        }
+        .into())
     }
 }

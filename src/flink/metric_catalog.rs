@@ -1,5 +1,5 @@
 use crate::elements::{telemetry, TelemetryValue};
-use crate::graph::GraphResult;
+use crate::error::TelemetryError;
 use oso::PolarClass;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -70,14 +70,15 @@ impl MetricCatalog {
     }
 
     //todo limited usefulness by itself; keys? iter support for custom and for entire catalog?
-    pub fn custom<R: std::convert::TryFrom<TelemetryValue>>(&self, metric: &str) -> Option<GraphResult<R>>
+    pub fn custom<T: std::convert::TryFrom<TelemetryValue>>(&self, metric: &str) -> Option<Result<T, TelemetryError>>
     where
-        R: std::convert::TryFrom<TelemetryValue>,
-        <R as std::convert::TryFrom<TelemetryValue>>::Error: Into<crate::error::GraphError>,
+        T: std::convert::TryFrom<TelemetryValue>,
+        TelemetryError: From<<T as std::convert::TryFrom<TelemetryValue>>::Error>,
     {
-        self.custom
-            .get(metric)
-            .map(|m| R::try_from(m.clone()).map_err(|err| err.into()))
+        self.custom.get(metric).map(|telemetry| {
+            let value = T::try_from(telemetry.clone())?;
+            Ok(value)
+        })
     }
 }
 
@@ -108,6 +109,7 @@ impl Add<&Self> for MetricCatalog {
 mod tests {
     use super::*;
     use crate::elements::telemetry::ToTelemetry;
+    use crate::error::TypeExpectation;
     use pretty_assertions::assert_eq;
     use std::convert::TryFrom;
 
@@ -115,12 +117,15 @@ mod tests {
     struct Bar(String);
 
     impl TryFrom<TelemetryValue> for Bar {
-        type Error = crate::error::GraphError;
+        type Error = TelemetryError;
 
         fn try_from(value: TelemetryValue) -> Result<Self, Self::Error> {
             match value {
                 TelemetryValue::Text(rep) => Ok(Bar(rep)),
-                v => Err(crate::error::GraphError::Unexpected(v.into())),
+                v => Err(TelemetryError::TypeError {
+                    expected: format!("telementry value {}", TypeExpectation::Text),
+                    actual: Some(format!("{:?}", v)),
+                }),
             }
         }
     }

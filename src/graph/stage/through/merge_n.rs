@@ -1,5 +1,7 @@
-use crate::graph::{stage, GraphResult, Inlet, InletsShape, Outlet, Port, SourceShape, Stage, UniformFanInShape};
+use crate::error::StageError;
+use crate::graph::{stage, Inlet, InletsShape, Outlet, Port, SourceShape, Stage, UniformFanInShape};
 use crate::AppData;
+use anyhow::Result;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use futures::future::{self, BoxFuture, FutureExt};
@@ -10,7 +12,9 @@ pub type MergeApi = mpsc::UnboundedSender<MergeMsg>;
 
 #[derive(Debug)]
 pub enum MergeMsg {
-    Stop { tx: oneshot::Sender<GraphResult<()>> },
+    Stop {
+        tx: oneshot::Sender<Result<(), StageError>>,
+    },
 }
 
 /// MergeN multiple sources. Picks elements randomly if all sources has elements ready.
@@ -180,7 +184,7 @@ impl<T: AppData> Stage for MergeN<T> {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> GraphResult<()> {
+    async fn check(&self) -> Result<()> {
         for inlet in self.inlets.0.lock().await.iter() {
             inlet.check_attachment().await?;
         }
@@ -189,7 +193,7 @@ impl<T: AppData> Stage for MergeN<T> {
     }
 
     #[tracing::instrument(level = "info", name = "run merge through", skip(self))]
-    async fn run(&mut self) -> GraphResult<()> {
+    async fn run(&mut self) -> Result<()> {
         let mut active_inlets = Self::initialize_active_inlets(self.inlets()).await;
         let outlet = &self.outlet;
         let inlets = self.inlets.clone();
@@ -233,14 +237,14 @@ impl<T: AppData> Stage for MergeN<T> {
     }
 
     #[tracing::instrument(level = "info", name = "close MergeN through", skip(self))]
-    async fn close(mut self: Box<Self>) -> GraphResult<()> {
+    async fn close(mut self: Box<Self>) -> Result<()> {
         self.inlets.close().await;
         self.outlet.close().await;
         Ok(())
     }
 }
 
-impl<'a, T: 'a + Debug + Send> MergeN<T> {
+impl<'a, T: AppData> MergeN<T> {
     #[tracing::instrument(level = "trace", skip(inlets))]
     async fn initialize_active_inlets(inlets: InletsShape<T>) -> Vec<BoxFuture<'a, (usize, Option<T>)>> {
         let inlets = inlets.0.lock().await;
@@ -269,7 +273,7 @@ impl<'a, T: 'a + Debug + Send> MergeN<T> {
     async fn handle_selected_pull(
         value: Option<T>, inlet_idx: usize, pulled_idx: usize, remaining: Vec<BoxFuture<'a, (usize, Option<T>)>>,
         inlets: InletsShape<T>, outlet: &Outlet<T>,
-    ) -> GraphResult<Vec<BoxFuture<'a, (usize, Option<T>)>>> {
+    ) -> Result<Vec<BoxFuture<'a, (usize, Option<T>)>>, StageError> {
         let mut remaining_inlets = remaining;
         let is_active = value.is_some();
 

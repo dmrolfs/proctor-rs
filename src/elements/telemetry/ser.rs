@@ -11,7 +11,7 @@
 // use std::fmt::Debug;
 //
 // use super::{Telemetry, TelemetryValue};
-// use crate::error::GraphError;
+// use crate::error::StageError;
 // use crate::elements::ToTelemetry;
 //
 // #[derive(Default, Debug)]
@@ -40,7 +40,7 @@
 //         let full_key = match self.last_key_index_pair() {
 //             Some((key, Some(index))) => Ok(format!("{}{}[{}]", SEQ_PREFIX, key, index)),
 //             Some((key, None)) => Ok(key.to_string()),
-//             None => Err(GraphError::GraphSerde(format!("key is not found for value {:?}", value))),
+//             None => Err(StageError::GraphSerde(format!("key is not found for value {:?}", value))),
 //         }?;
 //
 //         let (key, value) = self.refine_key_value(full_key, value)?;
@@ -126,7 +126,7 @@
 //                     updated.push(value.into());
 //                     TelemetryValue::Seq(updated)
 //                 } else {
-//                     Err(GraphError::GraphSerde(
+//                     Err(StageError::GraphSerde(
 //                         format!(
 //                             "serialized seq key form expected to match Seq telemetry value, but see: {:?}",
 //                             values
@@ -151,7 +151,7 @@
 //                     updated.insert(key.to_string(), value.into());
 //                     TelemetryValue::Table(updated)
 //                 } else {
-//                     Err(GraphError::GraphSerde(format!(
+//                     Err(StageError::GraphSerde(format!(
 //                         "serialized table key form expected to match Table telemetry value, but see: {:?}",
 //                         table
 //                     )))?
@@ -190,7 +190,7 @@
 //                         t.insert(key.to_string(), value.into());
 //                         updated.insert(idx, TelemetryValue::Table(t));
 //                     } else {
-//                         Err(GraphError::GraphSerde(format!(
+//                         Err(StageError::GraphSerde(format!(
 //                             "serialized seq of tables key form expected to match Seq+Table telemetry value, but see: {:?}",
 //                             tables
 //                         )))?
@@ -198,7 +198,7 @@
 //
 //                     TelemetryValue::Seq(updated)
 //                 } else {
-//                     Err(GraphError::GraphSerde(format!(
+//                     Err(StageError::GraphSerde(format!(
 //                         "serialized seq of tables key form expected to match Seq+Table telemetry value, but see: {:?}",
 //                         tables
 //                     )))?
@@ -226,9 +226,9 @@
 //             self.keys
 //                 .get_mut(len - 1)
 //                 .map(|pair| pair.1 = pair.1.map(|i| i + 1).or(Some(0)))
-//                 .ok_or_else(|| GraphError::GraphSerde(format!("last key is not found in {} keys", len)))
+//                 .ok_or_else(|| StageError::GraphSerde(format!("last key is not found in {} keys", len)))
 //         } else {
-//             Err(GraphError::GraphSerde("keys is empty".to_string()))
+//             Err(StageError::GraphSerde("keys is empty".to_string()))
 //         }
 //     }
 //
@@ -267,7 +267,7 @@
 //
 // impl<'a> ser::Serializer for &'a mut TelemetrySerializer {
 //     type Ok = ();
-//     type Error = GraphError;
+//     type Error = StageError;
 //     type SerializeSeq = Self;
 //     type SerializeTuple = Self;
 //     type SerializeTupleStruct = Self;
@@ -319,7 +319,7 @@
 //     #[tracing::instrument(level="trace", skip())]
 //     fn serialize_u64(self, v: u64) -> Result<Self::Ok> {
 //         if v > (i64::MAX as u64) {
-//             Err(GraphError::GraphSerde(format!(
+//             Err(StageError::GraphSerde(format!(
 //                 "value {} is greater than the max {}",
 //                 v,
 //                 i64::MAX,
@@ -454,7 +454,7 @@
 //
 // impl<'a> ser::SerializeSeq for &'a mut TelemetrySerializer {
 //     type Ok = ();
-//     type Error = GraphError;
+//     type Error = StageError;
 //
 //     #[tracing::instrument(level="trace", skip(value))]
 //     fn serialize_element<T>(&mut self, value: &T) -> Result<()>
@@ -474,7 +474,7 @@
 //
 // impl<'a> ser::SerializeTuple for &'a mut TelemetrySerializer {
 //     type Ok = ();
-//     type Error = GraphError;
+//     type Error = StageError;
 //
 //     #[tracing::instrument(level="trace", skip(value))]
 //     fn serialize_element<T>(&mut self, value: &T) -> Result<()>
@@ -494,7 +494,7 @@
 //
 // impl<'a> ser::SerializeTupleStruct for &'a mut TelemetrySerializer {
 //     type Ok = ();
-//     type Error = GraphError;
+//     type Error = StageError;
 //
 //     #[tracing::instrument(level="trace", skip(value))]
 //     fn serialize_field<T>(&mut self, value: &T) -> Result<()>
@@ -514,7 +514,7 @@
 //
 // impl<'a> ser::SerializeTupleVariant for &'a mut TelemetrySerializer {
 //     type Ok = ();
-//     type Error = GraphError;
+//     type Error = StageError;
 //
 //     #[tracing::instrument(level="trace", skip(value))]
 //     fn serialize_field<T>(&mut self, value: &T) -> Result<()>
@@ -535,7 +535,7 @@
 //
 // impl<'a> ser::SerializeMap for &'a mut TelemetrySerializer {
 //     type Ok = ();
-//     type Error = GraphError;
+//     type Error = StageError;
 //
 //     #[tracing::instrument(level="trace", skip(key))]
 //     fn serialize_key<T>(&mut self, key: &T) -> Result<()>
@@ -566,7 +566,7 @@
 //
 // impl<'a> ser::SerializeStruct for &'a mut TelemetrySerializer {
 //     type Ok = ();
-//     type Error = GraphError;
+//     type Error = StageError;
 //
 //     #[tracing::instrument(level="trace", skip(value))]
 //     fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<()>
@@ -587,7 +587,7 @@
 //
 // impl<'a> ser::SerializeStructVariant for &'a mut TelemetrySerializer {
 //     type Ok = ();
-//     type Error = GraphError;
+//     type Error = StageError;
 //
 //     #[tracing::instrument(level="trace", skip(value))]
 //     fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<()>
@@ -612,7 +612,7 @@
 //
 // impl ser::Serializer for StringKeySerializer {
 //     type Ok = String;
-//     type Error = GraphError;
+//     type Error = StageError;
 //     type SerializeSeq = Self;
 //     type SerializeTuple = Self;
 //     type SerializeTupleStruct = Self;
@@ -739,19 +739,19 @@
 //
 //     #[tracing::instrument(level="trace", skip())]
 //     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
-//         Err(GraphError::GraphSerde("seq can't serialize to string key".to_string()))
+//         Err(StageError::GraphSerde("seq can't serialize to string key".to_string()))
 //     }
 //
 //     #[tracing::instrument(level="trace", skip())]
 //     fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple> {
-//         Err(GraphError::GraphSerde(
+//         Err(StageError::GraphSerde(
 //             "tuple can't serialize to string key".to_string(),
 //         ))
 //     }
 //
 //     #[tracing::instrument(level="trace", skip())]
 //     fn serialize_tuple_struct(self, name: &str, _len: usize) -> Result<Self::SerializeTupleStruct> {
-//         Err(GraphError::GraphSerde(format!(
+//         Err(StageError::GraphSerde(format!(
 //             "tuple struct {} can't serialize to string key",
 //             name
 //         )))
@@ -761,7 +761,7 @@
 //     fn serialize_tuple_variant(
 //         self, name: &str, _variant_index: u32, variant: &str, _len: usize,
 //     ) -> Result<Self::SerializeTupleVariant> {
-//         Err(GraphError::GraphSerde(format!(
+//         Err(StageError::GraphSerde(format!(
 //             "tuple variant {}::{} can't serialize to string key",
 //             name, variant
 //         )))
@@ -769,12 +769,12 @@
 //
 //     #[tracing::instrument(level="trace", skip())]
 //     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap> {
-//         Err(GraphError::GraphSerde("map can't serialize to string key".to_string()))
+//         Err(StageError::GraphSerde("map can't serialize to string key".to_string()))
 //     }
 //
 //     #[tracing::instrument(level="trace", skip())]
 //     fn serialize_struct(self, name: &str, _len: usize) -> Result<Self::SerializeStruct> {
-//         Err(GraphError::GraphSerde(format!(
+//         Err(StageError::GraphSerde(format!(
 //             "struct {} can't serialize to string key",
 //             name
 //         )))
@@ -784,7 +784,7 @@
 //     fn serialize_struct_variant(
 //         self, name: &str, _variant_index: u32, variant: &str, _len: usize,
 //     ) -> Result<Self::SerializeStructVariant> {
-//         Err(GraphError::GraphSerde(format!(
+//         Err(StageError::GraphSerde(format!(
 //             "struct variant {}::{} can't serialize to string key",
 //             name, variant
 //         )))
@@ -793,7 +793,7 @@
 //
 // impl ser::SerializeSeq for StringKeySerializer {
 //     type Ok = String;
-//     type Error = GraphError;
+//     type Error = StageError;
 //
 //     #[tracing::instrument(level="trace", skip(self, _value))]
 //     fn serialize_element<T>(&mut self, _value: &T) -> Result<()>
@@ -811,7 +811,7 @@
 //
 // impl ser::SerializeTuple for StringKeySerializer {
 //     type Ok = String;
-//     type Error = GraphError;
+//     type Error = StageError;
 //
 //     #[tracing::instrument(level="trace", skip(self, _value))]
 //     fn serialize_element<T>(&mut self, _value: &T) -> Result<()>
@@ -829,7 +829,7 @@
 //
 // impl ser::SerializeTupleStruct for StringKeySerializer {
 //     type Ok = String;
-//     type Error = GraphError;
+//     type Error = StageError;
 //
 //     #[tracing::instrument(level="trace", skip(self, _value))]
 //     fn serialize_field<T>(&mut self, _value: &T) -> Result<()>
@@ -847,7 +847,7 @@
 //
 // impl ser::SerializeTupleVariant for StringKeySerializer {
 //     type Ok = String;
-//     type Error = GraphError;
+//     type Error = StageError;
 //
 //     #[tracing::instrument(level="trace", skip(self, _value))]
 //     fn serialize_field<T>(&mut self, _value: &T) -> Result<()>
@@ -865,7 +865,7 @@
 //
 // impl ser::SerializeMap for StringKeySerializer {
 //     type Ok = String;
-//     type Error = GraphError;
+//     type Error = StageError;
 //
 //     #[tracing::instrument(level="trace", skip(self, _key))]
 //     fn serialize_key<T>(&mut self, _key: &T) -> Result<()>
@@ -891,7 +891,7 @@
 //
 // impl ser::SerializeStruct for StringKeySerializer {
 //     type Ok = String;
-//     type Error = GraphError;
+//     type Error = StageError;
 //
 //     #[tracing::instrument(level="trace", skip(_value))]
 //     fn serialize_field<T>(&mut self, _key: &'static str, _value: &T) -> Result<()>
@@ -909,7 +909,7 @@
 //
 // impl ser::SerializeStructVariant for StringKeySerializer {
 //     type Ok = String;
-//     type Error = GraphError;
+//     type Error = StageError;
 //
 //     #[tracing::instrument(level="trace", skip(_value))]
 //     fn serialize_field<T>(&mut self, _key: &'static str, _value: &T) -> Result<()>

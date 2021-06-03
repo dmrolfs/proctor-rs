@@ -1,181 +1,213 @@
 use crate::elements::TelemetryValue;
 use std::fmt;
+use std::fmt::Debug;
 use thiserror::Error;
-use tokio::sync::{mpsc, oneshot};
-use tokio::task::JoinError;
 
-/// A result type where the error variant is always a `ProctorError`.
-pub type ProctorResult<T> = std::result::Result<T, ProctorError>;
-
-/// Error variants related to the internals of proctor execution.
+/// Set of errors occurring during telemetry collection
 #[derive(Debug, Error)]
-#[non_exhaustive]
-pub enum ProctorError {
-    /// There is an error during bootstrapping the application.
+pub enum CollectionError {
+    /// An error related to collecting from a CVS file.
     #[error("{0}")]
-    Bootstrap(anyhow::Error),
-    /// There is an error in the `Collection` stage.
+    CsvError(#[from] csv::Error),
+
+    ///An error related to collection via an HTTP source.
     #[error("{0}")]
-    Collection(anyhow::Error),
-    /// There is an error in the `Eligibility` stage.
+    HttpError(#[from] reqwest::Error),
+
     #[error("{0}")]
-    Eligibility(anyhow::Error),
-    /// There is an error in the `Decision` stage.
+    SettingsError(#[from] SettingsError),
+
+    #[error("Attempt to send via a closed subscription channel: {0}")]
+    ClosedSubscription(String),
+
     #[error("{0}")]
-    Decision(anyhow::Error),
-    /// There is an error in the `Forecast` stage.
+    PortError(#[from] PortError),
+
     #[error("{0}")]
-    Forecast(anyhow::Error),
-    /// There is an error in the `Governance` stage.
+    TelemetryError(#[from] TelemetryError),
+
+    #[error(transparent)]
+    Other(anyhow::Error),
+}
+
+#[derive(Debug, Error)]
+pub enum DecisionError {
+    #[error("data not found at key, {0}")]
+    DataNotFound(String),
+
     #[error("{0}")]
-    Governance(anyhow::Error),
-    /// There is an error in the `Execution` stage.
+    TelemetryError(#[from] TelemetryError),
+}
+
+/// Set of errors occurring during policy initialization or evaluation.
+///
+#[derive(Debug, Error)]
+pub enum PolicyError {
     #[error("{0}")]
-    Execution(anyhow::Error),
-    /// There is an error in the proctor execution pipeline.
+    IOError(#[from] std::io::Error),
+
+    /// Error occurred during initialization or execution of the policy engine.
     #[error("{0}")]
-    Pipeline(anyhow::Error),
-    /// An internal proctor error indicating that proctor is shutting down.
-    #[error("proctor is shutting down")]
-    ShuttingDown,
+    EngineError(#[from] oso::OsoError),
+
+    /// Error in parsing or evaluation of Polar policy.
+    #[error("{0}")]
+    PolicyError(#[from] polar_core::error::PolarError),
+
+    /// Error in using telemetry data in policies.
+    #[error("failed to pull policy data from telemetry: {0}")]
+    TelemetryError(#[from] TelemetryError),
+
+    #[error("policy data, {0}, not found")]
+    DataNotFound(String),
+
+    #[error("failed to publish policy event: {0}")]
+    PublishError(anyhow::Error), //todo: if only PortError then specialize via #[from]
 }
 
-impl From<ConfigError> for ProctorError {
-    fn from(that: ConfigError) -> Self {
-        ProctorError::Bootstrap(that.into())
+impl From<PortError> for PolicyError {
+    fn from(that: PortError) -> Self {
+        PolicyError::PublishError(that.into())
     }
 }
 
-impl From<GraphError> for ProctorError {
-    fn from(that: GraphError) -> Self {
-        ProctorError::Pipeline(that.into())
+/// Set of errors occurring while handling telemetry data
+#[derive(Debug, Error)]
+pub enum TelemetryError {
+    ///Invalid Type used in application
+    #[error("invalid type used, expected {expected} type but was: {actual:?}")]
+    TypeError { expected: String, actual: Option<String> },
+
+    #[error("Invalid type used, expected {0}: {1}")]
+    ExpectedTypeError(String, anyhow::Error),
+
+    #[error("{0}")]
+    SerializationError(#[from] flexbuffers::SerializationError),
+
+    #[error("{0}")]
+    DeserializationError(#[from] flexbuffers::DeserializationError),
+
+    #[error("{0}")]
+    ReaderError(#[from] flexbuffers::ReaderError),
+
+    #[error("{0}")]
+    ValueParseError(anyhow::Error),
+}
+
+#[derive(Debug)]
+pub enum TypeExpectation {
+    Boolean,
+    Integer,
+    Float,
+    Text,
+    Seq,
+    Table,
+    Unit,
+}
+
+impl fmt::Display for TypeExpectation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            TypeExpectation::Boolean => write!(f, "boolean"),
+            TypeExpectation::Integer => write!(f, "integer"),
+            TypeExpectation::Float => write!(f, "floating point"),
+            TypeExpectation::Text => write!(f, "text"),
+            TypeExpectation::Seq => write!(f, "sequence"),
+            TypeExpectation::Table => write!(f, "table"),
+            TypeExpectation::Unit => write!(f, "unit value"),
+        }
     }
 }
 
-impl From<config::ConfigError> for ProctorError {
-    fn from(that: config::ConfigError) -> Self {
-        ProctorError::Bootstrap(that.into())
+impl From<crate::elements::TelemetryValue> for TypeExpectation {
+    fn from(value: TelemetryValue) -> Self {
+        use crate::elements::TelemetryValue as TV;
+
+        match value {
+            TV::Boolean(_) => TypeExpectation::Boolean,
+            TV::Integer(_) => TypeExpectation::Integer,
+            TV::Float(_) => TypeExpectation::Float,
+            TV::Text(_) => TypeExpectation::Text,
+            TV::Seq(_) => TypeExpectation::Seq,
+            TV::Table(_) => TypeExpectation::Table,
+            TV::Unit => TypeExpectation::Unit,
+        }
     }
 }
 
-impl From<tokio::io::Error> for ProctorError {
-    fn from(that: tokio::io::Error) -> Self {
-        ProctorError::Pipeline(that.into())
+#[derive(Debug, Error)]
+pub enum StageError {
+    #[error("failure while materializing graph stage value: {0}")]
+    MaterializationError(String),
+
+    #[error("{0}")]
+    PortError(anyhow::Error),
+}
+
+impl From<PortError> for StageError {
+    fn from(that: PortError) -> Self {
+        StageError::PortError(that.into())
     }
 }
 
-impl From<toml::de::Error> for ProctorError {
-    fn from(that: toml::de::Error) -> Self {
-        ProctorError::Bootstrap(that.into())
-    }
+#[derive(Debug, Error)]
+pub enum PortError {
+    #[error("cannot use detached port, {0}.")]
+    Detached(String),
+
+    /// error occurred while attempting to send across a sync channel.
+    #[error("{0:?}")]
+    ChannelError(anyhow::Error),
 }
 
-impl From<serde_json::Error> for ProctorError {
-    fn from(that: serde_json::Error) -> Self {
-        ProctorError::Bootstrap(that.into())
-    }
-}
-
-impl From<csv::Error> for ProctorError {
-    fn from(that: csv::Error) -> Self {
-        ProctorError::Bootstrap(that.into())
-    }
-}
-
-impl<T: fmt::Debug + Send + Sync + 'static> From<mpsc::error::SendError<T>> for ProctorError {
-    fn from(that: mpsc::error::SendError<T>) -> Self {
-        ProctorError::Pipeline(that.into())
-    }
-}
-
-impl From<mpsc::error::RecvError> for ProctorError {
-    fn from(that: mpsc::error::RecvError) -> Self {
-        ProctorError::Pipeline(that.into())
-    }
-}
-
-impl From<oneshot::error::RecvError> for ProctorError {
-    fn from(that: oneshot::error::RecvError) -> Self {
-        ProctorError::Pipeline(that.into())
+impl<T: 'static + Debug + Send + Sync> From<tokio::sync::mpsc::error::SendError<T>> for PortError {
+    fn from(that: tokio::sync::mpsc::error::SendError<T>) -> Self {
+        PortError::ChannelError(that.into())
     }
 }
 
 /// Error variants related to configuration.
 #[derive(Debug, Error)]
 #[non_exhaustive]
-pub enum ConfigError {
+pub enum SettingsError {
     /// Error understanding execution environment.
     #[error("{0}")]
     Environment(String),
+
     /// Error in configuration settings.
-    #[error("{0}")]
-    Configuration(String),
-    /// Error in parsing configuration settings.
-    #[error("{0}")]
-    Parse(anyhow::Error),
+    #[error(transparent)]
+    Configuration(#[from] config::ConfigError),
+
     /// Error in bootstrapping execution from configuration.
+    #[error("error during system bootstrap: {message}: {setting}")]
+    Bootstrap { message: String, setting: String },
+
     #[error("{0}")]
-    Bootstrap(String),
+    HttpRequestError(anyhow::Error),
+
+    #[error("{0}")]
+    SourceError(anyhow::Error),
+
+    #[error("{0}")]
+    IOError(#[from] std::io::Error),
 }
 
-impl From<config::ConfigError> for ConfigError {
-    fn from(that: config::ConfigError) -> Self {
-        ConfigError::Parse(that.into())
-    }
-}
-
-impl From<toml::de::Error> for ConfigError {
-    fn from(that: toml::de::Error) -> Self {
-        ConfigError::Parse(that.into())
-    }
-}
-
-impl From<serde_json::Error> for ConfigError {
-    fn from(that: serde_json::Error) -> Self {
-        ConfigError::Parse(that.into())
-    }
-}
-
-impl From<reqwest::header::InvalidHeaderName> for ConfigError {
+impl From<reqwest::header::InvalidHeaderName> for SettingsError {
     fn from(that: reqwest::header::InvalidHeaderName) -> Self {
-        ConfigError::Configuration(format!("invalid header name: {:?}", that))
+        SettingsError::HttpRequestError(that.into())
     }
 }
 
-impl From<reqwest::header::InvalidHeaderValue> for ConfigError {
+impl From<reqwest::header::InvalidHeaderValue> for SettingsError {
     fn from(that: reqwest::header::InvalidHeaderValue) -> Self {
-        ConfigError::Configuration(format!("invalid header value: {:?}", that))
+        SettingsError::HttpRequestError(that.into())
     }
 }
 
-/// Error variants related to graph execution.
-#[derive(Debug, Error)]
-#[non_exhaustive]
-pub enum GraphError {
-    /// Attempt to use detached port.
-    #[error("Improper attempt to use detached port, {0}")]
-    GraphPortDetached(String),
-    /// Error occurred in underlying channel.
-    #[error("{0}")]
-    GraphChannel(String),
-    /// Error occurred in underlying asynchronous task.
-    #[error("{0}")]
-    GraphStage(anyhow::Error),
-    /// Error occurred at graph node boundary point.
-    #[error("{0}")]
-    GraphSerde(String),
-    ///Error occurred at graph node boundary point.
-    #[error("{0}")]
-    GraphBoundary(anyhow::Error),
-    ///Precondition error occurred in graph setup.
-    #[error("{0}")]
-    GraphPrecondition(String),
-    ///Invalid Type used in application
-    #[error("invalid type used, expected {0} type but was: {1}")]
-    TypeError(String, String),
-    ///Unexpected Type
-    #[error("type {0} unexpected")]
-    Unexpected(UnexpectedType),
+impl From<toml::de::Error> for SettingsError {
+    fn from(that: toml::de::Error) -> Self {
+        SettingsError::SourceError(that.into())
+    }
 }
 
 #[derive(Debug)]
@@ -216,144 +248,5 @@ impl From<crate::elements::TelemetryValue> for UnexpectedType {
             TV::Seq(_) => UnexpectedType::Seq,
             TV::Table(_) => UnexpectedType::Table,
         }
-    }
-}
-
-// impl std::error::Error for GraphError {}
-
-// impl fmt::Display for GraphError {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         write!(f, "{}", self.to_string())
-//     }
-// }
-
-impl From<config::ConfigError> for GraphError {
-    fn from(that: config::ConfigError) -> Self {
-        GraphError::GraphBoundary(that.into())
-    }
-}
-
-impl serde::de::Error for GraphError {
-    fn custom<T: fmt::Display>(msg: T) -> Self {
-        GraphError::GraphSerde(msg.to_string())
-    }
-}
-
-impl serde::ser::Error for GraphError {
-    fn custom<T: fmt::Display>(msg: T) -> Self {
-        GraphError::GraphSerde(msg.to_string())
-    }
-}
-
-// impl From<std::option::NoneError> for GraphError {
-//     fn from(that: std::option::NoneError) -> Self {
-//         GraphError::Task(that.into());
-//     }
-// }
-
-impl From<tokio::sync::oneshot::error::RecvError> for GraphError {
-    fn from(that: tokio::sync::oneshot::error::RecvError) -> Self {
-        GraphError::GraphChannel(format!("failed to receive oneshot message: {:?}", that))
-    }
-}
-
-impl From<tokio::sync::mpsc::error::RecvError> for GraphError {
-    fn from(that: tokio::sync::mpsc::error::RecvError) -> Self {
-        GraphError::GraphChannel(format!("failed to receive mpsc message: {:?}", that))
-    }
-}
-
-impl From<tokio::sync::broadcast::error::RecvError> for GraphError {
-    fn from(that: tokio::sync::broadcast::error::RecvError) -> Self {
-        GraphError::GraphChannel(format!("failed to receive broadcast message: {:?}", that))
-    }
-}
-
-impl<T> From<tokio::sync::mpsc::error::SendError<T>> for GraphError {
-    fn from(that: tokio::sync::mpsc::error::SendError<T>) -> Self {
-        //todo: can I make this into anyhow::Error while avoid `T: 'static` requirement?
-        GraphError::GraphChannel(format!("failed to send: {}", that))
-    }
-}
-
-impl<T> From<tokio::sync::broadcast::error::SendError<T>> for GraphError {
-    fn from(that: tokio::sync::broadcast::error::SendError<T>) -> Self {
-        //todo: can I make this into anyhow::Error while avoid `T: 'static` requirement?
-        GraphError::GraphChannel(format!("failed to send: {}", that))
-    }
-}
-
-impl From<tokio::task::JoinError> for GraphError {
-    fn from(that: JoinError) -> Self {
-        GraphError::GraphStage(that.into())
-    }
-}
-
-impl<T> From<std::sync::PoisonError<T>> for GraphError
-where
-    T: fmt::Debug,
-{
-    fn from(that: std::sync::PoisonError<T>) -> Self {
-        GraphError::GraphChannel(format!("Mutex is poisoned: {:?}", that))
-    }
-}
-
-impl From<reqwest::Error> for GraphError {
-    fn from(that: reqwest::Error) -> Self {
-        GraphError::GraphStage(that.into())
-    }
-}
-
-impl From<serde_json::Error> for GraphError {
-    fn from(that: serde_json::Error) -> Self {
-        GraphError::GraphStage(that.into())
-    }
-}
-
-impl From<oso::OsoError> for GraphError {
-    fn from(that: oso::OsoError) -> Self {
-        GraphError::GraphStage(that.into())
-    }
-}
-
-impl From<polar_core::error::PolarError> for GraphError {
-    fn from(that: polar_core::error::PolarError) -> Self {
-        GraphError::GraphStage(that.into())
-    }
-}
-
-impl From<std::io::Error> for GraphError {
-    fn from(that: std::io::Error) -> Self {
-        GraphError::GraphStage(that.into())
-    }
-}
-
-impl From<flexbuffers::SerializationError> for GraphError {
-    fn from(that: flexbuffers::SerializationError) -> Self {
-        GraphError::GraphBoundary(that.into())
-    }
-}
-
-impl From<flexbuffers::DeserializationError> for GraphError {
-    fn from(that: flexbuffers::DeserializationError) -> Self {
-        GraphError::GraphBoundary(that.into())
-    }
-}
-
-impl From<flexbuffers::ReaderError> for GraphError {
-    fn from(that: flexbuffers::ReaderError) -> Self {
-        GraphError::GraphBoundary(that.into())
-    }
-}
-
-impl From<std::num::TryFromIntError> for GraphError {
-    fn from(that: std::num::TryFromIntError) -> Self {
-        GraphError::TypeError("Integer".to_string(), format!("{:?}", that))
-    }
-}
-
-impl From<std::convert::Infallible> for GraphError {
-    fn from(that: std::convert::Infallible) -> Self {
-        GraphError::TypeError("Integer".to_string(), format!("{:?}", that))
     }
 }

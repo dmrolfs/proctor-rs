@@ -5,11 +5,12 @@ mod policy;
 mod protocol;
 
 use crate::elements::{telemetry, TelemetryValue, ToTelemetry};
-use crate::error::GraphError;
+use crate::error::{PolicyError, TelemetryError, TypeExpectation};
 use crate::graph::stage::{self, Stage};
-use crate::graph::{GraphResult, Inlet, Outlet, Port};
+use crate::graph::{Inlet, Outlet, Port};
 use crate::graph::{SinkShape, SourceShape};
 use crate::{AppData, ProctorContext};
+use anyhow::Result;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use oso::{Oso, ToPolar};
@@ -27,13 +28,13 @@ pub trait PolicySettings {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct PolicyResult<T, C> {
+pub struct PolicyOutcome<T, C> {
     pub item: T,
     pub context: C,
     pub bindings: telemetry::Table,
 }
 
-impl<T, C> PolicyResult<T, C> {
+impl<T, C> PolicyOutcome<T, C> {
     pub fn new(item: T, context: C, bindings: telemetry::Table) -> Self {
         Self {
             item,
@@ -47,10 +48,10 @@ const T_ITEM: &'static str = "item";
 const T_CONTEXT: &'static str = "context";
 const T_BINDINGS: &'static str = "bindings";
 
-impl<T, C> Into<TelemetryValue> for PolicyResult<T, C>
+impl<T, C> Into<TelemetryValue> for PolicyOutcome<T, C>
 where
-    T: Into<TelemetryValue>, /*+ ToPolar*/
-    C: Into<TelemetryValue>, /*+ ToPolar*/
+    T: Into<TelemetryValue>,
+    C: Into<TelemetryValue>,
 {
     fn into(self) -> TelemetryValue {
         TelemetryValue::Table(maplit::hashmap! {
@@ -61,51 +62,45 @@ where
     }
 }
 
-impl<T, C> TryFrom<TelemetryValue> for PolicyResult<T, C>
+impl<T, C> TryFrom<TelemetryValue> for PolicyOutcome<T, C>
 where
-    T: TryFrom<TelemetryValue>, /*+ ToPolar*/
-    <T as TryFrom<TelemetryValue>>::Error: Into<GraphError>,
-    C: TryFrom<TelemetryValue>, /*+ ToPolar*/
-    <C as TryFrom<TelemetryValue>>::Error: Into<GraphError>,
+    T: TryFrom<TelemetryValue>,
+    <T as TryFrom<TelemetryValue>>::Error: Into<TelemetryError>,
+    C: TryFrom<TelemetryValue>,
+    <C as TryFrom<TelemetryValue>>::Error: Into<TelemetryError>,
 {
-    type Error = GraphError;
+    type Error = PolicyError;
 
     fn try_from(value: TelemetryValue) -> Result<Self, Self::Error> {
         if let TelemetryValue::Table(ref table) = value {
             let item = if let Some(i) = table.get(T_ITEM) {
-                T::try_from(i.clone()).map_err(|err| err.into())
+                T::try_from(i.clone()).map_err(|err| PolicyError::TelemetryError(err.into()))
             } else {
-                Err(GraphError::GraphPrecondition(format!(
-                    "failed to find `{}` in Table",
-                    T_ITEM
-                )))
+                Err(PolicyError::DataNotFound(T_ITEM.to_string()))
             }?;
 
             let context = if let Some(c) = table.get(T_CONTEXT) {
-                C::try_from(c.clone()).map_err(|err| err.into())
+                C::try_from(c.clone()).map_err(|err| PolicyError::TelemetryError(err.into()))
             } else {
-                Err(GraphError::GraphPrecondition(format!(
-                    "failed to find `{}` in Table",
-                    T_CONTEXT
-                )))
+                Err(PolicyError::DataNotFound(T_CONTEXT.to_string()))
             }?;
 
             let bindings = if let Some(b) = table.get(T_BINDINGS) {
-                telemetry::Table::try_from(b.clone())
+                telemetry::Table::try_from(b.clone()).map_err(|err| err.into())
             } else {
-                Err(GraphError::GraphPrecondition(format!(
-                    "failed to find `{}` in Table",
-                    T_BINDINGS
-                )))
+                Err(PolicyError::DataNotFound(T_BINDINGS.to_string()))
             }?;
 
-            Ok(PolicyResult {
+            Ok(PolicyOutcome {
                 item,
                 context,
                 bindings,
             })
         } else {
-            Err(GraphError::TypeError("Table".to_string(), format!("{:?}", value)))
+            Err(PolicyError::TelemetryError(TelemetryError::TypeError {
+                expected: format!("telemetry {}", TypeExpectation::Table),
+                actual: Some(format!("{:?}", value)),
+            }))
         }
     }
 }
@@ -118,7 +113,7 @@ where
     policy: P,
     context_inlet: Inlet<C>,
     inlet: Inlet<T>,
-    outlet: Outlet<PolicyResult<T, C>>,
+    outlet: Outlet<PolicyOutcome<T, C>>,
     tx_api: PolicyFilterApi<C>,
     rx_api: mpsc::UnboundedReceiver<PolicyFilterCmd<C>>,
     pub tx_monitor: broadcast::Sender<PolicyFilterEvent<T, C>>,
@@ -170,7 +165,7 @@ impl<T, C, A, P> SourceShape for PolicyFilter<T, C, A, P>
 where
     P: QueryPolicy<Item = T, Context = C, Args = A>,
 {
-    type Out = PolicyResult<T, C>;
+    type Out = PolicyOutcome<T, C>;
     #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()
@@ -192,14 +187,14 @@ where
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> GraphResult<()> {
+    async fn check(&self) -> Result<()> {
         self.inlet.check_attachment().await?;
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run policy_filter through", skip(self))]
-    async fn run(&mut self) -> GraphResult<()> {
+    async fn run(&mut self) -> Result<()> {
         let name = self.name().to_owned();
         let mut oso = self.oso()?;
         let outlet = &self.outlet;
@@ -254,7 +249,7 @@ where
         Ok(())
     }
 
-    async fn close(mut self: Box<Self>) -> GraphResult<()> {
+    async fn close(mut self: Box<Self>) -> Result<()> {
         tracing::info!("closing policy_filter ports");
         self.inlet.close().await;
         self.outlet.close().await;
@@ -269,7 +264,7 @@ where
     P: QueryPolicy<Item = T, Context = C, Args = A>,
 {
     #[tracing::instrument(level = "info", name = "make policy knowledge base", skip(self))]
-    fn oso(&mut self) -> GraphResult<Oso> {
+    fn oso(&mut self) -> Result<Oso, PolicyError> {
         let mut oso = Oso::new();
 
         self.policy.load_policy_engine(&mut oso).map_err(|err| {
@@ -288,23 +283,21 @@ where
     #[tracing::instrument(level = "trace", skip(tx))]
     fn publish_event(
         event: PolicyFilterEvent<T, C>, tx: &broadcast::Sender<PolicyFilterEvent<T, C>>,
-    ) -> GraphResult<()> {
+    ) -> Result<(), PolicyError> {
         let nr_notified = tx
             .send(event.clone())
-            .map_err::<crate::error::GraphError, _>(|err| err.into())?;
+            .map_err(|err| PolicyError::PublishError(err.into()))?;
         tracing::trace!(%nr_notified, ?event, "notified subscribers of policy filter event.");
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "policy_filter handle item", skip(oso, outlet), fields())]
     async fn handle_item(
-        item: T, context: &C, policy: &P, oso: &Oso, outlet: &Outlet<PolicyResult<T, C>>,
+        item: T, context: &C, policy: &P, oso: &Oso, outlet: &Outlet<PolicyOutcome<T, C>>,
         tx: &broadcast::Sender<PolicyFilterEvent<T, C>>,
-    ) -> GraphResult<()> {
-        let query_result: GraphResult<QueryResult> = {
-            // query lifetime cannot span across `.await` since it cannot `Send` between threads.
-            policy.query_policy(oso, policy.make_query_args(&item, context))
-        };
+    ) -> Result<(), PolicyError> {
+        // query lifetime cannot span across `.await` since it cannot `Send` between threads.
+        let query_result = policy.query_policy(oso, policy.make_query_args(&item, context));
 
         tracing::info!(?query_result, "knowledge base query results");
 
@@ -318,7 +311,7 @@ where
                     ?bindings,
                     "item and context passed policy review - sending via outlet."
                 );
-                outlet.send(PolicyResult::new(item, context.clone(), bindings)).await?;
+                outlet.send(PolicyOutcome::new(item, context.clone(), bindings)).await?;
                 Ok(())
             }
 
@@ -344,7 +337,7 @@ where
         skip(tx),
         fields()
     )]
-    fn handle_item_before_context(item: T, tx: &broadcast::Sender<PolicyFilterEvent<T, C>>) -> GraphResult<()> {
+    fn handle_item_before_context(item: T, tx: &broadcast::Sender<PolicyFilterEvent<T, C>>) -> Result<(), PolicyError> {
         tracing::info!(?item, "dropping item received before policy context set.");
         Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
         Ok(())
@@ -353,7 +346,7 @@ where
     #[tracing::instrument(level = "info", name = "policy_filter handle context", skip(tx), fields())]
     async fn handle_context(
         context: Arc<Mutex<Option<C>>>, recv_context: C, tx: &broadcast::Sender<PolicyFilterEvent<T, C>>,
-    ) -> GraphResult<()> {
+    ) -> Result<(), PolicyError> {
         tracing::trace!(recv_context=?recv_context, "handling policy context update...");
         let mut ctx = context.lock().await;
         *ctx = Some(recv_context);
@@ -365,7 +358,7 @@ where
     #[tracing::instrument(level = "info", name = "policy_filter handle command", skip(oso, policy,), fields())]
     async fn handle_command(
         command: PolicyFilterCmd<C>, oso: &mut Oso, name: &str, policy: &P, context: Arc<Mutex<Option<C>>>,
-    ) -> GraphResult<bool> {
+    ) -> Result<bool, PolicyError> {
         tracing::trace!(?command, ?context, "handling policy filter command...");
 
         match command {
@@ -456,7 +449,6 @@ where
 mod tests {
     use super::*;
     use crate::elements::telemetry;
-    use crate::error::GraphError;
     use crate::phases::collection::TelemetrySubscription;
     use oso::PolarClass;
     use pretty_assertions::assert_eq;
@@ -518,15 +510,13 @@ mod tests {
         type Context = TestContext;
         type Args = (Self::Item, &'static str, &'static str);
 
-        fn load_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
+        fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
             oso.load_str(self.policy.as_str()).map_err(|err| err.into())
         }
 
-        fn initialize_policy_engine(&mut self, oso: &mut Oso) -> GraphResult<()> {
-            oso.register_class(User::get_polar_class())
-                .map_err::<GraphError, _>(|err| err.into())?;
-            oso.register_class(TestContext::get_polar_class())
-                .map_err::<GraphError, _>(|err| err.into())?;
+        fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
+            oso.register_class(User::get_polar_class())?;
+            oso.register_class(TestContext::get_polar_class())?;
             Ok(())
         }
 
@@ -534,7 +524,7 @@ mod tests {
             (item.clone(), "foo", "bar")
         }
 
-        fn query_policy(&self, engine: &Oso, args: Self::Args) -> GraphResult<QueryResult> {
+        fn query_policy(&self, engine: &Oso, args: Self::Args) -> Result<QueryResult, PolicyError> {
             QueryResult::from_query(engine.query_rule("allow", args)?)
         }
     }
@@ -579,7 +569,7 @@ mod tests {
             assert!(actual.is_some());
             assert_eq!(
                 actual.unwrap(),
-                PolicyResult::new(
+                PolicyOutcome::new(
                     User {
                         username: "peter.pan@example.com".to_string()
                     },

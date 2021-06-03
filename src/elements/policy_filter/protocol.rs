@@ -1,3 +1,4 @@
+use crate::error::PolicyError;
 use crate::Ack;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -69,7 +70,7 @@ impl PolicySource {
         Self::File(policy_path)
     }
 
-    pub fn load_into(&self, oso: &oso::Oso) -> crate::graph::GraphResult<()> {
+    pub fn load_into(&self, oso: &oso::Oso) -> Result<(), PolicyError> {
         let result = match self {
             PolicySource::String(policy) => oso.load_str(policy.as_str()),
             PolicySource::File(policy) => oso.load_file(policy),
@@ -77,7 +78,7 @@ impl PolicySource {
         result.map_err(|err| err.into())
     }
 
-    pub fn validate(&self) -> crate::graph::GraphResult<()> {
+    pub fn validate(&self) -> Result<(), PolicyError> {
         let polar = polar_core::polar::Polar::new();
         let result = match self {
             Self::String(policy) => polar.load_str(policy.as_str()),

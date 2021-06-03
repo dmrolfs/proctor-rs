@@ -80,7 +80,7 @@ async fn test_make_from_telemetry_stage() -> Result<()> {
     let setting = SourceSetting::Csv { path };
 
     let source = make_telemetry_cvs_source::<Data, _>("local", &setting)?;
-    let convert = make_from_telemetry("convert", true).await?;
+    let convert = make_from_telemetry("convert", true).await;
 
     let mut sink = stage::Fold::<_, Data, Vec<Data>>::new("sink", Vec::default(), |mut acc, item| {
         acc.push(item);

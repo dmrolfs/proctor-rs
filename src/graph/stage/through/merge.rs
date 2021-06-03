@@ -1,5 +1,6 @@
-use crate::graph::{FanInShape2, GraphResult, Inlet, Outlet, Port, SourceShape, Stage};
+use crate::graph::{FanInShape2, Inlet, Outlet, Port, SourceShape, Stage};
 use crate::AppData;
+use anyhow::Result;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt::{self, Debug};
@@ -90,7 +91,7 @@ impl<T: AppData> Stage for Merge<T> {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> GraphResult<()> {
+    async fn check(&self) -> Result<()> {
         self.inlet_0.check_attachment().await?;
         self.inlet_1.check_attachment().await?;
         self.outlet.check_attachment().await?;
@@ -98,7 +99,7 @@ impl<T: AppData> Stage for Merge<T> {
     }
 
     #[tracing::instrument(level = "info", name = "run merge through", skip(self))]
-    async fn run(&mut self) -> GraphResult<()> {
+    async fn run(&mut self) -> Result<()> {
         let outlet = &self.outlet;
         let rx_0 = &mut self.inlet_0;
         let rx_1 = &mut self.inlet_1;
@@ -125,7 +126,7 @@ impl<T: AppData> Stage for Merge<T> {
         Ok(())
     }
 
-    async fn close(mut self: Box<Self>) -> GraphResult<()> {
+    async fn close(mut self: Box<Self>) -> Result<()> {
         tracing::trace!("closing merge-through ports.");
         self.inlet_0.close().await;
         self.inlet_1.close().await;

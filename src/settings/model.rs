@@ -1,6 +1,5 @@
 use crate::elements::PolicySource;
-use crate::error::ConfigError;
-use crate::ProctorResult;
+use crate::error::SettingsError;
 use reqwest::{
     header::{HeaderMap, HeaderName, HeaderValue},
     Method, Url,
@@ -46,11 +45,11 @@ pub struct HttpQuery {
 }
 
 impl HttpQuery {
-    pub fn header_map(&self) -> ProctorResult<HeaderMap> {
+    pub fn header_map(&self) -> Result<HeaderMap, SettingsError> {
         let mut map = HeaderMap::with_capacity(self.headers.len());
         for (k, v) in self.headers.iter() {
-            let name = HeaderName::from_str(k.as_str()).map_err::<ConfigError, _>(|err| err.into());
-            let value = HeaderValue::from_str(v.as_str()).map_err::<ConfigError, _>(|err| err.into());
+            let name = HeaderName::from_str(k.as_str()).map_err::<SettingsError, _>(|err| err.into());
+            let value = HeaderValue::from_str(v.as_str()).map_err::<SettingsError, _>(|err| err.into());
             map.insert(name?, value?);
         }
         Ok(map)

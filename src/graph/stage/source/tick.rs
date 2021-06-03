@@ -1,6 +1,8 @@
+use crate::error::StageError;
 use crate::graph::shape::SourceShape;
-use crate::graph::{stage, GraphResult, Outlet, Port, Stage};
+use crate::graph::{stage, Outlet, Port, Stage};
 use crate::AppData;
+use anyhow::Result;
 use async_stream::stream;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
@@ -14,12 +16,14 @@ pub type TickApi = mpsc::UnboundedSender<TickMsg>;
 
 #[derive(Debug)]
 pub enum TickMsg {
-    Stop { tx: oneshot::Sender<GraphResult<()>> },
+    Stop {
+        tx: oneshot::Sender<Result<(), StageError>>,
+    },
 }
 
 impl TickMsg {
     #[inline]
-    pub fn stop() -> (Self, oneshot::Receiver<GraphResult<()>>) {
+    pub fn stop() -> (Self, oneshot::Receiver<Result<(), StageError>>) {
         let (tx, rx) = oneshot::channel();
         (Self::Stop { tx }, rx)
     }
@@ -184,13 +188,13 @@ where
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> GraphResult<()> {
+    async fn check(&self) -> Result<()> {
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run tick source", skip(self))]
-    async fn run(&mut self) -> GraphResult<()> {
+    async fn run(&mut self) -> Result<()> {
         let start = tokio::time::Instant::now() + self.initial_delay;
         let interval = tokio::time::interval_at(start, self.interval);
         tokio::pin!(interval);
@@ -249,7 +253,7 @@ where
         Ok(())
     }
 
-    async fn close(mut self: Box<Self>) -> GraphResult<()> {
+    async fn close(mut self: Box<Self>) -> Result<()> {
         tracing::info!("closing tick source outlet.");
         self.outlet.close().await;
         Ok(())
@@ -288,7 +292,7 @@ mod tests {
     use tokio_test::block_on;
 
     #[test]
-    fn test_stop_api() {
+    fn test_stop_api() -> anyhow::Result<()> {
         let (tx, mut rx) = mpsc::channel(100);
         let limit = 5;
         let mut tick = Tick::with_constraint(
@@ -309,20 +313,19 @@ mod tests {
 
             tokio::time::sleep(Duration::from_millis(95)).await;
             let (stop_tx, stop_rx) = oneshot::channel();
-            match tx_api.send(TickMsg::Stop { tx: stop_tx }) {
-                Ok(_) => tracing::info!("Stop sent to Tick source."),
-                Err(err) => panic!("failed to send Stop: {:?}", err),
-            };
+            let foo: anyhow::Result<()> = tx_api.send(TickMsg::Stop { tx: stop_tx }).map_err(|err| err.into());
+            let _ = foo?;
+            tracing::info!("Stop sent to Tick source.");
 
-            match stop_rx.await.map_err(|err| err.into()).and_then(|res| res) {
-                Ok(_) => tracing::info!("Stop Ack received."),
-                Err(err) => panic!("Stop failed: {:?}", err),
-            };
+            stop_rx.await??;
+            tracing::info!("Stop Ack received.");
 
             for _ in 1..=2 {
                 assert_eq!(Some(17), rx.recv().await);
             }
             assert_eq!(None, rx.recv().await);
-        });
+
+            Ok(())
+        })
     }
 }

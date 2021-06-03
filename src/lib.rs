@@ -13,6 +13,5 @@ pub mod tracing;
 
 pub use app_data::AppData;
 pub use elements::ProctorContext;
-pub use error::ProctorResult;
 
 pub type Ack = ();

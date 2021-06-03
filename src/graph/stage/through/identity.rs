@@ -1,6 +1,7 @@
 use crate::graph::shape::{SinkShape, SourceShape};
-use crate::graph::{GraphResult, Inlet, Outlet, Port, Stage};
+use crate::graph::{Inlet, Outlet, Port, Stage};
 use crate::AppData;
+use anyhow::Result;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt::{self, Debug};
@@ -18,11 +19,6 @@ impl<T> Identity<T> {
             inlet,
             outlet,
         }
-    }
-
-    #[inline]
-    pub fn inlet(&mut self) -> &mut Inlet<T> {
-        &mut self.inlet
     }
 }
 
@@ -51,14 +47,14 @@ impl<T: AppData> Stage for Identity<T> {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> GraphResult<()> {
+    async fn check(&self) -> Result<()> {
         self.inlet.check_attachment().await?;
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run identity through", skip(self))]
-    async fn run(&mut self) -> GraphResult<()> {
+    async fn run(&mut self) -> Result<()> {
         while let Some(value) = self.inlet.recv().await {
             self.outlet.send(value).await?;
         }
@@ -66,7 +62,7 @@ impl<T: AppData> Stage for Identity<T> {
         Ok(())
     }
 
-    async fn close(mut self: Box<Self>) -> GraphResult<()> {
+    async fn close(mut self: Box<Self>) -> Result<()> {
         tracing::trace!("closing identity-through ports.");
         self.inlet.close().await;
         self.outlet.close().await;

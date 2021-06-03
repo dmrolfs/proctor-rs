@@ -1,4 +1,4 @@
-use crate::error::GraphError;
+use crate::error::{TelemetryError, TypeExpectation};
 use config::Value as ConfigValue;
 use oso::{FromPolar, PolarValue, ToPolar};
 use serde::ser::{SerializeMap, SerializeSeq};
@@ -6,6 +6,7 @@ use serde::{de, Serialize, Serializer};
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque};
 use std::convert::TryFrom;
 use std::fmt;
+use std::num::{ParseFloatError, ParseIntError};
 
 #[derive(Debug, Clone)]
 pub enum TelemetryValue {
@@ -288,19 +289,19 @@ impl From<PolarValue> for TelemetryValue {
             PolarValue::Instance(_) => {
                 Self::Unit
                 // maybe Unit?
-                // Err(GraphError::TypeError("PolarValue::Instance is not a supported telemetry type.".to_string()))
+                // Err(StageError::TypeError("PolarValue::Instance is not a supported telemetry type.".to_string()))
             }
             PolarValue::Variable(_) => {
                 Self::Unit
                 // maybe Unit?
-                // Err(GraphError::TypeError("PolarValue::Variable is not a supported telemetry type.".to_string()))
+                // Err(StageError::TypeError("PolarValue::Variable is not a supported telemetry type.".to_string()))
             }
         }
     }
 }
 
 impl TryFrom<TelemetryValue> for bool {
-    type Error = GraphError;
+    type Error = TelemetryError;
 
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         match telemetry {
@@ -314,17 +315,17 @@ impl TryFrom<TelemetryValue> for bool {
                     "0" | "false" | "off" | "no" => Ok(false),
 
                     // Unexpected string value
-                    _ => Err(GraphError::TypeError(
-                        "a telemetry Boolean".to_string(),
-                        format!("{:?}", telemetry),
-                    )),
+                    rep => Err(TelemetryError::TypeError {
+                        expected: format!("{} value", TypeExpectation::Boolean),
+                        actual: Some(rep.to_string()),
+                    }),
                 }
             }
 
-            _ => Err(GraphError::TypeError(
-                "a telemetry Boolean".to_string(),
-                format!("{:?}", telemetry),
-            )),
+            value => Err(TelemetryError::TypeError {
+                expected: format!("{} value", TypeExpectation::Boolean),
+                actual: Some(format!("{:?}", value)),
+            }),
         }
     }
 }
@@ -332,35 +333,28 @@ impl TryFrom<TelemetryValue> for bool {
 macro_rules! try_from_telemetry_into_int {
     ($i:ty) => {
         impl TryFrom<TelemetryValue> for $i {
-            type Error = GraphError;
+            type Error = TelemetryError;
+
             fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
                 match telemetry {
-                    TelemetryValue::Integer(i64) => <$i>::try_from(i64).map_err(|_| {
-                        GraphError::TypeError("a telemetry Integer".to_string(), format!("{:?}", telemetry))
+                    TelemetryValue::Integer(i64) => <$i>::try_from(i64).map_err(|_err| TelemetryError::TypeError {
+                        expected: format!("{}", stringify!($i)),
+                        actual: Some(format!("{:?}", i64)),
                     }),
                     TelemetryValue::Float(f64) => Ok(f64.round() as $i),
                     TelemetryValue::Boolean(b) => Ok(if b { 1 } else { 0 }),
                     TelemetryValue::Text(ref rep) => match rep.to_lowercase().as_ref() {
                         "true" | "on" | "yes" => Ok(1),
                         "false" | "off" | "no" => Ok(0),
-                        _ => rep.parse().map_err(|_| {
-                            GraphError::TypeError("a telemetry Integer".to_string(), format!("{:?}", telemetry))
-                        }),
+                        _ => rep
+                            .parse()
+                            .map_err(|err: ParseIntError| TelemetryError::ValueParseError(err.into())),
                     },
-                    _ => Err(GraphError::TypeError(
-                        "a telemetry Integer".to_string(),
-                        format!("{:?}", telemetry),
-                    )),
+                    value => Err(TelemetryError::TypeError {
+                        expected: format!("a telemetry {}", TypeExpectation::Integer),
+                        actual: Some(value.to_string()),
+                    }),
                 }
-
-                // if let TelemetryValue::Integer(value) = telemetry {
-                //     <$i>::try_from(value).map_err(|err| err.into())
-                // } else {
-                //     Err(GraphError::TypeError(format!(
-                //         "expected a telemetry Integer type but was {:?}",
-                //         telemetry
-                //     )))
-                // }
             }
         }
     };
@@ -376,7 +370,7 @@ try_from_telemetry_into_int!(i32);
 try_from_telemetry_into_int!(i64);
 
 impl TryFrom<TelemetryValue> for f64 {
-    type Error = GraphError;
+    type Error = TelemetryError;
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         match telemetry {
             TelemetryValue::Float(f64) => Ok(f64),
@@ -387,18 +381,18 @@ impl TryFrom<TelemetryValue> for f64 {
                 "false" | "off" | "no" => Ok(0.0),
                 rep => rep
                     .parse()
-                    .map_err(|_| GraphError::TypeError("a telemetry Float".to_string(), format!("{:?}", telemetry))),
+                    .map_err(|err: ParseFloatError| TelemetryError::ValueParseError(err.into())),
             },
-            _ => Err(GraphError::TypeError(
-                "a telemetry Float".to_string(),
-                format!("{:?}", telemetry),
-            )),
+            value => Err(TelemetryError::TypeError {
+                expected: format!("a telemetry {}", TypeExpectation::Float),
+                actual: Some(format!("{:?}", value)),
+            }),
         }
     }
 }
 
 impl TryFrom<TelemetryValue> for f32 {
-    type Error = GraphError;
+    type Error = TelemetryError;
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         match telemetry {
             TelemetryValue::Float(f64) => Ok(f64 as f32),
@@ -409,18 +403,18 @@ impl TryFrom<TelemetryValue> for f32 {
                 "false" | "off" | "no" => Ok(0.0),
                 rep => rep
                     .parse()
-                    .map_err(|_| GraphError::TypeError("a telemetry Float".to_string(), format!("{:?}", telemetry))),
+                    .map_err(|err: ParseFloatError| TelemetryError::ValueParseError(err.into())),
             },
-            _ => Err(GraphError::TypeError(
-                "a telemetry Float".to_string(),
-                format!("{:?}", telemetry),
-            )),
+            _ => Err(TelemetryError::TypeError {
+                expected: format!("a telemetry {}", TypeExpectation::Float),
+                actual: Some(format!("{:?}", telemetry)),
+            }),
         }
     }
 }
 
 impl TryFrom<TelemetryValue> for String {
-    type Error = GraphError;
+    type Error = TelemetryError;
 
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         match telemetry {
@@ -429,130 +423,130 @@ impl TryFrom<TelemetryValue> for String {
             TelemetryValue::Integer(value) => Ok(value.to_string()),
             TelemetryValue::Float(value) => Ok(value.to_string()),
 
-            _ => Err(GraphError::TypeError(
-                "a telemetry String".to_string(),
-                format!("{:?}", telemetry),
-            )),
+            value => Err(TelemetryError::TypeError {
+                expected: format!("a telemetry {}", TypeExpectation::Text),
+                actual: Some(format!("{:?}", value)),
+            }),
         }
     }
 }
 
 impl<T: From<TelemetryValue>> TryFrom<TelemetryValue> for HashMap<String, T> {
-    type Error = GraphError;
+    type Error = TelemetryError;
 
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         if let TelemetryValue::Table(value) = telemetry {
             Ok(value.into_iter().map(|(k, v)| (k, v.into())).collect())
         } else {
-            Err(GraphError::TypeError(
-                "a telemetry Table".to_string(),
-                format!("{:?}", telemetry),
-            ))
+            Err(TelemetryError::TypeError {
+                expected: format!("a telemetry {}", TypeExpectation::Table),
+                actual: Some(format!("{:?}", telemetry)),
+            })
         }
     }
 }
 
 impl<T: From<TelemetryValue>> TryFrom<TelemetryValue> for BTreeMap<String, T> {
-    type Error = GraphError;
+    type Error = TelemetryError;
 
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         if let TelemetryValue::Table(value) = telemetry {
             Ok(value.into_iter().map(|(k, v)| (k, v.into())).collect())
         } else {
-            Err(GraphError::TypeError(
-                "a telemetry Table".to_string(),
-                format!("{:?}", telemetry),
-            ))
+            Err(TelemetryError::TypeError {
+                expected: format!("a telemetry {}", TypeExpectation::Table),
+                actual: Some(format!("{:?}", telemetry)),
+            })
         }
     }
 }
 
 impl<T: From<TelemetryValue>> TryFrom<TelemetryValue> for Vec<T> {
-    type Error = GraphError;
+    type Error = TelemetryError;
 
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         if let TelemetryValue::Seq(value) = telemetry {
             Ok(value.into_iter().map(|v| v.into()).collect())
         } else {
-            Err(GraphError::TypeError(
-                "a telemetry Seq".to_string(),
-                format!("{:?}", telemetry),
-            ))
+            Err(TelemetryError::TypeError {
+                expected: format!("a telemetry {}", TypeExpectation::Seq),
+                actual: Some(format!("{:?}", telemetry)),
+            })
         }
     }
 }
 
 impl<T: From<TelemetryValue>> TryFrom<TelemetryValue> for VecDeque<T> {
-    type Error = GraphError;
+    type Error = TelemetryError;
 
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         if let TelemetryValue::Seq(value) = telemetry {
             Ok(value.into_iter().map(|v| v.into()).collect())
         } else {
-            Err(GraphError::TypeError(
-                "a telemetry Seq".to_string(),
-                format!("{:?}", telemetry),
-            ))
+            Err(TelemetryError::TypeError {
+                expected: format!("a telemetry {}", TypeExpectation::Seq),
+                actual: Some(format!("{:?}", telemetry)),
+            })
         }
     }
 }
 
 impl<T: From<TelemetryValue>> TryFrom<TelemetryValue> for LinkedList<T> {
-    type Error = GraphError;
+    type Error = TelemetryError;
 
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         if let TelemetryValue::Seq(value) = telemetry {
             Ok(value.into_iter().map(|v| v.into()).collect())
         } else {
-            Err(GraphError::TypeError(
-                "a telemetry Seq".to_string(),
-                format!("{:?}", telemetry),
-            ))
+            Err(TelemetryError::TypeError {
+                expected: format!("a telemetry {}", TypeExpectation::Seq),
+                actual: Some(format!("{:?}", telemetry)),
+            })
         }
     }
 }
 
 impl<T: Eq + std::hash::Hash + From<TelemetryValue>> TryFrom<TelemetryValue> for HashSet<T> {
-    type Error = GraphError;
+    type Error = TelemetryError;
 
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         if let TelemetryValue::Seq(value) = telemetry {
             Ok(value.into_iter().map(|v| v.into()).collect())
         } else {
-            Err(GraphError::TypeError(
-                "a telemetry Seq".to_string(),
-                format!("{:?}", telemetry),
-            ))
+            Err(TelemetryError::TypeError {
+                expected: format!("a telemetry {}", TypeExpectation::Seq),
+                actual: Some(format!("{:?}", telemetry)),
+            })
         }
     }
 }
 
 impl<T: Ord + From<TelemetryValue>> TryFrom<TelemetryValue> for BTreeSet<T> {
-    type Error = GraphError;
+    type Error = TelemetryError;
 
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         if let TelemetryValue::Seq(value) = telemetry {
             Ok(value.into_iter().map(|v| v.into()).collect())
         } else {
-            Err(GraphError::TypeError(
-                "a telemetry Seq".to_string(),
-                format!("{:?}", telemetry),
-            ))
+            Err(TelemetryError::TypeError {
+                expected: format!("a telemetry {}", TypeExpectation::Seq),
+                actual: Some(format!("{:?}", telemetry)),
+            })
         }
     }
 }
 
 impl<T: Ord + From<TelemetryValue>> TryFrom<TelemetryValue> for BinaryHeap<T> {
-    type Error = GraphError;
+    type Error = TelemetryError;
 
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         if let TelemetryValue::Seq(value) = telemetry {
             Ok(value.into_iter().map(|v| v.into()).collect())
         } else {
-            Err(GraphError::TypeError(
-                "a telemetry Seq".to_string(),
-                format!("{:?}", telemetry),
-            ))
+            Err(TelemetryError::TypeError {
+                expected: format!("a telemetry {}", TypeExpectation::Seq),
+                actual: Some(format!("{:?}", telemetry)),
+            })
         }
     }
 }
@@ -1025,7 +1019,7 @@ mod tests {
 }
 
 // impl TryFrom<PolarValue> for TelemetryValue {
-//     type Error = GraphError;
+//     type Error = StageError;
 //
 //     fn try_from(value: PolarValue) -> Result<Self, Self::Error> {
 //         match value {
@@ -1043,11 +1037,11 @@ mod tests {
 //             },
 //             PolarValue::Instance(_) => {
 //                 // maybe Unit?
-//                 Err(GraphError::TypeError("PolarValue::Instance is not a supported telemetry type.".to_string()))
+//                 Err(StageError::TypeError("PolarValue::Instance is not a supported telemetry type.".to_string()))
 //             },
 //             PolarValue::Variable(_) => {
 //                 // maybe Unit?
-//                 Err(GraphError::TypeError("PolarValue::Variable is not a supported telemetry type.".to_string()))
+//                 Err(StageError::TypeError("PolarValue::Variable is not a supported telemetry type.".to_string()))
 //             },
 //         }
 //     }

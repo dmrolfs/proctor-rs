@@ -1,6 +1,7 @@
 use crate::graph::shape::SinkShape;
-use crate::graph::{GraphResult, Inlet, Port, Stage};
+use crate::graph::{Inlet, Port, Stage};
 use crate::AppData;
+use anyhow::Result;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt;
@@ -27,20 +28,20 @@ impl<In: AppData> Stage for LoggedSink<In> {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> GraphResult<()> {
+    async fn check(&self) -> Result<()> {
         self.inlet.check_attachment().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run logging sink", skip(self))]
-    async fn run(&mut self) -> GraphResult<()> {
+    async fn run(&mut self) -> Result<()> {
         while let Some(input) = self.inlet.recv().await {
             tracing::warn!("in graph sink: {:?}", input);
         }
         Ok(())
     }
 
-    async fn close(mut self: Box<Self>) -> GraphResult<()> {
+    async fn close(mut self: Box<Self>) -> Result<()> {
         tracing::trace!("closing logging-sink inlet.");
         self.inlet.close().await;
         Ok(())

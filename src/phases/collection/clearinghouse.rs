@@ -1,7 +1,9 @@
 use crate::elements::Telemetry;
+use crate::error::CollectionError;
 use crate::graph::stage::Stage;
-use crate::graph::{stage, Connect, GraphResult, Inlet, Outlet, OutletsShape, Port, SinkShape, UniformFanOutShape};
+use crate::graph::{stage, Connect, Inlet, Outlet, OutletsShape, Port, SinkShape, UniformFanOutShape};
 use crate::Ack;
+use anyhow::Result;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use futures::future::FutureExt;
@@ -222,7 +224,7 @@ impl TelemetrySubscription {
         }
     }
 
-    pub fn trim_to_subscription(&self, database: &Telemetry) -> GraphResult<(Telemetry, HashSet<String>)> {
+    pub fn trim_to_subscription(&self, database: &Telemetry) -> Result<(Telemetry, HashSet<String>), CollectionError> {
         let mut db = database.clone();
 
         match self {
@@ -309,8 +311,9 @@ impl TelemetrySubscription {
         (&outlet, receiver).connect().await;
     }
 
-    pub async fn send(&self, telemetry: Telemetry) -> GraphResult<()> {
-        self.outlet_to_subscription().send(telemetry).await
+    pub async fn send(&self, telemetry: Telemetry) -> Result<(), CollectionError> {
+        self.outlet_to_subscription().send(telemetry).await?;
+        Ok(())
     }
 }
 
@@ -394,7 +397,7 @@ impl Clearinghouse {
     #[tracing::instrument(level = "trace", skip(subscriptions, database,))]
     async fn handle_telemetry_data(
         data: Option<Telemetry>, subscriptions: &Vec<TelemetrySubscription>, database: &mut Telemetry,
-    ) -> GraphResult<bool> {
+    ) -> Result<bool, CollectionError> {
         match data {
             Some(d) => {
                 let updated_fields = d.keys().cloned().collect::<HashSet<_>>();
@@ -449,7 +452,9 @@ impl Clearinghouse {
         skip(database, subscribers),
         fields(subscribers = ?subscribers.iter().map(|s| s.name()).collect::<Vec<_>>(), ),
     )]
-    async fn push_to_subscribers(database: &Telemetry, subscribers: Vec<&TelemetrySubscription>) -> GraphResult<()> {
+    async fn push_to_subscribers(
+        database: &Telemetry, subscribers: Vec<&TelemetrySubscription>,
+    ) -> Result<(), CollectionError> {
         if subscribers.is_empty() {
             tracing::info!("not publishing - no subscribers corresponding to field changes.");
             return Ok(());
@@ -469,7 +474,7 @@ impl Clearinghouse {
         let nr_fulfilled = fulfilled.len();
 
         let statuses = futures::future::join_all(fulfilled).await;
-        let result: GraphResult<()> = if let Some((s, err)) = statuses.into_iter().find(|(_, status)| status.is_err()) {
+        let result = if let Some((s, err)) = statuses.into_iter().find(|(_, status)| status.is_err()) {
             tracing::error!(subscription=%s.name(), "failed to send fulfilled subscription.");
             err
         } else {
@@ -494,7 +499,7 @@ impl Clearinghouse {
     #[tracing::instrument(level = "trace", skip(subscriptions, database))]
     async fn handle_command(
         command: ClearinghouseCmd, subscriptions: &mut Vec<TelemetrySubscription>, database: &Telemetry,
-    ) -> GraphResult<bool> {
+    ) -> Result<bool, CollectionError> {
         match command {
             ClearinghouseCmd::GetSnapshot { name, tx } => {
                 let snapshot = match name {
@@ -603,8 +608,11 @@ impl Stage for Clearinghouse {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> GraphResult<()> {
-        self.inlet.check_attachment().await?;
+    async fn check(&self) -> Result<()> {
+        self.inlet
+            .check_attachment()
+            .await
+            .map_err(|err| CollectionError::PortError(err))?;
         for s in self.subscriptions.iter() {
             s.outlet_to_subscription().check_attachment().await?;
         }
@@ -612,7 +620,7 @@ impl Stage for Clearinghouse {
     }
 
     #[tracing::instrument(level = "info", name = "run clearinghouse", skip(self))]
-    async fn run(&mut self) -> GraphResult<()> {
+    async fn run(&mut self) -> Result<()> {
         let mut inlet = self.inlet.clone();
         let rx_api = &mut self.rx_api;
         let database = &mut self.database;
@@ -658,7 +666,7 @@ impl Stage for Clearinghouse {
         Ok(())
     }
 
-    async fn close(mut self: Box<Self>) -> GraphResult<()> {
+    async fn close(mut self: Box<Self>) -> Result<()> {
         tracing::warn!("DMR: closing clearinghouse.");
         self.inlet.close().await;
         for s in self.subscriptions {

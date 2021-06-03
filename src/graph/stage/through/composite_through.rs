@@ -1,6 +1,7 @@
 use crate::graph::shape::{SinkShape, SourceShape};
-use crate::graph::{stage, Connect, Graph, GraphResult, Inlet, Outlet, Port, Stage};
+use crate::graph::{stage, Connect, Graph, Inlet, Outlet, Port, Stage};
 use crate::AppData;
+use anyhow::Result;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt::Debug;
@@ -11,14 +12,15 @@ use std::fmt::Debug;
 ///
 /// ```rust
 /// use proctor::graph::stage::{self, Stage};
-/// use proctor::graph::{Connect, Graph, GraphResult};
+/// use proctor::graph::{Connect, Graph};
 /// use proctor::graph::{SinkShape, SourceShape};
 /// use proctor::tracing::{get_subscriber, init_subscriber};
 /// use futures::future;
+/// use proctor::error::StageError;
 ///
 /// #[tokio::main(flavor = "multi_thread", worker_threads = 16)]
 /// async fn main() -> anyhow::Result<()> {
-///     let subscriber = get_subscriber("sandbox", "trace");
+/// let subscriber = get_subscriber("sandbox", "trace");
 ///     init_subscriber(subscriber);
 ///
 ///     let main_span = tracing::info_span!("main");
@@ -33,7 +35,7 @@ use std::fmt::Debug;
 ///         future::ok(x * x + bar.parse::<i32>().expect("failed to parse bar."))
 ///     });
 ///
-///     let mut add_five = stage::AndThen::new("II.b AndThen-add_five", |x: GraphResult<i32>| {
+///     let mut add_five = stage::AndThen::new("II.b AndThen-add_five", |x: Result<i32, StageError>| {
 ///         tracing::info!(?x, "adding 5 to x");
 ///
 ///         match x {
@@ -56,7 +58,7 @@ use std::fmt::Debug;
 ///     cg.push_back(Box::new(add_five)).await;
 ///     let mut composite = stage::CompositeThrough::new("II. CompositeThrough-middle", cg, cg_inlet.clone(), cg_outlet.clone()).await;
 ///
-///     let mut fold = stage::Fold::<_, GraphResult<i32>, i32>::new("III. Fold-sum", 0, |acc, x| {
+///     let mut fold = stage::Fold::<_, Result<i32, StageError>, i32>::new("III. Fold-sum", 0, |acc, x| {
 ///         tracing::info!(%acc, ?x, "folding received value.");
 ///         acc + x.expect("error during calc")
 ///     });
@@ -161,21 +163,21 @@ impl<In: AppData, Out: AppData> Stage for CompositeThrough<In, Out> {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> GraphResult<()> {
+    async fn check(&self) -> Result<()> {
         self.inlet.check_attachment().await?;
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run composite through", skip(self))]
-    async fn run(&mut self) -> GraphResult<()> {
+    async fn run(&mut self) -> Result<()> {
         match self.graph.take() {
             None => Ok(()),
             Some(g) => g.run().await,
         }
     }
 
-    async fn close(mut self: Box<Self>) -> GraphResult<()> {
+    async fn close(mut self: Box<Self>) -> Result<()> {
         tracing::trace!("closing composite graph, inlet and outlet.");
         self.inlet.close().await;
         self.outlet.close().await;

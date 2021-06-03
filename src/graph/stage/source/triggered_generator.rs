@@ -10,9 +10,8 @@
 ///
 /// use proctor::elements::Telemetry;
 /// use proctor::elements::telemetry::ToTelemetry;
-/// use proctor::error::GraphError;
 /// use proctor::graph::stage::{self, tick, Stage};
-/// use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape};
+/// use proctor::graph::{Connect, Graph, SinkShape, SourceShape};
 /// use proctor::tracing::{get_subscriber, init_subscriber};
 /// use proctor::AppData;
 /// use futures::future::FutureExt;
@@ -67,7 +66,7 @@
 ///                 .unwrap()
 ///                 .json::<HttpBinResponse>()
 ///                 .await
-///                 .map_err::<GraphError, _>(|err| err.into())
+///                 .map_err::<anyhow::Error, _>(|err| err.into())
 ///                 .unwrap();
 ///
 ///             let mine = cc.clone();

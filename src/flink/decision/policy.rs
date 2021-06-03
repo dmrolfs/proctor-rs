@@ -1,7 +1,7 @@
 use super::context::FlinkDecisionContext;
 use crate::elements::{PolicySettings, PolicySource, PolicySubscription, QueryPolicy, QueryResult, Telemetry};
+use crate::error::PolicyError;
 use crate::flink::MetricCatalog;
-use crate::graph::GraphResult;
 use crate::phases::collection::TelemetrySubscription;
 use crate::ProctorContext;
 use oso::{Oso, PolarClass, PolarValue};
@@ -39,12 +39,12 @@ impl QueryPolicy for DecisionPolicy {
     type Context = FlinkDecisionContext;
     type Args = (Self::Item, Self::Context, PolarValue);
 
-    fn load_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
+    fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
         self.policy_source.load_into(oso)
     }
 
-    fn initialize_policy_engine(&mut self, oso: &mut Oso) -> GraphResult<()> {
-        oso.register_class(Telemetry::get_polar_class())?;
+    fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
+        Telemetry::initialize_policy_engine(oso)?;
 
         oso.register_class(
             FlinkDecisionContext::get_polar_class_builder()
@@ -63,7 +63,7 @@ impl QueryPolicy for DecisionPolicy {
         )
     }
 
-    fn query_policy(&self, engine: &Oso, args: Self::Args) -> GraphResult<QueryResult> {
+    fn query_policy(&self, engine: &Oso, args: Self::Args) -> Result<QueryResult, PolicyError> {
         QueryResult::from_query(engine.query_rule("scale", args)?)
     }
 }

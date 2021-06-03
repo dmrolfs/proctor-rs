@@ -1,6 +1,7 @@
 use crate::graph::shape::{SinkShape, SourceShape};
-use crate::graph::{GraphResult, Inlet, Outlet, Port, Stage};
+use crate::graph::{Inlet, Outlet, Port, Stage};
 use crate::AppData;
+use anyhow::Result;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use futures::future::Future;
@@ -13,7 +14,7 @@ use std::fmt::{self, Debug};
 ///
 /// ```
 /// use tokio::sync::mpsc;
-/// use proctor::graph::{Graph, Connect, Inlet, GraphResult};
+/// use proctor::graph::{Graph, Connect, Inlet};
 /// use proctor::graph::stage::{self, Stage};
 /// use proctor::graph::{SourceShape, ThroughShape, SinkShape};
 /// use futures::future;
@@ -27,7 +28,7 @@ use std::fmt::{self, Debug};
 ///         "square values then add",
 ///         move |x| { future::ok(x * x + bar.parse::<i32>().expect("failed to parse bar.")) },
 ///     );
-///     let mut fold = stage::Fold::<_, GraphResult<i32>, i32>::new("sum values", 0, |acc, x| acc + x.expect("error during calc") );
+///     let mut fold = stage::Fold::<_, Result<i32, anyhow::Error>, i32>::new("sum values", 0, |acc, x| acc + x.expect("error during calc") );
 ///     let rx_sum_sq = fold.take_final_rx().unwrap();
 ///
 ///     (source.outlet(), sq_plus.inlet()).connect().await;
@@ -127,14 +128,14 @@ where
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> GraphResult<()> {
+    async fn check(&self) -> Result<()> {
         self.inlet.check_attachment().await?;
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run map through", skip(self))]
-    async fn run(&mut self) -> GraphResult<()> {
+    async fn run(&mut self) -> Result<()> {
         let outlet = &self.outlet;
 
         while let Some(input) = self.inlet.recv().await {
@@ -145,7 +146,7 @@ where
         Ok(())
     }
 
-    async fn close(mut self: Box<Self>) -> GraphResult<()> {
+    async fn close(mut self: Box<Self>) -> Result<()> {
         tracing::trace!("closing map-through ports.");
         self.inlet.close().await;
         self.outlet.close().await;
@@ -168,7 +169,7 @@ mod tests {
     fn test_basic_usage() {
         let my_data = vec![1, 2, 3];
         let (tx_in, rx_in) = mpsc::channel::<i32>(8);
-        let (tx_out, mut rx_out) = mpsc::channel::<GraphResult<i32>>(8);
+        let (tx_out, mut rx_out) = mpsc::channel::<anyhow::Result<i32>>(8);
 
         let bar = "17".to_string(); // important to type check closing over non-copy value
         let mut map = AndThen::new("square values", move |x| {
@@ -213,7 +214,7 @@ mod tests {
             future::ok(x * x + bar.parse::<i32>().expect("failed to parse bar."))
         });
 
-        let (tx_out, mut rx_out) = mpsc::channel::<GraphResult<i32>>(8);
+        let (tx_out, mut rx_out) = mpsc::channel::<anyhow::Result<i32>>(8);
 
         let mut actual = Vec::with_capacity(7);
 

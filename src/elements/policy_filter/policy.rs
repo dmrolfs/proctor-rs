@@ -1,8 +1,7 @@
 use super::ProctorContext;
 use crate::elements::telemetry;
 use crate::elements::TelemetryValue;
-use crate::error::GraphError;
-use crate::graph::GraphResult;
+use crate::error::PolicyError;
 use crate::phases::collection::TelemetrySubscription;
 use oso::{Query, ResultSet, ToPolar, ToPolarList};
 use std::collections::HashMap;
@@ -45,8 +44,10 @@ pub struct QueryResult {
 }
 
 impl QueryResult {
-    pub fn from_query(mut query: Query) -> GraphResult<Self> {
-        fn fill_results(mut results: telemetry::Table, result_set: &ResultSet) -> GraphResult<telemetry::Table> {
+    pub fn from_query(mut query: Query) -> Result<Self, PolicyError> {
+        fn fill_results(
+            mut results: telemetry::Table, result_set: &ResultSet,
+        ) -> Result<telemetry::Table, PolicyError> {
             for key in result_set.keys() {
                 match result_set.get_typed(key)? {
                     TelemetryValue::Unit => (),
@@ -75,22 +76,16 @@ impl QueryResult {
         self.bindings.take()
     }
 
-    pub fn get_typed<T: TryFrom<TelemetryValue>>(&self, key: &str) -> GraphResult<T>
+    pub fn get_typed<T: TryFrom<TelemetryValue>>(&self, key: &str) -> Result<T, PolicyError>
     where
         T: TryFrom<TelemetryValue>,
-        <T as TryFrom<TelemetryValue>>::Error: Into<crate::error::GraphError>,
+        <T as TryFrom<TelemetryValue>>::Error: Into<crate::error::TelemetryError>,
     {
         if let Some(ref inner) = self.bindings {
-            let value = inner.get(key).ok_or(GraphError::GraphPrecondition(format!(
-                "no policy binding found for key, {}",
-                key
-            )))?;
-
-            T::try_from(value.clone()).map_err(|err| err.into())
+            let value = inner.get(key).ok_or(PolicyError::DataNotFound(key.to_string()))?;
+            T::try_from(value.clone()).map_err(|err| PolicyError::TelemetryError(err.into()))
         } else {
-            Err(GraphError::GraphPrecondition(
-                "no policy bindings for empty result".to_string(),
-            ))
+            Err(PolicyError::DataNotFound("bindings".to_string()))
         }
     }
 
@@ -127,10 +122,10 @@ pub trait QueryPolicy: Debug + Send + Sync {
     type Context: ToPolar + Clone;
     type Args: ToPolarList;
 
-    fn load_policy_engine(&self, engine: &mut oso::Oso) -> GraphResult<()>;
-    fn initialize_policy_engine(&mut self, engine: &mut oso::Oso) -> GraphResult<()>;
+    fn load_policy_engine(&self, engine: &mut oso::Oso) -> Result<(), PolicyError>;
+    fn initialize_policy_engine(&mut self, engine: &mut oso::Oso) -> Result<(), PolicyError>;
     fn make_query_args(&self, item: &Self::Item, context: &Self::Context) -> Self::Args;
-    fn query_policy(&self, engine: &oso::Oso, args: Self::Args) -> GraphResult<QueryResult>;
+    fn query_policy(&self, engine: &oso::Oso, args: Self::Args) -> Result<QueryResult, PolicyError>;
 }
 
 //todo: look into supprting a basic implementation; this attempt was side-tracked by the need to create

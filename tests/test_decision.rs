@@ -6,26 +6,25 @@ use oso::{PolarValue, ToPolar};
 use pretty_assertions::assert_eq;
 use proctor::elements;
 use proctor::elements::{
-    Policy, PolicyResult, PolicySettings, PolicySource, PolicySubscription, Telemetry, TelemetryValue,
-    ToTelemetry,
+    Policy, PolicyOutcome, PolicySettings, PolicySource, PolicySubscription, Telemetry, TelemetryValue, ToTelemetry,
 };
 use proctor::flink::decision::context::FlinkDecisionContext;
 use proctor::flink::decision::policy::DecisionPolicy;
 use proctor::flink::decision::result::{make_decision_transform, DecisionResult};
+use proctor::flink::perf::Benchmark;
 use proctor::flink::{FlowMetrics, MetricCatalog, UtilizationMetrics};
 use proctor::graph::stage::{self, ThroughStage, WithApi, WithMonitor};
-use proctor::graph::{ Connect, Graph, GraphResult, Inlet, SinkShape, SourceShape, UniformFanInShape, };
+use proctor::graph::{Connect, Graph, Inlet, SinkShape, SourceShape, UniformFanInShape};
 use proctor::phases::collection;
 use proctor::phases::collection::TelemetrySubscription;
 use proctor::phases::decision::Decision;
-use proctor::{AppData, ProctorContext, ProctorResult};
+use proctor::{AppData, ProctorContext};
 use serde::de::DeserializeOwned;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::time::Duration;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
-use proctor::flink::perf::Benchmark;
 
 type Args<T, C> = (T, C, PolarValue);
 
@@ -114,7 +113,7 @@ where
         telemetry_subscription: TelemetrySubscription, context_subscription: TelemetrySubscription,
         decision_stage: impl ThroughStage<In, Out>, decision_context_inlet: Inlet<C>,
         tx_decision_api: elements::PolicyFilterApi<C>, rx_decision_monitor: elements::PolicyFilterMonitor<In, C>,
-    ) -> ProctorResult<Self> {
+    ) -> anyhow::Result<Self> {
         let telemetry_source = stage::ActorSource::<Telemetry>::new("telemetry_source");
         let tx_data_source_api = telemetry_source.tx_api();
 
@@ -194,13 +193,13 @@ where
         })
     }
 
-    pub async fn push_telemetry(&self, telemetry: Telemetry) -> GraphResult<()> {
+    pub async fn push_telemetry(&self, telemetry: Telemetry) -> anyhow::Result<()> {
         let (cmd, ack) = stage::ActorSourceCmd::push(telemetry);
         self.tx_data_source_api.send(cmd)?;
         ack.await.map_err(|err| err.into())
     }
 
-    pub async fn push_context<'a, I>(&self, context_data: I) -> GraphResult<()>
+    pub async fn push_context<'a, I>(&self, context_data: I) -> anyhow::Result<()>
     where
         I: IntoIterator<Item = (&'a str, TelemetryValue)>,
     {
@@ -213,17 +212,17 @@ where
     #[allow(dead_code)]
     pub async fn tell_policy(
         &self, command_rx: (elements::PolicyFilterCmd<C>, oneshot::Receiver<proctor::Ack>),
-    ) -> GraphResult<proctor::Ack> {
+    ) -> anyhow::Result<proctor::Ack> {
         self.tx_decision_api.send(command_rx.0)?;
         command_rx.1.await.map_err(|err| err.into())
     }
 
-    pub async fn recv_policy_event(&mut self) -> GraphResult<elements::PolicyFilterEvent<In, C>> {
+    pub async fn recv_policy_event(&mut self) -> anyhow::Result<elements::PolicyFilterEvent<In, C>> {
         self.rx_decision_monitor.recv().await.map_err(|err| err.into())
     }
-    
+
     #[allow(dead_code)]
-    pub async fn inspect_policy_context(&self) -> GraphResult<elements::PolicyFilterDetail<C>> {
+    pub async fn inspect_policy_context(&self) -> anyhow::Result<elements::PolicyFilterDetail<C>> {
         let (cmd, detail) = elements::PolicyFilterCmd::inspect();
         self.tx_decision_api.send(cmd)?;
         detail
@@ -235,7 +234,7 @@ where
             .map_err(|err| err.into())
     }
 
-    pub async fn inspect_sink(&self) -> GraphResult<Vec<Out>> {
+    pub async fn inspect_sink(&self) -> anyhow::Result<Vec<Out>> {
         let (cmd, acc) = stage::FoldCmd::get_accumulation();
         self.tx_sink_api.send(cmd)?;
         acc.await
@@ -249,7 +248,7 @@ where
     #[tracing::instrument(level = "info", skip(self, check_size))]
     pub async fn check_sink_accumulation(
         &self, label: &str, timeout: Duration, mut check_size: impl FnMut(Vec<Out>) -> bool,
-    ) -> GraphResult<bool> {
+    ) -> anyhow::Result<bool> {
         use std::time::Instant;
         let deadline = Instant::now() + timeout;
         let step = Duration::from_millis(50);
@@ -287,7 +286,7 @@ where
     }
 
     #[tracing::instrument(level = "warn", skip(self))]
-    pub async fn close(mut self) -> GraphResult<Vec<Out>> {
+    pub async fn close(mut self) -> anyhow::Result<Vec<Out>> {
         let (stop, _) = stage::ActorSourceCmd::stop();
         self.tx_data_source_api.send(stop)?;
 
@@ -360,7 +359,7 @@ async fn test_decision_carry_policy_result() -> anyhow::Result<()> {
 
     let decision_stage = Decision::<
         MetricCatalog,
-        PolicyResult<MetricCatalog, FlinkDecisionContext>,
+        PolicyOutcome<MetricCatalog, FlinkDecisionContext>,
         FlinkDecisionContext,
     >::carry_policy_result("carry_policy_decision", policy)
     .await;
@@ -418,7 +417,7 @@ async fn test_decision_carry_policy_result() -> anyhow::Result<()> {
             .await?
     );
 
-    let actual: Vec<PolicyResult<MetricCatalog, FlinkDecisionContext>> = flow.close().await?;
+    let actual: Vec<PolicyOutcome<MetricCatalog, FlinkDecisionContext>> = flow.close().await?;
     tracing::warn!(?actual, "DMR: 08. Verify final accumulation...");
     let actual_vals: Vec<(f32, Option<String>)> = actual
         .into_iter()
@@ -487,7 +486,7 @@ async fn test_decision_common() -> anyhow::Result<()> {
             policy,
             make_decision_transform(
                 "common_decision_transform",
-                |result: &PolicyResult<MetricCatalog, FlinkDecisionContext>| Benchmark {
+                |result: &PolicyOutcome<MetricCatalog, FlinkDecisionContext>| Benchmark {
                     nr_task_managers: result.context.nr_task_managers,
                     records_out_per_sec: result.item.flow.records_out_per_sec,
                 },

@@ -8,7 +8,7 @@ mod ser;
 mod to_telemetry;
 mod value;
 
-use crate::graph::GraphResult;
+use crate::error::{PolicyError, TelemetryError};
 use flexbuffers;
 use oso::PolarClass;
 use oso::ToPolar;
@@ -35,7 +35,7 @@ impl Telemetry {
 
     /// Attempt to deserialize the entire telemetry into the requested type.
     #[tracing::instrument(level = "trace", skip())]
-    pub fn try_into<T: serde_de::DeserializeOwned>(self) -> GraphResult<T> {
+    pub fn try_into<T: serde_de::DeserializeOwned>(self) -> Result<T, TelemetryError> {
         let mut serializer = flexbuffers::FlexbufferSerializer::new();
         self.0.serialize(&mut serializer)?;
         let reader = flexbuffers::Reader::get_root(serializer.view())?;
@@ -47,7 +47,7 @@ impl Telemetry {
     // test_telemetry_simple_enum()
     /// Attempt to serialize the entire telemetry from the given type.
     #[tracing::instrument(level = "trace", skip())]
-    pub fn try_from<T: Serialize + Debug>(from: &T) -> GraphResult<Self> {
+    pub fn try_from<T: Serialize + Debug>(from: &T) -> Result<Self, TelemetryError> {
         let mut serializer = flexbuffers::FlexbufferSerializer::new();
         from.serialize(&mut serializer)?;
         let data = serializer.take_buffer();
@@ -62,7 +62,7 @@ impl Telemetry {
     }
 
     #[tracing::instrument(level = "trace", skip(oso))]
-    pub fn load_knowledge_base(oso: &mut oso::Oso) -> GraphResult<()> {
+    pub fn initialize_policy_engine(oso: &mut oso::Oso) -> Result<(), PolicyError> {
         oso.register_class(Telemetry::get_polar_class())?;
 
         oso.register_class(
@@ -677,7 +677,7 @@ mod tests {
 //             let last_failure = table.get(&"task.last_failure".to_string()).map(|t| );
 //             let is_deploying
 //         } else {
-//             Err(crate::error::GraphError::TypeError("TelemetryValue::Map".to_string()))
+//             Err(crate::error::StageError::TypeError("TelemetryValue::Map".to_string()))
 //         }
 //     }
 // }

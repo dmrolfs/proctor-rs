@@ -9,16 +9,17 @@ use oso::{Oso, PolarClass, ToPolar};
 use pretty_assertions::assert_eq;
 use proctor::elements::telemetry::ToTelemetry;
 use proctor::elements::{
-    self, telemetry, Policy, PolicyFilterEvent, PolicyResult, PolicySettings, PolicySource, PolicySubscription,
+    self, telemetry, Policy, PolicyFilterEvent, PolicyOutcome, PolicySettings, PolicySource, PolicySubscription,
     QueryPolicy, QueryResult, Telemetry, TelemetryValue,
 };
+use proctor::error::PolicyError;
 use proctor::graph::stage::{self, WithApi, WithMonitor};
-use proctor::graph::{Connect, Graph, GraphResult, SinkShape, SourceShape, UniformFanInShape};
+use proctor::graph::{Connect, Graph, SinkShape, SourceShape, UniformFanInShape};
 use proctor::phases::collection;
 use proctor::phases::collection::TelemetrySubscription;
 use proctor::phases::eligibility::Eligibility;
 use proctor::AppData;
-use proctor::{ProctorContext, ProctorResult};
+use proctor::ProctorContext;
 use serde_test::{assert_tokens, Token};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -290,11 +291,11 @@ impl<D: AppData + ToPolar + Clone> QueryPolicy for TestEligibilityPolicy<D> {
     type Context = TestEligibilityContext;
     type Args = (Self::Item, Self::Context);
 
-    fn load_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
+    fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
         self.policy.load_into(oso)
     }
 
-    fn initialize_policy_engine(&mut self, oso: &mut Oso) -> GraphResult<()> {
+    fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
         oso.register_class(
             TestEligibilityContext::get_polar_class_builder()
                 .name("TestEnvironment")
@@ -319,7 +320,7 @@ impl<D: AppData + ToPolar + Clone> QueryPolicy for TestEligibilityPolicy<D> {
         (item.clone(), context.clone())
     }
 
-    fn query_policy(&self, oso: &Oso, args: Self::Args) -> GraphResult<QueryResult> {
+    fn query_policy(&self, oso: &Oso, args: Self::Args) -> Result<QueryResult, PolicyError> {
         let q = oso.query_rule("eligible", args)?;
         QueryResult::from_query(q)
     }
@@ -332,8 +333,8 @@ struct TestFlow<D, C> {
     pub tx_clearinghouse_api: collection::ClearinghouseApi,
     pub tx_eligibility_api: elements::PolicyFilterApi<C>,
     pub rx_eligibility_monitor: elements::PolicyFilterMonitor<D, C>,
-    pub tx_sink_api: stage::FoldApi<Vec<PolicyResult<D, C>>>,
-    pub rx_sink: Option<oneshot::Receiver<Vec<PolicyResult<D, C>>>>,
+    pub tx_sink_api: stage::FoldApi<Vec<PolicyOutcome<D, C>>>,
+    pub rx_sink: Option<oneshot::Receiver<Vec<PolicyOutcome<D, C>>>>,
 }
 
 impl<D, C> TestFlow<D, C>
@@ -343,7 +344,7 @@ where
 {
     pub async fn new(
         telemetry_subscription: TelemetrySubscription, policy: impl Policy<D, C, (D, C)> + 'static,
-    ) -> ProctorResult<Self> {
+    ) -> anyhow::Result<Self> {
         let telemetry_source = stage::ActorSource::<Telemetry>::new("telemetry_source");
         let tx_data_source_api = telemetry_source.tx_api();
 
@@ -364,7 +365,7 @@ where
         let tx_eligibility_api = eligibility.tx_api();
         let rx_eligibility_monitor = eligibility.rx_monitor();
 
-        let mut sink = stage::Fold::<_, PolicyResult<D, C>, _>::new("sink", Vec::new(), |mut acc, item| {
+        let mut sink = stage::Fold::<_, PolicyOutcome<D, C>, _>::new("sink", Vec::new(), |mut acc, item| {
             acc.push(item);
             acc
         });
@@ -425,13 +426,13 @@ where
         })
     }
 
-    pub async fn push_telemetry(&self, telemetry: Telemetry) -> GraphResult<()> {
+    pub async fn push_telemetry(&self, telemetry: Telemetry) -> anyhow::Result<()> {
         let (cmd, ack) = stage::ActorSourceCmd::push(telemetry);
         self.tx_data_source_api.send(cmd)?;
         ack.await.map_err(|err| err.into())
     }
 
-    pub async fn push_context<'a, I>(&self, context_data: I) -> GraphResult<()>
+    pub async fn push_context<'a, I>(&self, context_data: I) -> anyhow::Result<()>
     where
         I: IntoIterator<Item = (&'a str, TelemetryValue)>,
     {
@@ -443,16 +444,16 @@ where
 
     pub async fn tell_policy(
         &self, command_rx: (elements::PolicyFilterCmd<C>, oneshot::Receiver<proctor::Ack>),
-    ) -> GraphResult<proctor::Ack> {
+    ) -> anyhow::Result<proctor::Ack> {
         self.tx_eligibility_api.send(command_rx.0)?;
         command_rx.1.await.map_err(|err| err.into())
     }
 
-    pub async fn recv_policy_event(&mut self) -> GraphResult<elements::PolicyFilterEvent<D, C>> {
+    pub async fn recv_policy_event(&mut self) -> anyhow::Result<elements::PolicyFilterEvent<D, C>> {
         self.rx_eligibility_monitor.recv().await.map_err(|err| err.into())
     }
 
-    pub async fn inspect_policy_context(&self) -> GraphResult<elements::PolicyFilterDetail<C>> {
+    pub async fn inspect_policy_context(&self) -> anyhow::Result<elements::PolicyFilterDetail<C>> {
         let (cmd, detail) = elements::PolicyFilterCmd::inspect();
         self.tx_eligibility_api.send(cmd)?;
         detail
@@ -464,7 +465,7 @@ where
             .map_err(|err| err.into())
     }
 
-    pub async fn inspect_sink(&self) -> GraphResult<Vec<PolicyResult<D, C>>> {
+    pub async fn inspect_sink(&self) -> anyhow::Result<Vec<PolicyOutcome<D, C>>> {
         let (cmd, acc) = stage::FoldCmd::get_accumulation();
         self.tx_sink_api.send(cmd)?;
         acc.await
@@ -477,8 +478,8 @@ where
 
     #[tracing::instrument(level = "info", skip(self, check_size))]
     pub async fn check_sink_accumulation(
-        &self, label: &str, timeout: Duration, mut check_size: impl FnMut(Vec<PolicyResult<D, C>>) -> bool,
-    ) -> GraphResult<bool> {
+        &self, label: &str, timeout: Duration, mut check_size: impl FnMut(Vec<PolicyOutcome<D, C>>) -> bool,
+    ) -> anyhow::Result<bool> {
         use std::time::Instant;
         let deadline = Instant::now() + timeout;
         let step = Duration::from_millis(50);
@@ -516,7 +517,7 @@ where
     }
 
     #[tracing::instrument(level = "warn", skip(self))]
-    pub async fn close(mut self) -> GraphResult<Vec<PolicyResult<D, C>>> {
+    pub async fn close(mut self) -> anyhow::Result<Vec<PolicyOutcome<D, C>>> {
         let (stop, _) = stage::ActorSourceCmd::stop();
         self.tx_data_source_api.send(stop)?;
 
@@ -695,14 +696,14 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     assert_eq!(
         actual,
         vec![
-            PolicyResult::new(
+            PolicyOutcome::new(
                 MeasurementData {
                     measurement: std::f64::consts::PI,
                 },
                 context.clone(),
                 HashMap::new()
             ),
-            PolicyResult::new(
+            PolicyOutcome::new(
                 MeasurementData {
                     measurement: std::f64::consts::TAU,
                 },
@@ -806,11 +807,11 @@ impl QueryPolicy for TestPolicy {
     type Context = TestEligibilityContext;
     type Args = (Self::Item, Self::Context);
 
-    fn load_policy_engine(&self, oso: &mut Oso) -> GraphResult<()> {
+    fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
         oso.load_str(self.policy.as_str()).map_err(|err| err.into())
     }
 
-    fn initialize_policy_engine(&mut self, oso: &mut Oso) -> GraphResult<()> {
+    fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
         oso.register_class(
             TestItem::get_polar_class_builder()
                 .name("TestMetricCatalog")
@@ -834,7 +835,7 @@ impl QueryPolicy for TestPolicy {
         (item.clone(), context.clone())
     }
 
-    fn query_policy(&self, oso: &Oso, args: Self::Args) -> GraphResult<QueryResult> {
+    fn query_policy(&self, oso: &Oso, args: Self::Args) -> Result<QueryResult, PolicyError> {
         QueryResult::from_query(oso.query_rule("eligible", args)?)
     }
 }
@@ -942,7 +943,7 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
             .await?
     );
 
-    let actual: Vec<PolicyResult<TestItem, TestEligibilityContext>> = flow.close().await?;
+    let actual: Vec<PolicyOutcome<TestItem, TestEligibilityContext>> = flow.close().await?;
 
     tracing::warn!(?actual, "DMR: 08. Verify final accumulation...");
     let actual_vals: Vec<(f64, i32)> = actual
@@ -1136,13 +1137,13 @@ async fn test_eligibility_replace_policy() -> anyhow::Result<()> {
     assert_eq!(
         actual,
         vec![
-            PolicyResult::new(
+            PolicyOutcome::new(
                 TestItem::new(std::f64::consts::PI, 1, too_old_ts),
                 context.clone(),
                 HashMap::new()
             ),
-            PolicyResult::new(TestItem::new(17.327, 2, good_ts), context.clone(), HashMap::new()),
-            PolicyResult::new(TestItem::new(17.327, 2, good_ts), context.clone(), HashMap::new()),
+            PolicyOutcome::new(TestItem::new(17.327, 2, good_ts), context.clone(), HashMap::new()),
+            PolicyOutcome::new(TestItem::new(17.327, 2, good_ts), context.clone(), HashMap::new()),
         ]
     );
     Ok(())

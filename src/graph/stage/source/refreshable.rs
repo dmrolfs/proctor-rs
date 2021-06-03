@@ -1,6 +1,7 @@
 use crate::graph::shape::SourceShape;
-use crate::graph::{GraphResult, Outlet, Port, Stage};
+use crate::graph::{Outlet, Port, Stage};
 use crate::AppData;
+use anyhow::Result;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt::{self, Debug};
@@ -65,13 +66,13 @@ where
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> GraphResult<()> {
+    async fn check(&self) -> Result<()> {
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run refreshable source", skip(self))]
-    async fn run(&mut self) -> GraphResult<()> {
+    async fn run(&mut self) -> Result<()> {
         let mut done = false;
 
         let op = &self.action;
@@ -112,7 +113,7 @@ where
         Ok(())
     }
 
-    async fn close(mut self: Box<Self>) -> GraphResult<()> {
+    async fn close(mut self: Box<Self>) -> Result<()> {
         tracing::info!("closing refreshable source outlet.");
         self.outlet.close().await;
         Ok(())

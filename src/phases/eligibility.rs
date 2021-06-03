@@ -5,11 +5,12 @@ use cast_trait_object::dyn_upcast;
 use tokio::sync::broadcast;
 
 use crate::elements::{
-    PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, PolicyResult, QueryPolicy,
+    PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, PolicyOutcome, QueryPolicy,
 };
 use crate::graph::stage::{Stage, WithApi, WithMonitor};
-use crate::graph::{GraphResult, Inlet, Outlet, Port, SinkShape, SourceShape};
+use crate::graph::{Inlet, Outlet, Port, SinkShape, SourceShape};
 use crate::{AppData, ProctorContext};
+use anyhow::Result;
 use oso::ToPolar;
 
 pub struct Eligibility<T, C> {
@@ -17,7 +18,7 @@ pub struct Eligibility<T, C> {
     policy_filter: Box<dyn Stage>,
     pub context_inlet: Inlet<C>,
     inlet: Inlet<T>,
-    outlet: Outlet<PolicyResult<T, C>>,
+    outlet: Outlet<PolicyOutcome<T, C>>,
     tx_policy_api: PolicyFilterApi<C>,
     tx_policy_monitor: broadcast::Sender<PolicyFilterEvent<T, C>>,
 }
@@ -73,7 +74,7 @@ impl<T, C> SinkShape for Eligibility<T, C> {
 }
 
 impl<T, C> SourceShape for Eligibility<T, C> {
-    type Out = PolicyResult<T, C>;
+    type Out = PolicyOutcome<T, C>;
     #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()
@@ -89,7 +90,7 @@ impl<T: AppData, C: ProctorContext> Stage for Eligibility<T, C> {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> GraphResult<()> {
+    async fn check(&self) -> Result<()> {
         self.inlet.check_attachment().await?;
         self.context_inlet.check_attachment().await?;
         self.outlet.check_attachment().await?;
@@ -98,12 +99,13 @@ impl<T: AppData, C: ProctorContext> Stage for Eligibility<T, C> {
     }
 
     #[tracing::instrument(level = "info", name = "run eligibility phase", skip(self))]
-    async fn run(&mut self) -> GraphResult<()> {
-        self.policy_filter.run().await
+    async fn run(&mut self) -> Result<()> {
+        self.policy_filter.run().await?;
+        Ok(())
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn close(mut self: Box<Self>) -> GraphResult<()> {
+    async fn close(mut self: Box<Self>) -> Result<()> {
         tracing::trace!("closing eligibility ports.");
         self.inlet.close().await;
         self.context_inlet.close().await;

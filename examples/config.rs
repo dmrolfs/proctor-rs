@@ -1,10 +1,9 @@
 use anyhow::Result;
 use clap::Clap;
 use config::Config;
-use proctor::error::ConfigError;
+use proctor::error::SettingsError;
 use proctor::settings::{HttpQuery, Settings, SourceSetting};
 use proctor::tracing::{get_subscriber, init_subscriber};
-use proctor::ProctorResult;
 use reqwest::Url;
 use std::convert::{TryFrom, TryInto};
 use std::path::PathBuf;
@@ -105,7 +104,8 @@ headers = [
 type = "Local"
 path = "tests/resources/base.csv"
     "#;
-    let decoded: ProctorResult<proctor::settings::Settings> = toml::from_str(toml_str).map_err(|err| err.into());
+
+    let decoded: Result<Settings, SettingsError> = toml::from_str(toml_str).map_err(|err| err.into());
     tracing::warn!(?decoded, "deserialized from string");
 
     let mut c = config::Config::default();
@@ -120,13 +120,13 @@ path = "tests/resources/base.csv"
 
     c.merge(config::Environment::with_prefix("app").separator("__"))?;
 
-    let settings: ProctorResult<proctor::settings::Settings> = c.try_into().map_err(|err| err.into());
+    let settings: Result<Settings, SettingsError> = c.try_into().map_err(|err| err.into());
     tracing::warn!(?settings, "settings loaded: {}", settings.is_ok());
     Ok(())
 }
 
 #[tracing::instrument(level = "info")]
-fn load_configuration(mut c: Config, dir: &PathBuf, opts: &CliOptions) -> ProctorResult<Config> {
+fn load_configuration(mut c: Config, dir: &PathBuf, opts: &CliOptions) -> anyhow::Result<Config> {
     match &opts.config {
         Some(config_path) => {
             let config_path = PathBuf::from(dir.join(config_path));
@@ -144,7 +144,7 @@ fn load_configuration(mut c: Config, dir: &PathBuf, opts: &CliOptions) -> Procto
 }
 
 #[tracing::instrument(level = "info")]
-fn load_secrets(mut c: Config, dir: &PathBuf, opts: &CliOptions) -> ProctorResult<Config> {
+fn load_secrets(mut c: Config, dir: &PathBuf, opts: &CliOptions) -> anyhow::Result<Config> {
     if let Some(secrets_path) = &opts.secrets {
         let secrets_path = PathBuf::from(dir.join(secrets_path));
         c.merge(config::File::from(secrets_path).required(true))?;
@@ -154,7 +154,7 @@ fn load_secrets(mut c: Config, dir: &PathBuf, opts: &CliOptions) -> ProctorResul
 }
 
 #[tracing::instrument(level = "info")]
-fn get_command_options() -> ProctorResult<CliOptions> {
+fn get_command_options() -> anyhow::Result<CliOptions> {
     let opts = CliOptions::parse();
     tracing::info!(options=?opts.config, secrets=?opts.secrets, "CLI pasred.");
     Ok(opts)
@@ -188,13 +188,13 @@ impl AsRef<str> for Environment {
 }
 
 impl TryFrom<String> for Environment {
-    type Error = ConfigError;
+    type Error = SettingsError;
 
     fn try_from(s: String) -> Result<Self, Self::Error> {
         match s.to_lowercase().as_str() {
             "local" => Ok(Self::Local),
             "production" => Ok(Self::Production),
-            other => Err(ConfigError::Environment(format!(
+            other => Err(SettingsError::Environment(format!(
                 "do not recognize {} environment.",
                 other
             ))),

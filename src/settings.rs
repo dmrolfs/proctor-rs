@@ -2,13 +2,12 @@ pub use model::*;
 
 mod model;
 
-use crate::error::ConfigError;
-use crate::ProctorResult;
+use crate::error::SettingsError;
 use clap::Clap;
 use std::convert::{TryFrom, TryInto};
 use std::path::PathBuf;
 
-pub fn get_settings() -> ProctorResult<Settings> {
+pub fn get_settings() -> Result<Settings, SettingsError> {
     let mut settings = config::Config::default();
 
     let base_path = std::env::current_dir()?;
@@ -37,7 +36,7 @@ pub fn get_settings() -> ProctorResult<Settings> {
     settings.try_into().map_err(|err| err.into())
 }
 
-fn get_command_options() -> ProctorResult<CliOptions> {
+fn get_command_options() -> Result<CliOptions, SettingsError> {
     let opts = CliOptions::parse();
     tracing::info!(option=?opts.config, secrets=%opts.secrets, "CLI parsed");
     Ok(opts)
@@ -70,13 +69,13 @@ impl AsRef<str> for Environment {
 }
 
 impl TryFrom<String> for Environment {
-    type Error = ConfigError;
+    type Error = SettingsError;
 
     fn try_from(s: String) -> Result<Self, Self::Error> {
         match s.to_lowercase().as_str() {
             "local" => Ok(Self::Local),
             "production" => Ok(Self::Production),
-            other => Err(ConfigError::Environment(format!(
+            other => Err(SettingsError::Environment(format!(
                 "do not recognize {} environment.",
                 other
             ))),

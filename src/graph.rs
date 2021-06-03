@@ -9,12 +9,10 @@ pub use self::shape::*;
 
 use self::node::Node;
 use self::stage::Stage;
-use crate::error::GraphError;
+use anyhow::Result;
 use std::collections::VecDeque;
 use std::fmt;
 use tracing::Instrument;
-
-pub type GraphResult<T> = Result<T, GraphError>;
 
 /// A Graph represents a runnable stream processing graph.
 ///
@@ -81,7 +79,7 @@ impl Graph {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    pub async fn check(&self) -> GraphResult<()> {
+    pub async fn check(&self) -> Result<()> {
         tracing::info!(nodes=?self.node_names(), "checking graph nodes.");
         for node in self.nodes.iter() {
             node.check().await?;
@@ -90,7 +88,7 @@ impl Graph {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    pub async fn run(self) -> GraphResult<()> {
+    pub async fn run(self) -> Result<()> {
         self.check().await?;
 
         let tasks = self.nodes.into_iter().map(|node| node.run()).collect::<Vec<_>>();

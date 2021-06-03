@@ -1,9 +1,11 @@
 use crate::elements::{
-    PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, PolicyResult, QueryPolicy, QueryResult,
+    PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, PolicyOutcome, QueryPolicy, QueryResult,
 };
+use crate::error::PolicyError;
 use crate::graph::stage::{Stage, ThroughStage, WithApi, WithMonitor};
-use crate::graph::{stage, Connect, Graph, GraphResult, Inlet, Outlet, Port, SinkShape, SourceShape};
+use crate::graph::{stage, Connect, Graph, Inlet, Outlet, Port, SinkShape, SourceShape};
 use crate::{AppData, ProctorContext};
+use anyhow::Result;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use oso::{Oso, PolarValue, ToPolar};
@@ -31,7 +33,7 @@ pub struct Decision<In, Out, C> {
 //     }
 // }
 
-impl<T: AppData + ToPolar + Clone, C: ProctorContext> Decision<T, PolicyResult<T, C>, C> {
+impl<T: AppData + ToPolar + Clone, C: ProctorContext> Decision<T, PolicyOutcome<T, C>, C> {
     #[tracing::instrument(level = "info", skip(name))]
     pub async fn carry_policy_result<S: AsRef<str>>(
         name: S, policy: impl QueryPolicy<Item = T, Context = C, Args = (T, C, PolarValue)> + 'static,
@@ -46,7 +48,7 @@ impl<In: AppData + ToPolar + Clone, Out: AppData, C: ProctorContext> Decision<In
     #[tracing::instrument(level = "info", skip(name))]
     pub async fn with_transform<S: Into<String>>(
         name: S, policy: impl QueryPolicy<Item = In, Context = C, Args = (In, C, PolarValue)> + 'static,
-        transform: impl ThroughStage<PolicyResult<In, C>, Out> + 'static,
+        transform: impl ThroughStage<PolicyOutcome<In, C>, Out> + 'static,
     ) -> Self {
         let name = name.into();
 
@@ -117,7 +119,7 @@ where
     type Args = (T, C, PolarValue);
 
     #[inline]
-    fn load_policy_engine(&self, engine: &mut Oso) -> GraphResult<()> {
+    fn load_policy_engine(&self, engine: &mut Oso) -> Result<(), PolicyError> {
         engine.load_str(
             r#"scale(item, context, direction) if scale_up(item, context, direction) and direction = "up";
             scale(item, context, direction) if scale_down(item, context, direction) and direction = "down";"#,
@@ -126,7 +128,7 @@ where
     }
 
     #[inline]
-    fn initialize_policy_engine(&mut self, engine: &mut Oso) -> GraphResult<()> {
+    fn initialize_policy_engine(&mut self, engine: &mut Oso) -> Result<(), PolicyError> {
         self.0.initialize_policy_engine(engine)
     }
 
@@ -136,7 +138,7 @@ where
     }
 
     #[inline]
-    fn query_policy(&self, engine: &Oso, args: Self::Args) -> GraphResult<QueryResult> {
+    fn query_policy(&self, engine: &Oso, args: Self::Args) -> Result<QueryResult, PolicyError> {
         self.0.query_policy(engine, args)
     }
 }
@@ -180,7 +182,7 @@ impl<In: AppData, Out: AppData, C: ProctorContext> Stage for Decision<In, Out, C
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> GraphResult<()> {
+    async fn check(&self) -> Result<()> {
         self.inlet.check_attachment().await?;
         self.context_inlet.check_attachment().await?;
         self.inner_stage.check().await?;
@@ -189,12 +191,13 @@ impl<In: AppData, Out: AppData, C: ProctorContext> Stage for Decision<In, Out, C
     }
 
     #[tracing::instrument(level = "info", name = "run decision phase", skip(self))]
-    async fn run(&mut self) -> GraphResult<()> {
-        self.inner_stage.run().await
+    async fn run(&mut self) -> Result<()> {
+        self.inner_stage.run().await?;
+        Ok(())
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn close(mut self: Box<Self>) -> GraphResult<()> {
+    async fn close(mut self: Box<Self>) -> Result<()> {
         tracing::trace!("closing decision ports.");
         self.inlet.close().await;
         self.context_inlet.close().await;

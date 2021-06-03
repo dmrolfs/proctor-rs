@@ -1,6 +1,7 @@
 use crate::graph::shape::{SinkShape, SourceShape};
-use crate::graph::{GraphResult, Inlet, Outlet, Port, Stage};
+use crate::graph::{Inlet, Outlet, Port, Stage};
 use crate::AppData;
+use anyhow::Result;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt::{self, Debug};
@@ -115,14 +116,14 @@ where
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> GraphResult<()> {
+    async fn check(&self) -> Result<()> {
         self.inlet.check_attachment().await?;
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run filter through", skip(self))]
-    async fn run(&mut self) -> GraphResult<()> {
+    async fn run(&mut self) -> Result<()> {
         let outlet = &self.outlet;
         while let Some(item) = self.inlet.recv().await {
             let filter_span = tracing::info_span!("filter on item", ?item);
@@ -138,7 +139,7 @@ where
         Ok(())
     }
 
-    async fn close(mut self: Box<Self>) -> GraphResult<()> {
+    async fn close(mut self: Box<Self>) -> Result<()> {
         tracing::trace!("closing filter-through ports.");
         self.inlet.close().await;
         self.outlet.close().await;

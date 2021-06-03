@@ -1,8 +1,9 @@
 use crate::elements::{make_from_telemetry, FromTelemetryShape, Telemetry};
-use crate::error::GraphError;
+use crate::error::CollectionError;
 use crate::graph::stage::Stage;
-use crate::graph::{GraphResult, Inlet, Outlet, Port, SourceShape};
+use crate::graph::{Inlet, Outlet, Port, SourceShape};
 use crate::AppData;
+use anyhow::Result;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use serde::de::DeserializeOwned;
@@ -19,9 +20,9 @@ pub struct SubscriptionChannel<T> {
 }
 
 impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
-    pub async fn new<S: Into<String>>(name: S) -> GraphResult<Self> {
+    pub async fn new<S: Into<String>>(name: S) -> Result<Self, CollectionError> {
         let name = name.into();
-        let inner_stage = make_from_telemetry(name.as_str(), true).await?;
+        let inner_stage = make_from_telemetry(name.as_str(), true).await;
         let subscription_receiver = inner_stage.inlet();
         let outlet = inner_stage.outlet();
 
@@ -63,7 +64,7 @@ impl<T: AppData> Stage for SubscriptionChannel<T> {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> GraphResult<()> {
+    async fn check(&self) -> Result<()> {
         self.subscription_receiver.check_attachment().await?;
         self.outlet.check_attachment().await?;
         if let Some(ref inner) = self.inner_stage {
@@ -72,17 +73,14 @@ impl<T: AppData> Stage for SubscriptionChannel<T> {
         Ok(())
     }
 
-    async fn run(&mut self) -> GraphResult<()> {
+    async fn run(&mut self) -> Result<()> {
         match self.inner_stage.as_mut() {
             Some(inner) => inner.run().await,
-            None => Err(GraphError::GraphPrecondition(format!(
-                "subscription_channel, {}, already spent - cannot run.",
-                self.name
-            ))),
+            None => Err(CollectionError::ClosedSubscription(self.name.clone()).into()),
         }
     }
 
-    async fn close(mut self: Box<Self>) -> GraphResult<()> {
+    async fn close(mut self: Box<Self>) -> Result<()> {
         tracing::info!("closing subscription_channel.");
         self.subscription_receiver.close().await;
         if let Some(inner) = self.inner_stage.take() {
