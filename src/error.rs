@@ -25,6 +25,18 @@ pub enum CollectionError {
 
     #[error("{0}")]
     TelemetryError(#[from] TelemetryError),
+
+    #[error("{0}")]
+    StageError(#[from] anyhow::Error),
+}
+
+#[derive(Debug, Error)]
+pub enum EligibilityError {
+    #[error("{0}")]
+    PortError(#[from] PortError),
+
+    #[error("{0}")]
+    StageError(#[from] anyhow::Error),
 }
 
 #[derive(Debug, Error)]
@@ -34,6 +46,12 @@ pub enum DecisionError {
 
     #[error("{0}")]
     TelemetryError(#[from] TelemetryError),
+
+    #[error("{0}")]
+    PortError(#[from] PortError),
+
+    #[error("{0}")]
+    StageError(#[from] anyhow::Error),
 }
 
 /// Set of errors occurring during policy initialization or evaluation.
@@ -140,7 +158,6 @@ pub enum StageError {
     #[error("{0}")]
     PortError(#[from] PortError),
 }
-
 
 #[derive(Debug, Error)]
 pub enum PortError {

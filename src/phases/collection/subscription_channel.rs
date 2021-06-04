@@ -65,6 +65,24 @@ impl<T: AppData> Stage for SubscriptionChannel<T> {
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> Result<()> {
+        self.do_check().await?;
+        Ok(())
+    }
+
+    async fn run(&mut self) -> Result<()> {
+        self.do_run().await?;
+        Ok(())
+    }
+
+    async fn close(mut self: Box<Self>) -> Result<()> {
+        self.do_close().await?;
+        Ok(())
+    }
+}
+
+impl<T: AppData> SubscriptionChannel<T> {
+    #[inline]
+    async fn do_check(&self) -> Result<(), CollectionError> {
         self.subscription_receiver.check_attachment().await?;
         self.outlet.check_attachment().await?;
         if let Some(ref inner) = self.inner_stage {
@@ -73,14 +91,20 @@ impl<T: AppData> Stage for SubscriptionChannel<T> {
         Ok(())
     }
 
-    async fn run(&mut self) -> Result<()> {
+    #[inline]
+    async fn do_run(&mut self) -> Result<(), CollectionError> {
         match self.inner_stage.as_mut() {
-            Some(inner) => inner.run().await,
-            None => Err(CollectionError::ClosedSubscription(self.name.clone()).into()),
+            Some(inner) => {
+                inner.run().await?;
+                Ok(())
+            }
+
+            None => Err(CollectionError::ClosedSubscription(self.name.clone())),
         }
     }
 
-    async fn close(mut self: Box<Self>) -> Result<()> {
+    #[inline]
+    async fn do_close(mut self: Box<Self>) -> Result<(), CollectionError> {
         tracing::info!("closing subscription_channel.");
         self.subscription_receiver.close().await;
         if let Some(inner) = self.inner_stage.take() {

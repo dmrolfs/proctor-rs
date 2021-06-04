@@ -7,7 +7,8 @@ use tokio::sync::broadcast;
 use crate::elements::{
     PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, PolicyOutcome, QueryPolicy,
 };
-use crate::graph::stage::{Stage, WithApi, WithMonitor, ThroughStage};
+use crate::error::EligibilityError;
+use crate::graph::stage::{Stage, ThroughStage, WithApi, WithMonitor};
 use crate::graph::{Inlet, Outlet, Port, SinkShape, SourceShape};
 use crate::{AppData, ProctorContext};
 use anyhow::Result;
@@ -91,6 +92,27 @@ impl<T: AppData, C: ProctorContext> Stage for Eligibility<T, C> {
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> Result<()> {
+        self.do_check().await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "info", name = "run eligibility phase", skip(self))]
+    async fn run(&mut self) -> Result<()> {
+        self.do_run().await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "info", skip(self))]
+    async fn close(mut self: Box<Self>) -> Result<()> {
+        self.do_close().await?;
+        Ok(())
+    }
+}
+
+// this implementation block provides a convenient means to ground errors to the phase error.
+impl<T: AppData, C: ProctorContext> Eligibility<T, C> {
+    #[inline]
+    async fn do_check(&self) -> Result<(), EligibilityError> {
         self.inlet.check_attachment().await?;
         self.context_inlet.check_attachment().await?;
         self.outlet.check_attachment().await?;
@@ -98,14 +120,14 @@ impl<T: AppData, C: ProctorContext> Stage for Eligibility<T, C> {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run eligibility phase", skip(self))]
-    async fn run(&mut self) -> Result<()> {
+    #[inline]
+    async fn do_run(&mut self) -> Result<(), EligibilityError> {
         self.policy_filter.run().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
-    async fn close(mut self: Box<Self>) -> Result<()> {
+    #[inline]
+    async fn do_close(mut self: Box<Self>) -> Result<(), EligibilityError> {
         tracing::trace!("closing eligibility ports.");
         self.inlet.close().await;
         self.context_inlet.close().await;

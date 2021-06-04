@@ -1,6 +1,7 @@
 use crate::elements::{
     PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, PolicyOutcome, QueryPolicy, QueryResult,
 };
+use crate::error::DecisionError;
 use crate::error::PolicyError;
 use crate::graph::stage::{Stage, ThroughStage, WithApi, WithMonitor};
 use crate::graph::{stage, Connect, Graph, Inlet, Outlet, Port, SinkShape, SourceShape};
@@ -183,6 +184,27 @@ impl<In: AppData, Out: AppData, C: ProctorContext> Stage for Decision<In, Out, C
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> Result<()> {
+        self.do_check().await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "info", name = "run decision phase", skip(self))]
+    async fn run(&mut self) -> Result<()> {
+        self.do_run().await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "info", skip(self))]
+    async fn close(mut self: Box<Self>) -> Result<()> {
+        self.do_close().await?;
+        Ok(())
+    }
+}
+
+// this implementation block provides a convenient means to ground errors to the phase error.
+impl<In: AppData, Out: AppData, C: ProctorContext> Decision<In, Out, C> {
+    #[inline]
+    async fn do_check(&self) -> Result<(), DecisionError> {
         self.inlet.check_attachment().await?;
         self.context_inlet.check_attachment().await?;
         self.inner_stage.check().await?;
@@ -190,14 +212,14 @@ impl<In: AppData, Out: AppData, C: ProctorContext> Stage for Decision<In, Out, C
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run decision phase", skip(self))]
-    async fn run(&mut self) -> Result<()> {
+    #[inline]
+    async fn do_run(&mut self) -> Result<(), DecisionError> {
         self.inner_stage.run().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
-    async fn close(mut self: Box<Self>) -> Result<()> {
+    #[inline]
+    async fn do_close(mut self: Box<Self>) -> Result<(), DecisionError> {
         tracing::trace!("closing decision ports.");
         self.inlet.close().await;
         self.context_inlet.close().await;

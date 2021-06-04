@@ -609,18 +609,36 @@ impl Stage for Clearinghouse {
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> Result<()> {
-        self.inlet
-            .check_attachment()
-            .await
-            .map_err(|err| CollectionError::PortError(err))?;
-        for s in self.subscriptions.iter() {
-            s.outlet_to_subscription().check_attachment().await?;
-        }
+        self.do_check().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run clearinghouse", skip(self))]
     async fn run(&mut self) -> Result<()> {
+        self.do_run().await?;
+        Ok(())
+    }
+
+    async fn close(mut self: Box<Self>) -> Result<()> {
+        self.do_close().await?;
+        Ok(())
+    }
+}
+
+impl Clearinghouse {
+    #[inline]
+    async fn do_check(&self) -> Result<(), CollectionError> {
+        self.inlet.check_attachment().await?;
+
+        for s in self.subscriptions.iter() {
+            s.outlet_to_subscription().check_attachment().await?;
+        }
+
+        Ok(())
+    }
+
+    #[inline]
+    async fn do_run(&mut self) -> Result<(), CollectionError> {
         let mut inlet = self.inlet.clone();
         let rx_api = &mut self.rx_api;
         let database = &mut self.database;
@@ -666,7 +684,8 @@ impl Stage for Clearinghouse {
         Ok(())
     }
 
-    async fn close(mut self: Box<Self>) -> Result<()> {
+    #[inline]
+    async fn do_close(mut self: Box<Self>) -> Result<(), CollectionError> {
         tracing::warn!("DMR: closing clearinghouse.");
         self.inlet.close().await;
         for s in self.subscriptions {
