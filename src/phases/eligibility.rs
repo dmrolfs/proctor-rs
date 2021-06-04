@@ -7,7 +7,7 @@ use tokio::sync::broadcast;
 use crate::elements::{
     PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, PolicyOutcome, QueryPolicy,
 };
-use crate::graph::stage::{Stage, WithApi, WithMonitor};
+use crate::graph::stage::{Stage, WithApi, WithMonitor, ThroughStage};
 use crate::graph::{Inlet, Outlet, Port, SinkShape, SourceShape};
 use crate::{AppData, ProctorContext};
 use anyhow::Result;
@@ -15,7 +15,7 @@ use oso::ToPolar;
 
 pub struct Eligibility<T, C> {
     name: String,
-    policy_filter: Box<dyn Stage>,
+    policy_filter: Box<dyn ThroughStage<T, PolicyOutcome<T, C>>>,
     pub context_inlet: Inlet<C>,
     inlet: Inlet<T>,
     outlet: Outlet<PolicyOutcome<T, C>>,
