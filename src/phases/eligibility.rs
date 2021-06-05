@@ -10,8 +10,7 @@ use crate::elements::{
 use crate::error::EligibilityError;
 use crate::graph::stage::{Stage, ThroughStage, WithApi, WithMonitor};
 use crate::graph::{Inlet, Outlet, Port, SinkShape, SourceShape};
-use crate::{AppData, ProctorContext};
-use anyhow::Result;
+use crate::{AppData, ProctorContext, ProctorResult};
 use oso::ToPolar;
 
 pub struct Eligibility<T, C> {
@@ -91,19 +90,19 @@ impl<T: AppData, C: ProctorContext> Stage for Eligibility<T, C> {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> Result<()> {
+    async fn check(&self) -> ProctorResult<()> {
         self.do_check().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run eligibility phase", skip(self))]
-    async fn run(&mut self) -> Result<()> {
+    async fn run(&mut self) -> ProctorResult<()> {
         self.do_run().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn close(mut self: Box<Self>) -> Result<()> {
+    async fn close(mut self: Box<Self>) -> ProctorResult<()> {
         self.do_close().await?;
         Ok(())
     }
@@ -116,13 +115,19 @@ impl<T: AppData, C: ProctorContext> Eligibility<T, C> {
         self.inlet.check_attachment().await?;
         self.context_inlet.check_attachment().await?;
         self.outlet.check_attachment().await?;
-        self.policy_filter.check().await?;
+        self.policy_filter
+            .check()
+            .await
+            .map_err(|err| EligibilityError::StageError(err.into()))?;
         Ok(())
     }
 
     #[inline]
     async fn do_run(&mut self) -> Result<(), EligibilityError> {
-        self.policy_filter.run().await?;
+        self.policy_filter
+            .run()
+            .await
+            .map_err(|err| EligibilityError::StageError(err.into()))?;
         Ok(())
     }
 
@@ -132,7 +137,10 @@ impl<T: AppData, C: ProctorContext> Eligibility<T, C> {
         self.inlet.close().await;
         self.context_inlet.close().await;
         self.outlet.close().await;
-        self.policy_filter.close().await?;
+        self.policy_filter
+            .close()
+            .await
+            .map_err(|err| EligibilityError::StageError(err.into()))?;
         Ok(())
     }
 }

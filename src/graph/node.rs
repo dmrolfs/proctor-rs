@@ -1,5 +1,5 @@
 use super::stage::Stage;
-use anyhow::Result;
+use crate::ProctorResult;
 use tokio::task::JoinHandle;
 use tracing::Instrument;
 
@@ -35,14 +35,16 @@ impl Node {
     //     )
     // }
 
-    pub async fn check(&self) -> Result<()> {
+    pub async fn check(&self) -> ProctorResult<()> {
         self.stage
             .check()
             .instrument(tracing::info_span!("check graph node", node=%self.stage.name()))
-            .await
+            .await?;
+
+        Ok(())
     }
 
-    pub fn run(mut self) -> JoinHandle<Result<()>> {
+    pub fn run(mut self) -> JoinHandle<ProctorResult<()>> {
         let name = self.name.clone();
         tokio::spawn(
             async move {
@@ -56,11 +58,13 @@ impl Node {
                     .close()
                     .instrument(tracing::info_span!("close graph node"))
                     .await;
+
                 if let Err(err) = &close_result {
                     tracing::error!(error=?err, "node close failed.");
                 }
 
-                run_result.and(close_result)
+                run_result.and(close_result)?;
+                Ok(())
             }
             .instrument(tracing::info_span!("spawn node", node=%name)),
         )

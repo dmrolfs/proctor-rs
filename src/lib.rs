@@ -14,4 +14,6 @@ pub mod tracing;
 pub use app_data::AppData;
 pub use elements::ProctorContext;
 
+pub type ProctorResult<T> = Result<T, error::ProctorError>;
+
 pub type Ack = ();

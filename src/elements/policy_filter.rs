@@ -5,12 +5,11 @@ mod policy;
 mod protocol;
 
 use crate::elements::{telemetry, TelemetryValue, ToTelemetry};
-use crate::error::{PolicyError, TelemetryError, TypeExpectation};
+use crate::error::{GraphError, PolicyError, TelemetryError, TypeExpectation};
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Inlet, Outlet, Port};
 use crate::graph::{SinkShape, SourceShape};
-use crate::{AppData, ProctorContext};
-use anyhow::Result;
+use crate::{AppData, ProctorContext, ProctorResult};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use oso::{Oso, ToPolar};
@@ -187,14 +186,39 @@ where
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> Result<()> {
+    async fn check(&self) -> ProctorResult<()> {
+        self.do_check().await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "info", name = "run policy_filter through", skip(self))]
+    async fn run(&mut self) -> ProctorResult<()> {
+        self.do_run().await?;
+        Ok(())
+    }
+
+    async fn close(mut self: Box<Self>) -> ProctorResult<()> {
+        self.do_close().await?;
+        Ok(())
+    }
+}
+
+impl<T, C, A, P> PolicyFilter<T, C, A, P>
+where
+    T: AppData + ToPolar + Clone + Sync,
+    C: ProctorContext + Debug + Clone + Send + Sync,
+    A: 'static,
+    P: QueryPolicy<Item = T, Context = C, Args = A> + 'static,
+{
+    #[inline]
+    async fn do_check(&self) -> Result<(), GraphError> {
         self.inlet.check_attachment().await?;
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run policy_filter through", skip(self))]
-    async fn run(&mut self) -> Result<()> {
+    #[inline]
+    async fn do_run(&mut self) -> Result<(), GraphError> {
         let name = self.name().to_owned();
         let mut oso = self.oso()?;
         let outlet = &self.outlet;
@@ -249,7 +273,8 @@ where
         Ok(())
     }
 
-    async fn close(mut self: Box<Self>) -> Result<()> {
+    #[inline]
+    async fn do_close(mut self: Box<Self>) -> Result<(), GraphError> {
         tracing::info!("closing policy_filter ports");
         self.inlet.close().await;
         self.outlet.close().await;

@@ -1,8 +1,7 @@
 use crate::error::StageError;
 use crate::graph::shape::SourceShape;
 use crate::graph::{stage, Outlet, Port, Stage};
-use crate::AppData;
-use anyhow::Result;
+use crate::{AppData, ProctorResult};
 use async_stream::stream;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
@@ -188,13 +187,13 @@ where
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> Result<()> {
+    async fn check(&self) -> ProctorResult<()> {
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run tick source", skip(self))]
-    async fn run(&mut self) -> Result<()> {
+    async fn run(&mut self) -> ProctorResult<()> {
         let start = tokio::time::Instant::now() + self.initial_delay;
         let interval = tokio::time::interval_at(start, self.interval);
         tokio::pin!(interval);
@@ -253,7 +252,7 @@ where
         Ok(())
     }
 
-    async fn close(mut self: Box<Self>) -> Result<()> {
+    async fn close(mut self: Box<Self>) -> ProctorResult<()> {
         tracing::info!("closing tick source outlet.");
         self.outlet.close().await;
         Ok(())

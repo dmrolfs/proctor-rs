@@ -1,7 +1,6 @@
 use crate::graph::shape::SinkShape;
 use crate::graph::{Inlet, Port, Stage};
-use crate::AppData;
-use anyhow::Result;
+use crate::{AppData, ProctorResult};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt;
@@ -98,13 +97,13 @@ where
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> Result<()> {
+    async fn check(&self) -> ProctorResult<()> {
         self.inlet.check_attachment().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run foreach sink", skip(self))]
-    async fn run(&mut self) -> Result<()> {
+    async fn run(&mut self) -> ProctorResult<()> {
         let op = &self.operation;
         while let Some(input) = self.inlet.recv().await {
             op(input);
@@ -112,7 +111,7 @@ where
         Ok(())
     }
 
-    async fn close(mut self: Box<Self>) -> Result<()> {
+    async fn close(mut self: Box<Self>) -> ProctorResult<()> {
         tracing::trace!("closing foreach-sink inlet.");
         self.inlet.close().await;
         Ok(())

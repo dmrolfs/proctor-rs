@@ -3,6 +3,51 @@ use std::fmt;
 use std::fmt::Debug;
 use thiserror::Error;
 
+#[derive(Debug, Error)]
+pub enum ProctorError {
+    #[error("{0}")]
+    CollectionError(#[from] CollectionError),
+
+    #[error("{0}")]
+    EligibilityError(#[from] EligibilityError),
+
+    #[error("{0}")]
+    DecisionError(#[from] DecisionError),
+
+    #[error("{0}")]
+    PlanError(#[from] PlanError),
+
+    #[error("{0}")]
+    GraphError(#[from] GraphError),
+}
+
+impl From<PortError> for ProctorError {
+    fn from(that: PortError) -> Self {
+        ProctorError::GraphError(that.into())
+    }
+}
+
+impl From<StageError> for ProctorError {
+    fn from(that: StageError) -> Self {
+        ProctorError::GraphError(that.into())
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum GraphError {
+    #[error("{0}")]
+    PolicyError(#[from] PolicyError),
+
+    #[error("{0}")]
+    StageError(#[from] StageError),
+
+    #[error("{0}")]
+    JoinError(#[from] tokio::task::JoinError),
+
+    #[error("{0}")]
+    PortError(#[from] PortError),
+}
+
 /// Set of errors occurring during telemetry collection
 #[derive(Debug, Error)]
 pub enum CollectionError {
@@ -21,10 +66,10 @@ pub enum CollectionError {
     ClosedSubscription(String),
 
     #[error("{0}")]
-    PortError(#[from] PortError),
+    TelemetryError(#[from] TelemetryError),
 
     #[error("{0}")]
-    TelemetryError(#[from] TelemetryError),
+    PortError(#[from] PortError),
 
     #[error("{0}")]
     StageError(#[from] anyhow::Error),
@@ -47,6 +92,15 @@ pub enum DecisionError {
     #[error("{0}")]
     TelemetryError(#[from] TelemetryError),
 
+    #[error("{0}")]
+    PortError(#[from] PortError),
+
+    #[error("{0}")]
+    StageError(#[from] anyhow::Error),
+}
+
+#[derive(Debug, Error)]
+pub enum PlanError {
     #[error("{0}")]
     PortError(#[from] PortError),
 

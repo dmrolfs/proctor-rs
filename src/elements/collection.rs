@@ -2,8 +2,7 @@ use super::Telemetry;
 use crate::error::CollectionError;
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Connect, Graph, Inlet, Outlet, Port, SinkShape, SourceShape};
-use crate::AppData;
-use anyhow::Result;
+use crate::{AppData, ProctorResult};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use reqwest::header::HeaderMap;
@@ -221,25 +220,45 @@ impl Stage for Collect {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> Result<()> {
-        self.trigger.check_attachment().await?;
-        self.outlet.check_attachment().await?;
-        if let Some(ref g) = self.graph {
-            g.check().await?;
-        }
+    async fn check(&self) -> ProctorResult<()> {
+        self.do_check().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run collect source", skip(self))]
-    async fn run(&mut self) -> Result<()> {
-        let foo = match self.graph.take() {
-            None => Ok(()),
-            Some(g) => g.run().await,
-        };
-        foo
+    async fn run(&mut self) -> ProctorResult<()> {
+        self.do_run().await?;
+        Ok(())
     }
 
-    async fn close(mut self: Box<Self>) -> Result<()> {
+    async fn close(mut self: Box<Self>) -> ProctorResult<()> {
+        self.do_close().await?;
+        Ok(())
+    }
+}
+
+impl Collect {
+    #[inline]
+    async fn do_check(&self) -> Result<(), CollectionError> {
+        self.trigger.check_attachment().await?;
+        self.outlet.check_attachment().await?;
+        if let Some(ref g) = self.graph {
+            g.check().await.map_err(|err| CollectionError::StageError(err.into()))?;
+        }
+        Ok(())
+    }
+
+    #[inline]
+    async fn do_run(&mut self) -> Result<(), CollectionError> {
+        if let Some(g) = self.graph.take() {
+            g.run().await.map_err(|err| CollectionError::StageError(err.into()))?;
+        }
+
+        Ok(())
+    }
+
+    #[inline]
+    async fn do_close(mut self: Box<Self>) -> Result<(), CollectionError> {
         tracing::trace!("closing collect inner graph and outlet.");
         self.outlet.close().await;
         Ok(())

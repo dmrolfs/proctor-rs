@@ -2,8 +2,7 @@ use crate::elements::Telemetry;
 use crate::error::CollectionError;
 use crate::graph::stage::Stage;
 use crate::graph::{stage, Connect, Inlet, Outlet, OutletsShape, Port, SinkShape, UniformFanOutShape};
-use crate::Ack;
-use anyhow::Result;
+use crate::{Ack, ProctorResult};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use futures::future::FutureExt;
@@ -608,18 +607,18 @@ impl Stage for Clearinghouse {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> Result<()> {
+    async fn check(&self) -> ProctorResult<()> {
         self.do_check().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run clearinghouse", skip(self))]
-    async fn run(&mut self) -> Result<()> {
+    async fn run(&mut self) -> ProctorResult<()> {
         self.do_run().await?;
         Ok(())
     }
 
-    async fn close(mut self: Box<Self>) -> Result<()> {
+    async fn close(mut self: Box<Self>) -> ProctorResult<()> {
         self.do_close().await?;
         Ok(())
     }

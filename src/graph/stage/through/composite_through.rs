@@ -1,7 +1,6 @@
 use crate::graph::shape::{SinkShape, SourceShape};
 use crate::graph::{stage, Connect, Graph, Inlet, Outlet, Port, Stage};
-use crate::AppData;
-use anyhow::Result;
+use crate::{AppData, ProctorResult};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt::Debug;
@@ -163,21 +162,21 @@ impl<In: AppData, Out: AppData> Stage for CompositeThrough<In, Out> {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> Result<()> {
+    async fn check(&self) -> ProctorResult<()> {
         self.inlet.check_attachment().await?;
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run composite through", skip(self))]
-    async fn run(&mut self) -> Result<()> {
+    async fn run(&mut self) -> ProctorResult<()> {
         match self.graph.take() {
             None => Ok(()),
             Some(g) => g.run().await,
         }
     }
 
-    async fn close(mut self: Box<Self>) -> Result<()> {
+    async fn close(mut self: Box<Self>) -> ProctorResult<()> {
         tracing::trace!("closing composite graph, inlet and outlet.");
         self.inlet.close().await;
         self.outlet.close().await;

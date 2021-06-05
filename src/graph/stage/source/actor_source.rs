@@ -1,7 +1,6 @@
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Outlet, Port, SourceShape};
-use crate::{Ack, AppData};
-use anyhow::Result;
+use crate::{Ack, AppData, ProctorResult};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt::{self, Debug};
@@ -69,13 +68,13 @@ impl<T: AppData> Stage for ActorSource<T> {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> Result<()> {
+    async fn check(&self) -> ProctorResult<()> {
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run actor source", skip(self))]
-    async fn run(&mut self) -> Result<()> {
+    async fn run(&mut self) -> ProctorResult<()> {
         while let Some(command) = self.rx_api.recv().await {
             tracing::info!(?command, "handling command");
             match command {
@@ -106,7 +105,7 @@ impl<T: AppData> Stage for ActorSource<T> {
         Ok(())
     }
 
-    async fn close(mut self: Box<Self>) -> Result<()> {
+    async fn close(mut self: Box<Self>) -> ProctorResult<()> {
         tracing::info!("closing actor source outlet.");
         self.outlet.close().await;
         Ok(())

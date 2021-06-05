@@ -9,7 +9,8 @@ pub use self::shape::*;
 
 use self::node::Node;
 use self::stage::Stage;
-use anyhow::Result;
+use crate::error::GraphError;
+use crate::ProctorResult;
 use std::collections::VecDeque;
 use std::fmt;
 use tracing::Instrument;
@@ -79,7 +80,7 @@ impl Graph {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    pub async fn check(&self) -> Result<()> {
+    pub async fn check(&self) -> ProctorResult<()> {
         tracing::info!(nodes=?self.node_names(), "checking graph nodes.");
         for node in self.nodes.iter() {
             node.check().await?;
@@ -88,18 +89,23 @@ impl Graph {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    pub async fn run(self) -> Result<()> {
+    pub async fn run(self) -> ProctorResult<()> {
         self.check().await?;
 
         let tasks = self.nodes.into_iter().map(|node| node.run()).collect::<Vec<_>>();
 
-        futures::future::try_join_all(tasks)
+        let results: Vec<ProctorResult<()>> = futures::future::try_join_all(tasks)
             .instrument(tracing::info_span!("graph_run_join_all"))
             .await
-            .map_err(|err| {
-                tracing::error!(error=?err, "at least one graph node run failed.");
-                err.into()
-            })
-            .map(|results| results.into_iter().for_each(|r| r.unwrap()))
+            .map_err(|err| GraphError::JoinError(err))?;
+
+        let bad_apple = results.into_iter().find(|result| result.is_err());
+
+        match bad_apple {
+            None => (),
+            Some(bad) => bad?,
+        };
+
+        Ok(())
     }
 }

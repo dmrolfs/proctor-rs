@@ -6,7 +6,7 @@ pub use self::sink::*;
 pub use self::source::*;
 pub use self::through::*;
 
-use anyhow::Result;
+use crate::ProctorResult;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt;
@@ -19,9 +19,9 @@ use std::fmt;
 #[async_trait]
 pub trait Stage: fmt::Debug + Send + Sync {
     fn name(&self) -> &str;
-    async fn check(&self) -> Result<()>;
-    async fn run(&mut self) -> Result<()>;
-    async fn close(self: Box<Self>) -> Result<()>;
+    async fn check(&self) -> ProctorResult<()>;
+    async fn run(&mut self) -> ProctorResult<()>;
+    async fn close(self: Box<Self>) -> ProctorResult<()>;
 }
 
 pub trait WithApi {

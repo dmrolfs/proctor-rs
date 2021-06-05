@@ -5,8 +5,7 @@ use crate::error::DecisionError;
 use crate::error::PolicyError;
 use crate::graph::stage::{Stage, ThroughStage, WithApi, WithMonitor};
 use crate::graph::{stage, Connect, Graph, Inlet, Outlet, Port, SinkShape, SourceShape};
-use crate::{AppData, ProctorContext};
-use anyhow::Result;
+use crate::{AppData, ProctorContext, ProctorResult};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use oso::{Oso, PolarValue, ToPolar};
@@ -183,19 +182,19 @@ impl<In: AppData, Out: AppData, C: ProctorContext> Stage for Decision<In, Out, C
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> Result<()> {
+    async fn check(&self) -> ProctorResult<()> {
         self.do_check().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run decision phase", skip(self))]
-    async fn run(&mut self) -> Result<()> {
+    async fn run(&mut self) -> ProctorResult<()> {
         self.do_run().await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn close(mut self: Box<Self>) -> Result<()> {
+    async fn close(mut self: Box<Self>) -> ProctorResult<()> {
         self.do_close().await?;
         Ok(())
     }
@@ -207,14 +206,20 @@ impl<In: AppData, Out: AppData, C: ProctorContext> Decision<In, Out, C> {
     async fn do_check(&self) -> Result<(), DecisionError> {
         self.inlet.check_attachment().await?;
         self.context_inlet.check_attachment().await?;
-        self.inner_stage.check().await?;
+        self.inner_stage
+            .check()
+            .await
+            .map_err(|err| DecisionError::StageError(err.into()))?;
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
     #[inline]
     async fn do_run(&mut self) -> Result<(), DecisionError> {
-        self.inner_stage.run().await?;
+        self.inner_stage
+            .run()
+            .await
+            .map_err(|err| DecisionError::StageError(err.into()))?;
         Ok(())
     }
 
@@ -224,7 +229,10 @@ impl<In: AppData, Out: AppData, C: ProctorContext> Decision<In, Out, C> {
         self.inlet.close().await;
         self.context_inlet.close().await;
         self.outlet.close().await;
-        self.inner_stage.close().await?;
+        self.inner_stage
+            .close()
+            .await
+            .map_err(|err| DecisionError::StageError(err.into()))?;
         Ok(())
     }
 }

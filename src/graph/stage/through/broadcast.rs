@@ -1,6 +1,5 @@
 use crate::graph::{Inlet, Outlet, OutletsShape, Port, SinkShape, Stage, UniformFanOutShape};
-use crate::AppData;
-use anyhow::Result;
+use crate::{AppData, ProctorResult};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt::{self, Debug};
@@ -115,7 +114,7 @@ impl<T: AppData + Clone> Stage for Broadcast<T> {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> Result<()> {
+    async fn check(&self) -> ProctorResult<()> {
         self.inlet.check_attachment().await?;
         for outlet in self.outlets.iter() {
             outlet.check_attachment().await?;
@@ -124,7 +123,7 @@ impl<T: AppData + Clone> Stage for Broadcast<T> {
     }
 
     #[tracing::instrument(level = "info", name = "run broadcast through", skip(self))]
-    async fn run(&mut self) -> Result<()> {
+    async fn run(&mut self) -> ProctorResult<()> {
         let outlets = &self.outlets;
         while let Some(item) = self.inlet.recv().await {
             for o in outlets.iter() {
@@ -135,7 +134,7 @@ impl<T: AppData + Clone> Stage for Broadcast<T> {
         Ok(())
     }
 
-    async fn close(mut self: Box<Self>) -> Result<()> {
+    async fn close(mut self: Box<Self>) -> ProctorResult<()> {
         tracing::trace!("closing broadcast-through ports.");
         self.inlet.close().await;
         for o in self.outlets.iter_mut() {

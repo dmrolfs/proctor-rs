@@ -2,8 +2,7 @@ use crate::elements::{make_from_telemetry, FromTelemetryShape, Telemetry};
 use crate::error::CollectionError;
 use crate::graph::stage::Stage;
 use crate::graph::{Inlet, Outlet, Port, SourceShape};
-use crate::AppData;
-use anyhow::Result;
+use crate::{AppData, ProctorResult};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use serde::de::DeserializeOwned;
@@ -64,17 +63,17 @@ impl<T: AppData> Stage for SubscriptionChannel<T> {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn check(&self) -> Result<()> {
+    async fn check(&self) -> ProctorResult<()> {
         self.do_check().await?;
         Ok(())
     }
 
-    async fn run(&mut self) -> Result<()> {
+    async fn run(&mut self) -> ProctorResult<()> {
         self.do_run().await?;
         Ok(())
     }
 
-    async fn close(mut self: Box<Self>) -> Result<()> {
+    async fn close(mut self: Box<Self>) -> ProctorResult<()> {
         self.do_close().await?;
         Ok(())
     }
@@ -86,7 +85,10 @@ impl<T: AppData> SubscriptionChannel<T> {
         self.subscription_receiver.check_attachment().await?;
         self.outlet.check_attachment().await?;
         if let Some(ref inner) = self.inner_stage {
-            inner.check().await?;
+            inner
+                .check()
+                .await
+                .map_err(|err| CollectionError::StageError(err.into()))?;
         }
         Ok(())
     }
@@ -95,7 +97,10 @@ impl<T: AppData> SubscriptionChannel<T> {
     async fn do_run(&mut self) -> Result<(), CollectionError> {
         match self.inner_stage.as_mut() {
             Some(inner) => {
-                inner.run().await?;
+                inner
+                    .run()
+                    .await
+                    .map_err(|err| CollectionError::StageError(err.into()))?;
                 Ok(())
             }
 
@@ -108,7 +113,10 @@ impl<T: AppData> SubscriptionChannel<T> {
         tracing::info!("closing subscription_channel.");
         self.subscription_receiver.close().await;
         if let Some(inner) = self.inner_stage.take() {
-            inner.close().await?;
+            inner
+                .close()
+                .await
+                .map_err(|err| CollectionError::StageError(err.into()))?;
         }
         self.outlet.close().await;
         Ok(())
