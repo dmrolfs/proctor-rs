@@ -7,7 +7,8 @@ use std::fmt::{self, Debug};
 
 /// The FilterMap stage both filters and maps on items.
 ///
-/// The stage passes only the values for which the supplied closure returns Some(value).
+/// The stage passes only the values for which the supplied closure returns Some(value), and None
+/// values are not passed through; i.e., blocked.
 ///
 /// FilterMap can be used to make chains of filter and map more concise.
 ///

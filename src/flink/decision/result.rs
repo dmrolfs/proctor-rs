@@ -19,14 +19,16 @@ where
     S: Into<String>,
     F: FnMut(&PolicyOutcome<T, C>) -> Benchmark + Send + Sync + 'static,
 {
-    stage::Map::new(name, move |policy_result: PolicyOutcome<T, C>| {
+    let filter = stage::FilterMap::new(name, move |policy_result: PolicyOutcome<T, C>| {
         if let Some(TelemetryValue::Text(direction)) = policy_result.bindings.get(DECISION_BINDING) {
             let benchmark = extract_benchmark(&policy_result);
             DecisionResult::new(policy_result.item, benchmark, direction)
         } else {
-            DecisionResult::None
+            None
         }
-    })
+    });
+
+    filter.with_block_logging()
 }
 
 const T_ITEM: &'static str = "item";
@@ -40,18 +42,17 @@ where
 {
     ScaleUp(T, Benchmark),
     ScaleDown(T, Benchmark),
-    None,
 }
 
 impl<T> DecisionResult<T>
 where
     T: Debug + Clone + PartialEq,
 {
-    pub fn new(item: T, benchmark: Benchmark, decision_rep: &str) -> Self {
+    pub fn new(item: T, benchmark: Benchmark, decision_rep: &str) -> Option<Self> {
         match decision_rep {
-            SCALE_UP => DecisionResult::ScaleUp(item, benchmark),
-            SCALE_DOWN => DecisionResult::ScaleDown(item, benchmark),
-            _ => DecisionResult::None,
+            SCALE_UP => Some(DecisionResult::ScaleUp(item, benchmark)),
+            SCALE_DOWN => Some(DecisionResult::ScaleDown(item, benchmark)),
+            _ => None,
         }
     }
 }
@@ -72,7 +73,6 @@ where
                 T_BENCHMARK.to_string() => benchmark.to_telemetry(),
                 T_SCALE_DECISION.to_string() => SCALE_DOWN.to_telemetry(),
             }),
-            DecisionResult::None => TelemetryValue::Unit,
         }
     }
 }
@@ -107,26 +107,22 @@ where
                 Err(DecisionError::DataNotFound(T_SCALE_DECISION.to_string()))
             }?;
 
-            let result = match decision.as_str() {
-                SCALE_UP => DecisionResult::ScaleUp(item, benchmark),
-                SCALE_DOWN => DecisionResult::ScaleDown(item, benchmark),
-                _ => DecisionResult::None,
-            };
-
-            Ok(result)
+            match decision.as_str() {
+                SCALE_UP => Ok(DecisionResult::ScaleUp(item, benchmark)),
+                SCALE_DOWN => Ok(DecisionResult::ScaleDown(item, benchmark)),
+                rep =>  Err(DecisionError::ParseError(rep.to_string())),
+            }
         } else if let TelemetryValue::Unit = value {
-            Ok(DecisionResult::None)
+            Err(crate::error::TelemetryError::TypeError {
+                expected: format!("telemetry {} value", TypeExpectation::Table),
+                actual: Some(format!("{:?}", value))
+            }.into())
         } else {
             //todo resolves into DecisionError::Other. Improve precision?
             Err(crate::error::TelemetryError::TypeError {
-                expected: format!(
-                    "telemetry {} or {} value",
-                    TypeExpectation::Table,
-                    TypeExpectation::Unit
-                ),
+                expected: format!("telemetry {} value", TypeExpectation::Table),
                 actual: Some(format!("{:?}", value)),
-            }
-            .into())
+            }.into())
         }
     }
 }

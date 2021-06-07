@@ -89,6 +89,9 @@ pub enum DecisionError {
     #[error("data not found at key, {0}")]
     DataNotFound(String),
 
+    #[error("failed to parse decision from {0}")]
+    ParseError(String),
+
     #[error("{0}")]
     TelemetryError(#[from] TelemetryError),
 

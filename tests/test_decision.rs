@@ -552,7 +552,6 @@ async fn test_decision_common() -> anyhow::Result<()> {
     let actual_vals: Vec<(f32, Benchmark, &'static str)> = actual
         .into_iter()
         .map(|a| match a {
-            DecisionResult::None => (0.0, Benchmark::ZERO, "none"),
             DecisionResult::ScaleUp(item, benchmark) => (item.flow.input_messages_per_sec, benchmark, "up"),
             DecisionResult::ScaleDown(item, benchmark) => (item.flow.input_messages_per_sec, benchmark, "down"),
         })

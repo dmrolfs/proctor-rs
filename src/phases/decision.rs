@@ -14,7 +14,7 @@ use tokio::sync::broadcast;
 
 pub struct Decision<In, Out, C> {
     name: String,
-    inner_stage: Box<dyn ThroughStage<In, Out>>,
+    inner_policy_transform: Box<dyn ThroughStage<In, Out>>,
     pub context_inlet: Inlet<C>,
     inlet: Inlet<In>,
     outlet: Outlet<Out>,
@@ -74,10 +74,10 @@ impl<In: AppData + ToPolar + Clone, Out: AppData, C: ProctorContext> Decision<In
 
         Self {
             name,
-            inner_stage: Box::new(inner_stage),
+            inner_policy_transform: Box::new(inner_stage),
             context_inlet,
-            inlet: inner_inlet,   //inlet,
-            outlet: inner_outlet, //outlet
+            inlet: inner_inlet,
+            outlet: inner_outlet,
             tx_policy_api,
             tx_policy_monitor,
         }
@@ -147,7 +147,7 @@ impl<In, Out, C: Debug> Debug for Decision<In, Out, C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Decision")
             .field("name", &self.name)
-            .field("inner_stage", &self.inner_stage)
+            .field("inner_stage", &self.inner_policy_transform)
             .field("context_inlet", &self.context_inlet)
             .field("inlet", &self.inlet)
             .field("outlet", &self.outlet)
@@ -206,7 +206,7 @@ impl<In: AppData, Out: AppData, C: ProctorContext> Decision<In, Out, C> {
     async fn do_check(&self) -> Result<(), DecisionError> {
         self.inlet.check_attachment().await?;
         self.context_inlet.check_attachment().await?;
-        self.inner_stage
+        self.inner_policy_transform
             .check()
             .await
             .map_err(|err| DecisionError::StageError(err.into()))?;
@@ -216,7 +216,7 @@ impl<In: AppData, Out: AppData, C: ProctorContext> Decision<In, Out, C> {
 
     #[inline]
     async fn do_run(&mut self) -> Result<(), DecisionError> {
-        self.inner_stage
+        self.inner_policy_transform
             .run()
             .await
             .map_err(|err| DecisionError::StageError(err.into()))?;
@@ -229,7 +229,7 @@ impl<In: AppData, Out: AppData, C: ProctorContext> Decision<In, Out, C> {
         self.inlet.close().await;
         self.context_inlet.close().await;
         self.outlet.close().await;
-        self.inner_stage
+        self.inner_policy_transform
             .close()
             .await
             .map_err(|err| DecisionError::StageError(err.into()))?;
