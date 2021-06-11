@@ -11,7 +11,6 @@ use proctor::elements::{
 use proctor::flink::decision::context::FlinkDecisionContext;
 use proctor::flink::decision::policy::DecisionPolicy;
 use proctor::flink::decision::result::{make_decision_transform, DecisionResult};
-use proctor::flink::perf::Benchmark;
 use proctor::flink::{FlowMetrics, MetricCatalog, UtilizationMetrics};
 use proctor::graph::stage::{self, ThroughStage, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, Inlet, SinkShape, SourceShape, UniformFanInShape};
@@ -484,13 +483,7 @@ async fn test_decision_common() -> anyhow::Result<()> {
         Decision::<MetricCatalog, DecisionResult<MetricCatalog>, FlinkDecisionContext>::with_transform(
             "common_decision",
             policy,
-            make_decision_transform(
-                "common_decision_transform",
-                |result: &PolicyOutcome<MetricCatalog, FlinkDecisionContext>| Benchmark {
-                    nr_task_managers: result.context.nr_task_managers,
-                    records_out_per_sec: result.item.flow.records_out_per_sec,
-                },
-            ),
+            make_decision_transform("common_decision_transform"),
         )
         .await;
     let decision_context_inlet = decision_stage.context_inlet();
@@ -549,34 +542,18 @@ async fn test_decision_common() -> anyhow::Result<()> {
 
     let actual: Vec<DecisionResult<MetricCatalog>> = flow.close().await?;
     tracing::warn!(?actual, "DMR: 08. Verify final accumulation...");
-    let actual_vals: Vec<(f32, Benchmark, &'static str)> = actual
+    let actual_vals: Vec<(f32, &'static str)> = actual
         .into_iter()
         .map(|a| match a {
-            DecisionResult::ScaleUp(item, benchmark) => (item.flow.input_messages_per_sec, benchmark, "up"),
-            DecisionResult::ScaleDown(item, benchmark) => (item.flow.input_messages_per_sec, benchmark, "down"),
+            DecisionResult::ScaleUp(item) => (item.flow.input_messages_per_sec, "up"),
+            DecisionResult::ScaleDown(item) => (item.flow.input_messages_per_sec, "down"),
+            DecisionResult::NoAction(item) => (item.flow.input_messages_per_sec, "no action"),
         })
         .collect();
 
     assert_eq!(
         actual_vals,
-        vec![
-            (
-                std::f32::consts::PI,
-                Benchmark {
-                    nr_task_managers: 4,
-                    records_out_per_sec: 0.0,
-                },
-                "up"
-            ),
-            (
-                std::f32::consts::LN_2,
-                Benchmark {
-                    nr_task_managers: 4,
-                    records_out_per_sec: 0.0,
-                },
-                "down"
-            ),
-        ]
+        vec![(std::f32::consts::PI, "up"), (std::f32::consts::LN_2, "down"),]
     );
 
     Ok(())

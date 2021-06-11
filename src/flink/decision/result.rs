@@ -1,6 +1,5 @@
 use crate::elements::{PolicyOutcome, TelemetryValue, ToTelemetry};
 use crate::error::{DecisionError, TelemetryError, TypeExpectation};
-use crate::flink::perf::Benchmark;
 use crate::graph::stage::{self, ThroughStage};
 use crate::{AppData, ProctorContext};
 use std::convert::TryFrom;
@@ -9,30 +8,24 @@ use std::fmt::Debug;
 pub const DECISION_BINDING: &'static str = "direction";
 pub const SCALE_UP: &'static str = "up";
 pub const SCALE_DOWN: &'static str = "down";
+pub const NO_ACTION: &'static str = "no action";
 
-pub fn make_decision_transform<T, C, S, F>(
-    name: S, mut extract_benchmark: F,
-) -> impl ThroughStage<PolicyOutcome<T, C>, DecisionResult<T>>
+pub fn make_decision_transform<T, C, S>(name: S) -> impl ThroughStage<PolicyOutcome<T, C>, DecisionResult<T>>
 where
     T: AppData + Clone + PartialEq,
     C: ProctorContext,
     S: Into<String>,
-    F: FnMut(&PolicyOutcome<T, C>) -> Benchmark + Send + Sync + 'static,
 {
-    let filter = stage::FilterMap::new(name, move |policy_result: PolicyOutcome<T, C>| {
+    stage::Map::new(name, move |policy_result: PolicyOutcome<T, C>| {
         if let Some(TelemetryValue::Text(direction)) = policy_result.bindings.get(DECISION_BINDING) {
-            let benchmark = extract_benchmark(&policy_result);
-            DecisionResult::new(policy_result.item, benchmark, direction)
+            DecisionResult::new(policy_result.item, direction)
         } else {
-            None
+            DecisionResult::NoAction(policy_result.item)
         }
-    });
-
-    filter.with_block_logging()
+    })
 }
 
 const T_ITEM: &'static str = "item";
-const T_BENCHMARK: &'static str = "benchmark";
 const T_SCALE_DECISION: &'static str = "scale_decision";
 
 #[derive(Debug, Clone, PartialEq)]
@@ -40,19 +33,20 @@ pub enum DecisionResult<T>
 where
     T: Debug + Clone + PartialEq,
 {
-    ScaleUp(T, Benchmark),
-    ScaleDown(T, Benchmark),
+    ScaleUp(T),
+    ScaleDown(T),
+    NoAction(T),
 }
 
 impl<T> DecisionResult<T>
 where
     T: Debug + Clone + PartialEq,
 {
-    pub fn new(item: T, benchmark: Benchmark, decision_rep: &str) -> Option<Self> {
+    pub fn new(item: T, decision_rep: &str) -> Self {
         match decision_rep {
-            SCALE_UP => Some(DecisionResult::ScaleUp(item, benchmark)),
-            SCALE_DOWN => Some(DecisionResult::ScaleDown(item, benchmark)),
-            _ => None,
+            SCALE_UP => DecisionResult::ScaleUp(item),
+            SCALE_DOWN => DecisionResult::ScaleDown(item),
+            _ => DecisionResult::NoAction(item),
         }
     }
 }
@@ -63,15 +57,17 @@ where
 {
     fn into(self) -> TelemetryValue {
         match self {
-            DecisionResult::ScaleUp(item, benchmark) => TelemetryValue::Table(maplit::hashmap! {
+            DecisionResult::ScaleUp(item) => TelemetryValue::Table(maplit::hashmap! {
                 T_ITEM.to_string() => item.to_telemetry(),
-                T_BENCHMARK.to_string() => benchmark.to_telemetry(),
                 T_SCALE_DECISION.to_string() => SCALE_UP.to_telemetry(),
             }),
-            DecisionResult::ScaleDown(item, benchmark) => TelemetryValue::Table(maplit::hashmap! {
+            DecisionResult::ScaleDown(item) => TelemetryValue::Table(maplit::hashmap! {
                 T_ITEM.to_string() => item.to_telemetry(),
-                T_BENCHMARK.to_string() => benchmark.to_telemetry(),
                 T_SCALE_DECISION.to_string() => SCALE_DOWN.to_telemetry(),
+            }),
+            DecisionResult::NoAction(item) => TelemetryValue::Table(maplit::hashmap! {
+                T_ITEM.to_string() => item.to_telemetry(),
+                T_SCALE_DECISION.to_string() => NO_ACTION.to_telemetry(),
             }),
         }
     }
@@ -95,12 +91,6 @@ where
                 Err(DecisionError::DataNotFound(T_ITEM.to_string()))
             }?;
 
-            let benchmark = if let Some(b) = table.get(T_BENCHMARK) {
-                Benchmark::try_from(b.clone()).map_err(|err| err.into())
-            } else {
-                Err(DecisionError::DataNotFound(T_BENCHMARK.to_string()))
-            }?;
-
             let decision = if let Some(d) = table.get(T_SCALE_DECISION) {
                 String::try_from(d.clone()).map_err(|err| err.into())
             } else {
@@ -108,21 +98,23 @@ where
             }?;
 
             match decision.as_str() {
-                SCALE_UP => Ok(DecisionResult::ScaleUp(item, benchmark)),
-                SCALE_DOWN => Ok(DecisionResult::ScaleDown(item, benchmark)),
-                rep =>  Err(DecisionError::ParseError(rep.to_string())),
+                SCALE_UP => Ok(DecisionResult::ScaleUp(item)),
+                SCALE_DOWN => Ok(DecisionResult::ScaleDown(item)),
+                rep => Err(DecisionError::ParseError(rep.to_string())),
             }
         } else if let TelemetryValue::Unit = value {
             Err(crate::error::TelemetryError::TypeError {
                 expected: format!("telemetry {} value", TypeExpectation::Table),
-                actual: Some(format!("{:?}", value))
-            }.into())
+                actual: Some(format!("{:?}", value)),
+            }
+            .into())
         } else {
             //todo resolves into DecisionError::Other. Improve precision?
             Err(crate::error::TelemetryError::TypeError {
                 expected: format!("telemetry {} value", TypeExpectation::Table),
                 actual: Some(format!("{:?}", value)),
-            }.into())
+            }
+            .into())
         }
     }
 }

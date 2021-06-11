@@ -71,6 +71,7 @@ cast_trait_object = "0"
 serde_with = { version = "1.8.1", features = ["chrono", "json", "macros"] }
 maplit = "1"
 regex = "1.4.6"
+itertools = "0"
 
 [dev-dependencies]
 serde_test = "1"
@@ -78,7 +79,6 @@ tokio-test = "0"
 criterion = { version = "0", features = ["async_tokio", "html_reports"] }
 pprof = {version = "0", features = ["flamegraph"]}
 static_assertions = "1"
-itertools = "0"
 pretty_assertions = "0"
 
 

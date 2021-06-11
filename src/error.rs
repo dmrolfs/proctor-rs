@@ -65,6 +65,12 @@ pub enum CollectionError {
     #[error("Attempt to send via a closed subscription channel: {0}")]
     ClosedSubscription(String),
 
+    #[error("data not found at key, {0}")]
+    DataNotFound(String),
+
+    #[error("failed to parse decision from {0}")]
+    ParseError(String),
+
     #[error("{0}")]
     TelemetryError(#[from] TelemetryError),
 
@@ -77,6 +83,15 @@ pub enum CollectionError {
 
 #[derive(Debug, Error)]
 pub enum EligibilityError {
+    #[error("data not found at key, {0}")]
+    DataNotFound(String),
+
+    #[error("failed to parse decision from {0}")]
+    ParseError(String),
+
+    #[error("{0}")]
+    TelemetryError(#[from] TelemetryError),
+
     #[error("{0}")]
     PortError(#[from] PortError),
 
@@ -104,6 +119,15 @@ pub enum DecisionError {
 
 #[derive(Debug, Error)]
 pub enum PlanError {
+    #[error("data not found at key, {0}")]
+    DataNotFound(String),
+
+    #[error("failed to parse decision from {0}")]
+    ParseError(String),
+
+    #[error("{0}")]
+    TelemetryError(#[from] TelemetryError),
+
     #[error("{0}")]
     PortError(#[from] PortError),
 
