@@ -51,7 +51,7 @@ impl Telemetry {
         let mut serializer = flexbuffers::FlexbufferSerializer::new();
         from.serialize(&mut serializer)?;
         let data = serializer.take_buffer();
-        let reader = flexbuffers::Reader::get_root(&data)?;
+        let reader = flexbuffers::Reader::get_root(&*data)?;
         let root = TelemetryValue::deserialize(reader)?;
         Ok(Telemetry(root))
     }
