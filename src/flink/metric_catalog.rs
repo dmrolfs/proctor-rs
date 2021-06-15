@@ -1,12 +1,18 @@
 use crate::elements::{telemetry, TelemetryValue};
 use crate::error::TelemetryError;
+use ::serde_with::{serde_as, TimestampMilliSeconds};
+use chrono::{DateTime, Utc};
 use oso::PolarClass;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::ops::Add;
 
-#[derive(PolarClass, Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
+#[serde_as]
+#[derive(PolarClass, Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct MetricCatalog {
+    #[serde_as(as = "TimestampMilliSeconds")]
+    pub timestamp: DateTime<Utc>,
+
     #[polar(attribute)]
     #[serde(flatten)]
     pub flow: FlowMetrics,
@@ -22,47 +28,48 @@ pub struct MetricCatalog {
 
 #[derive(PolarClass, Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
 pub struct FlowMetrics {
-    // this will need to be in context:  historical_input_messages_per_sec: VecDeque<(f32, DateTime<Utc>)>,
+    // this will need to be in context:  historical_input_messages_per_sec: VecDeque<(f64, DateTime<Utc>)>,
     #[polar(attribute)]
-    pub input_messages_per_sec: f32,
+    pub input_messages_per_sec: f64,
 
     #[polar(attribute)]
-    pub input_consumer_lag: f32,
+    pub input_consumer_lag: f64,
 
     #[polar(attribute)]
-    pub records_out_per_sec: f32,
+    pub records_out_per_sec: f64,
 
     #[polar(attribute)]
-    pub max_message_latency: f32,
+    pub max_message_latency: f64,
 
     #[polar(attribute)]
-    pub net_in_utilization: f32,
+    pub net_in_utilization: f64,
 
     #[polar(attribute)]
-    pub net_out_utilization: f32,
+    pub net_out_utilization: f64,
 
     #[polar(attribute)]
-    pub sink_health_metrics: f32,
+    pub sink_health_metrics: f64,
 
     #[polar(attribute)]
-    pub task_nr_records_in_per_sec: f32,
+    pub task_nr_records_in_per_sec: f64,
 
     #[polar(attribute)]
-    pub task_nr_records_out_per_sec: f32,
+    pub task_nr_records_out_per_sec: f64,
 }
 
 #[derive(PolarClass, Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
 pub struct UtilizationMetrics {
     #[polar(attribute)]
-    pub task_cpu_load: f32,
+    pub task_cpu_load: f64,
 
     #[polar(attribute)]
-    pub network_io_utilization: f32,
+    pub network_io_utilization: f64,
 }
 
 impl MetricCatalog {
-    pub fn new(custom: telemetry::Table) -> Self {
+    pub fn new(timestamp: DateTime<Utc>, custom: telemetry::Table) -> Self {
         Self {
+            timestamp,
             flow: FlowMetrics::default(),
             utilization: UtilizationMetrics::default(),
             custom,
@@ -143,23 +150,24 @@ mod tests {
             "otis".to_string() => "Otis".to_telemetry(),
             "bar".to_string() => "Neo".to_telemetry(),
         };
-        let data = MetricCatalog::new(cdata);
-        assert_eq!(data.custom::<i32>("foo").unwrap().unwrap(), 17_i32);
+        let data = MetricCatalog::new(Utc::now(), cdata);
+        assert_eq!(data.custom::<i64>("foo").unwrap().unwrap(), 17_i64);
         assert_eq!(data.custom::<f64>("foo").unwrap().unwrap(), 17.0_f64);
         assert_eq!(data.custom::<String>("otis").unwrap().unwrap(), "Otis".to_string());
         assert_eq!(data.custom::<Bar>("bar").unwrap().unwrap(), Bar("Neo".to_string()));
         assert_eq!(data.custom::<String>("bar").unwrap().unwrap(), "Neo".to_string());
-        assert!(data.custom::<i32>("zed").is_none());
+        assert!(data.custom::<i64>("zed").is_none());
     }
 
     #[test]
     fn test_metric_add() {
-        let data = MetricCatalog::default();
+        let ts = Utc::now();
+        let data = MetricCatalog::new(ts.clone(), std::collections::HashMap::default());
         let am1 = maplit::hashmap! {
             "foo.1".to_string() => "f-1".to_telemetry(),
             "bar.1".to_string() => "b-1".to_telemetry(),
         };
-        let a1 = MetricCatalog::new(am1.clone());
+        let a1 = MetricCatalog::new(ts.clone(), am1.clone());
         let d1 = data.clone() + a1.clone();
         assert_eq!(d1.custom, am1);
 
@@ -167,7 +175,7 @@ mod tests {
             "foo.2".to_string() => "f-2".to_telemetry(),
             "bar.2".to_string() => "b-2".to_telemetry(),
         };
-        let a2 = MetricCatalog::new(am2.clone());
+        let a2 = MetricCatalog::new(ts.clone(), am2.clone());
         let d2 = d1.clone() + a2.clone();
         let mut exp2 = am1.clone();
         exp2.extend(am2.clone());
@@ -175,11 +183,11 @@ mod tests {
     }
 
     // #[test]
-    // fn test_metric_to_f32() {
-    //     let expected = 3.14159_f32;
-    //     let m: Metric<f32> = Metric::new("pi", expected);
+    // fn test_metric_to_f64() {
+    //     let expected = 3.14159_f64;
+    //     let m: Metric<f64> = Metric::new("pi", expected);
     //
-    //     let actual: f32 = m.into();
+    //     let actual: f64 = m.into();
     //     assert_eq!(actual, expected);
     // }
 }

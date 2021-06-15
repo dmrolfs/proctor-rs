@@ -71,8 +71,9 @@ serde_with = { version = "*", features = ["chrono", "json", "macros"] }
 maplit = "*"
 regex = "*"
 itertools = "*"
-smartcore = { version = "*", features=["nalgebra-bindings"]}
-nalgebra = "*"
+#smartcore = { version = "*", features=["nalgebra-bindings"]}
+#nalgebra = ">=0.27.1"
+statrs = "*"
 
 [dev-dependencies]
 serde_test = "1"

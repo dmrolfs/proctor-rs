@@ -298,8 +298,9 @@ where
     }
 }
 
-fn make_test_item(input_messages_per_sec: f32, inbox_lag: f32) -> MetricCatalog {
+fn make_test_item(timestamp: DateTime<Utc>, input_messages_per_sec: f64, inbox_lag: f64) -> MetricCatalog {
     MetricCatalog {
+        timestamp,
         flow: FlowMetrics {
             input_messages_per_sec,
             input_consumer_lag: inbox_lag,
@@ -327,6 +328,7 @@ async fn test_decision_carry_policy_result() -> anyhow::Result<()> {
 
     let telemetry_subscription = TelemetrySubscription::new("measurements")
         .with_required_fields(maplit::hashset! {
+            "timestamp",
             "input_messages_per_sec",
             "input_consumer_lag",
             "records_out_per_sec",
@@ -386,8 +388,8 @@ async fn test_decision_carry_policy_result() -> anyhow::Result<()> {
     let event = flow.recv_policy_event().await?;
     assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
 
-    // let ts = *DT_1 + chrono::Duration::hours(1);
-    let item = make_test_item(std::f32::consts::PI, 1.0);
+    let ts = *DT_1 + chrono::Duration::hours(1);
+    let item = make_test_item(ts, std::f64::consts::PI, 1.0);
     tracing::warn!(?item, "DMR-A.1: created item to push.");
     let telemetry = Telemetry::try_from(&item);
     tracing::warn!(?item, ?telemetry, "DMR-A.2: converted item to telemetry and pushing...");
@@ -398,14 +400,14 @@ async fn test_decision_carry_policy_result() -> anyhow::Result<()> {
             .await?
     );
 
-    let item = make_test_item(std::f32::consts::E, 2.0);
+    let item = make_test_item(ts, std::f64::consts::E, 2.0);
     let telemetry = Telemetry::try_from(&item);
     flow.push_telemetry(telemetry?).await?;
     let event = flow.recv_policy_event().await?;
     assert!(matches!(event, elements::PolicyFilterEvent::ItemBlocked(_)));
     tracing::warn!(?event, "DMR-C: item dropped confirmed");
 
-    let item = make_test_item(std::f32::consts::LN_2, 1.0);
+    let item = make_test_item(ts, std::f64::consts::LN_2, 1.0);
     tracing::warn!(?item, "DMR-D.1: created item to push.");
     let telemetry = Telemetry::try_from(&item);
     tracing::warn!(?item, ?telemetry, "DMR-D.2: converted item to telemetry and pushing...");
@@ -418,7 +420,7 @@ async fn test_decision_carry_policy_result() -> anyhow::Result<()> {
 
     let actual: Vec<PolicyOutcome<MetricCatalog, FlinkDecisionContext>> = flow.close().await?;
     tracing::warn!(?actual, "DMR: 08. Verify final accumulation...");
-    let actual_vals: Vec<(f32, Option<String>)> = actual
+    let actual_vals: Vec<(f64, Option<String>)> = actual
         .into_iter()
         .map(|a| {
             let direction = a
@@ -434,8 +436,8 @@ async fn test_decision_carry_policy_result() -> anyhow::Result<()> {
     assert_eq!(
         actual_vals,
         vec![
-            (std::f32::consts::PI, Some("up".to_string())),
-            (std::f32::consts::LN_2, Some("down".to_string())),
+            (std::f64::consts::PI, Some("up".to_string())),
+            (std::f64::consts::LN_2, Some("down".to_string())),
         ]
     );
 
@@ -450,6 +452,7 @@ async fn test_decision_common() -> anyhow::Result<()> {
 
     let telemetry_subscription = TelemetrySubscription::new("measurements")
         .with_required_fields(maplit::hashset! {
+            "timestamp",
             "input_messages_per_sec",
             "input_consumer_lag",
             "records_out_per_sec",
@@ -510,26 +513,26 @@ async fn test_decision_common() -> anyhow::Result<()> {
     let event = flow.recv_policy_event().await?;
     assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
 
-    // let ts = *DT_1 + chrono::Duration::hours(1);
-    let item = make_test_item(std::f32::consts::PI, 1.0);
+    let ts = *DT_1 + chrono::Duration::hours(1);
+    let item = make_test_item(ts, std::f64::consts::PI, 1.0);
     tracing::warn!(?item, "DMR-A.1: created item to push.");
     let telemetry = Telemetry::try_from(&item);
     tracing::warn!(?item, ?telemetry, "DMR-A.2: converted item to telemetry and pushing...");
     flow.push_telemetry(telemetry?).await?;
     tracing::info!("waiting for item to reach sink...");
     assert!(
-        flow.check_sink_accumulation("first", Duration::from_millis(250), |acc| acc.len() == 1)
+        flow.check_sink_accumulation("first", Duration::from_millis(500), |acc| acc.len() == 1)
             .await?
     );
 
-    let item = make_test_item(std::f32::consts::E, 2.0);
+    let item = make_test_item(ts, std::f64::consts::E, 2.0);
     let telemetry = Telemetry::try_from(&item);
     flow.push_telemetry(telemetry?).await?;
     let event = flow.recv_policy_event().await?;
     assert!(matches!(event, elements::PolicyFilterEvent::ItemBlocked(_)));
     tracing::warn!(?event, "DMR-C: item dropped confirmed");
 
-    let item = make_test_item(std::f32::consts::LN_2, 1.0);
+    let item = make_test_item(ts, std::f64::consts::LN_2, 1.0);
     tracing::warn!(?item, "DMR-D.1: created item to push.");
     let telemetry = Telemetry::try_from(&item);
     tracing::warn!(?item, ?telemetry, "DMR-D.2: converted item to telemetry and pushing...");
@@ -542,7 +545,7 @@ async fn test_decision_common() -> anyhow::Result<()> {
 
     let actual: Vec<DecisionResult<MetricCatalog>> = flow.close().await?;
     tracing::warn!(?actual, "DMR: 08. Verify final accumulation...");
-    let actual_vals: Vec<(f32, &'static str)> = actual
+    let actual_vals: Vec<(f64, &'static str)> = actual
         .into_iter()
         .map(|a| match a {
             DecisionResult::ScaleUp(item) => (item.flow.input_messages_per_sec, "up"),
@@ -553,7 +556,7 @@ async fn test_decision_common() -> anyhow::Result<()> {
 
     assert_eq!(
         actual_vals,
-        vec![(std::f32::consts::PI, "up"), (std::f32::consts::LN_2, "down"),]
+        vec![(std::f64::consts::PI, "up"), (std::f64::consts::LN_2, "down"),]
     );
 
     Ok(())

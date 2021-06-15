@@ -131,6 +131,9 @@ pub enum PlanError {
     #[error("{0}")]
     PortError(#[from] PortError),
 
+    #[error("0")]
+    ForecastError(anyhow::Error),
+
     #[error("{0}")]
     StageError(#[from] anyhow::Error),
 }
