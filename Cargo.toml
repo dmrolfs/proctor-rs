@@ -72,8 +72,9 @@ maplit = "*"
 regex = "*"
 itertools = "*"
 #smartcore = { version = "*", features=["nalgebra-bindings"]}
-#nalgebra = ">=0.27.1"
+nalgebra = ">=0.27.1"
 statrs = "*"
+num-traits = "*"
 
 [dev-dependencies]
 serde_test = "1"
@@ -82,6 +83,7 @@ criterion = { version = "0", features = ["async_tokio", "html_reports"] }
 pprof = {version = "0", features = ["flamegraph"]}
 static_assertions = "1"
 pretty_assertions = "0"
+approx = "*"
 
 
 [[bench]]

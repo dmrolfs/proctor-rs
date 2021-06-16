@@ -2,7 +2,7 @@ use statrs::statistics::Statistics;
 use std::collections::VecDeque;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Peak {
+pub enum Anomaly {
     Low,
     High,
 }
@@ -45,6 +45,10 @@ pub enum Peak {
 /// thereby also determines how often the algorithm signals. Examine your own data and choose a
 /// sensible threshold that makes the algorithm signal when you want it to (some trial-and-error
 /// might be needed here to get to a good threshold for your purpose).
+///
+/// Brakel, J.P.G. van (2014). "Robust peak detection algorithm using z-scores".
+/// Stack Overflow. Available at: https://stackoverflow.com/questions/22583391/peak-signal-detection-in-realtime-timeseries-data/22640362#22640362
+/// (version: 2020-11-08).
 #[derive(Debug)]
 pub struct SignalDetector {
     threshold: f64,
@@ -70,10 +74,7 @@ impl SignalDetector {
     /// 1 gives the signal full influence that other data points have (least robust option).
     /// For non-stationary data, the influence option should be set somewhere between 0 and 1.
     ///
-    pub fn new(
-        lag: usize,
-        threshold: f64,
-        influence: f64) -> Self {
+    pub fn new(lag: usize, threshold: f64, influence: f64) -> Self {
         Self {
             threshold,
             influence,
@@ -81,7 +82,11 @@ impl SignalDetector {
         }
     }
 
-    pub fn signal(&mut self, value: f64) -> Option<Peak> {
+    pub fn clear(&mut self) {
+        self.window.clear();
+    }
+
+    pub fn signal(&mut self, value: f64) -> Option<Anomaly> {
         if self.window.len() < self.window.capacity() {
             self.window.push_back(value);
             return None;
@@ -94,9 +99,9 @@ impl SignalDetector {
                 let next_value = (value * self.influence) + ((1. - self.influence) * window_last);
                 self.window.push_back(next_value);
                 if mean < value {
-                    Some(Peak::High)
+                    Some(Anomaly::High)
                 } else {
-                    Some(Peak::Low)
+                    Some(Anomaly::Low)
                 }
             } else {
                 self.window.push_back(value);
@@ -148,7 +153,7 @@ where
     I: Iterator,
     F: FnMut(&I::Item) -> f64,
 {
-    type Item = (I::Item, Peak);
+    type Item = (I::Item, Anomaly);
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(item) = self.source.next() {
@@ -166,7 +171,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{Peak, SignalDetector, SignalFilter};
+    use super::{Anomaly, SignalDetector, SignalFilter};
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -188,22 +193,22 @@ mod tests {
         assert_eq!(
             output,
             vec![
-                (45, Peak::High),
-                (47, Peak::High),
-                (48, Peak::High),
-                (49, Peak::High),
-                (50, Peak::High),
-                (51, Peak::High),
-                (58, Peak::High),
-                (59, Peak::High),
-                (60, Peak::High),
-                (61, Peak::High),
-                (62, Peak::High),
-                (63, Peak::High),
-                (67, Peak::High),
-                (68, Peak::High),
-                (69, Peak::High),
-                (70, Peak::High),
+                (45, Anomaly::High),
+                (47, Anomaly::High),
+                (48, Anomaly::High),
+                (49, Anomaly::High),
+                (50, Anomaly::High),
+                (51, Anomaly::High),
+                (58, Anomaly::High),
+                (59, Anomaly::High),
+                (60, Anomaly::High),
+                (61, Anomaly::High),
+                (62, Anomaly::High),
+                (63, Anomaly::High),
+                (67, Anomaly::High),
+                (68, Anomaly::High),
+                (69, Anomaly::High),
+                (70, Anomaly::High),
             ]
         );
     }
@@ -211,20 +216,14 @@ mod tests {
     #[test]
     fn anomaly_sin_wave() {
         let input: Vec<f64> = vec![
-            50,53,56,59,62,65,68,71,
-            74,77,79,82,84,86,89,90,
-            92,94,95,96,98,98,99,100,
-            100,100,100,100,99,98,98,96,
-            95,94,92,90,89,86,84,82,
-            79,77,74,71,68,650,62,59,
-            56,53,50,47,44,41,38,35,
-            32,29,26,23,21,18,16,14,
-            11,10,8,6,5,4,2,2,
-            1,0,0,0,0,0,1,2,
-            2,4,5,6,8,10,11,14,
-            16,18,21,23,26,29,32,35,
-            38,41,44,47,50,
-        ].into_iter().map(|v| v as f64).collect();
+            50, 53, 56, 59, 62, 65, 68, 71, 74, 77, 79, 82, 84, 86, 89, 90, 92, 94, 95, 96, 98, 98, 99, 100, 100, 100,
+            100, 100, 99, 98, 98, 96, 95, 94, 92, 90, 89, 86, 84, 82, 79, 77, 74, 71, 68, 650, 62, 59, 56, 53, 50, 47,
+            44, 41, 38, 35, 32, 29, 26, 23, 21, 18, 16, 14, 11, 10, 8, 6, 5, 4, 2, 2, 1, 0, 0, 0, 0, 0, 1, 2, 2, 4, 5,
+            6, 8, 10, 11, 14, 16, 18, 21, 23, 26, 29, 32, 35, 38, 41, 44, 47, 50,
+        ]
+        .into_iter()
+        .map(|v| v as f64)
+        .collect();
 
         let output: Vec<_> = input
             .into_iter()
@@ -233,11 +232,6 @@ mod tests {
             .map(|((i, _), p)| (i, p))
             .collect();
 
-        assert_eq!(
-            output,
-            vec![
-                (45, Peak::High),
-            ]
-        );
+        assert_eq!(output, vec![(45, Anomaly::High),]);
     }
 }

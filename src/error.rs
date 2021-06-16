@@ -1,4 +1,5 @@
 use crate::elements::TelemetryValue;
+use chrono::{DateTime, Utc};
 use std::fmt;
 use std::fmt::Debug;
 use thiserror::Error;
@@ -133,6 +134,9 @@ pub enum PlanError {
 
     #[error("0")]
     ForecastError(anyhow::Error),
+
+    #[error("failed to solve linear resolution regression for timestamp {0:?}")]
+    LinearResolutionFailed(DateTime<Utc>),
 
     #[error("{0}")]
     StageError(#[from] anyhow::Error),
