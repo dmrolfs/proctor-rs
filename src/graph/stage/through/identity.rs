@@ -13,11 +13,7 @@ pub struct Identity<T> {
 
 impl<T> Identity<T> {
     pub fn new<S: Into<String>>(name: S, inlet: Inlet<T>, outlet: Outlet<T>) -> Self {
-        Self {
-            name: name.into(),
-            inlet,
-            outlet,
-        }
+        Self { name: name.into(), inlet, outlet }
     }
 }
 

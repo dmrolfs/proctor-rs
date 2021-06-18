@@ -782,9 +782,7 @@ mod tests {
         let main_span = tracing::info_span!("test_telemetry_value_integer_serde");
         let _main_span_guard = main_span.enter();
 
-        let foo = Foo {
-            bar: TelemetryValue::Integer(37),
-        };
+        let foo = Foo { bar: TelemetryValue::Integer(37) };
         let json_foo = serde_json::to_string(&foo).unwrap();
         assert_eq!(json_foo, r#"{"bar":37}"#);
         tracing::warn!("deserialize: {}", json_foo);

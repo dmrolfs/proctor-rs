@@ -79,12 +79,7 @@ where
         let name = name.into();
         let inlet = Inlet::new(name.clone());
         let outlet = Outlet::new(name.clone());
-        Self {
-            name,
-            operation,
-            inlet,
-            outlet,
-        }
+        Self { name, operation, inlet, outlet }
     }
 }
 

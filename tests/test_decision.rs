@@ -149,9 +149,7 @@ where
         clearinghouse
             .add_subscription(context_subscription, &context_channel.subscription_receiver)
             .await;
-        (context_channel.outlet(), decision_context_inlet.clone())
-            .connect()
-            .await;
+        (context_channel.outlet(), decision_context_inlet.clone()).connect().await;
         (telemetry_channel.outlet(), decision_stage.inlet()).connect().await;
         (decision_stage.outlet(), sink.inlet()).connect().await;
 
@@ -312,10 +310,7 @@ fn make_test_item(timestamp: DateTime<Utc>, input_messages_per_sec: f64, inbox_l
             task_nr_records_in_per_sec: 0.0,
             task_nr_records_out_per_sec: 0.0,
         },
-        utilization: UtilizationMetrics {
-            task_cpu_load: 0.0,
-            network_io_utilization: 0.0,
-        },
+        utilization: UtilizationMetrics { task_cpu_load: 0.0, network_io_utilization: 0.0 },
         custom: std::collections::HashMap::default(),
     }
 }

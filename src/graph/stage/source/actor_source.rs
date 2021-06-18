@@ -42,12 +42,7 @@ impl<T> ActorSource<T> {
         let name = name.into();
         let outlet = Outlet::new(name.clone());
         let (tx_api, rx_api) = mpsc::unbounded_channel();
-        Self {
-            name,
-            outlet,
-            tx_api,
-            rx_api,
-        }
+        Self { name, outlet, tx_api, rx_api }
     }
 }
 

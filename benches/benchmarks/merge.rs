@@ -113,10 +113,7 @@ async fn run_scenario(g: Graph, rx_sum: oneshot::Receiver<i32>) -> Result<i32> {
 
 fn benchmark_merge_5(c: &mut Criterion) {
     c.bench_function("merge_5_fan_in", move |b| {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
         b.to_async(rt).iter(|| async {
             let (g, rx_sum) = make_graph().await;
             black_box(run_scenario(g, rx_sum).await.expect("scenario failed"));

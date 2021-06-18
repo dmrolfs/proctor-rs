@@ -35,14 +35,7 @@ impl ClearinghouseCmd {
         subscription: TelemetrySubscription, receiver: Inlet<Telemetry>,
     ) -> (Self, oneshot::Receiver<Ack>) {
         let (tx, rx) = oneshot::channel();
-        (
-            Self::Subscribe {
-                subscription,
-                receiver,
-                tx,
-            },
-            rx,
-        )
+        (Self::Subscribe { subscription, receiver, tx }, rx)
     }
 
     #[inline]
@@ -60,13 +53,7 @@ impl ClearinghouseCmd {
     #[inline]
     pub fn get_subscription_snapshot<S: Into<String>>(name: S) -> (Self, oneshot::Receiver<ClearinghouseResp>) {
         let (tx, rx) = oneshot::channel();
-        (
-            Self::GetSnapshot {
-                name: Some(name.into()),
-                tx,
-            },
-            rx,
-        )
+        (Self::GetSnapshot { name: Some(name.into()), tx }, rx)
     }
 }
 
@@ -101,20 +88,14 @@ impl TelemetrySubscription {
     pub fn new<S: Into<String>>(name: S) -> Self {
         let name = name.into();
         let outlet_to_subscription = Outlet::new(format!("outlet_for_subscription_{}", name));
-        Self::All {
-            name,
-            outlet_to_subscription,
-        }
+        Self::All { name, outlet_to_subscription }
     }
 
     pub fn with_required_fields<S: Into<String>>(self, required_fields: HashSet<S>) -> Self {
         let required_fields = required_fields.into_iter().map(|s| s.into()).collect();
 
         match self {
-            Self::All {
-                name,
-                outlet_to_subscription,
-            } => Self::Explicit {
+            Self::All { name, outlet_to_subscription } => Self::Explicit {
                 name,
                 required_fields,
                 optional_fields: HashSet::default(),
@@ -140,10 +121,7 @@ impl TelemetrySubscription {
     pub fn with_optional_fields<S: Into<String>>(self, optional_fields: HashSet<S>) -> Self {
         let optional_fields = optional_fields.into_iter().map(|s| s.into()).collect();
         match self {
-            Self::All {
-                name,
-                outlet_to_subscription,
-            } => Self::Explicit {
+            Self::All { name, outlet_to_subscription } => Self::Explicit {
                 name,
                 required_fields: HashSet::default(),
                 optional_fields,
@@ -174,10 +152,7 @@ impl TelemetrySubscription {
 
     pub fn name(&self) -> &str {
         match self {
-            Self::All {
-                name,
-                outlet_to_subscription: _,
-            } => name.as_str(),
+            Self::All { name, outlet_to_subscription: _ } => name.as_str(),
             Self::Explicit {
                 name,
                 required_fields: _,
@@ -189,10 +164,7 @@ impl TelemetrySubscription {
 
     pub fn outlet_to_subscription(&self) -> Outlet<Telemetry> {
         match self {
-            Self::All {
-                name: _,
-                outlet_to_subscription,
-            } => outlet_to_subscription.clone(),
+            Self::All { name: _, outlet_to_subscription } => outlet_to_subscription.clone(),
             Self::Explicit {
                 name: _,
                 required_fields: _,
@@ -328,16 +300,9 @@ impl PartialEq for TelemetrySubscription {
         use TelemetrySubscription::*;
 
         match (self, other) {
-            (
-                All {
-                    name: lhs_name,
-                    outlet_to_subscription: _,
-                },
-                All {
-                    name: rhs_name,
-                    outlet_to_subscription: _,
-                },
-            ) => lhs_name == rhs_name,
+            (All { name: lhs_name, outlet_to_subscription: _ }, All { name: rhs_name, outlet_to_subscription: _ }) => {
+                lhs_name == rhs_name
+            }
             (
                 Explicit {
                     name: lhs_name,
@@ -544,11 +509,7 @@ impl Clearinghouse {
                 Ok(true)
             }
 
-            ClearinghouseCmd::Subscribe {
-                subscription,
-                receiver,
-                tx,
-            } => {
+            ClearinghouseCmd::Subscribe { subscription, receiver, tx } => {
                 tracing::info!(?subscription, "adding telemetry subscriber.");
                 subscription.connect_to_receiver(&receiver).await;
                 subscriptions.push(subscription);
@@ -908,11 +869,7 @@ mod tests {
             tx_api.send(get_1)?;
 
             rx_add.await?;
-            let ClearinghouseResp::Snapshot {
-                database: _,
-                missing: _,
-                subscriptions: subs1,
-            } = rx_get_1.await?;
+            let ClearinghouseResp::Snapshot { database: _, missing: _, subscriptions: subs1 } = rx_get_1.await?;
             assert_eq!(subs1.len(), 1);
 
             let name_1 = subs1[0].name();
@@ -922,11 +879,7 @@ mod tests {
 
             let (get_2, rx_get_2) = ClearinghouseCmd::get_clearinghouse_snapshot();
             tx_api.send(get_2)?;
-            let ClearinghouseResp::Snapshot {
-                database: _,
-                missing: _,
-                subscriptions: subs2,
-            } = rx_get_2.await?;
+            let ClearinghouseResp::Snapshot { database: _, missing: _, subscriptions: subs2 } = rx_get_2.await?;
             assert_eq!(subs2.len(), 0);
 
             tracing::info!("stopping tick source...");

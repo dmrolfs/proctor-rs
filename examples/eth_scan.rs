@@ -50,10 +50,7 @@ impl Currency {
     where
         S: Into<String>,
     {
-        Self {
-            code,
-            name: name.into(),
-        }
+        Self { code, name: name.into() }
     }
 }
 

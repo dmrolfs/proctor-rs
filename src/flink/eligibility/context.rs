@@ -92,13 +92,8 @@ mod tests {
     #[test]
     fn test_serde_flink_eligibility_context() {
         let context = FlinkEligibilityContext {
-            task_status: TaskStatus {
-                last_failure: Some(DT_1.clone()),
-            },
-            cluster_status: ClusterStatus {
-                is_deploying: false,
-                last_deployment: DT_2.clone(),
-            },
+            task_status: TaskStatus { last_failure: Some(DT_1.clone()) },
+            cluster_status: ClusterStatus { is_deploying: false, last_deployment: DT_2.clone() },
             custom: maplit::hashmap! {
                 "custom_foo".to_string() => "fred flintstone".into(),
                 "custom_bar".to_string() => "The Happy Barber".into(),
@@ -150,13 +145,8 @@ mod tests {
         let actual = data.try_into::<FlinkEligibilityContext>();
         tracing::info!(?actual, "converted into FlinkEligibilityContext");
         let expected = FlinkEligibilityContext {
-            task_status: TaskStatus {
-                last_failure: Some(DT_1.clone()),
-            },
-            cluster_status: ClusterStatus {
-                is_deploying: false,
-                last_deployment: DT_2.clone(),
-            },
+            task_status: TaskStatus { last_failure: Some(DT_1.clone()) },
+            cluster_status: ClusterStatus { is_deploying: false, last_deployment: DT_2.clone() },
             custom: maplit::hashmap! {"foo".to_string() => "bar".into(),},
         };
         tracing::info!("actual: {:?}", actual);

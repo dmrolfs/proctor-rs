@@ -68,11 +68,7 @@ impl<T, I> Sequence<T, I> {
         let name = name.into();
         let outlet = Outlet::new(name.clone());
         let items = data.into_iter();
-        Self {
-            name,
-            items: Some(items),
-            outlet,
-        }
+        Self { name, items: Some(items), outlet }
     }
 }
 

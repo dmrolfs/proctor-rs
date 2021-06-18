@@ -100,12 +100,7 @@ impl<In: AppData, Out: AppData> CompositeThrough<In, Out> {
     {
         let name = name.into();
         let (graph, inlet, outlet) = Self::extend_graph(name.clone(), graph, graph_inlet, graph_outlet).await;
-        Self {
-            name,
-            graph: Some(graph),
-            inlet,
-            outlet,
-        }
+        Self { name, graph: Some(graph), inlet, outlet }
     }
 
     async fn extend_graph(

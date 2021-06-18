@@ -140,11 +140,7 @@ impl<I: Iterator> SignalFilter<I> for I {
     where
         F: FnMut(&I::Item) -> f64,
     {
-        SignalIterator {
-            source: self,
-            signal,
-            detector,
-        }
+        SignalIterator { source: self, signal, detector }
     }
 }
 

@@ -61,11 +61,7 @@ impl TryFrom<TelemetryValue> for Benchmark {
                 .map(|v| f64::try_from(v.clone()))
                 .ok_or(PlanError::DataNotFound(T_RECORDS_OUT_PER_SEC.to_string()))??;
 
-            Ok(Benchmark {
-                timestamp,
-                nr_task_managers,
-                records_out_per_sec,
-            })
+            Ok(Benchmark { timestamp, nr_task_managers, records_out_per_sec })
         } else {
             Err(TelemetryError::TypeError {
                 expected: format!("{}", TypeExpectation::Table),

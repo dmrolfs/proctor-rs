@@ -85,10 +85,8 @@ impl PolicySource {
             Self::File(policy) => {
                 let file = policy.as_path();
                 if !file.extension().map(|ext| ext == "polar").unwrap_or(false) {
-                    return Err(oso::OsoError::IncorrectFileType {
-                        filename: file.to_string_lossy().into_owned(),
-                    })
-                    .map_err(|err| err.into());
+                    return Err(oso::OsoError::IncorrectFileType { filename: file.to_string_lossy().into_owned() })
+                        .map_err(|err| err.into());
                 }
 
                 use std::io::Read;

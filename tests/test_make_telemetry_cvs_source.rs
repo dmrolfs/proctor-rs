@@ -32,9 +32,7 @@ impl Default for Data {
         Self {
             last_failure: None,
             is_deploying: true,
-            latest_deployment: Utc
-                .datetime_from_str("1970-08-30 11:32:09", "%Y-%m-%d %H:%M:%S")
-                .unwrap(),
+            latest_deployment: Utc.datetime_from_str("1970-08-30 11:32:09", "%Y-%m-%d %H:%M:%S").unwrap(),
         }
     }
 }
@@ -72,8 +70,7 @@ async fn test_make_telemetry_cvs_source() -> Result<()> {
             let rec_is_deploying = if is_first {
                 tracing::info!("first record - set is_deploying.");
                 is_first = false;
-                rec.get("cluster.is_deploying")
-                    .map(|v| bool::try_from(v.clone()).unwrap())
+                rec.get("cluster.is_deploying").map(|v| bool::try_from(v.clone()).unwrap())
             } else {
                 tracing::info!("not first record - skip parsing is_deploying.");
                 None
@@ -104,14 +101,7 @@ async fn test_make_telemetry_cvs_source() -> Result<()> {
                 acc.latest_deployment
             };
 
-            (
-                Data {
-                    last_failure,
-                    is_deploying,
-                    latest_deployment,
-                },
-                is_first,
-            )
+            (Data { last_failure, is_deploying, latest_deployment }, is_first)
         },
     );
 

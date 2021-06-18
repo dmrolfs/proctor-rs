@@ -32,9 +32,7 @@ impl Default for Data {
         Self {
             last_failure: None,
             is_deploying: true,
-            last_deployment: Utc
-                .datetime_from_str("1970-08-30 11:32:09", "%Y-%m-%d %H:%M:%S")
-                .unwrap(),
+            last_deployment: Utc.datetime_from_str("1970-08-30 11:32:09", "%Y-%m-%d %H:%M:%S").unwrap(),
         }
     }
 }

@@ -316,11 +316,7 @@ mod tests {
             fn eq(&self, other: &Self) -> bool {
                 let mut result = self.elements.len() == other.elements.len();
                 if result {
-                    result = self
-                        .elements
-                        .iter()
-                        .zip_eq(&other.elements)
-                        .all(|(lhs, rhs)| lhs == rhs);
+                    result = self.elements.iter().zip_eq(&other.elements).all(|(lhs, rhs)| lhs == rhs);
                 }
                 result
             }
@@ -502,9 +498,7 @@ mod tests {
     fn test_telemetry_retain() {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
         tracing::info!("start test_telemetry_retain...");
-        let mut telemetry: Telemetry = (0..8)
-            .map(|x| (x.to_string(), TelemetryValue::Integer(x * 10)))
-            .collect();
+        let mut telemetry: Telemetry = (0..8).map(|x| (x.to_string(), TelemetryValue::Integer(x * 10))).collect();
         tracing::info!(?telemetry, "test_telemetry_retain telemetry");
         // Keep only the elements with even-numbered keys.
         telemetry.retain(|k, v| {

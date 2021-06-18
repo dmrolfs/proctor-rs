@@ -62,10 +62,7 @@ struct TestContext {
 
 impl TestContext {
     pub fn new(location_code: u32) -> Self {
-        Self {
-            location_code,
-            custom: telemetry::Table::default(),
-        }
+        Self { location_code, custom: telemetry::Table::default() }
     }
 
     pub fn with_custom(self, custom: telemetry::Table) -> Self {
@@ -94,10 +91,7 @@ impl TestPolicy {
         let policy = policy.into();
         let polar = polar_core::polar::Polar::new();
         polar.load_str(policy.as_ref()).expect("failed to parse policy");
-        Self {
-            policy,
-            query: query.into(),
-        }
+        Self { policy, query: query.into() }
     }
 }
 
@@ -288,9 +282,7 @@ async fn test_policy_filter_before_context_baseline() -> anyhow::Result<()> {
 
     let flow = TestFlow::new(r#"eligible(item, context) if context.location_code == 33;"#).await;
     let item = TestItem {
-        flow: TestFlowMetrics {
-            input_messages_per_sec: 3.1415926535,
-        },
+        flow: TestFlowMetrics { input_messages_per_sec: 3.1415926535 },
         timestamp: Utc::now().into(),
         inbox_lag: 3,
     };

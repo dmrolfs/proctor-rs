@@ -149,11 +149,7 @@ impl<Out: AppData> CompositeSource<Out> {
     {
         let name = name.into();
         let (graph, outlet) = Self::extend_graph(name.clone(), graph, graph_outlet).await;
-        Self {
-            name,
-            graph: Some(graph),
-            outlet,
-        }
+        Self { name, graph: Some(graph), outlet }
     }
 
     async fn extend_graph(name: String, mut graph: Graph, graph_outlet: Outlet<Out>) -> (Graph, Outlet<Out>) {

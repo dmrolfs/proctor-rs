@@ -97,10 +97,7 @@ impl<T: AppData> SubscriptionChannel<T> {
     async fn do_run(&mut self) -> Result<(), CollectionError> {
         match self.inner_stage.as_mut() {
             Some(inner) => {
-                inner
-                    .run()
-                    .await
-                    .map_err(|err| CollectionError::StageError(err.into()))?;
+                inner.run().await.map_err(|err| CollectionError::StageError(err.into()))?;
                 Ok(())
             }
 

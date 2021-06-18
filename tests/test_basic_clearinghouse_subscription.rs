@@ -23,11 +23,7 @@ struct Data {
 
 impl Default for Data {
     fn default() -> Self {
-        Self {
-            pos: None,
-            value: None,
-            cat: "".to_string(),
-        }
+        Self { pos: None, value: None, cat: "".to_string() }
     }
 }
 

@@ -35,11 +35,7 @@ pub struct PolicyOutcome<T, C> {
 
 impl<T, C> PolicyOutcome<T, C> {
     pub fn new(item: T, context: C, bindings: telemetry::Table) -> Self {
-        Self {
-            item,
-            context,
-            bindings,
-        }
+        Self { item, context, bindings }
     }
 }
 
@@ -90,11 +86,7 @@ where
                 Err(PolicyError::DataNotFound(T_BINDINGS.to_string()))
             }?;
 
-            Ok(PolicyOutcome {
-                item,
-                context,
-                bindings,
-            })
+            Ok(PolicyOutcome { item, context, bindings })
         } else {
             Err(PolicyError::TelemetryError(TelemetryError::TypeError {
                 expected: format!("telemetry {}", TypeExpectation::Table),
@@ -328,9 +320,7 @@ where
 
         match query_result {
             // a successful query has Some bindings; otherwise the policy did not pass or errored.
-            Ok(QueryResult {
-                bindings: Some(bindings),
-            }) => {
+            Ok(QueryResult { bindings: Some(bindings) }) => {
                 tracing::info!(
                     ?item,
                     ?bindings,
@@ -407,10 +397,7 @@ where
                 Ok(true)
             }
 
-            PolicyFilterCmd::AppendPolicy {
-                additional_policy: policy_source,
-                tx,
-            } => {
+            PolicyFilterCmd::AppendPolicy { additional_policy: policy_source, tx } => {
                 match policy_source {
                     PolicySource::String(p) => oso.load_str(p.as_str())?,
                     PolicySource::File(path) => oso.load_file(path)?,
@@ -565,9 +552,7 @@ mod tests {
         let mut policy_filter = PolicyFilter::new("test-policy-filter", policy);
         let oso = policy_filter.oso()?; //.expect("failed to build policy engine");
 
-        let item = User {
-            username: "peter.pan@example.com".to_string(),
-        };
+        let item = User { username: "peter.pan@example.com".to_string() };
 
         block_on(async move {
             let (tx, mut rx) = mpsc::channel(4);
@@ -595,9 +580,7 @@ mod tests {
             assert_eq!(
                 actual.unwrap(),
                 PolicyOutcome::new(
-                    User {
-                        username: "peter.pan@example.com".to_string()
-                    },
+                    User { username: "peter.pan@example.com".to_string() },
                     context,
                     HashMap::default()
                 )

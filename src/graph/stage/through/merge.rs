@@ -49,12 +49,7 @@ impl<T> Merge<T> {
         let inlet_0 = Inlet::new(format!("{}_0", name));
         let inlet_1 = Inlet::new(format!("{}_1", name));
         let outlet = Outlet::new(name.clone());
-        Self {
-            name,
-            inlet_0,
-            inlet_1,
-            outlet,
-        }
+        Self { name, inlet_0, inlet_1, outlet }
     }
 }
 

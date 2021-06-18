@@ -148,13 +148,7 @@ impl<T: Send> MergeN<T> {
                 .collect(),
         );
 
-        Self {
-            name,
-            inlets,
-            outlet,
-            tx_api,
-            rx_api,
-        }
+        Self { name, inlets, outlet, tx_api, rx_api }
     }
 }
 

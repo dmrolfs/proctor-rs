@@ -61,20 +61,11 @@ where
         let name = name.into();
         let inlet = Inlet::new(name.clone());
         let outlet = Outlet::new(name.clone());
-        Self {
-            name,
-            predicate,
-            inlet,
-            outlet,
-            log_blocks: false,
-        }
+        Self { name, predicate, inlet, outlet, log_blocks: false }
     }
 
     pub fn with_block_logging(self) -> Self {
-        Self {
-            log_blocks: true,
-            ..self
-        }
+        Self { log_blocks: true, ..self }
     }
 }
 

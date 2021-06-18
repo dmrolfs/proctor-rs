@@ -296,10 +296,7 @@ mod tests {
         };
 
         let mut expected = vec![
-            Token::Struct {
-                name: "SimplePolicySettings",
-                len: 3,
-            },
+            Token::Struct { name: "SimplePolicySettings", len: 3 },
             Token::Str("required_subscription_fields"),
             Token::Seq { len: Some(2) },
             Token::Str("foo"),
@@ -311,10 +308,7 @@ mod tests {
             Token::Str("Stella"),
             Token::SeqEnd,
             Token::Str("policy_source"),
-            Token::NewtypeVariant {
-                name: "PolicySource",
-                variant: "File",
-            },
+            Token::NewtypeVariant { name: "PolicySource", variant: "File" },
             Token::Str("./tests/policies/eligibility.polar"),
             Token::StructEnd,
         ];
@@ -373,10 +367,7 @@ mod tests {
         assert_tokens(
             &endpoint,
             &[
-                Token::Struct {
-                    name: "HttpQuery",
-                    len: 4,
-                },
+                Token::Struct { name: "HttpQuery", len: 4 },
                 Token::Str("interval_secs"),
                 Token::U64(33),
                 Token::Str("method"),
@@ -509,10 +500,7 @@ mod tests {
         assert_tokens(
             &local,
             &[
-                Token::Struct {
-                    name: "SourceSetting",
-                    len: 2,
-                },
+                Token::Struct { name: "SourceSetting", len: 2 },
                 Token::Str("type"),
                 Token::Str("Csv"),
                 Token::Str("path"),
@@ -537,10 +525,7 @@ mod tests {
         assert_tokens(
             &cluster,
             &[
-                Token::Struct {
-                    name: "HttpQuery",
-                    len: 5,
-                },
+                Token::Struct { name: "HttpQuery", len: 5 },
                 Token::Str("type"),
                 Token::Str("RestApi"),
                 Token::Str("interval_secs"),
@@ -587,18 +572,12 @@ mod tests {
         assert_tokens(
             &settings,
             &[
-                Token::Struct {
-                    name: "Settings",
-                    len: 1,
-                },
+                Token::Struct { name: "Settings", len: 1 },
                 Token::Str("sources"),
                 Token::Map { len: Some(2) },
                 // "httpbin" => RestApi
                 Token::Str("httpbin"),
-                Token::Struct {
-                    name: "HttpQuery",
-                    len: 5,
-                },
+                Token::Struct { name: "HttpQuery", len: 5 },
                 Token::Str("type"),
                 Token::Str("RestApi"),
                 Token::Str("interval_secs"),
@@ -623,10 +602,7 @@ mod tests {
                 Token::StructEnd,
                 // "local" => Csv
                 Token::Str("local"),
-                Token::Struct {
-                    name: "SourceSetting",
-                    len: 2,
-                },
+                Token::Struct { name: "SourceSetting", len: 2 },
                 Token::Str("type"),
                 Token::Str("Csv"),
                 Token::Str("path"),

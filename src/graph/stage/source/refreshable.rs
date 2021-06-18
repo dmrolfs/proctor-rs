@@ -29,12 +29,7 @@ where
     pub fn new<S: Into<String>>(name: S, action: A, rx_control: mpsc::Receiver<Ctrl>) -> Self {
         let name = name.into();
         let outlet = Outlet::new(name.clone());
-        Self {
-            name,
-            action,
-            rx_control,
-            outlet,
-        }
+        Self { name, action, rx_control, outlet }
     }
 }
 

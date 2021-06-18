@@ -64,9 +64,7 @@ impl Default for Data {
         Self {
             last_failure: None,
             is_deploying: true,
-            latest_deployment: Utc
-                .datetime_from_str("1970-08-30 11:32:09", "%Y-%m-%d %H:%M:%S")
-                .unwrap(),
+            latest_deployment: Utc.datetime_from_str("1970-08-30 11:32:09", "%Y-%m-%d %H:%M:%S").unwrap(),
         }
     }
 }
@@ -140,14 +138,7 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
                 acc.latest_deployment
             };
 
-            (
-                Data {
-                    last_failure,
-                    is_deploying,
-                    latest_deployment,
-                },
-                count + 1,
-            )
+            (Data { last_failure, is_deploying, latest_deployment }, count + 1)
         },
     );
 

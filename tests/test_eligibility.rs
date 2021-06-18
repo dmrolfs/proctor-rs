@@ -252,10 +252,7 @@ impl<D> TestEligibilityPolicy<D> {
 
     #[allow(dead_code)]
     pub fn with_custom(self, custom_fields: HashSet<String>) -> Self {
-        Self {
-            custom_fields: Some(custom_fields),
-            ..self
-        }
+        Self { custom_fields: Some(custom_fields), ..self }
     }
 }
 
@@ -666,9 +663,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
         .into_iter()
         .collect();
     assert_eq!(
-        MeasurementData {
-            measurement: std::f64::consts::PI,
-        },
+        MeasurementData { measurement: std::f64::consts::PI },
         t1.try_into::<MeasurementData>()?
     );
 
@@ -697,16 +692,12 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
         actual,
         vec![
             PolicyOutcome::new(
-                MeasurementData {
-                    measurement: std::f64::consts::PI,
-                },
+                MeasurementData { measurement: std::f64::consts::PI },
                 context.clone(),
                 HashMap::new()
             ),
             PolicyOutcome::new(
-                MeasurementData {
-                    measurement: std::f64::consts::TAU,
-                },
+                MeasurementData { measurement: std::f64::consts::TAU },
                 context.clone(),
                 HashMap::new()
             ),
