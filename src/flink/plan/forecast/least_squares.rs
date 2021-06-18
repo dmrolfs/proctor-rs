@@ -196,7 +196,7 @@ impl RegressionStrategy for QuadraticRegression {
 
 impl LeastSquaresWorkloadForecast {
     fn do_predict_workload(&self) -> Result<Workload, PlanError> {
-        let data: Vec<Point> = self.data.iter().cloned().collect();
+        let data: Vec<Point> = self.data.iter().copied().collect();
         if let Some(next_timestamp) = Self::estimate_next_timestamp(&data) {
             let model = Self::do_select_model(&data)?;
             model.calculate(next_timestamp)
@@ -292,7 +292,7 @@ mod tests {
     use statrs::statistics::Statistics;
 
     #[test]
-    fn test_measure_spike() -> anyhow::Result<()> {
+    fn test_plan_forecast_measure_spike() -> anyhow::Result<()> {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_measure_spike");
         let _ = main_span.enter();
@@ -386,7 +386,7 @@ mod tests {
     }
 
     #[test]
-    fn test_quadratic_regression_coefficients() -> anyhow::Result<()> {
+    fn test_plan_forecast_quadratic_regression_coefficients() -> anyhow::Result<()> {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_quadratic_regression_coefficients");
         let _ = main_span.enter();
@@ -402,7 +402,7 @@ mod tests {
     }
 
     #[test]
-    fn test_quadratic_regression_prediction() -> anyhow::Result<()> {
+    fn test_plan_forecast_quadratic_regression_prediction() -> anyhow::Result<()> {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_quadratic_regression_prediction");
         let _ = main_span.enter();
@@ -420,7 +420,7 @@ mod tests {
     }
 
     #[test]
-    fn test_estimate_next_timestamp() -> anyhow::Result<()> {
+    fn test_plan_forecastestimate_next_timestamp() -> anyhow::Result<()> {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_estimate_next_timestamp");
         let _ = main_span.enter();
@@ -432,7 +432,7 @@ mod tests {
     }
 
     #[test]
-    fn test_linear_coefficients() -> anyhow::Result<()> {
+    fn test_plan_forecast_linear_coefficients() -> anyhow::Result<()> {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_linear_coefficients");
         let _ = main_span.enter();
@@ -446,7 +446,7 @@ mod tests {
     }
 
     #[test]
-    fn test_linear_regression() -> anyhow::Result<()> {
+    fn test_plan_forecast_linear_regression() -> anyhow::Result<()> {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_linear_regression");
         let _ = main_span.enter();
