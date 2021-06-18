@@ -19,7 +19,7 @@ pub type Point = (f64, f64);
 pub trait WorkloadForecast {
     fn add_observation(&mut self, observation: MetricCatalog);
     fn clear(&mut self);
-    fn predict_workload(&mut self) -> Result<Workload, PlanError>;
+    fn predict_next_workload(&mut self) -> Result<Workload, PlanError>;
     fn workload_observation_from(metrics: MetricCatalog) -> Point {
         (
             metrics.timestamp.timestamp() as f64,
