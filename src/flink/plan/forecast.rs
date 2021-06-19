@@ -2,6 +2,7 @@ use crate::error::PlanError;
 use crate::flink::MetricCatalog;
 
 mod least_squares;
+mod regression;
 mod ridge_regression;
 mod signal;
 

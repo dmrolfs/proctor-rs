@@ -30,7 +30,7 @@ const T_RECORDS_OUT_PER_SEC: &'static str = "records_out_per_sec";
 impl From<Benchmark> for TelemetryValue {
     fn from(that: Benchmark) -> Self {
         TelemetryValue::Table(maplit::hashmap! {
-            T_TIMESTAMP.to_string() => that.timestamp.timestamp_millis().to_telemetry(),
+            T_TIMESTAMP.to_string() => that.timestamp.timestamp().to_telemetry(),
             T_NR_TASK_MANAGERS.to_string() => that.nr_task_managers.to_telemetry(),
             T_RECORDS_OUT_PER_SEC.to_string() => that.records_out_per_sec.to_telemetry(),
         })
@@ -44,11 +44,7 @@ impl TryFrom<TelemetryValue> for Benchmark {
         if let TelemetryValue::Table(rep) = telemetry {
             let timestamp = rep
                 .get(T_TIMESTAMP)
-                .map(|v| {
-                    i64::try_from(v.clone())
-                        // .map(|millis| Utc::timestamp_millis(&millis))
-                        .map(|millis| Utc.timestamp_millis(millis))
-                })
+                .map(|v| i64::try_from(v.clone()).map(|secs| Utc.timestamp(secs, 0)))
                 .ok_or(PlanError::DataNotFound(T_NR_TASK_MANAGERS.to_string()))??;
 
             let nr_task_managers = rep
