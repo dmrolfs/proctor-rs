@@ -322,20 +322,7 @@ async fn test_decision_carry_policy_result() -> anyhow::Result<()> {
     let _ = main_span.enter();
 
     let telemetry_subscription = TelemetrySubscription::new("measurements")
-        .with_required_fields(maplit::hashset! {
-            "timestamp",
-            "input_messages_per_sec",
-            "input_consumer_lag",
-            "records_out_per_sec",
-            "max_message_latency",
-            "net_in_utilization",
-            "net_out_utilization",
-            "sink_health_metrics",
-            "task_nr_records_in_per_sec",
-            "task_nr_records_out_per_sec",
-            "task_cpu_load",
-            "network_io_utilization",
-        })
+        .with_required_fields(proctor::flink::metric_catalog::METRIC_CATALOG_REQ_SUBSCRIPTION_FIELDS.clone())
         .with_optional_fields(maplit::hashset! {
             "all_sinks_healthy",
             "nr_task_managers",
@@ -446,20 +433,7 @@ async fn test_decision_common() -> anyhow::Result<()> {
     let _ = main_span.enter();
 
     let telemetry_subscription = TelemetrySubscription::new("measurements")
-        .with_required_fields(maplit::hashset! {
-            "timestamp",
-            "input_messages_per_sec",
-            "input_consumer_lag",
-            "records_out_per_sec",
-            "max_message_latency",
-            "net_in_utilization",
-            "net_out_utilization",
-            "sink_health_metrics",
-            "task_nr_records_in_per_sec",
-            "task_nr_records_out_per_sec",
-            "task_cpu_load",
-            "network_io_utilization",
-        })
+        .with_required_fields(proctor::flink::metric_catalog::METRIC_CATALOG_REQ_SUBSCRIPTION_FIELDS.clone())
         .with_optional_fields(maplit::hashset! {
             "all_sinks_healthy",
             "nr_task_managers",

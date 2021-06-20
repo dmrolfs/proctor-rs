@@ -2,10 +2,37 @@ use crate::elements::{telemetry, TelemetryValue};
 use crate::error::TelemetryError;
 use ::serde_with::{serde_as, TimestampMilliSeconds};
 use chrono::{DateTime, Utc};
+use lazy_static::lazy_static;
 use oso::PolarClass;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::Add;
+
+//todo: replace this with reflection approach if one identified.
+// tried serde-reflection, which failed since serde identifiers (flatten) et.al., are not supported.
+// tried Oso PolarClass, but Class::attributes is private.
+// could write a rpcedural macro, but want to list effective serde names, such as for flattened.
+lazy_static! {
+    pub static ref METRIC_CATALOG_REQ_SUBSCRIPTION_FIELDS: HashSet<&'static str> = maplit::hashset! {
+    "timestamp",
+
+    // FlowMetrics
+    "input_messages_per_sec",
+    "input_consumer_lag",
+    "records_out_per_sec",
+    "max_message_latency",
+    "net_in_utilization",
+    "net_out_utilization",
+    "sink_health_metrics",
+    "task_nr_records_in_per_sec",
+    "task_nr_records_out_per_sec",
+
+    // UtilizationMetrics
+    "task_cpu_load",
+    "network_io_utilization",
+};
+}
 
 #[serde_as]
 #[derive(PolarClass, Debug, PartialEq, Clone, Serialize, Deserialize)]
