@@ -24,5 +24,5 @@ wrap_comments = true
 # pre-unstable
 chain_width = 75
 single_line_if_else_max_width = 75
-space_around_attr_eq = false
+#space_around_attr_eq = false
 struct_lit_width = 50
