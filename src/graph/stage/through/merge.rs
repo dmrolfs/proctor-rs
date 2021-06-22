@@ -120,6 +120,7 @@ impl<T: AppData> Stage for Merge<T> {
         Ok(())
     }
 
+    #[tracing::instrument(level = "info", skip(self))]
     async fn close(mut self: Box<Self>) -> ProctorResult<()> {
         tracing::trace!("closing merge-through ports.");
         self.inlet_0.close().await;

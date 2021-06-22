@@ -104,8 +104,8 @@ impl LeastSquaresWorkloadForecast {
 
         let model: Box<dyn RegressionStrategy> =
             match (linear.correlation_coefficient, quadratic.correlation_coefficient) {
-                (f64::NAN, _) => Box::new(quadratic),
-                (_, f64::NAN) => Box::new(linear),
+                (linear_coeff, _) if linear_coeff.is_nan() => Box::new(quadratic),
+                (_, quad_coeff) if quad_coeff.is_nan() => Box::new(linear),
                 (l, q) if l < q => Box::new(quadratic),
                 _ => Box::new(linear),
             };

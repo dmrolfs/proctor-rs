@@ -1,45 +1,56 @@
 use crate::error::PlanError;
-use crate::graph::stage::{Stage, ThroughStage};
-use crate::graph::{Inlet, Outlet, Port, SinkShape, SourceShape};
+use crate::graph::stage::Stage;
+use crate::graph::{Inlet, Outlet, Port, SinkShape, SourceShape, ThroughShape};
 use crate::{AppData, ProctorResult};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt::{self, Debug};
 
-pub struct Plan<In, Out> {
+pub trait DataDecisionStage: Stage + ThroughShape + 'static {
+    type Decision;
+    fn decision_inlet(&self) -> Inlet<Self::Decision>;
+}
+
+pub struct Plan<In, Decision, Out> {
     name: String,
-    inner_plan: Box<dyn ThroughStage<In, Out>>,
+    inner_plan: Box<dyn DataDecisionStage<In = In, Decision = Decision, Out = Out>>,
     inlet: Inlet<In>,
+    decision_inlet: Inlet<Decision>,
     outlet: Outlet<Out>,
 }
 
-impl<In, Out> Plan<In, Out> {
+impl<In, Decision, Out> Plan<In, Decision, Out> {
     #[tracing::instrument(level = "info", skip(name))]
-    pub fn new<S: Into<String>>(name: S, plan: impl ThroughStage<In, Out>) -> Self {
+    pub fn new<S: Into<String>>(
+        name: S, plan: impl DataDecisionStage<In = In, Decision = Decision, Out = Out>,
+    ) -> Self {
         let inlet = plan.inlet();
+        let decision_inlet = plan.decision_inlet();
         let outlet = plan.outlet();
 
         Self {
             name: name.into(),
             inner_plan: Box::new(plan),
             inlet,
+            decision_inlet,
             outlet,
         }
     }
 }
 
-impl<In, Out> Debug for Plan<In, Out> {
+impl<In, Decision, Out> Debug for Plan<In, Decision, Out> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Plan")
             .field("name", &self.name)
             .field("inner_plan", &self.inner_plan)
             .field("inlet", &self.inlet)
+            .field("decision_inlet", &self.decision_inlet)
             .field("outlet", &self.outlet)
             .finish()
     }
 }
 
-impl<In, Out> SinkShape for Plan<In, Out> {
+impl<In, Decision, Out> SinkShape for Plan<In, Decision, Out> {
     type In = In;
 
     #[inline]
@@ -48,7 +59,7 @@ impl<In, Out> SinkShape for Plan<In, Out> {
     }
 }
 
-impl<In, Out> SourceShape for Plan<In, Out> {
+impl<In, Decision, Out> SourceShape for Plan<In, Decision, Out> {
     type Out = Out;
 
     #[inline]
@@ -59,7 +70,7 @@ impl<In, Out> SourceShape for Plan<In, Out> {
 
 #[dyn_upcast]
 #[async_trait]
-impl<In: AppData, Out: AppData> Stage for Plan<In, Out> {
+impl<In: AppData, Decision: AppData, Out: AppData> Stage for Plan<In, Decision, Out> {
     #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
@@ -85,10 +96,11 @@ impl<In: AppData, Out: AppData> Stage for Plan<In, Out> {
 }
 
 // this implementation block provides a convenient means to ground errors to the phase error.
-impl<In: AppData, Out: AppData> Plan<In, Out> {
+impl<In: AppData, Decision: AppData, Out: AppData> Plan<In, Decision, Out> {
     #[inline]
     async fn do_check(&self) -> Result<(), PlanError> {
         self.inlet.check_attachment().await?;
+        self.decision_inlet.check_attachment().await?;
         self.inner_plan
             .check()
             .await
@@ -111,6 +123,7 @@ impl<In: AppData, Out: AppData> Plan<In, Out> {
     async fn do_close(mut self: Box<Self>) -> Result<(), PlanError> {
         tracing::trace!("closing scaling_plan ports.");
         self.inlet.close().await;
+        self.decision_inlet.close().await;
         self.outlet.close().await;
         self.inner_plan
             .close()

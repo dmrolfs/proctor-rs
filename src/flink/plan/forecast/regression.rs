@@ -1,9 +1,8 @@
 use crate::error::PlanError;
 use crate::flink::plan::forecast::{Point, Workload};
 use chrono::{TimeZone, Utc};
-use nalgebra::{Matrix3, Matrix3x1, SMatrix};
+use nalgebra::{Matrix3, Matrix3x1};
 use num_traits::pow;
-use statrs::statistics::Statistics;
 use std::fmt::Debug;
 
 pub trait RegressionStrategy: Debug {

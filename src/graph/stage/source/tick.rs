@@ -252,6 +252,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(level = "info", skip(self))]
     async fn close(mut self: Box<Self>) -> ProctorResult<()> {
         tracing::info!("closing tick source outlet.");
         self.outlet.close().await;
