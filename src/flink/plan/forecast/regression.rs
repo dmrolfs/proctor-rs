@@ -117,7 +117,7 @@ impl QuadraticRegression {
             .iter()
             .fold(0., |acc, (x, y)| acc + pow(y - (a * pow(*x, 2) + b * x + c), 2));
 
-        let sst = data.iter().fold(0., |acc, (x, y)| acc + pow(y - y_mean, 2));
+        let sst = data.iter().fold(0., |acc, (_, y)| acc + pow(y - y_mean, 2));
 
         let correlation_coefficient = (1. - sse / sst).sqrt();
 

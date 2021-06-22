@@ -122,7 +122,7 @@ impl LeastSquaresWorkloadForecast {
     }
 
     fn estimate_next_timestamp(data: &[Point]) -> Option<f64> {
-        data.get(data.len() - 1).map(|(x, y)| {
+        data.get(data.len() - 1).map(|(x, _)| {
             // calculate average only if there's data.
             let avg_ts_delta = Self::splines(data)
                 .into_iter()
@@ -160,7 +160,7 @@ impl LeastSquaresWorkloadForecast {
     }
 
     fn measure_spike(&mut self, observation: Point) -> usize {
-        if let Some(spike) = self.spike_detector.signal(observation.1) {
+        if let Some(_spike) = self.spike_detector.signal(observation.1) {
             self.consecutive_spikes += 1;
             tracing::debug!(consecutive_spikes=%self.consecutive_spikes, "anomaly detected at {:?}", observation);
         } else {
