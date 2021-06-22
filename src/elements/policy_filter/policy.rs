@@ -35,7 +35,9 @@ pub trait PolicySubscription {
         subscription
     }
 
-    fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription { subscription }
+    fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
+        subscription
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -72,7 +74,9 @@ impl QueryResult {
         Ok(Self { bindings })
     }
 
-    pub fn take_bindings(&mut self) -> Option<telemetry::Table> { self.bindings.take() }
+    pub fn take_bindings(&mut self) -> Option<telemetry::Table> {
+        self.bindings.take()
+    }
 
     pub fn get_typed<T: TryFrom<TelemetryValue>>(&self, key: &str) -> Result<T, PolicyError>
     where
@@ -88,13 +92,19 @@ impl QueryResult {
     }
 
     #[inline]
-    pub fn is_success(&self) -> bool { self.is_some() }
+    pub fn is_success(&self) -> bool {
+        self.is_some()
+    }
 
     #[inline]
-    pub fn is_some(&self) -> bool { self.bindings.is_some() }
+    pub fn is_some(&self) -> bool {
+        self.bindings.is_some()
+    }
 
     #[inline]
-    pub fn is_none(&self) -> bool { self.bindings.is_none() }
+    pub fn is_none(&self) -> bool {
+        self.bindings.is_none()
+    }
 }
 
 impl std::ops::Deref for QueryResult {

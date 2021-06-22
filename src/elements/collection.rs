@@ -191,21 +191,27 @@ impl SourceShape for Collect {
     type Out = Telemetry;
 
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.outlet.clone()
+    }
 }
 
 impl SinkShape for Collect {
     type In = ();
 
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> { self.trigger.clone() }
+    fn inlet(&self) -> Inlet<Self::In> {
+        self.trigger.clone()
+    }
 }
 
 #[dyn_upcast]
 #[async_trait]
 impl Stage for Collect {
     #[inline]
-    fn name(&self) -> &str { self.name.as_str() }
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {

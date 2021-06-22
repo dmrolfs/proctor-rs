@@ -41,7 +41,9 @@ impl QueryPolicy for EligibilityPolicy {
     type Context = FlinkEligibilityContext;
     type Item = MetricCatalog;
 
-    fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> { self.policy_source.load_into(oso) }
+    fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
+        self.policy_source.load_into(oso)
+    }
 
     fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
         Telemetry::initialize_policy_engine(oso)?;

@@ -20,7 +20,9 @@ pub struct LeastSquaresWorkloadForecast {
 const OBSERVATION_WINDOW_SIZE: usize = 20;
 
 impl Default for LeastSquaresWorkloadForecast {
-    fn default() -> Self { LeastSquaresWorkloadForecast::new(OBSERVATION_WINDOW_SIZE, 5., 0.) }
+    fn default() -> Self {
+        LeastSquaresWorkloadForecast::new(OBSERVATION_WINDOW_SIZE, 5., 0.)
+    }
 }
 
 impl LeastSquaresWorkloadForecast {
@@ -169,7 +171,9 @@ impl LeastSquaresWorkloadForecast {
     }
 
     #[inline]
-    fn exceeded_spike_threshold(&self) -> bool { SPIKE_THRESHOLD <= self.consecutive_spikes }
+    fn exceeded_spike_threshold(&self) -> bool {
+        SPIKE_THRESHOLD <= self.consecutive_spikes
+    }
 
     fn drop_data<R>(&mut self, range: R) -> Vec<Point>
     where

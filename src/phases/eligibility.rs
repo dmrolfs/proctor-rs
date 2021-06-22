@@ -48,7 +48,9 @@ impl<T: AppData + ToPolar + Clone, C: ProctorContext> Eligibility<T, C> {
     }
 
     #[inline]
-    pub fn context_inlet(&self) -> Inlet<C> { self.context_inlet.clone() }
+    pub fn context_inlet(&self) -> Inlet<C> {
+        self.context_inlet.clone()
+    }
 }
 
 impl<T, C: Debug> Debug for Eligibility<T, C> {
@@ -67,21 +69,27 @@ impl<T, C> SinkShape for Eligibility<T, C> {
     type In = T;
 
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
+    fn inlet(&self) -> Inlet<Self::In> {
+        self.inlet.clone()
+    }
 }
 
 impl<T, C> SourceShape for Eligibility<T, C> {
     type Out = PolicyOutcome<T, C>;
 
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.outlet.clone()
+    }
 }
 
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData, C: ProctorContext> Stage for Eligibility<T, C> {
     #[inline]
-    fn name(&self) -> &str { self.name.as_str() }
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
@@ -143,12 +151,16 @@ impl<T, C> WithApi for Eligibility<T, C> {
     type Sender = PolicyFilterApi<C>;
 
     #[inline]
-    fn tx_api(&self) -> Self::Sender { self.tx_policy_api.clone() }
+    fn tx_api(&self) -> Self::Sender {
+        self.tx_policy_api.clone()
+    }
 }
 
 impl<T, C> WithMonitor for Eligibility<T, C> {
     type Receiver = PolicyFilterMonitor<T, C>;
 
     #[inline]
-    fn rx_monitor(&self) -> Self::Receiver { self.tx_policy_monitor.subscribe() }
+    fn rx_monitor(&self) -> Self::Receiver {
+        self.tx_policy_monitor.subscribe()
+    }
 }

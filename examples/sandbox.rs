@@ -22,7 +22,9 @@ struct Data {
 }
 
 impl Default for Data {
-    fn default() -> Self { Self { pos: None, value: None, cat: "".to_string() } }
+    fn default() -> Self {
+        Self { pos: None, value: None, cat: "".to_string() }
+    }
 }
 
 const POS_FIELD: &str = "pos";
@@ -83,7 +85,7 @@ async fn main() -> Result<()> {
     //         let is_deploying = rec.get("is_deploying").unwrap().as_str().parse::<bool>().unwrap();
     //
     //         let rec_latest_deployment =
-    // DateTime::parse_from_str(rec.get("last_deployment").unwrap().as_str(), dt_format)            
+    // DateTime::parse_from_str(rec.get("last_deployment").unwrap().as_str(), dt_format)
     // .unwrap()             .with_timezone(&Utc);
     //
     //         let last_failure = match (acc.last_failure, rec_last_failure) {

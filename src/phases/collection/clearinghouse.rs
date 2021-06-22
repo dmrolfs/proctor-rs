@@ -292,7 +292,9 @@ impl TelemetrySubscription {
 
 impl TelemetrySubscription {
     #[tracing::instrument()]
-    pub async fn close(self) { self.outlet_to_subscription().close().await; }
+    pub async fn close(self) {
+        self.outlet_to_subscription().close().await;
+    }
 }
 
 impl PartialEq for TelemetrySubscription {
@@ -324,7 +326,6 @@ impl PartialEq for TelemetrySubscription {
 
 /// Clearinghouse is a sink for collected telemetry data and a subscription-based source for
 /// groups of telemetry fields.
-///
 pub struct Clearinghouse {
     name: String,
     subscriptions: Vec<TelemetrySubscription>,
@@ -545,7 +546,9 @@ impl SinkShape for Clearinghouse {
     type In = Telemetry;
 
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
+    fn inlet(&self) -> Inlet<Self::In> {
+        self.inlet.clone()
+    }
 }
 
 impl UniformFanOutShape for Clearinghouse {
@@ -561,7 +564,9 @@ impl UniformFanOutShape for Clearinghouse {
 #[async_trait]
 impl Stage for Clearinghouse {
     #[inline]
-    fn name(&self) -> &str { self.name.as_str() }
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
@@ -656,7 +661,9 @@ impl stage::WithApi for Clearinghouse {
     type Sender = ClearinghouseApi;
 
     #[inline]
-    fn tx_api(&self) -> Self::Sender { self.tx_api.clone() }
+    fn tx_api(&self) -> Self::Sender {
+        self.tx_api.clone()
+    }
 }
 
 // /////////////////////////////////////////////////////

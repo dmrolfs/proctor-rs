@@ -51,14 +51,18 @@ impl<T> SourceShape for ActorSource<T> {
     type Out = T;
 
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.outlet.clone()
+    }
 }
 
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData> Stage for ActorSource<T> {
     #[inline]
-    fn name(&self) -> &str { self.name.as_ref() }
+    fn name(&self) -> &str {
+        self.name.as_ref()
+    }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
@@ -109,7 +113,9 @@ impl<T> stage::WithApi for ActorSource<T> {
     type Sender = ActorSourceApi<T>;
 
     #[inline]
-    fn tx_api(&self) -> Self::Sender { self.tx_api.clone() }
+    fn tx_api(&self) -> Self::Sender {
+        self.tx_api.clone()
+    }
 }
 
 impl<T> Debug for ActorSource<T> {

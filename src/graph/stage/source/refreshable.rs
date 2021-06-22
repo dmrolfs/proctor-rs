@@ -43,7 +43,9 @@ where
     type Out = Out;
 
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.outlet.clone()
+    }
 }
 
 #[dyn_upcast]
@@ -56,7 +58,9 @@ where
     F: Future<Output = Option<Out>> + Send + 'static,
 {
     #[inline]
-    fn name(&self) -> &str { self.name.as_ref() }
+    fn name(&self) -> &str {
+        self.name.as_ref()
+    }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {

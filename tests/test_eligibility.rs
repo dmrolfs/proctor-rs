@@ -65,7 +65,9 @@ impl ProctorContext for TestEligibilityContext {
         maplit::hashset! { "task.last_failure", }
     }
 
-    fn custom(&self) -> telemetry::Table { self.custom.clone() }
+    fn custom(&self) -> telemetry::Table {
+        self.custom.clone()
+    }
 }
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -188,11 +190,17 @@ struct TestSettings {
 }
 
 impl PolicySettings for TestSettings {
-    fn required_subscription_fields(&self) -> HashSet<String> { self.required_subscription_fields.clone() }
+    fn required_subscription_fields(&self) -> HashSet<String> {
+        self.required_subscription_fields.clone()
+    }
 
-    fn optional_subscription_fields(&self) -> HashSet<String> { self.optional_subscription_fields.clone() }
+    fn optional_subscription_fields(&self) -> HashSet<String> {
+        self.optional_subscription_fields.clone()
+    }
 
-    fn source(&self) -> PolicySource { self.source.clone() }
+    fn source(&self) -> PolicySource {
+        self.source.clone()
+    }
 }
 
 fn make_test_policy<D>(
@@ -281,7 +289,9 @@ impl<D: AppData + ToPolar + Clone> QueryPolicy for TestEligibilityPolicy<D> {
     type Context = TestEligibilityContext;
     type Item = D;
 
-    fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> { self.policy.load_into(oso) }
+    fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
+        self.policy.load_into(oso)
+    }
 
     fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
         oso.register_class(
@@ -756,7 +766,9 @@ struct TestPolicy {
 }
 
 impl TestPolicy {
-    pub fn new<S: AsRef<str>>(policy: S) -> Self { Self::new_with_extension(policy, HashSet::<String>::new()) }
+    pub fn new<S: AsRef<str>>(policy: S) -> Self {
+        Self::new_with_extension(policy, HashSet::<String>::new())
+    }
 
     pub fn new_with_extension<S0, S1>(policy: S0, subscription_extension: HashSet<S1>) -> Self
     where

@@ -31,7 +31,9 @@ impl ProctorContext for FlinkEligibilityContext {
         }
     }
 
-    fn custom(&self) -> telemetry::Table { self.custom.clone() }
+    fn custom(&self) -> telemetry::Table {
+        self.custom.clone()
+    }
 }
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]

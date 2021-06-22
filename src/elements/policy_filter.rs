@@ -36,7 +36,9 @@ pub struct PolicyOutcome<T, C> {
 }
 
 impl<T, C> PolicyOutcome<T, C> {
-    pub fn new(item: T, context: C, bindings: telemetry::Table) -> Self { Self { item, context, bindings } }
+    pub fn new(item: T, context: C, bindings: telemetry::Table) -> Self {
+        Self { item, context, bindings }
+    }
 }
 
 const T_ITEM: &'static str = "item";
@@ -136,7 +138,9 @@ where
     }
 
     #[inline]
-    pub fn context_inlet(&self) -> Inlet<C> { self.context_inlet.clone() }
+    pub fn context_inlet(&self) -> Inlet<C> {
+        self.context_inlet.clone()
+    }
 }
 
 impl<T, C, A, P> SinkShape for PolicyFilter<T, C, A, P>
@@ -146,7 +150,9 @@ where
     type In = T;
 
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
+    fn inlet(&self) -> Inlet<Self::In> {
+        self.inlet.clone()
+    }
 }
 
 impl<T, C, A, P> SourceShape for PolicyFilter<T, C, A, P>
@@ -156,7 +162,9 @@ where
     type Out = PolicyOutcome<T, C>;
 
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.outlet.clone()
+    }
 }
 
 #[dyn_upcast]
@@ -169,7 +177,9 @@ where
     P: QueryPolicy<Item = T, Context = C, Args = A> + 'static,
 {
     #[inline]
-    fn name(&self) -> &str { self.name.as_str() }
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
@@ -418,7 +428,9 @@ where
     type Sender = PolicyFilterApi<C>;
 
     #[inline]
-    fn tx_api(&self) -> Self::Sender { self.tx_api.clone() }
+    fn tx_api(&self) -> Self::Sender {
+        self.tx_api.clone()
+    }
 }
 
 impl<T, C, A, P> stage::WithMonitor for PolicyFilter<T, C, A, P>
@@ -428,7 +440,9 @@ where
     type Receiver = PolicyFilterMonitor<T, C>;
 
     #[inline]
-    fn rx_monitor(&self) -> Self::Receiver { self.tx_monitor.subscribe() }
+    fn rx_monitor(&self) -> Self::Receiver {
+        self.tx_monitor.subscribe()
+    }
 }
 
 impl<T, C, A, P> Debug for PolicyFilter<T, C, A, P>
@@ -487,7 +501,9 @@ mod tests {
             maplit::hashset! {"location_code", }
         }
 
-        fn custom(&self) -> telemetry::Table { self.qualities.clone() }
+        fn custom(&self) -> telemetry::Table {
+            self.qualities.clone()
+        }
     }
 
     #[derive(Debug)]
@@ -496,7 +512,9 @@ mod tests {
     }
 
     impl TestPolicy {
-        pub fn new<S: Into<String>>(policy: S) -> Self { Self { policy: policy.into() } }
+        pub fn new<S: Into<String>>(policy: S) -> Self {
+            Self { policy: policy.into() }
+        }
     }
 
     impl PolicySubscription for TestPolicy {

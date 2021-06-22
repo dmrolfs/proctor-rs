@@ -86,7 +86,9 @@ impl<In: AppData + ToPolar + Clone, Out: AppData, C: ProctorContext> Decision<In
     }
 
     #[inline]
-    pub fn context_inlet(&self) -> Inlet<C> { self.context_inlet.clone() }
+    pub fn context_inlet(&self) -> Inlet<C> {
+        self.context_inlet.clone()
+    }
 
     fn policy_with_prelude(
         policy: impl QueryPolicy<Item = In, Context = C, Args = (In, C, PolarValue)> + 'static,
@@ -159,21 +161,27 @@ impl<In, Out, C> SinkShape for Decision<In, Out, C> {
     type In = In;
 
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
+    fn inlet(&self) -> Inlet<Self::In> {
+        self.inlet.clone()
+    }
 }
 
 impl<In, Out, C> SourceShape for Decision<In, Out, C> {
     type Out = Out;
 
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.outlet.clone()
+    }
 }
 
 #[dyn_upcast]
 #[async_trait]
 impl<In: AppData, Out: AppData, C: ProctorContext> Stage for Decision<In, Out, C> {
     #[inline]
-    fn name(&self) -> &str { self.name.as_str() }
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
@@ -235,12 +243,16 @@ impl<In, Out, C> WithApi for Decision<In, Out, C> {
     type Sender = PolicyFilterApi<C>;
 
     #[inline]
-    fn tx_api(&self) -> Self::Sender { self.tx_policy_api.clone() }
+    fn tx_api(&self) -> Self::Sender {
+        self.tx_policy_api.clone()
+    }
 }
 
 impl<In, Out, C> WithMonitor for Decision<In, Out, C> {
     type Receiver = PolicyFilterMonitor<In, C>;
 
     #[inline]
-    fn rx_monitor(&self) -> Self::Receiver { self.tx_policy_monitor.subscribe() }
+    fn rx_monitor(&self) -> Self::Receiver {
+        self.tx_policy_monitor.subscribe()
+    }
 }

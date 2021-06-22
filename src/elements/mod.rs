@@ -16,6 +16,8 @@ pub mod telemetry;
 
 pub trait ProctorContext: AppData + Clone + PolarClass + Serialize + DeserializeOwned {
     fn required_context_fields() -> HashSet<&'static str>;
-    fn optional_context_fields() -> HashSet<&'static str> { HashSet::default() }
+    fn optional_context_fields() -> HashSet<&'static str> {
+        HashSet::default()
+    }
     fn custom(&self) -> telemetry::Table;
 }

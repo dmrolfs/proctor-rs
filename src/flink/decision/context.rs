@@ -28,7 +28,9 @@ impl ProctorContext for FlinkDecisionContext {
         }
     }
 
-    fn custom(&self) -> telemetry::Table { self.custom.clone() }
+    fn custom(&self) -> telemetry::Table {
+        self.custom.clone()
+    }
 }
 
 // /////////////////////////////////////////////////////

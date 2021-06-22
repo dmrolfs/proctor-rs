@@ -80,15 +80,21 @@ impl Constraint {
     /// By default, Tick has no constraint and will produce ticks ongoing until it is stopped by
     /// either dropping the Tick source or sending it the [TickMsg::Stop] message.
     #[inline]
-    pub fn none() -> Constraint { Constraint::None }
+    pub fn none() -> Constraint {
+        Constraint::None
+    }
 
     /// Tick can be set to stop after a predefined count of ticks.
     #[inline]
-    pub fn by_count(limit: usize) -> Constraint { Constraint::ByCount { count: 0, limit } }
+    pub fn by_count(limit: usize) -> Constraint {
+        Constraint::ByCount { count: 0, limit }
+    }
 
     /// Tick can be set to stop after a predefined duration.
     #[inline]
-    pub fn by_time(limit: Duration) -> Constraint { Constraint::ByTime { stop: None, limit } }
+    pub fn by_time(limit: Duration) -> Constraint {
+        Constraint::ByTime { stop: None, limit }
+    }
 }
 
 /// Elements are emitted periodically with the specified interval. The tick element will be
@@ -168,7 +174,9 @@ impl<T> SourceShape for Tick<T> {
     type Out = T;
 
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.outlet.clone()
+    }
 }
 
 #[dyn_upcast]
@@ -178,7 +186,9 @@ where
     T: AppData + Clone + Unpin + Sync,
 {
     #[inline]
-    fn name(&self) -> &str { self.name.as_ref() }
+    fn name(&self) -> &str {
+        self.name.as_ref()
+    }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
@@ -258,7 +268,9 @@ impl<T> stage::WithApi for Tick<T> {
     type Sender = TickApi;
 
     #[inline]
-    fn tx_api(&self) -> Self::Sender { self.tx_api.clone() }
+    fn tx_api(&self) -> Self::Sender {
+        self.tx_api.clone()
+    }
 }
 
 impl<T> Debug for Tick<T> {

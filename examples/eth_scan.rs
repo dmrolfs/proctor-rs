@@ -21,7 +21,9 @@ pub enum CurrencyCode {
 }
 
 impl CurrencyCode {
-    fn label(code: &CurrencyCode) -> String { format!("{}", code).to_lowercase() }
+    fn label(code: &CurrencyCode) -> String {
+        format!("{}", code).to_lowercase()
+    }
 }
 
 impl CurrencyCode {

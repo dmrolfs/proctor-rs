@@ -94,21 +94,27 @@ impl<T> UniformFanOutShape for Broadcast<T> {
     type Out = T;
 
     #[inline]
-    fn outlets(&self) -> OutletsShape<Self::Out> { self.outlets.clone() }
+    fn outlets(&self) -> OutletsShape<Self::Out> {
+        self.outlets.clone()
+    }
 }
 
 impl<T> SinkShape for Broadcast<T> {
     type In = T;
 
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
+    fn inlet(&self) -> Inlet<Self::In> {
+        self.inlet.clone()
+    }
 }
 
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData + Clone> Stage for Broadcast<T> {
     #[inline]
-    fn name(&self) -> &str { self.name.as_str() }
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {

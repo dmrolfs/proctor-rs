@@ -10,9 +10,13 @@ use super::Benchmark;
 pub struct ClusterPerformance(BTreeMap<usize, Benchmark>);
 
 impl ClusterPerformance {
-    pub fn add_benchmark(&mut self, b: Benchmark) { let _ = self.0.insert(b.nr_task_managers, b); }
+    pub fn add_benchmark(&mut self, b: Benchmark) {
+        let _ = self.0.insert(b.nr_task_managers, b);
+    }
 
-    pub fn clear(&mut self) { self.0.clear() }
+    pub fn clear(&mut self) {
+        self.0.clear()
+    }
 }
 
 impl std::ops::Add<Benchmark> for ClusterPerformance {

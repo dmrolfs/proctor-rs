@@ -17,7 +17,9 @@ use pprof::ProfilerGuard;
 ///     // Use the criterion struct as normal here.
 /// }
 ///
-/// fn custom() -> Criterion { Criterion::default().with_profiler(FlamegraphProfiler::new()) }
+/// fn custom() -> Criterion {
+///     Criterion::default().with_profiler(FlamegraphProfiler::new())
+/// }
 ///
 /// criterion_group! {
 ///     name = benches;
@@ -44,7 +46,9 @@ pub struct FlamegraphProfiler<'a> {
 
 impl<'a> FlamegraphProfiler<'a> {
     #[allow(dead_code)]
-    pub fn new(frequency: c_int) -> Self { FlamegraphProfiler { frequency, active_profiler: None } }
+    pub fn new(frequency: c_int) -> Self {
+        FlamegraphProfiler { frequency, active_profiler: None }
+    }
 }
 
 impl<'a> Profiler for FlamegraphProfiler<'a> {

@@ -24,12 +24,16 @@ pub struct Telemetry(TelemetryValue);
 
 impl Default for Telemetry {
     #[tracing::instrument(level = "trace", skip())]
-    fn default() -> Self { Self(TelemetryValue::Table(HashMap::default())) }
+    fn default() -> Self {
+        Self(TelemetryValue::Table(HashMap::default()))
+    }
 }
 
 impl Telemetry {
     #[tracing::instrument(level = "trace", skip())]
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     /// Attempt to deserialize the entire telemetry into the requested type.
     #[tracing::instrument(level = "trace", skip())]
@@ -55,7 +59,9 @@ impl Telemetry {
     }
 
     #[inline]
-    pub fn extend(&mut self, that: Self) { self.0.extend(&that.0); }
+    pub fn extend(&mut self, that: Self) {
+        self.0.extend(&that.0);
+    }
 
     #[tracing::instrument(level = "trace", skip(oso))]
     pub fn initialize_policy_engine(oso: &mut oso::Oso) -> Result<(), PolicyError> {
@@ -104,12 +110,16 @@ impl std::ops::DerefMut for Telemetry {
 
 impl Into<Telemetry> for HashMap<String, TelemetryValue> {
     #[tracing::instrument(level = "trace", skip())]
-    fn into(self) -> Telemetry { Telemetry(TelemetryValue::Table(self)) }
+    fn into(self) -> Telemetry {
+        Telemetry(TelemetryValue::Table(self))
+    }
 }
 
 impl Into<Telemetry> for BTreeMap<String, TelemetryValue> {
     #[tracing::instrument(level = "trace", skip())]
-    fn into(self) -> Telemetry { self.into_iter().collect() }
+    fn into(self) -> Telemetry {
+        self.into_iter().collect()
+    }
 }
 
 impl std::ops::Add for Telemetry {

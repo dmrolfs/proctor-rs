@@ -67,13 +67,19 @@ pub struct SimplePolicySettings {
 
 impl crate::elements::PolicySettings for SimplePolicySettings {
     #[inline]
-    fn required_subscription_fields(&self) -> HashSet<String> { self.required_subscription_fields.clone() }
+    fn required_subscription_fields(&self) -> HashSet<String> {
+        self.required_subscription_fields.clone()
+    }
 
     #[inline]
-    fn optional_subscription_fields(&self) -> HashSet<String> { self.optional_subscription_fields.clone() }
+    fn optional_subscription_fields(&self) -> HashSet<String> {
+        self.optional_subscription_fields.clone()
+    }
 
     #[inline]
-    fn source(&self) -> PolicySource { self.policy_source.clone() }
+    fn source(&self) -> PolicySource {
+        self.policy_source.clone()
+    }
 }
 
 // #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

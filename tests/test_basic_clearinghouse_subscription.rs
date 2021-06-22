@@ -23,7 +23,9 @@ struct Data {
 }
 
 impl Default for Data {
-    fn default() -> Self { Self { pos: None, value: None, cat: "".to_string() } }
+    fn default() -> Self {
+        Self { pos: None, value: None, cat: "".to_string() }
+    }
 }
 
 const POS_FIELD: &str = "pos";

@@ -43,7 +43,9 @@ impl TestItem {
         boundary < self.timestamp
     }
 
-    pub fn input_messages_per_sec(&self, lag: u32) -> f64 { self.flow.input_messages_per_sec * lag as f64 }
+    pub fn input_messages_per_sec(&self, lag: u32) -> f64 {
+        self.flow.input_messages_per_sec * lag as f64
+    }
 }
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -60,9 +62,13 @@ struct TestContext {
 }
 
 impl TestContext {
-    pub fn new(location_code: u32) -> Self { Self { location_code, custom: telemetry::Table::default() } }
+    pub fn new(location_code: u32) -> Self {
+        Self { location_code, custom: telemetry::Table::default() }
+    }
 
-    pub fn with_custom(self, custom: telemetry::Table) -> Self { Self { custom, ..self } }
+    pub fn with_custom(self, custom: telemetry::Table) -> Self {
+        Self { custom, ..self }
+    }
 }
 
 impl proctor::ProctorContext for TestContext {
@@ -70,7 +76,9 @@ impl proctor::ProctorContext for TestContext {
         maplit::hashset! { "location_code", "input_messages_per_sec", }
     }
 
-    fn custom(&self) -> telemetry::Table { self.custom.clone() }
+    fn custom(&self) -> telemetry::Table {
+        self.custom.clone()
+    }
 }
 
 #[derive(Debug)]
@@ -153,7 +161,9 @@ struct TestFlow {
 }
 
 impl TestFlow {
-    pub async fn new<S: Into<String>>(policy: S) -> Self { Self::with_query(policy, "eligible").await }
+    pub async fn new<S: Into<String>>(policy: S) -> Self {
+        Self::with_query(policy, "eligible").await
+    }
 
     pub async fn with_query<S0: Into<String>, S1: Into<String>>(policy: S0, query: S1) -> Self {
         let item_source = stage::ActorSource::<TestItem>::new("item_source");

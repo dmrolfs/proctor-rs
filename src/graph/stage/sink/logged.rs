@@ -24,7 +24,9 @@ impl<In> LoggedSink<In> {
 #[async_trait]
 impl<In: AppData> Stage for LoggedSink<In> {
     #[inline]
-    fn name(&self) -> &str { self.name.as_ref() }
+    fn name(&self) -> &str {
+        self.name.as_ref()
+    }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
@@ -51,7 +53,9 @@ impl<In> SinkShape for LoggedSink<In> {
     type In = In;
 
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
+    fn inlet(&self) -> Inlet<Self::In> {
+        self.inlet.clone()
+    }
 }
 
 impl<In> fmt::Debug for LoggedSink<In> {

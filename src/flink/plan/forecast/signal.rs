@@ -82,7 +82,9 @@ impl SignalDetector {
         }
     }
 
-    pub fn clear(&mut self) { self.window.clear(); }
+    pub fn clear(&mut self) {
+        self.window.clear();
+    }
 
     pub fn signal(&mut self, value: f64) -> Option<Anomaly> {
         if self.window.len() < self.window.capacity() {

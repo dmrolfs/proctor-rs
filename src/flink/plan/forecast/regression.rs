@@ -52,14 +52,18 @@ impl LinearRegression {
 
 impl RegressionStrategy for LinearRegression {
     #[inline]
-    fn name(&self) -> &str { "LinearRegression" }
+    fn name(&self) -> &str {
+        "LinearRegression"
+    }
 
     fn calculate(&self, x: f64) -> Result<Workload, PlanError> {
         Ok(Workload::RecordsPerSecond(self.slope * x + self.y_intercept))
     }
 
     #[inline]
-    fn correlation_coefficient(&self) -> f64 { self.correlation_coefficient }
+    fn correlation_coefficient(&self) -> f64 {
+        self.correlation_coefficient
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -123,12 +127,16 @@ impl QuadraticRegression {
 
 impl RegressionStrategy for QuadraticRegression {
     #[inline]
-    fn name(&self) -> &str { "QuadraticRegression" }
+    fn name(&self) -> &str {
+        "QuadraticRegression"
+    }
 
     fn calculate(&self, x: f64) -> Result<Workload, PlanError> {
         Ok(Workload::RecordsPerSecond(self.a * pow(x, 2) + self.b * x + self.c))
     }
 
     #[inline]
-    fn correlation_coefficient(&self) -> f64 { self.correlation_coefficient }
+    fn correlation_coefficient(&self) -> f64 {
+        self.correlation_coefficient
+    }
 }

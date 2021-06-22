@@ -82,7 +82,9 @@ where
     I: Iterator<Item = T> + Send + Sync + 'static,
 {
     #[inline]
-    fn name(&self) -> &str { self.name.as_str() }
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
@@ -113,7 +115,9 @@ impl<T, I> SourceShape for Sequence<T, I> {
     type Out = T;
 
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.outlet.clone()
+    }
 }
 
 impl<T, I> fmt::Debug for Sequence<T, I> {

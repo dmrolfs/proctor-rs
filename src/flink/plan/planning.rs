@@ -45,28 +45,36 @@ impl SourceShape for FlinkScalePlanning {
     type Out = FlinkScalePlan;
 
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.outlet.clone()
+    }
 }
 
 impl SinkShape for FlinkScalePlanning {
     type In = MetricCatalog;
 
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
+    fn inlet(&self) -> Inlet<Self::In> {
+        self.inlet.clone()
+    }
 }
 
 impl DataDecisionStage for FlinkScalePlanning {
     type Decision = DecisionResult<MetricCatalog>;
 
     #[inline]
-    fn decision_inlet(&self) -> Inlet<Self::Decision> { self.decision_inlet.clone() }
+    fn decision_inlet(&self) -> Inlet<Self::Decision> {
+        self.decision_inlet.clone()
+    }
 }
 
 #[dyn_upcast]
 #[async_trait]
 impl Stage for FlinkScalePlanning {
     #[inline]
-    fn name(&self) -> &str { self.name.as_str() }
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
@@ -123,7 +131,9 @@ impl FlinkScalePlanning {
     }
 
     #[tracing::instrument(level = "info", skip(data), fields())]
-    async fn handle_data_item(data: MetricCatalog) -> Result<(), PlanError> { todo!() }
+    async fn handle_data_item(data: MetricCatalog) -> Result<(), PlanError> {
+        todo!()
+    }
 
     #[tracing::instrument(level = "info", skip(), fields())]
     async fn handle_decision(

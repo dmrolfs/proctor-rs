@@ -43,11 +43,17 @@ struct TestSettings {
 }
 
 impl PolicySettings for TestSettings {
-    fn required_subscription_fields(&self) -> HashSet<String> { self.required_subscription_fields.clone() }
+    fn required_subscription_fields(&self) -> HashSet<String> {
+        self.required_subscription_fields.clone()
+    }
 
-    fn optional_subscription_fields(&self) -> HashSet<String> { self.optional_subscription_fields.clone() }
+    fn optional_subscription_fields(&self) -> HashSet<String> {
+        self.optional_subscription_fields.clone()
+    }
 
-    fn source(&self) -> PolicySource { self.source.clone() }
+    fn source(&self) -> PolicySource {
+        self.source.clone()
+    }
 }
 
 fn make_test_policy(

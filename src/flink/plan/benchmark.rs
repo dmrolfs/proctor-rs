@@ -20,7 +20,9 @@ pub struct Benchmark {
 }
 
 impl PartialOrd for Benchmark {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.nr_task_managers.cmp(&other.nr_task_managers)) }
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.nr_task_managers.cmp(&other.nr_task_managers))
+    }
 }
 
 const T_TIMESTAMP: &'static str = "timestamp";

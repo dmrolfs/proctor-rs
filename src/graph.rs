@@ -76,7 +76,9 @@ impl Graph {
         self.nodes.push_back(node);
     }
 
-    fn node_names(&self) -> Vec<&str> { self.nodes.iter().map(|n| n.name.as_str()).collect() }
+    fn node_names(&self) -> Vec<&str> {
+        self.nodes.iter().map(|n| n.name.as_str()).collect()
+    }
 
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn check(&self) -> ProctorResult<()> {

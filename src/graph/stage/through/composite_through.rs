@@ -138,21 +138,27 @@ impl<In, Out> SourceShape for CompositeThrough<In, Out> {
     type Out = Out;
 
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
+    fn outlet(&self) -> Outlet<Self::Out> {
+        self.outlet.clone()
+    }
 }
 
 impl<In, Out> SinkShape for CompositeThrough<In, Out> {
     type In = In;
 
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
+    fn inlet(&self) -> Inlet<Self::In> {
+        self.inlet.clone()
+    }
 }
 
 #[dyn_upcast]
 #[async_trait]
 impl<In: AppData, Out: AppData> Stage for CompositeThrough<In, Out> {
     #[inline]
-    fn name(&self) -> &str { self.name.as_str() }
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {

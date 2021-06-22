@@ -80,7 +80,9 @@ where
     type In = In;
 
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
+    fn inlet(&self) -> Inlet<Self::In> {
+        self.inlet.clone()
+    }
 }
 
 #[dyn_upcast]
@@ -91,7 +93,9 @@ where
     In: AppData,
 {
     #[inline]
-    fn name(&self) -> &str { self.name.as_ref() }
+    fn name(&self) -> &str {
+        self.name.as_ref()
+    }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {

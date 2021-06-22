@@ -25,11 +25,15 @@ pub enum ProctorError {
 }
 
 impl From<PortError> for ProctorError {
-    fn from(that: PortError) -> Self { ProctorError::GraphError(that.into()) }
+    fn from(that: PortError) -> Self {
+        ProctorError::GraphError(that.into())
+    }
 }
 
 impl From<StageError> for ProctorError {
-    fn from(that: StageError) -> Self { ProctorError::GraphError(that.into()) }
+    fn from(that: StageError) -> Self {
+        ProctorError::GraphError(that.into())
+    }
 }
 
 #[derive(Debug, Error)]
@@ -166,7 +170,9 @@ pub enum PolicyError {
 }
 
 impl From<PortError> for PolicyError {
-    fn from(that: PortError) -> Self { PolicyError::PublishError(that.into()) }
+    fn from(that: PortError) -> Self {
+        PolicyError::PublishError(that.into())
+    }
 }
 
 /// Set of errors occurring while handling telemetry data
@@ -253,7 +259,9 @@ pub enum PortError {
 }
 
 impl<T: 'static + Debug + Send + Sync> From<tokio::sync::mpsc::error::SendError<T>> for PortError {
-    fn from(that: tokio::sync::mpsc::error::SendError<T>) -> Self { PortError::ChannelError(that.into()) }
+    fn from(that: tokio::sync::mpsc::error::SendError<T>) -> Self {
+        PortError::ChannelError(that.into())
+    }
 }
 
 /// Error variants related to configuration.
@@ -283,15 +291,21 @@ pub enum SettingsError {
 }
 
 impl From<reqwest::header::InvalidHeaderName> for SettingsError {
-    fn from(that: reqwest::header::InvalidHeaderName) -> Self { SettingsError::HttpRequestError(that.into()) }
+    fn from(that: reqwest::header::InvalidHeaderName) -> Self {
+        SettingsError::HttpRequestError(that.into())
+    }
 }
 
 impl From<reqwest::header::InvalidHeaderValue> for SettingsError {
-    fn from(that: reqwest::header::InvalidHeaderValue) -> Self { SettingsError::HttpRequestError(that.into()) }
+    fn from(that: reqwest::header::InvalidHeaderValue) -> Self {
+        SettingsError::HttpRequestError(that.into())
+    }
 }
 
 impl From<toml::de::Error> for SettingsError {
-    fn from(that: toml::de::Error) -> Self { SettingsError::SourceError(that.into()) }
+    fn from(that: toml::de::Error) -> Self {
+        SettingsError::SourceError(that.into())
+    }
 }
 
 #[derive(Debug)]

@@ -64,9 +64,13 @@ pub enum PolicySource {
 }
 
 impl PolicySource {
-    pub fn from_string<S: Into<String>>(policy: S) -> Self { Self::String(policy.into()) }
+    pub fn from_string<S: Into<String>>(policy: S) -> Self {
+        Self::String(policy.into())
+    }
 
-    pub fn from_path(policy_path: PathBuf) -> Self { Self::File(policy_path) }
+    pub fn from_path(policy_path: PathBuf) -> Self {
+        Self::File(policy_path)
+    }
 
     pub fn load_into(&self, oso: &oso::Oso) -> Result<(), PolicyError> {
         let result = match self {

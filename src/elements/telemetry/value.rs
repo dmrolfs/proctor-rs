@@ -57,7 +57,9 @@ impl TelemetryValue {
 
 impl Default for TelemetryValue {
     #[tracing::instrument(level = "trace")]
-    fn default() -> Self { Self::Unit }
+    fn default() -> Self {
+        Self::Unit
+    }
 }
 
 impl fmt::Display for TelemetryValue {
@@ -141,17 +143,23 @@ impl Into<ConfigValue> for TelemetryValue {
 }
 
 impl From<bool> for TelemetryValue {
-    fn from(value: bool) -> Self { TelemetryValue::Boolean(value) }
+    fn from(value: bool) -> Self {
+        TelemetryValue::Boolean(value)
+    }
 }
 
 impl From<usize> for TelemetryValue {
-    fn from(value: usize) -> Self { TelemetryValue::Integer(value as i64) }
+    fn from(value: usize) -> Self {
+        TelemetryValue::Integer(value as i64)
+    }
 }
 
 macro_rules! from_int_to_telemetry {
     ($i:ty) => {
         impl From<$i> for TelemetryValue {
-            fn from(value: $i) -> Self { Self::Integer(value.into()) }
+            fn from(value: $i) -> Self {
+                Self::Integer(value.into())
+            }
         }
     };
 }
@@ -167,7 +175,9 @@ from_int_to_telemetry!(i64);
 macro_rules! from_float_to_telemetry {
     ($f:ty) => {
         impl From<$f> for TelemetryValue {
-            fn from(value: $f) -> Self { Self::Float(value.into()) }
+            fn from(value: $f) -> Self {
+                Self::Float(value.into())
+            }
         }
     };
 }
@@ -176,43 +186,63 @@ from_float_to_telemetry!(f32);
 from_float_to_telemetry!(f64);
 
 impl From<String> for TelemetryValue {
-    fn from(rep: String) -> Self { Self::Text(rep) }
+    fn from(rep: String) -> Self {
+        Self::Text(rep)
+    }
 }
 
 impl<'a> From<&'a str> for TelemetryValue {
-    fn from(rep: &'a str) -> Self { Self::Text(rep.to_string()) }
+    fn from(rep: &'a str) -> Self {
+        Self::Text(rep.to_string())
+    }
 }
 
 impl<T: Into<TelemetryValue>> From<Vec<T>> for TelemetryValue {
-    fn from(values: Vec<T>) -> Self { Self::Seq(values.into_iter().map(|v| v.into()).collect()) }
+    fn from(values: Vec<T>) -> Self {
+        Self::Seq(values.into_iter().map(|v| v.into()).collect())
+    }
 }
 
 impl<T: Into<TelemetryValue>> From<VecDeque<T>> for TelemetryValue {
-    fn from(values: VecDeque<T>) -> Self { Self::Seq(values.into_iter().map(|v| v.into()).collect()) }
+    fn from(values: VecDeque<T>) -> Self {
+        Self::Seq(values.into_iter().map(|v| v.into()).collect())
+    }
 }
 
 impl<T: Into<TelemetryValue>> From<LinkedList<T>> for TelemetryValue {
-    fn from(values: LinkedList<T>) -> Self { Self::Seq(values.into_iter().map(|v| v.into()).collect()) }
+    fn from(values: LinkedList<T>) -> Self {
+        Self::Seq(values.into_iter().map(|v| v.into()).collect())
+    }
 }
 
 impl<T: Into<TelemetryValue>> From<HashSet<T>> for TelemetryValue {
-    fn from(values: HashSet<T>) -> Self { Self::Seq(values.into_iter().map(|v| v.into()).collect()) }
+    fn from(values: HashSet<T>) -> Self {
+        Self::Seq(values.into_iter().map(|v| v.into()).collect())
+    }
 }
 
 impl<T: Into<TelemetryValue>> From<BTreeSet<T>> for TelemetryValue {
-    fn from(values: BTreeSet<T>) -> Self { Self::Seq(values.into_iter().map(|v| v.into()).collect()) }
+    fn from(values: BTreeSet<T>) -> Self {
+        Self::Seq(values.into_iter().map(|v| v.into()).collect())
+    }
 }
 
 impl<T: Into<TelemetryValue>> From<BinaryHeap<T>> for TelemetryValue {
-    fn from(values: BinaryHeap<T>) -> Self { Self::Seq(values.into_iter().map(|v| v.into()).collect()) }
+    fn from(values: BinaryHeap<T>) -> Self {
+        Self::Seq(values.into_iter().map(|v| v.into()).collect())
+    }
 }
 
 impl<'a, T: Clone + Into<TelemetryValue>> From<&'a [T]> for TelemetryValue {
-    fn from(values: &'a [T]) -> Self { Self::Seq(values.iter().cloned().map(|v| v.into()).collect()) }
+    fn from(values: &'a [T]) -> Self {
+        Self::Seq(values.iter().cloned().map(|v| v.into()).collect())
+    }
 }
 
 impl<T: Into<TelemetryValue>> From<HashMap<String, T>> for TelemetryValue {
-    fn from(table: HashMap<String, T>) -> Self { Self::Table(table.into_iter().map(|(k, v)| (k, v.into())).collect()) }
+    fn from(table: HashMap<String, T>) -> Self {
+        Self::Table(table.into_iter().map(|(k, v)| (k, v.into())).collect())
+    }
 }
 
 impl<T: Into<TelemetryValue>> From<HashMap<&str, T>> for TelemetryValue {
@@ -222,7 +252,9 @@ impl<T: Into<TelemetryValue>> From<HashMap<&str, T>> for TelemetryValue {
 }
 
 impl<T: Into<TelemetryValue>> From<BTreeMap<String, T>> for TelemetryValue {
-    fn from(table: BTreeMap<String, T>) -> Self { Self::Table(table.into_iter().map(|(k, v)| (k, v.into())).collect()) }
+    fn from(table: BTreeMap<String, T>) -> Self {
+        Self::Table(table.into_iter().map(|(k, v)| (k, v.into())).collect())
+    }
 }
 
 impl<T: Into<TelemetryValue>> From<BTreeMap<&str, T>> for TelemetryValue {
@@ -582,7 +614,9 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
         impl<'de> de::Visitor<'de> for ValueVisitor {
             type Value = TelemetryValue;
 
-            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.write_str("any valid telemetry value") }
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("any valid telemetry value")
+            }
 
             #[inline]
             #[tracing::instrument(level = "info")]
