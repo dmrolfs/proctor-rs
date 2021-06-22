@@ -1,7 +1,7 @@
-//todo This file was part of the direct Serializer/Deserializer approach that didn't pan out well on the first attempt.
-// tried to define Telemetry as a Deserializer; meaning values could be directly
-// deserialized from it. I ran into problems getting Enum Variants right and particular trouble with
-// recursive structures; e.g., Seq of Tables, etc.
+// todo This file was part of the direct Serializer/Deserializer approach that didn't pan out well
+// on the first attempt. tried to define Telemetry as a Deserializer; meaning values could be
+// directly deserialized from it. I ran into problems getting Enum Variants right and particular
+// trouble with recursive structures; e.g., Seq of Tables, etc.
 
 // use crate::graph::GraphResult;
 // use serde::ser;
@@ -40,8 +40,8 @@
 //         let full_key = match self.last_key_index_pair() {
 //             Some((key, Some(index))) => Ok(format!("{}{}[{}]", SEQ_PREFIX, key, index)),
 //             Some((key, None)) => Ok(key.to_string()),
-//             None => Err(StageError::GraphSerde(format!("key is not found for value {:?}", value))),
-//         }?;
+//             None => Err(StageError::GraphSerde(format!("key is not found for value {:?}",
+// value))),         }?;
 //
 //         let (key, value) = self.refine_key_value(full_key, value)?;
 //         tracing::trace!(?key, ?value, "inserting into serialization output.");
@@ -50,8 +50,8 @@
 //     }
 //
 //     #[tracing::instrument(level="trace", skip(), )]
-//     fn refine_key_value<T>(&mut self, full_key: String, value: T) -> GraphResult<(String, TelemetryValue)>
-//     where
+//     fn refine_key_value<T>(&mut self, full_key: String, value: T) -> GraphResult<(String,
+// TelemetryValue)>     where
 //         T: Into<TelemetryValue> + Debug,
 //     {
 //         tracing::trace!(?full_key, ?value, "refining full_key and value...");
@@ -66,8 +66,8 @@
 //                 Self::do_refine_table_key_type(k.as_str(),self.output.get(&key), value)?
 //             },
 //             KeyType::SeqTable(idx, k) => {
-//                 Self::do_refine_seq_table_key_type(idx, k.as_str(), self.output.get(&key), value)?
-//             },
+//                 Self::do_refine_seq_table_key_type(idx, k.as_str(), self.output.get(&key),
+// value)?             },
 //         };
 //         tracing::info!(?key, ?value, "refined telemetry serialized key and value");
 //         Ok((key, value))
@@ -79,8 +79,9 @@
 //         const KEY: &str = "key";
 //         const IDX: &str = "idx";
 //         lazy_static! {
-//             static ref RE_SEQ: Regex = Regex::new(format!(r"{}(?P<{}>.+)\[(?P<{}>\d+)\]", SEQ_PREFIX, NAME, IDX).as_str()).unwrap();
-//             static ref RE_TABLE: Regex = Regex::new(format!(r"{}(?P<{}>.+)\.(?P<{}>.+)", TABLE_PREFIX, NAME, KEY).as_str()).unwrap();
+//             static ref RE_SEQ: Regex = Regex::new(format!(r"{}(?P<{}>.+)\[(?P<{}>\d+)\]",
+// SEQ_PREFIX, NAME, IDX).as_str()).unwrap();             static ref RE_TABLE: Regex =
+// Regex::new(format!(r"{}(?P<{}>.+)\.(?P<{}>.+)", TABLE_PREFIX, NAME, KEY).as_str()).unwrap();
 //             static ref RE_SEQ_TABLE: Regex = Regex::new(format!(
 //                 r"{}(?P<{}>.+)\[(?P<{}>\d+)\]\.(?P<{}>.+)",
 //                 SEQ_TABLE_PREFIX, NAME, KEY, IDX
@@ -114,8 +115,8 @@
 //     }
 //
 //     #[tracing::instrument(level="trace")]
-//     fn do_refine_seq_key_type<T>(_idx: usize, telemetry: Option<&TelemetryValue>, value: T) -> GraphResult<TelemetryValue>
-//         where
+//     fn do_refine_seq_key_type<T>(_idx: usize, telemetry: Option<&TelemetryValue>, value: T) ->
+// GraphResult<TelemetryValue>         where
 //             T: Into<TelemetryValue> + Debug,
 //     {
 //         let seq_value = match telemetry {
@@ -128,8 +129,8 @@
 //                 } else {
 //                     Err(StageError::GraphSerde(
 //                         format!(
-//                             "serialized seq key form expected to match Seq telemetry value, but see: {:?}",
-//                             values
+//                             "serialized seq key form expected to match Seq telemetry value, but
+// see: {:?}",                             values
 //                         )
 //                     ))?
 //                 }
@@ -139,8 +140,8 @@
 //     }
 //
 //     #[tracing::instrument(level="trace", skip(),)]
-//     fn do_refine_table_key_type<T>(key: &str, telemetry: Option<&TelemetryValue>, value: T) -> GraphResult<TelemetryValue>
-//         where
+//     fn do_refine_table_key_type<T>(key: &str, telemetry: Option<&TelemetryValue>, value: T) ->
+// GraphResult<TelemetryValue>         where
 //             T: Into<TelemetryValue> + Debug,
 //     {
 //         let table_value = match telemetry {
@@ -152,8 +153,8 @@
 //                     TelemetryValue::Table(updated)
 //                 } else {
 //                     Err(StageError::GraphSerde(format!(
-//                         "serialized table key form expected to match Table telemetry value, but see: {:?}",
-//                         table
+//                         "serialized table key form expected to match Table telemetry value, but
+// see: {:?}",                         table
 //                     )))?
 //                 }
 //             }
@@ -174,8 +175,8 @@
 //     {
 //         let seq_table_value = match telemetry {
 //             None => {
-//                 let tbl_item = TelemetryValue::Table(maplit::hashmap! {key.to_string() => value.into()});
-//                 TelemetryValue::Seq(vec![tbl_item])
+//                 let tbl_item = TelemetryValue::Table(maplit::hashmap! {key.to_string() =>
+// value.into()});                 TelemetryValue::Seq(vec![tbl_item])
 //             },
 //             Some(tables) => {
 //                 if let TelemetryValue::Seq(ref tbls) = tables {
@@ -191,16 +192,16 @@
 //                         updated.insert(idx, TelemetryValue::Table(t));
 //                     } else {
 //                         Err(StageError::GraphSerde(format!(
-//                             "serialized seq of tables key form expected to match Seq+Table telemetry value, but see: {:?}",
-//                             tables
+//                             "serialized seq of tables key form expected to match Seq+Table
+// telemetry value, but see: {:?}",                             tables
 //                         )))?
 //                     }
 //
 //                     TelemetryValue::Seq(updated)
 //                 } else {
 //                     Err(StageError::GraphSerde(format!(
-//                         "serialized seq of tables key form expected to match Seq+Table telemetry value, but see: {:?}",
-//                         tables
+//                         "serialized seq of tables key form expected to match Seq+Table telemetry
+// value, but see: {:?}",                         tables
 //                     )))?
 //                 }
 //             }
@@ -226,8 +227,8 @@
 //             self.keys
 //                 .get_mut(len - 1)
 //                 .map(|pair| pair.1 = pair.1.map(|i| i + 1).or(Some(0)))
-//                 .ok_or_else(|| StageError::GraphSerde(format!("last key is not found in {} keys", len)))
-//         } else {
+//                 .ok_or_else(|| StageError::GraphSerde(format!("last key is not found in {} keys",
+// len)))         } else {
 //             Err(StageError::GraphSerde("keys is empty".to_string()))
 //         }
 //     }
@@ -421,8 +422,8 @@
 //     }
 //
 //     #[tracing::instrument(level="trace", skip())]
-//     fn serialize_tuple_struct(self, _name: &'static str, len: usize) -> Result<Self::SerializeTupleStruct> {
-//         self.serialize_seq(Some(len))
+//     fn serialize_tuple_struct(self, _name: &'static str, len: usize) ->
+// Result<Self::SerializeTupleStruct> {         self.serialize_seq(Some(len))
 //     }
 //
 //     #[tracing::instrument(level="trace", skip())]
@@ -715,8 +716,8 @@
 //     }
 //
 //     #[tracing::instrument(level="trace", skip())]
-//     fn serialize_unit_variant(self, _name: &str, _variant_index: u32, variant: &str) -> Result<Self::Ok> {
-//         Ok(variant.to_string())
+//     fn serialize_unit_variant(self, _name: &str, _variant_index: u32, variant: &str) ->
+// Result<Self::Ok> {         Ok(variant.to_string())
 //     }
 //
 //     #[tracing::instrument(level="trace", skip(value))]
@@ -750,8 +751,8 @@
 //     }
 //
 //     #[tracing::instrument(level="trace", skip())]
-//     fn serialize_tuple_struct(self, name: &str, _len: usize) -> Result<Self::SerializeTupleStruct> {
-//         Err(StageError::GraphSerde(format!(
+//     fn serialize_tuple_struct(self, name: &str, _len: usize) ->
+// Result<Self::SerializeTupleStruct> {         Err(StageError::GraphSerde(format!(
 //             "tuple struct {} can't serialize to string key",
 //             name
 //         )))

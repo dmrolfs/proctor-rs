@@ -1,9 +1,10 @@
+use std::convert::TryFrom;
+use std::fmt::Debug;
+
 use crate::elements::{PolicyOutcome, TelemetryValue, ToTelemetry};
 use crate::error::{DecisionError, TelemetryError, TypeExpectation};
 use crate::graph::stage::{self, ThroughStage};
 use crate::{AppData, ProctorContext};
-use std::convert::TryFrom;
-use std::fmt::Debug;
 
 pub const DECISION_BINDING: &'static str = "direction";
 pub const SCALE_UP: &'static str = "up";
@@ -109,7 +110,7 @@ where
             }
             .into())
         } else {
-            //todo resolves into DecisionError::Other. Improve precision?
+            // todo resolves into DecisionError::Other. Improve precision?
             Err(crate::error::TelemetryError::TypeError {
                 expected: format!("telemetry {} value", TypeExpectation::Table),
                 actual: Some(format!("{:?}", value)),

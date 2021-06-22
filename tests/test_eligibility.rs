@@ -1,5 +1,10 @@
 mod fixtures;
 
+use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
+use std::marker::PhantomData;
+use std::time::Duration;
+
 use ::serde::de::DeserializeOwned;
 use ::serde::{Deserialize, Serialize};
 use ::serde_with::{serde_as, TimestampSeconds};
@@ -21,10 +26,6 @@ use proctor::phases::eligibility::Eligibility;
 use proctor::AppData;
 use proctor::ProctorContext;
 use serde_test::{assert_tokens, Token};
-use std::collections::{HashMap, HashSet};
-use std::fmt::Debug;
-use std::marker::PhantomData;
-use std::time::Duration;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
@@ -52,7 +53,7 @@ pub struct TestEligibilityContext {
 
 impl ProctorContext for TestEligibilityContext {
     fn required_context_fields() -> HashSet<&'static str> {
-        //todo: DMR SERDE_REFLECTION
+        // todo: DMR SERDE_REFLECTION
         maplit::hashset! {
             "cluster.location_code",
             "cluster.is_deploying",
@@ -64,9 +65,7 @@ impl ProctorContext for TestEligibilityContext {
         maplit::hashset! { "task.last_failure", }
     }
 
-    fn custom(&self) -> telemetry::Table {
-        self.custom.clone()
-    }
+    fn custom(&self) -> telemetry::Table { self.custom.clone() }
 }
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -126,7 +125,7 @@ struct TestItem {
     pub flow: TestFlowMetrics,
 
     #[polar(attribute)]
-    pub inbox_lag: i32, //todo: TelemetryValue cannot deser U32!!!!  why!?
+    pub inbox_lag: i32, // todo: TelemetryValue cannot deser U32!!!!  why!?
 
     #[serde_as(as = "TimestampSeconds")]
     // #[serde(with = "proctor::serde")]
@@ -189,17 +188,11 @@ struct TestSettings {
 }
 
 impl PolicySettings for TestSettings {
-    fn required_subscription_fields(&self) -> HashSet<String> {
-        self.required_subscription_fields.clone()
-    }
+    fn required_subscription_fields(&self) -> HashSet<String> { self.required_subscription_fields.clone() }
 
-    fn optional_subscription_fields(&self) -> HashSet<String> {
-        self.optional_subscription_fields.clone()
-    }
+    fn optional_subscription_fields(&self) -> HashSet<String> { self.optional_subscription_fields.clone() }
 
-    fn source(&self) -> PolicySource {
-        self.source.clone()
-    }
+    fn source(&self) -> PolicySource { self.source.clone() }
 }
 
 fn make_test_policy<D>(
@@ -284,13 +277,11 @@ impl<D: AppData> PolicySubscription for TestEligibilityPolicy<D> {
 }
 
 impl<D: AppData + ToPolar + Clone> QueryPolicy for TestEligibilityPolicy<D> {
-    type Item = D;
-    type Context = TestEligibilityContext;
     type Args = (Self::Item, Self::Context);
+    type Context = TestEligibilityContext;
+    type Item = D;
 
-    fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
-        self.policy.load_into(oso)
-    }
+    fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> { self.policy.load_into(oso) }
 
     fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
         oso.register_class(
@@ -568,10 +559,10 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
         PolicyFilterEvent::ItemBlocked(blocked) => {
             tracing::warn!("receive item blocked notification re: {:?}", blocked);
             assert_eq!(blocked, data);
-        }
+        },
         PolicyFilterEvent::ContextChanged(ctx) => {
             panic!("unexpected context change:{:?}", ctx);
-        }
+        },
     }
 
     let actual = flow.close().await?;
@@ -647,7 +638,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
                     custom: HashMap::new(),
                 }
             );
-        }
+        },
         PolicyFilterEvent::ContextChanged(None) => panic!("did not expect to clear context"),
         PolicyFilterEvent::ItemBlocked(item) => panic!("unexpected item receipt - blocked: {:?}", item),
     };
@@ -735,8 +726,8 @@ fn test_item_serde() {
         .collect()
     );
 
-    //dmr commented out since full round trip not possible due to lost timestamp precision with
-    //dmr timestamp serde approach.
+    // dmr commented out since full round trip not possible due to lost timestamp precision with
+    // dmr timestamp serde approach.
     // assert_tokens(
     //     &item,
     //     &vec![
@@ -765,9 +756,7 @@ struct TestPolicy {
 }
 
 impl TestPolicy {
-    pub fn new<S: AsRef<str>>(policy: S) -> Self {
-        Self::new_with_extension(policy, HashSet::<String>::new())
-    }
+    pub fn new<S: AsRef<str>>(policy: S) -> Self { Self::new_with_extension(policy, HashSet::<String>::new()) }
 
     pub fn new_with_extension<S0, S1>(policy: S0, subscription_extension: HashSet<S1>) -> Self
     where
@@ -794,9 +783,9 @@ impl PolicySubscription for TestPolicy {
 }
 
 impl QueryPolicy for TestPolicy {
-    type Item = TestItem;
-    type Context = TestEligibilityContext;
     type Args = (Self::Item, Self::Context);
+    type Context = TestEligibilityContext;
+    type Item = TestItem;
 
     fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
         oso.load_str(self.policy.as_str()).map_err(|err| err.into())

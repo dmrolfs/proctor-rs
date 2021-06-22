@@ -1,12 +1,14 @@
+use std::collections::HashMap;
+use std::convert::TryFrom;
+use std::fmt::Debug;
+
+use oso::{Query, ResultSet, ToPolar, ToPolarList};
+
 use super::ProctorContext;
 use crate::elements::telemetry;
 use crate::elements::TelemetryValue;
 use crate::error::PolicyError;
 use crate::phases::collection::TelemetrySubscription;
-use oso::{Query, ResultSet, ToPolar, ToPolarList};
-use std::collections::HashMap;
-use std::convert::TryFrom;
-use std::fmt::Debug;
 
 pub trait Policy<T, C, A>: PolicySubscription<Context = C> + QueryPolicy<Item = T, Context = C, Args = A> {}
 
@@ -33,9 +35,7 @@ pub trait PolicySubscription {
         subscription
     }
 
-    fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
-        subscription
-    }
+    fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription { subscription }
 }
 
 #[derive(Debug, Clone)]
@@ -53,7 +53,7 @@ impl QueryResult {
                     TelemetryValue::Unit => (),
                     value => {
                         let _ = results.insert(key.to_string(), value);
-                    }
+                    },
                 }
             }
             Ok(results)
@@ -72,9 +72,7 @@ impl QueryResult {
         Ok(Self { bindings })
     }
 
-    pub fn take_bindings(&mut self) -> Option<telemetry::Table> {
-        self.bindings.take()
-    }
+    pub fn take_bindings(&mut self) -> Option<telemetry::Table> { self.bindings.take() }
 
     pub fn get_typed<T: TryFrom<TelemetryValue>>(&self, key: &str) -> Result<T, PolicyError>
     where
@@ -90,19 +88,13 @@ impl QueryResult {
     }
 
     #[inline]
-    pub fn is_success(&self) -> bool {
-        self.is_some()
-    }
+    pub fn is_success(&self) -> bool { self.is_some() }
 
     #[inline]
-    pub fn is_some(&self) -> bool {
-        self.bindings.is_some()
-    }
+    pub fn is_some(&self) -> bool { self.bindings.is_some() }
 
     #[inline]
-    pub fn is_none(&self) -> bool {
-        self.bindings.is_none()
-    }
+    pub fn is_none(&self) -> bool { self.bindings.is_none() }
 }
 
 impl std::ops::Deref for QueryResult {
@@ -128,10 +120,10 @@ pub trait QueryPolicy: Debug + Send + Sync {
     fn query_policy(&self, engine: &oso::Oso, args: Self::Args) -> Result<QueryResult, PolicyError>;
 }
 
-//todo: look into supprting a basic implementation; this attempt was side-tracked by the need to create
-// create a ToPolarList-supported Args that can support options beyond (Item, Context).
-// Vec<PolarValue> does implement ToPolarList? (I can fix that w a pull request), and creating a tuple
-// without a macro isn't clear. The limited value may not be enough for the twists and turns.
+// todo: look into supprting a basic implementation; this attempt was side-tracked by the need to
+// create create a ToPolarList-supported Args that can support options beyond (Item, Context).
+// Vec<PolarValue> does implement ToPolarList? (I can fix that w a pull request), and creating a
+// tuple without a macro isn't clear. The limited value may not be enough for the twists and turns.
 //
 // pub fn make_item_context_policy<T, C, S, F>(
 //     query_target: S, settings: &impl PolicySettings, initialize_engine: F,
@@ -164,12 +156,12 @@ pub trait QueryPolicy: Debug + Send + Sync {
 // where
 //     F: FnOnce(&mut Oso) -> GraphResult<()>,
 // {
-//     pub fn new<S: Into<String>>(query: S, settings: &impl PolicySettings, initialize_engine: F) -> Self {
-//         Self::with_extra_query_args(query, settings, Vec::default(), initialize_engine)
+//     pub fn new<S: Into<String>>(query: S, settings: &impl PolicySettings, initialize_engine: F)
+// -> Self {         Self::with_extra_query_args(query, settings, Vec::default(), initialize_engine)
 //     }
 //
-//     pub fn with_extra_query_args<S: Into<String>>(query: S, settings: &impl PolicySettings, extra_args: Vec<PolarValue>, initialize_engine: F) -> Self {
-//         Self {
+//     pub fn with_extra_query_args<S: Into<String>>(query: S, settings: &impl PolicySettings,
+// extra_args: Vec<PolarValue>, initialize_engine: F) -> Self {         Self {
 //             required_subscription_fields: settings.required_subscription_fields(),
 //             optional_subscription_fields: settings.optional_subscription_fields(),
 //             source: settings.source(),
@@ -205,8 +197,8 @@ pub trait QueryPolicy: Debug + Send + Sync {
 // {
 //     type Context = C;
 //
-//     fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
-//         subscription
+//     fn do_extend_subscription(&self, subscription: TelemetrySubscription) ->
+// TelemetrySubscription {         subscription
 //             .with_required_fields(self.required_subscription_fields.clone())
 //             .with_optional_fields(self.optional_subscription_fields.clone())
 //     }
@@ -245,8 +237,8 @@ pub trait QueryPolicy: Debug + Send + Sync {
 //         args
 //     }
 //
-//     fn query_policy(&self, engine: &Oso, item: &Self::Item, context: &Self::Context) -> GraphResult<QueryResult> {
-//         let q = engine.query_rule(self.query.as_str(), self.make_query_args(item, context))?;
-//         QueryResult::from_query(q)
+//     fn query_policy(&self, engine: &Oso, item: &Self::Item, context: &Self::Context) ->
+// GraphResult<QueryResult> {         let q = engine.query_rule(self.query.as_str(),
+// self.make_query_args(item, context))?;         QueryResult::from_query(q)
 //     }
 // }

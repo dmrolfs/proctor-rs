@@ -1,9 +1,9 @@
-use serde::{de, Deserialize, Deserializer, Serializer};
 use std::fmt;
 use std::str::FromStr;
 use std::time::Duration;
 
 pub use date_serde::*;
+use serde::{de, Deserialize, Deserializer, Serializer};
 
 mod date_serde;
 

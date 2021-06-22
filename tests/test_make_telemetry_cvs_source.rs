@@ -1,5 +1,7 @@
 mod fixtures;
 
+use std::convert::TryFrom;
+
 use ::anyhow::Result;
 use ::cast_trait_object::DynCastExt;
 use ::chrono::{DateTime, TimeZone, Utc};
@@ -10,7 +12,6 @@ use proctor::elements::Telemetry;
 use proctor::graph::{stage, Connect, Graph, SinkShape};
 use proctor::phases::collection::make_telemetry_cvs_source;
 use proctor::settings::SourceSetting;
-use std::convert::TryFrom;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Data {
@@ -128,10 +129,10 @@ async fn test_make_telemetry_cvs_source() -> Result<()> {
 
             assert_eq!(actual, expected);
             Ok(())
-        }
+        },
         Err(err) => {
             tracing::error!(error=?err, "failed to receive final folded result.");
             Err(err.into())
-        }
+        },
     }
 }

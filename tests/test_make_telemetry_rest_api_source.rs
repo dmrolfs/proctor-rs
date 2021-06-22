@@ -1,5 +1,9 @@
 mod fixtures;
 
+use std::collections::HashMap;
+use std::convert::TryFrom;
+use std::time::Duration;
+
 use anyhow::Result;
 use cast_trait_object::DynCastExt;
 use chrono::{DateTime, TimeZone, Utc};
@@ -10,9 +14,6 @@ use proctor::graph::{Connect, Graph, SinkShape};
 use proctor::phases::collection::make_telemetry_rest_api_source;
 use proctor::settings::{HttpQuery, SourceSetting};
 use serde::Deserialize;
-use std::collections::HashMap;
-use std::convert::TryFrom;
-use std::time::Duration;
 use tokio::sync::oneshot;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -182,10 +183,10 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
             assert_eq!(count, 3);
 
             Ok(())
-        }
+        },
         Err(err) => {
             tracing::error!(error=?err, "failed to receive final folded result.");
             Err(err.into())
-        }
+        },
     }
 }

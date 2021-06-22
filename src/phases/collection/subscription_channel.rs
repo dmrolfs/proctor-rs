@@ -1,16 +1,17 @@
+use std::fmt::{self, Debug};
+
+use async_trait::async_trait;
+use cast_trait_object::dyn_upcast;
+use serde::de::DeserializeOwned;
+
 use crate::elements::{make_from_telemetry, FromTelemetryShape, Telemetry};
 use crate::error::CollectionError;
 use crate::graph::stage::Stage;
 use crate::graph::{Inlet, Outlet, Port, SourceShape};
 use crate::{AppData, ProctorResult};
-use async_trait::async_trait;
-use cast_trait_object::dyn_upcast;
-use serde::de::DeserializeOwned;
-use std::fmt::{self, Debug};
 
 /// Subscription Source stage that can be used to adapt subscribed telemetry data into a
 /// typed inlet.
-///
 pub struct SubscriptionChannel<T> {
     name: String,
     pub subscription_receiver: Inlet<Telemetry>,
@@ -49,18 +50,14 @@ impl<T> SourceShape for SubscriptionChannel<T> {
     type Out = T;
 
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> {
-        self.outlet.clone()
-    }
+    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
 }
 
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData> Stage for SubscriptionChannel<T> {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
+    fn name(&self) -> &str { self.name.as_str() }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
@@ -99,7 +96,7 @@ impl<T: AppData> SubscriptionChannel<T> {
             Some(inner) => {
                 inner.run().await.map_err(|err| CollectionError::StageError(err.into()))?;
                 Ok(())
-            }
+            },
 
             None => Err(CollectionError::ClosedSubscription(self.name.clone())),
         }

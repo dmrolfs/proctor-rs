@@ -1,20 +1,18 @@
-use super::Benchmark;
+use std::collections::BTreeMap;
+
 use itertools::Itertools;
 use oso::PolarClass;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+
+use super::Benchmark;
 
 #[derive(Debug, Default, PolarClass, Clone, Serialize, Deserialize)]
 pub struct ClusterPerformance(BTreeMap<usize, Benchmark>);
 
 impl ClusterPerformance {
-    pub fn add_benchmark(&mut self, b: Benchmark) {
-        let _ = self.0.insert(b.nr_task_managers, b);
-    }
+    pub fn add_benchmark(&mut self, b: Benchmark) { let _ = self.0.insert(b.nr_task_managers, b); }
 
-    pub fn clear(&mut self) {
-        self.0.clear()
-    }
+    pub fn clear(&mut self) { self.0.clear() }
 }
 
 impl std::ops::Add<Benchmark> for ClusterPerformance {
@@ -53,8 +51,8 @@ impl ClusterPerformance {
             (None, None) => None,
 
             (Some(_), None) => {
-                //todo - switch to once stable: self.0.last_key_value().map(|(_, hi)| BenchNeighbors::AboveHighest(hi))
-                // self.0
+                // todo - switch to once stable: self.0.last_key_value().map(|(_, hi)|
+                // BenchNeighbors::AboveHighest(hi)) self.0
                 //     .last_key_value()
                 //     .map(|(_, hi)| BenchNeighbors::AboveHighest(hi)p
 
@@ -62,7 +60,7 @@ impl ClusterPerformance {
                     .iter()
                     .fold1(|_, latest| latest)
                     .map(|(_, hi)| BenchNeighbors::AboveHighest(hi))
-            }
+            },
 
             (None, Some(mark)) => Some(BenchNeighbors::BelowLowest(mark)),
 

@@ -1,8 +1,10 @@
-use crate::graph::{Inlet, Outlet, OutletsShape, Port, SinkShape, Stage, UniformFanOutShape};
-use crate::{AppData, ProctorResult};
+use std::fmt::{self, Debug};
+
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
-use std::fmt::{self, Debug};
+
+use crate::graph::{Inlet, Outlet, OutletsShape, Port, SinkShape, Stage, UniformFanOutShape};
+use crate::{AppData, ProctorResult};
 
 /// Fan-out the stream to several streams emitting each incoming upstream element to all downstream
 /// consumers.
@@ -10,12 +12,13 @@ use std::fmt::{self, Debug};
 /// # Examples
 ///
 /// ```rust
+/// use std::collections::HashMap;
+/// use std::time::Duration;
+///
 /// use proctor::graph::stage::{self, tick, Stage};
 /// use proctor::graph::{Connect, Graph, SinkShape, SourceShape, UniformFanOutShape};
 /// use proctor::tracing::{get_subscriber, init_subscriber};
 /// use serde::Deserialize;
-/// use std::collections::HashMap;
-/// use std::time::Duration;
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
@@ -29,16 +32,13 @@ use std::fmt::{self, Debug};
 ///     let rx_count = count_0.take_final_rx().unwrap();
 ///     let mut sum_1 = stage::Fold::<_, i32, i32>::new("sum", 0, |acc, i| acc + i);
 ///     let rx_sum = sum_1.take_final_rx().unwrap();
-///     let mut concatenate_2 = stage::Fold::<_, i32, String>::new(
-///         "concatenate",
-///         String::new(),
-///         |acc, i| {
-///             if acc.is_empty() {
-///                 i.to_string()
-///             } else {
-///                 format!("{}_{}", acc, i)
-///             }
-///         });
+///     let mut concatenate_2 = stage::Fold::<_, i32, String>::new("concatenate", String::new(), |acc, i| {
+///         if acc.is_empty() {
+///             i.to_string()
+///         } else {
+///             format!("{}_{}", acc, i)
+///         }
+///     });
 ///     let rx_concatenate = concatenate_2.take_final_rx().unwrap();
 ///
 ///     let mut tick = stage::Tick::with_constraint(
@@ -54,7 +54,9 @@ use std::fmt::{self, Debug};
 ///     (tick.outlet(), broadcast.inlet()).connect().await;
 ///     (broadcast.outlets().get(0).unwrap(), &count_0.inlet()).connect().await;
 ///     (broadcast.outlets().get(1).unwrap(), &sum_1.inlet()).connect().await;
-///     (broadcast.outlets().get(2).unwrap(), &concatenate_2.inlet()).connect().await;
+///     (broadcast.outlets().get(2).unwrap(), &concatenate_2.inlet())
+///         .connect()
+///         .await;
 ///
 ///     let mut g = Graph::default();
 ///     g.push_back(Box::new(tick)).await;
@@ -92,26 +94,21 @@ impl<T> UniformFanOutShape for Broadcast<T> {
     type Out = T;
 
     #[inline]
-    fn outlets(&self) -> OutletsShape<Self::Out> {
-        self.outlets.clone()
-    }
+    fn outlets(&self) -> OutletsShape<Self::Out> { self.outlets.clone() }
 }
 
 impl<T> SinkShape for Broadcast<T> {
     type In = T;
+
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> {
-        self.inlet.clone()
-    }
+    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
 }
 
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData + Clone> Stage for Broadcast<T> {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
+    fn name(&self) -> &str { self.name.as_str() }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {

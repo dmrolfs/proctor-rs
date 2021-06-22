@@ -1,5 +1,8 @@
 mod fixtures;
 
+use std::collections::HashSet;
+use std::path::PathBuf;
+
 use cast_trait_object::DynCastExt;
 use pretty_assertions::assert_eq;
 use proctor::elements::Telemetry;
@@ -8,8 +11,6 @@ use proctor::phases::collection;
 use proctor::phases::collection::TelemetrySubscription;
 use proctor::settings::SourceSetting;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Data {
@@ -22,9 +23,7 @@ struct Data {
 }
 
 impl Default for Data {
-    fn default() -> Self {
-        Self { pos: None, value: None, cat: "".to_string() }
-    }
+    fn default() -> Self { Self { pos: None, value: None, cat: "".to_string() } }
 }
 
 const POS_FIELD: &str = "pos";

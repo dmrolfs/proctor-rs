@@ -1,19 +1,21 @@
+use std::fmt;
+
+use async_trait::async_trait;
+use cast_trait_object::dyn_upcast;
+
 use crate::graph::shape::SinkShape;
 use crate::graph::{Inlet, Port, Stage};
 use crate::{AppData, ProctorResult};
-use async_trait::async_trait;
-use cast_trait_object::dyn_upcast;
-use std::fmt;
 
 /// A Sink that will invoke the given procedure for each received element.
 ///
 /// # Examples
 ///
 /// ```
-/// use tokio::sync::mpsc;
 /// use proctor::graph::stage::{self, Stage};
 /// use proctor::graph::Inlet;
 /// use proctor::graph::SinkShape;
+/// use tokio::sync::mpsc;
 ///
 /// #[tokio::main]
 /// async fn main() {
@@ -24,32 +26,31 @@ use std::fmt;
 ///     let actual = std::sync::Arc::new(std::sync::Mutex::new(actual));
 ///
 ///     let fe_actual = actual.clone();
-///     let mut foreach = stage::Foreach::new(
-///         "collect",
-///          move |x| {
-///             let data = fe_actual.lock();
-///             if let Ok(mut data) = data {
-///                 data.push(x * 2);
-///             }
+///     let mut foreach = stage::Foreach::new("collect", move |x| {
+///         let data = fe_actual.lock();
+///         if let Ok(mut data) = data {
+///             data.push(x * 2);
 ///         }
-///     );
+///     });
 ///
 ///     foreach.inlet().attach("test_channel", rx).await;
 ///
-///     let sink_handle = tokio::spawn(async move { foreach.run().await; });
+///     let sink_handle = tokio::spawn(async move {
+///         foreach.run().await;
+///     });
 ///
 ///     let source_handle = tokio::spawn(async move {
 ///         for x in my_data {
 ///             tx.send(x).await.expect("failed to send data");
-///        }
-///    });
+///         }
+///     });
 ///
-///    source_handle.await.unwrap();
-///    sink_handle.await.unwrap();
+///     source_handle.await.unwrap();
+///     sink_handle.await.unwrap();
 ///
-///    let a = actual.lock();
-///    let a = a.as_deref().unwrap();
-///    assert_eq!(&vec![2, 4, 6], a);
+///     let a = actual.lock();
+///     let a = a.as_deref().unwrap();
+///     assert_eq!(&vec![2, 4, 6], a);
 /// }
 /// ```
 pub struct Foreach<F, In>
@@ -79,9 +80,7 @@ where
     type In = In;
 
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> {
-        self.inlet.clone()
-    }
+    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
 }
 
 #[dyn_upcast]
@@ -92,9 +91,7 @@ where
     In: AppData,
 {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_ref()
-    }
+    fn name(&self) -> &str { self.name.as_ref() }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {

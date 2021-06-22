@@ -77,11 +77,12 @@
 //             return Ok(Workload::NotEnoughData);
 //         }
 //
-//         let timestamps = DenseMatrix::from_array(self.0.num_samples, self.0.num_features, &self.0.data);
+//         let timestamps = DenseMatrix::from_array(self.0.num_samples, self.0.num_features,
+// &self.0.data);
 //
 //         let workloads = &self.0.target;
-//         let (ts_train, ts_test, workload_train, workload_test) = train_test_split(&timestamps, workloads, 0.2, true);
-//         let workload_rr = RidgeRegression::fit(
+//         let (ts_train, ts_test, workload_train, workload_test) = train_test_split(&timestamps,
+// workloads, 0.2, true);         let workload_rr = RidgeRegression::fit(
 //             &ts_train,
 //             &workload_train,
 //             RidgeRegressionParameters::default().with_alpha(0.5),
@@ -93,8 +94,8 @@
 //
 // impl RidgeRegressionWorkloadForecast {
 //     fn predict_and_evaluate(
-//         workload_rr: RidgeRegression<f64, DenseMatrix<f64>>, ts_test: DenseMatrix<f64>, workload_test: Vec<f64>,
-//     ) -> Result<Workload, PlanError> {
+//         workload_rr: RidgeRegression<f64, DenseMatrix<f64>>, ts_test: DenseMatrix<f64>,
+// workload_test: Vec<f64>,     ) -> Result<Workload, PlanError> {
 //         let avg_workload_test = workload_test.sum() / workload_test.len() as f64;
 //         let avg_sq = avg_workload_test.square();
 //

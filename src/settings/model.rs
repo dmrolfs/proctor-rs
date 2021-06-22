@@ -1,14 +1,16 @@
-use crate::elements::PolicySource;
-use crate::error::SettingsError;
+use std::collections::{BTreeMap, HashSet};
+use std::path::PathBuf;
+use std::str::FromStr;
+use std::time::Duration;
+
 use reqwest::{
     header::{HeaderMap, HeaderName, HeaderValue},
     Method, Url,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::time::Duration;
+
+use crate::elements::PolicySource;
+use crate::error::SettingsError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -65,18 +67,13 @@ pub struct SimplePolicySettings {
 
 impl crate::elements::PolicySettings for SimplePolicySettings {
     #[inline]
-    fn required_subscription_fields(&self) -> HashSet<String> {
-        self.required_subscription_fields.clone()
-    }
-    #[inline]
-    fn optional_subscription_fields(&self) -> HashSet<String> {
-        self.optional_subscription_fields.clone()
-    }
+    fn required_subscription_fields(&self) -> HashSet<String> { self.required_subscription_fields.clone() }
 
     #[inline]
-    fn source(&self) -> PolicySource {
-        self.policy_source.clone()
-    }
+    fn optional_subscription_fields(&self) -> HashSet<String> { self.optional_subscription_fields.clone() }
+
+    #[inline]
+    fn source(&self) -> PolicySource { self.policy_source.clone() }
 }
 
 // #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -111,9 +108,9 @@ impl crate::elements::PolicySettings for SimplePolicySettings {
 //     pub fn headers(&self) -> SpringlineResult<HeaderMap> {
 //         let mut map = HeaderMap::with_capacity(self.headers.len());
 //         for (k, v) in self.headers.iter() {
-//             let name = HeaderName::from_str(k.as_str()).map_err::<ConfigError, _>(|err| err.into());
-//             let value = HeaderValue::from_str(v.as_str()).map_err::<ConfigError, _>(|err| err.into());
-//             map.insert(name?, value?);
+//             let name = HeaderName::from_str(k.as_str()).map_err::<ConfigError, _>(|err|
+// err.into());             let value = HeaderValue::from_str(v.as_str()).map_err::<ConfigError,
+// _>(|err| err.into());             map.insert(name?, value?);
 //         }
 //         Ok(map)
 //     }
@@ -283,9 +280,10 @@ impl crate::elements::PolicySettings for SimplePolicySettings {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use reqwest::header;
     use serde_test::{assert_tokens, Token};
+
+    use super::*;
 
     #[test]
     fn test_serde_eligibility_settings() {
@@ -610,84 +608,84 @@ mod tests {
                 Token::StructEnd,
                 Token::MapEnd,
                 Token::StructEnd,
-                // Token::Enum { name: "SourceSetting" },
-                // Token::Str("RestApi"),
-                // Token::Struct { name: "HttpQuery", len: 4 },
-                // Token::Str("interval_secs"),
-                // Token::U64(37),
-                // Token::Str("method"),
-                // Token::Str("HEAD"),
-                // Token::Str("url"),
-                // Token::Str("https://httpbin.org/get?is_redeploying=false?last_deployment%3D1979-05-27%2007%3A32%3A00Z"),
-                // Token::Str("headers"),
-                // Token::Seq { len: Some(2) },
-                // Token::Tuple { len: 2 },
-                // Token::Str("authorization"),
-                // Token::Str("Basic Zm9vOmJhcg=="),
-                // Token::TupleEnd,
-                // Token::Tuple { len: 2 },
-                // Token::Str("host"),
-                // Token::Str("example.com"),
-                // Token::TupleEnd,
-                // Token::SeqEnd,
-                // Token::StructEnd,
+                /* Token::Enum { name: "SourceSetting" },
+                 * Token::Str("RestApi"),
+                 * Token::Struct { name: "HttpQuery", len: 4 },
+                 * Token::Str("interval_secs"),
+                 * Token::U64(37),
+                 * Token::Str("method"),
+                 * Token::Str("HEAD"),
+                 * Token::Str("url"),
+                 * Token::Str("https://httpbin.org/get?is_redeploying=false?last_deployment%3D1979-05-27%2007%3A32%3A00Z"),
+                 * Token::Str("headers"),
+                 * Token::Seq { len: Some(2) },
+                 * Token::Tuple { len: 2 },
+                 * Token::Str("authorization"),
+                 * Token::Str("Basic Zm9vOmJhcg=="),
+                 * Token::TupleEnd,
+                 * Token::Tuple { len: 2 },
+                 * Token::Str("host"),
+                 * Token::Str("example.com"),
+                 * Token::TupleEnd,
+                 * Token::SeqEnd,
+                 * Token::StructEnd, */
 
-                // Token::Enum { name: "SourceSetting" },
-                // Token::Str("Local"),
-                // Token::Str("examples/data/eligibility.csv"),
-                // Token::MapEnd,
-                // Token::StructEnd,
-                // Token::Struct {
-                //     name: "EligibilitySettings",
-                //     len: 2,
-                // },
-                // Token::Str("task_status"),
-                // Token::Struct {
-                //     name: "GatherSettings",
-                //     len: 1,
-                // },
-                // Token::Str("strategy"),
-                // Token::Enum { name: "GatherStrategy" },
-                // Token::Str("Local"),
-                // Token::Map { len: Some(2) },
-                // Token::Str("path"),
-                // Token::Str("foo/bar.csv"),
-                // Token::Str("keys"),
-                // Token::Seq { len: Some(0) },
-                // Token::SeqEnd,
-                // Token::MapEnd,
-                // Token::StructEnd,
-                // Token::Str("cluster_status"),
-                // Token::Struct {
-                //     name: "GatherSettings",
-                //     len: 1,
-                // },
-                // Token::Str("strategy"),
-                // Token::Enum { name: "GatherStrategy" },
-                // Token::Str("Distributed"),
-                // Token::Struct {
-                //     name: "HttpEndpoint",
-                //     len: 3,
-                // },
-                // Token::Str("method"),
-                // Token::Str("HEAD"),
-                // Token::Str("url"),
-                // Token::Str("https://httpbin.org/head"),
-                // Token::Str("headers"),
-                // Token::Seq { len: Some(2) },
-                // Token::Tuple { len: 2 },
-                // Token::Str("authorization"),
-                // Token::Str("Basic Zm9vOmJhcg=="),
-                // Token::TupleEnd,
-                // Token::Tuple { len: 2 },
-                // Token::Str("host"),
-                // Token::Str("example.com"),
-                // Token::TupleEnd,
-                // Token::SeqEnd,
-                // Token::StructEnd,
-                // Token::StructEnd,
-                // Token::StructEnd,
-                // Token::StructEnd,
+                /* Token::Enum { name: "SourceSetting" },
+                 * Token::Str("Local"),
+                 * Token::Str("examples/data/eligibility.csv"),
+                 * Token::MapEnd,
+                 * Token::StructEnd,
+                 * Token::Struct {
+                 *     name: "EligibilitySettings",
+                 *     len: 2,
+                 * },
+                 * Token::Str("task_status"),
+                 * Token::Struct {
+                 *     name: "GatherSettings",
+                 *     len: 1,
+                 * },
+                 * Token::Str("strategy"),
+                 * Token::Enum { name: "GatherStrategy" },
+                 * Token::Str("Local"),
+                 * Token::Map { len: Some(2) },
+                 * Token::Str("path"),
+                 * Token::Str("foo/bar.csv"),
+                 * Token::Str("keys"),
+                 * Token::Seq { len: Some(0) },
+                 * Token::SeqEnd,
+                 * Token::MapEnd,
+                 * Token::StructEnd,
+                 * Token::Str("cluster_status"),
+                 * Token::Struct {
+                 *     name: "GatherSettings",
+                 *     len: 1,
+                 * },
+                 * Token::Str("strategy"),
+                 * Token::Enum { name: "GatherStrategy" },
+                 * Token::Str("Distributed"),
+                 * Token::Struct {
+                 *     name: "HttpEndpoint",
+                 *     len: 3,
+                 * },
+                 * Token::Str("method"),
+                 * Token::Str("HEAD"),
+                 * Token::Str("url"),
+                 * Token::Str("https://httpbin.org/head"),
+                 * Token::Str("headers"),
+                 * Token::Seq { len: Some(2) },
+                 * Token::Tuple { len: 2 },
+                 * Token::Str("authorization"),
+                 * Token::Str("Basic Zm9vOmJhcg=="),
+                 * Token::TupleEnd,
+                 * Token::Tuple { len: 2 },
+                 * Token::Str("host"),
+                 * Token::Str("example.com"),
+                 * Token::TupleEnd,
+                 * Token::SeqEnd,
+                 * Token::StructEnd,
+                 * Token::StructEnd,
+                 * Token::StructEnd,
+                 * Token::StructEnd, */
             ],
         )
     }
@@ -697,7 +695,8 @@ mod tests {
     //     let mut headers = HeaderMap::new();
     //     headers.insert(header::AUTHORIZATION, "Basic Zm9vOmJhcg==".parse().unwrap());
     //     headers.insert(header::HOST, "example.com".parse().unwrap());
-    //     let headers = headers.iter().map(|(k, v)| (k.to_string(), v.to_str().unwrap().to_string())).collect();
+    //     let headers = headers.iter().map(|(k, v)| (k.to_string(),
+    // v.to_str().unwrap().to_string())).collect();
     //
     //     let endpoint = HttpEndpoint {
     //         method: Method::GET,

@@ -1,15 +1,17 @@
-use crate::elements::{telemetry, TelemetryValue};
-use crate::error::TelemetryError;
+use std::collections::HashSet;
+use std::fmt::Debug;
+use std::ops::Add;
+
 use ::serde_with::{serde_as, TimestampMilliSeconds};
 use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
 use oso::PolarClass;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-use std::fmt::Debug;
-use std::ops::Add;
 
-//todo: replace this with reflection approach if one identified.
+use crate::elements::{telemetry, TelemetryValue};
+use crate::error::TelemetryError;
+
+// todo: replace this with reflection approach if one identified.
 // tried serde-reflection, which failed since serde identifiers (flatten) et.al., are not supported.
 // tried Oso PolarClass, but Class::attributes is private.
 // could write a rpcedural macro, but want to list effective serde names, such as for flattened.
@@ -103,7 +105,7 @@ impl MetricCatalog {
         }
     }
 
-    //todo limited usefulness by itself; keys? iter support for custom and for entire catalog?
+    // todo limited usefulness by itself; keys? iter support for custom and for entire catalog?
     pub fn custom<T: std::convert::TryFrom<TelemetryValue>>(&self, metric: &str) -> Option<Result<T, TelemetryError>>
     where
         T: std::convert::TryFrom<TelemetryValue>,
@@ -141,11 +143,13 @@ impl Add<&Self> for MetricCatalog {
 
 #[cfg(test)]
 mod tests {
+    use std::convert::TryFrom;
+
+    use pretty_assertions::assert_eq;
+
     use super::*;
     use crate::elements::telemetry::ToTelemetry;
     use crate::error::TypeExpectation;
-    use pretty_assertions::assert_eq;
-    use std::convert::TryFrom;
 
     #[derive(PartialEq, Debug)]
     struct Bar(String);

@@ -1,9 +1,10 @@
+use serde::de::DeserializeOwned;
+
 use super::Telemetry;
 use crate::error::TelemetryError;
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Connect, Graph, SinkShape, SourceShape, ThroughShape};
 use crate::AppData;
-use serde::de::DeserializeOwned;
 
 pub type FromTelemetryShape<Out> = Box<dyn FromTelemetryStage<Out>>;
 

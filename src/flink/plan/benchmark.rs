@@ -1,10 +1,12 @@
-use crate::elements::{TelemetryValue, ToTelemetry};
-use crate::error::{PlanError, TelemetryError, TypeExpectation};
+use std::cmp::Ordering;
+use std::convert::TryFrom;
+
 use ::serde_with::{serde_as, TimestampMilliSeconds};
 use chrono::{DateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
-use std::cmp::Ordering;
-use std::convert::TryFrom;
+
+use crate::elements::{TelemetryValue, ToTelemetry};
+use crate::error::{PlanError, TelemetryError, TypeExpectation};
 
 #[serde_as]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -18,9 +20,7 @@ pub struct Benchmark {
 }
 
 impl PartialOrd for Benchmark {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.nr_task_managers.cmp(&other.nr_task_managers))
-    }
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.nr_task_managers.cmp(&other.nr_task_managers)) }
 }
 
 const T_TIMESTAMP: &'static str = "timestamp";

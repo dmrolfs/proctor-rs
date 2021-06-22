@@ -1,5 +1,8 @@
 mod fixtures;
 
+use std::collections::{HashMap, HashSet};
+use std::f64::consts;
+
 use ::serde::{Deserialize, Serialize};
 use chrono::*;
 use oso::{Oso, PolarClass, PolarValue};
@@ -10,8 +13,6 @@ use proctor::error::PolicyError;
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape};
 use proctor::ProctorContext;
-use std::collections::{HashMap, HashSet};
-use std::f64::consts;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
@@ -42,9 +43,7 @@ impl TestItem {
         boundary < self.timestamp
     }
 
-    pub fn input_messages_per_sec(&self, lag: u32) -> f64 {
-        self.flow.input_messages_per_sec * lag as f64
-    }
+    pub fn input_messages_per_sec(&self, lag: u32) -> f64 { self.flow.input_messages_per_sec * lag as f64 }
 }
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -61,13 +60,9 @@ struct TestContext {
 }
 
 impl TestContext {
-    pub fn new(location_code: u32) -> Self {
-        Self { location_code, custom: telemetry::Table::default() }
-    }
+    pub fn new(location_code: u32) -> Self { Self { location_code, custom: telemetry::Table::default() } }
 
-    pub fn with_custom(self, custom: telemetry::Table) -> Self {
-        Self { custom, ..self }
-    }
+    pub fn with_custom(self, custom: telemetry::Table) -> Self { Self { custom, ..self } }
 }
 
 impl proctor::ProctorContext for TestContext {
@@ -75,9 +70,7 @@ impl proctor::ProctorContext for TestContext {
         maplit::hashset! { "location_code", "input_messages_per_sec", }
     }
 
-    fn custom(&self) -> telemetry::Table {
-        self.custom.clone()
-    }
+    fn custom(&self) -> telemetry::Table { self.custom.clone() }
 }
 
 #[derive(Debug)]
@@ -98,16 +91,16 @@ impl TestPolicy {
 impl PolicySubscription for TestPolicy {
     type Context = TestContext;
 
-    //todo test optional fields
+    // todo test optional fields
     // fn subscription_fields(&self) -> HashSet<String> {
     //     Self::Context::subscription_fields_nucleus()
     // }
 }
 
 impl QueryPolicy for TestPolicy {
-    type Item = TestItem;
-    type Context = TestContext;
     type Args = (TestItem, TestContext, PolarValue);
+    type Context = TestContext;
+    type Item = TestItem;
 
     fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
         oso.load_str(self.policy.as_str()).map_err(|err| err.into())
@@ -160,9 +153,7 @@ struct TestFlow {
 }
 
 impl TestFlow {
-    pub async fn new<S: Into<String>>(policy: S) -> Self {
-        Self::with_query(policy, "eligible").await
-    }
+    pub async fn new<S: Into<String>>(policy: S) -> Self { Self::with_query(policy, "eligible").await }
 
     pub async fn with_query<S0: Into<String>, S1: Into<String>>(policy: S0, query: S1) -> Self {
         let item_source = stage::ActorSource::<TestItem>::new("item_source");

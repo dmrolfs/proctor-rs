@@ -1,11 +1,13 @@
-use crate::error::StageError;
-use crate::graph::{stage, Inlet, InletsShape, Outlet, Port, SourceShape, Stage, UniformFanInShape};
-use crate::{AppData, ProctorResult};
+use std::fmt::{self, Debug};
+
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use futures::future::{self, BoxFuture, FutureExt};
-use std::fmt::{self, Debug};
 use tokio::sync::{mpsc, oneshot};
+
+use crate::error::StageError;
+use crate::graph::{stage, Inlet, InletsShape, Outlet, Port, SourceShape, Stage, UniformFanInShape};
+use crate::{AppData, ProctorResult};
 
 pub type MergeApi = mpsc::UnboundedSender<MergeMsg>;
 
@@ -154,27 +156,23 @@ impl<T: Send> MergeN<T> {
 
 impl<T> UniformFanInShape for MergeN<T> {
     type In = T;
+
     #[inline]
-    fn inlets(&self) -> InletsShape<T> {
-        self.inlets.clone()
-    }
+    fn inlets(&self) -> InletsShape<T> { self.inlets.clone() }
 }
 
 impl<T> SourceShape for MergeN<T> {
     type Out = T;
+
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> {
-        self.outlet.clone()
-    }
+    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
 }
 
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData> Stage for MergeN<T> {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
+    fn name(&self) -> &str { self.name.as_str() }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
@@ -254,9 +252,7 @@ impl<'a, T: AppData> MergeN<T> {
     }
 
     #[tracing::instrument(level="trace", skip(inlet), fields(inlet_idx=%idx))]
-    async fn replenish_inlet_pull(idx: usize, mut inlet: Inlet<T>) -> (usize, Option<T>) {
-        (idx, inlet.recv().await)
-    }
+    async fn replenish_inlet_pull(idx: usize, mut inlet: Inlet<T>) -> (usize, Option<T>) { (idx, inlet.recv().await) }
 
     #[tracing::instrument(
         level="info",
@@ -300,9 +296,7 @@ impl<T> stage::WithApi for MergeN<T> {
     type Sender = MergeApi;
 
     #[inline]
-    fn tx_api(&self) -> Self::Sender {
-        self.tx_api.clone()
-    }
+    fn tx_api(&self) -> Self::Sender { self.tx_api.clone() }
 }
 
 impl<T> Debug for MergeN<T> {

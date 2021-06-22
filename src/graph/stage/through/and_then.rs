@@ -1,10 +1,12 @@
-use crate::graph::shape::{SinkShape, SourceShape};
-use crate::graph::{Inlet, Outlet, Port, Stage};
-use crate::{AppData, ProctorResult};
+use std::fmt::{self, Debug};
+
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use futures::future::Future;
-use std::fmt::{self, Debug};
+
+use crate::graph::shape::{SinkShape, SourceShape};
+use crate::graph::{Inlet, Outlet, Port, Stage};
+use crate::{AppData, ProctorResult};
 
 /// Transform this stream by applying the given function to each of the elements as they pass
 /// through this processing step.
@@ -12,22 +14,23 @@ use std::fmt::{self, Debug};
 /// # Examples
 ///
 /// ```
-/// use tokio::sync::mpsc;
-/// use proctor::graph::{Graph, Connect, Inlet};
-/// use proctor::graph::stage::{self, Stage};
-/// use proctor::graph::{SourceShape, ThroughShape, SinkShape};
 /// use futures::future;
+/// use proctor::graph::stage::{self, Stage};
+/// use proctor::graph::{Connect, Graph, Inlet};
+/// use proctor::graph::{SinkShape, SourceShape, ThroughShape};
+/// use tokio::sync::mpsc;
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
 ///     let mut source = stage::Sequence::new("src", (4..=10));
 ///     let bar = "17".to_string();
 ///
-///     let mut sq_plus = stage::AndThen::new(
-///         "square values then add",
-///         move |x| { future::ok(x * x + bar.parse::<i32>().expect("failed to parse bar.")) },
-///     );
-///     let mut fold = stage::Fold::<_, Result<i32, anyhow::Error>, i32>::new("sum values", 0, |acc, x| acc + x.expect("error during calc") );
+///     let mut sq_plus = stage::AndThen::new("square values then add", move |x| {
+///         future::ok(x * x + bar.parse::<i32>().expect("failed to parse bar."))
+///     });
+///     let mut fold = stage::Fold::<_, Result<i32, anyhow::Error>, i32>::new("sum values", 0, |acc, x| {
+///         acc + x.expect("error during calc")
+///     });
 ///     let rx_sum_sq = fold.take_final_rx().unwrap();
 ///
 ///     (source.outlet(), sq_plus.inlet()).connect().await;
@@ -89,10 +92,9 @@ where
     Op: FnMut(In) -> Fut,
 {
     type Out = Out;
+
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> {
-        self.outlet.clone()
-    }
+    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
 }
 
 impl<Op, Fut, In, Out> SinkShape for AndThen<Op, Fut, In, Out>
@@ -101,10 +103,9 @@ where
     Op: FnMut(In) -> Fut,
 {
     type In = In;
+
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> {
-        self.inlet.clone()
-    }
+    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
 }
 
 #[dyn_upcast]
@@ -117,9 +118,7 @@ where
     Op: FnMut(In) -> Fut + Send + Sync + 'static,
 {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
+    fn name(&self) -> &str { self.name.as_str() }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
@@ -153,11 +152,12 @@ where
 //
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::graph::SourceShape;
     use futures::future;
     use tokio::sync::mpsc;
     use tokio_test::block_on;
+
+    use super::*;
+    use crate::graph::SourceShape;
 
     #[test]
     fn test_basic_usage() {

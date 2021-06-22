@@ -1,14 +1,16 @@
+use std::collections::HashSet;
+use std::fmt::{self, Debug};
+
+use async_trait::async_trait;
+use cast_trait_object::dyn_upcast;
+use futures::future::FutureExt;
+use tokio::sync::{mpsc, oneshot};
+
 use crate::elements::Telemetry;
 use crate::error::CollectionError;
 use crate::graph::stage::Stage;
 use crate::graph::{stage, Connect, Inlet, Outlet, OutletsShape, Port, SinkShape, UniformFanOutShape};
 use crate::{Ack, ProctorResult};
-use async_trait::async_trait;
-use cast_trait_object::dyn_upcast;
-use futures::future::FutureExt;
-use std::collections::HashSet;
-use std::fmt::{self, Debug};
-use tokio::sync::{mpsc, oneshot};
 
 pub type ClearinghouseApi = mpsc::UnboundedSender<ClearinghouseCmd>;
 
@@ -78,10 +80,10 @@ pub enum TelemetrySubscription {
         optional_fields: HashSet<String>,
         outlet_to_subscription: Outlet<Telemetry>,
     },
-    // Remainder {
-    //     name: String,
-    //     outlet_to_subscription: Outlet<TelemetryData>,
-    // }
+    /* Remainder {
+     *     name: String,
+     *     outlet_to_subscription: Outlet<TelemetryData>,
+     * } */
 }
 
 impl TelemetrySubscription {
@@ -114,7 +116,7 @@ impl TelemetrySubscription {
                     optional_fields,
                     outlet_to_subscription,
                 }
-            }
+            },
         }
     }
 
@@ -140,7 +142,7 @@ impl TelemetrySubscription {
                     optional_fields: my_optional_fields,
                     outlet_to_subscription,
                 }
-            }
+            },
         }
     }
 
@@ -191,7 +193,7 @@ impl TelemetrySubscription {
                     }
                 }
                 interested
-            }
+            },
         }
     }
 
@@ -226,7 +228,7 @@ impl TelemetrySubscription {
                 }
 
                 Ok((db, missing))
-            }
+            },
         }
     }
 
@@ -272,7 +274,7 @@ impl TelemetrySubscription {
                     let ready = ready.into_iter().map(|(k, v)| (k, v.clone())).collect();
                     Some(ready)
                 }
-            }
+            },
         }
     }
 
@@ -290,9 +292,7 @@ impl TelemetrySubscription {
 
 impl TelemetrySubscription {
     #[tracing::instrument()]
-    pub async fn close(self) {
-        self.outlet_to_subscription().close().await;
-    }
+    pub async fn close(self) { self.outlet_to_subscription().close().await; }
 }
 
 impl PartialEq for TelemetrySubscription {
@@ -302,7 +302,7 @@ impl PartialEq for TelemetrySubscription {
         match (self, other) {
             (All { name: lhs_name, outlet_to_subscription: _ }, All { name: rhs_name, outlet_to_subscription: _ }) => {
                 lhs_name == rhs_name
-            }
+            },
             (
                 Explicit {
                     name: lhs_name,
@@ -324,7 +324,6 @@ impl PartialEq for TelemetrySubscription {
 
 /// Clearinghouse is a sink for collected telemetry data and a subscription-based source for
 /// groups of telemetry fields.
-///
 ///
 pub struct Clearinghouse {
     name: String,
@@ -371,14 +370,14 @@ impl Clearinghouse {
                 database.extend(d);
                 Self::push_to_subscribers(database, interested).await?;
                 Ok(true)
-            }
+            },
 
             None => {
                 tracing::info!(
                     "telemetry sources dried up - stopping since subscribers have data they're going to get."
                 );
                 Ok(false)
-            }
+            },
         }
     }
 
@@ -474,7 +473,7 @@ impl Clearinghouse {
                             missing: HashSet::default(),
                             subscriptions: subscriptions.clone(),
                         }
-                    }
+                    },
 
                     Some(name) => match subscriptions.iter().find(|s| s.name() == name.as_str()) {
                         Some(sub) => {
@@ -492,7 +491,7 @@ impl Clearinghouse {
                                 missing,
                                 subscriptions: vec![sub.clone()],
                             }
-                        }
+                        },
 
                         None => {
                             tracing::info!(requested_subscription=%name, "subscription not found - returning clearinghouse snapshot.");
@@ -501,13 +500,13 @@ impl Clearinghouse {
                                 missing: HashSet::default(),
                                 subscriptions: subscriptions.clone(),
                             }
-                        }
+                        },
                     },
                 };
 
                 let _ = tx.send(snapshot);
                 Ok(true)
-            }
+            },
 
             ClearinghouseCmd::Subscribe { subscription, receiver, tx } => {
                 tracing::info!(?subscription, "adding telemetry subscriber.");
@@ -515,7 +514,7 @@ impl Clearinghouse {
                 subscriptions.push(subscription);
                 let _ = tx.send(());
                 Ok(true)
-            }
+            },
 
             ClearinghouseCmd::Unsubscribe { name, tx } => {
                 // let mut subs = subscriptions.lock().await;
@@ -527,7 +526,7 @@ impl Clearinghouse {
                 tracing::info!(?dropped, "subscription dropped");
                 let _ = tx.send(());
                 Ok(true)
-            }
+            },
         }
     }
 }
@@ -544,10 +543,9 @@ impl Debug for Clearinghouse {
 
 impl SinkShape for Clearinghouse {
     type In = Telemetry;
+
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> {
-        self.inlet.clone()
-    }
+    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
 }
 
 impl UniformFanOutShape for Clearinghouse {
@@ -563,9 +561,7 @@ impl UniformFanOutShape for Clearinghouse {
 #[async_trait]
 impl Stage for Clearinghouse {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
+    fn name(&self) -> &str { self.name.as_str() }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
@@ -660,9 +656,7 @@ impl stage::WithApi for Clearinghouse {
     type Sender = ClearinghouseApi;
 
     #[inline]
-    fn tx_api(&self) -> Self::Sender {
-        self.tx_api.clone()
-    }
+    fn tx_api(&self) -> Self::Sender { self.tx_api.clone() }
 }
 
 // /////////////////////////////////////////////////////
@@ -670,17 +664,19 @@ impl stage::WithApi for Clearinghouse {
 //
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::time::Duration;
+
+    use lazy_static::lazy_static;
+    use pretty_assertions::assert_eq;
+    use tokio::sync::oneshot;
+    use tokio_test::block_on;
+    use tracing::Instrument;
+
     use super::*;
     use crate::elements::telemetry::ToTelemetry;
     use crate::graph::stage::{self, Stage, WithApi};
     use crate::graph::{Connect, SinkShape, SourceShape};
-    use lazy_static::lazy_static;
-    use pretty_assertions::assert_eq;
-    use std::collections::HashMap;
-    use std::time::Duration;
-    use tokio::sync::oneshot;
-    use tokio_test::block_on;
-    use tracing::Instrument;
 
     lazy_static! {
         static ref SUBSCRIPTIONS: Vec<TelemetrySubscription> = vec![
@@ -1027,8 +1023,8 @@ mod tests {
             ],
         };
         block_on(async move {
-            let nr_skip = 0; //todo expand test to remove this line
-            let nr_take = SUBSCRIPTIONS.len(); //todo expand test to remove this line
+            let nr_skip = 0; // todo expand test to remove this line
+            let nr_take = SUBSCRIPTIONS.len(); // todo expand test to remove this line
             let subscriptions = SUBSCRIPTIONS
                 .iter()
                 .skip(nr_skip)//todo expand test to remove this line
@@ -1036,7 +1032,7 @@ mod tests {
                 .collect::<Vec<_>>();
             let mut sub_receivers = Vec::with_capacity(subscriptions.len());
             for s in SUBSCRIPTIONS.iter().skip(nr_skip).take(nr_take) {
-                //todo expand test to remove this line
+                // todo expand test to remove this line
                 let receiver: Inlet<Telemetry> = Inlet::new(format!("recv_from_{}", s.name()));
                 (&s.outlet_to_subscription(), &receiver).connect().await;
                 sub_receivers.push((s, receiver));

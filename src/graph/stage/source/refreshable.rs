@@ -1,11 +1,13 @@
+use std::fmt::{self, Debug};
+use std::future::Future;
+
+use async_trait::async_trait;
+use cast_trait_object::dyn_upcast;
+use tokio::sync::mpsc;
+
 use crate::graph::shape::SourceShape;
 use crate::graph::{Outlet, Port, Stage};
 use crate::{AppData, ProctorResult};
-use async_trait::async_trait;
-use cast_trait_object::dyn_upcast;
-use std::fmt::{self, Debug};
-use std::future::Future;
-use tokio::sync::mpsc;
 
 /// A source that produces a single outcome, which may be restarted or cancelled via a control
 /// channel and evaluation function.
@@ -39,10 +41,9 @@ where
     F: Future<Output = Option<Out>>,
 {
     type Out = Out;
+
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> {
-        self.outlet.clone()
-    }
+    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
 }
 
 #[dyn_upcast]
@@ -55,9 +56,7 @@ where
     F: Future<Output = Option<Out>> + Send + 'static,
 {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_ref()
-    }
+    fn name(&self) -> &str { self.name.as_ref() }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {

@@ -1,4 +1,4 @@
-//todo: collect once every minute for scaling metrics
+// todo: collect once every minute for scaling metrics
 
 /// Tailorable collection source: plugin mechanism to pull metrics from various sources.
 ///

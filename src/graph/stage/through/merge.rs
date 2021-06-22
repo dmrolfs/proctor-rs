@@ -1,24 +1,26 @@
-use crate::graph::{FanInShape2, Inlet, Outlet, Port, SourceShape, Stage};
-use crate::{AppData, ProctorResult};
+use std::fmt::{self, Debug};
+
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
-use std::fmt::{self, Debug};
+
+use crate::graph::{FanInShape2, Inlet, Outlet, Port, SourceShape, Stage};
+use crate::{AppData, ProctorResult};
 
 /// Merge multiple sources. Picks elements randomly if all sources has elements ready.
 ///
 /// # Examples
 ///
 /// ```
-/// use tokio::sync::mpsc;
-/// use proctor::graph::{Graph, Connect, Inlet, FanInShape2, ThroughShape, SinkShape, SourceShape};
 /// use proctor::graph::stage::{self, Stage};
+/// use proctor::graph::{Connect, FanInShape2, Graph, Inlet, SinkShape, SourceShape, ThroughShape};
+/// use tokio::sync::mpsc;
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
 ///     let mut source_0 = stage::Sequence::new("first", (1..=3));
 ///     let mut source_1 = stage::Sequence::new("second", (10..=30).step_by(10));
 ///     let mut merge = stage::Merge::new("merge_streams");
-///     let mut sum = stage::Fold::new("sum", 0, |acc, x| acc + x );
+///     let mut sum = stage::Fold::new("sum", 0, |acc, x| acc + x);
 ///     let rx_sum = sum.take_final_rx().unwrap();
 ///
 ///     (source_0.outlet(), merge.inlet_0()).connect().await;
@@ -58,31 +60,24 @@ impl<T> FanInShape2 for Merge<T> {
     type In1 = T;
 
     #[inline]
-    fn inlet_0(&self) -> Inlet<Self::In0> {
-        self.inlet_0.clone()
-    }
+    fn inlet_0(&self) -> Inlet<Self::In0> { self.inlet_0.clone() }
 
     #[inline]
-    fn inlet_1(&self) -> Inlet<Self::In1> {
-        self.inlet_1.clone()
-    }
+    fn inlet_1(&self) -> Inlet<Self::In1> { self.inlet_1.clone() }
 }
 
 impl<T> SourceShape for Merge<T> {
     type Out = T;
+
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> {
-        self.outlet.clone()
-    }
+    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
 }
 
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData> Stage for Merge<T> {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
+    fn name(&self) -> &str { self.name.as_str() }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {

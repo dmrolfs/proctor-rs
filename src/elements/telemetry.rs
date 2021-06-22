@@ -8,30 +8,28 @@ mod ser;
 mod to_telemetry;
 mod value;
 
-use crate::error::{PolicyError, TelemetryError};
+use std::collections::{BTreeMap, HashMap};
+use std::fmt::Debug;
+use std::iter::{FromIterator, IntoIterator};
+
 use flexbuffers;
 use oso::PolarClass;
 use oso::ToPolar;
 use serde::{de as serde_de, Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
-use std::fmt::Debug;
-use std::iter::{FromIterator, IntoIterator};
+
+use crate::error::{PolicyError, TelemetryError};
 
 #[derive(PolarClass, Debug, Clone, PartialEq)]
 pub struct Telemetry(TelemetryValue);
 
 impl Default for Telemetry {
     #[tracing::instrument(level = "trace", skip())]
-    fn default() -> Self {
-        Self(TelemetryValue::Table(HashMap::default()))
-    }
+    fn default() -> Self { Self(TelemetryValue::Table(HashMap::default())) }
 }
 
 impl Telemetry {
     #[tracing::instrument(level = "trace", skip())]
-    pub fn new() -> Self {
-        Self::default()
-    }
+    pub fn new() -> Self { Self::default() }
 
     /// Attempt to deserialize the entire telemetry into the requested type.
     #[tracing::instrument(level = "trace", skip())]
@@ -43,8 +41,8 @@ impl Telemetry {
         Ok(result)
     }
 
-    //todo: DMR - I can't get this to work wrt Enum Unit Variants - see commented out try_form portion of
-    // test_telemetry_simple_enum()
+    // todo: DMR - I can't get this to work wrt Enum Unit Variants - see commented out try_form portion
+    // of test_telemetry_simple_enum()
     /// Attempt to serialize the entire telemetry from the given type.
     #[tracing::instrument(level = "trace", skip())]
     pub fn try_from<T: Serialize + Debug>(from: &T) -> Result<Self, TelemetryError> {
@@ -57,9 +55,7 @@ impl Telemetry {
     }
 
     #[inline]
-    pub fn extend(&mut self, that: Self) {
-        self.0.extend(&that.0);
-    }
+    pub fn extend(&mut self, that: Self) { self.0.extend(&that.0); }
 
     #[tracing::instrument(level = "trace", skip(oso))]
     pub fn initialize_policy_engine(oso: &mut oso::Oso) -> Result<(), PolicyError> {
@@ -108,20 +104,17 @@ impl std::ops::DerefMut for Telemetry {
 
 impl Into<Telemetry> for HashMap<String, TelemetryValue> {
     #[tracing::instrument(level = "trace", skip())]
-    fn into(self) -> Telemetry {
-        Telemetry(TelemetryValue::Table(self))
-    }
+    fn into(self) -> Telemetry { Telemetry(TelemetryValue::Table(self)) }
 }
 
 impl Into<Telemetry> for BTreeMap<String, TelemetryValue> {
     #[tracing::instrument(level = "trace", skip())]
-    fn into(self) -> Telemetry {
-        self.into_iter().collect()
-    }
+    fn into(self) -> Telemetry { self.into_iter().collect() }
 }
 
 impl std::ops::Add for Telemetry {
     type Output = Self;
+
     #[tracing::instrument(level = "trace", skip())]
     fn add(mut self, rhs: Self) -> Self::Output {
         self.0.extend(&rhs.0);
@@ -144,8 +137,8 @@ impl<'a> FromIterator<(&'a str, TelemetryValue)> for Telemetry {
 }
 
 impl<'a> IntoIterator for &'a Telemetry {
-    type Item = (&'a String, &'a TelemetryValue);
     type IntoIter = std::collections::hash_map::Iter<'a, String, TelemetryValue>;
+    type Item = (&'a String, &'a TelemetryValue);
 
     #[inline]
     #[tracing::instrument(level = "trace", skip())]
@@ -159,8 +152,8 @@ impl<'a> IntoIterator for &'a Telemetry {
 }
 
 impl<'a> IntoIterator for &'a mut Telemetry {
-    type Item = (&'a String, &'a mut TelemetryValue);
     type IntoIter = std::collections::hash_map::IterMut<'a, String, TelemetryValue>;
+    type Item = (&'a String, &'a mut TelemetryValue);
 
     #[inline]
     #[tracing::instrument(level = "trace", skip())]
@@ -174,8 +167,8 @@ impl<'a> IntoIterator for &'a mut Telemetry {
 }
 
 impl IntoIterator for Telemetry {
-    type Item = (String, TelemetryValue);
     type IntoIter = std::collections::hash_map::IntoIter<String, TelemetryValue>;
+    type Item = (String, TelemetryValue);
 
     #[inline]
     #[tracing::instrument(level = "trace", skip())]
@@ -193,11 +186,12 @@ impl IntoIterator for Telemetry {
 //
 #[cfg(test)]
 mod tests {
-    use super::*;
     use chrono::{DateTime, Utc};
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
     use serde::{Deserialize, Serialize};
+
+    use super::*;
 
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
     struct Data {
@@ -460,8 +454,9 @@ mod tests {
         // );
     }
 
-    use crate::elements::TelemetryValue;
     use std::convert::TryFrom;
+
+    use crate::elements::TelemetryValue;
 
     #[test]
     fn test_telemetry_data_try_into_deserializer() -> anyhow::Result<()> {
@@ -479,7 +474,7 @@ mod tests {
 
         let foo: Option<bool> = data
             .get("cluster.is_deploying")
-            .and_then(|f| bool::try_from(f.clone()).ok()); //bool::from_telemetry(f.clone()).unwrap());
+            .and_then(|f| bool::try_from(f.clone()).ok()); // bool::from_telemetry(f.clone()).unwrap());
         assert_eq!(foo, Some(false));
 
         let expected = Data {
@@ -752,10 +747,11 @@ mod tests {
 //
 //     let expected = Telemetry(
 //         maplit::hashmap! {
-//             "task.last_failure".to_string() => TelemetryValue::Text("2014-11-28T12:45:59.324310806Z".to_string()),
-//             // "cluster.is_deploying".to_string() => TelemetryValue::Boolean(false),
-//             // "cluster.last_deployment".to_string() => TelemetryValue::Text("2014-11-28T10:11:37.246310806Z".to_string()),
-//         }
+//             "task.last_failure".to_string() =>
+// TelemetryValue::Text("2014-11-28T12:45:59.324310806Z".to_string()),             //
+// "cluster.is_deploying".to_string() => TelemetryValue::Boolean(false),             //
+// "cluster.last_deployment".to_string() =>
+// TelemetryValue::Text("2014-11-28T10:11:37.246310806Z".to_string()),         }
 //         .into(),
 //     );
 //     tracing::info!(telemetry=?data, ?expected, "expected conversion from telemetry data.");

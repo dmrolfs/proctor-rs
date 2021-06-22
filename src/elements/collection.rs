@@ -1,16 +1,18 @@
-use super::Telemetry;
-use crate::error::CollectionError;
-use crate::graph::stage::{self, Stage};
-use crate::graph::{Connect, Graph, Inlet, Outlet, Port, SinkShape, SourceShape};
-use crate::{AppData, ProctorResult};
+use std::fmt::{self, Debug};
+
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use reqwest::header::HeaderMap;
 use reqwest::{IntoUrl, Url};
 use serde::de::DeserializeOwned;
-use std::fmt::{self, Debug};
 
-//todo: collect once every minute for scaling metrics
+use super::Telemetry;
+use crate::error::CollectionError;
+use crate::graph::stage::{self, Stage};
+use crate::graph::{Connect, Graph, Inlet, Outlet, Port, SinkShape, SourceShape};
+use crate::{AppData, ProctorResult};
+
+// todo: collect once every minute for scaling metrics
 
 /// Tailorable collection source: plugin mechanism to pull metrics from various sources.
 ///
@@ -20,16 +22,17 @@ use std::fmt::{self, Debug};
 /// #[macro_use]
 /// extern crate proctor_derive;
 ///
-/// use proctor::AppData;
+/// use std::collections::{BTreeMap, HashMap};
+/// use std::iter::FromIterator;
+/// use std::time::Duration;
+///
 /// use proctor::elements;
+/// use proctor::elements::telemetry::ToTelemetry;
 /// use proctor::graph::stage::{self, tick, Stage};
 /// use proctor::graph::{Connect, Graph, SinkShape, SourceShape, ThroughShape};
+/// use proctor::AppData;
 /// use reqwest::header::HeaderMap;
 /// use serde::Deserialize;
-/// use std::collections::{BTreeMap, HashMap};
-/// use std::time::Duration;
-/// use proctor::elements::telemetry::ToTelemetry;
-/// use std::iter::FromIterator;
 ///
 /// #[derive(Debug, Clone, Deserialize)]
 /// pub struct HttpBinResponse {
@@ -43,7 +46,10 @@ use std::fmt::{self, Debug};
 /// async fn main() -> anyhow::Result<()> {
 ///     let url = "https://httpbin.org/get?f=foo&b=bar";
 ///     let mut default_headers = HeaderMap::new();
-///     default_headers.insert("x-api-key", "fe37af1e07mshd1763d86e5f2a8cp1714cfjsnb6145a35e7ca".parse().unwrap());
+///     default_headers.insert(
+///         "x-api-key",
+///         "fe37af1e07mshd1763d86e5f2a8cp1714cfjsnb6145a35e7ca".parse().unwrap(),
+///     );
 ///
 ///     let mut count = 0;
 ///
@@ -66,20 +72,12 @@ use std::fmt::{self, Debug};
 ///         elements::Telemetry::try_from(&data).unwrap()
 ///     };
 ///
-///     let mut collect = elements::Collect::new(
-///         "collect-args",
-///         url,
-///         default_headers,
-///         to_metric_catalog,
-///     )
-///     .await;
+///     let mut collect = elements::Collect::new("collect-args", url, default_headers, to_metric_catalog).await;
 ///
 ///     let mut fold = stage::Fold::<_, elements::Telemetry, _>::new(
 ///         "gather latest",
 ///         None,
-///         |acc: Option<elements::Telemetry>, data| {
-///             acc.map_or(Some(data.clone()), move |a| Some(a + data.clone()))
-///         }
+///         |acc: Option<elements::Telemetry>, data| acc.map_or(Some(data.clone()), move |a| Some(a + data.clone())),
 ///     );
 ///     let rx_gather = fold.take_final_rx().unwrap();
 ///
@@ -100,7 +98,7 @@ use std::fmt::{self, Debug};
 ///                 exp.insert(format!("args.{}.b", i), "bar".into());
 ///             }
 ///             assert_eq!(resp, exp.into_iter().collect());
-///         }
+///         },
 ///         None => panic!("did not expect no response"),
 ///     }
 ///
@@ -191,27 +189,23 @@ impl Collect {
 
 impl SourceShape for Collect {
     type Out = Telemetry;
+
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> {
-        self.outlet.clone()
-    }
+    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
 }
 
 impl SinkShape for Collect {
     type In = ();
+
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> {
-        self.trigger.clone()
-    }
+    fn inlet(&self) -> Inlet<Self::In> { self.trigger.clone() }
 }
 
 #[dyn_upcast]
 #[async_trait]
 impl Stage for Collect {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
+    fn name(&self) -> &str { self.name.as_str() }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {

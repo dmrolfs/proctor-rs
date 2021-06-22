@@ -17,7 +17,6 @@ pub use self::identity::Identity;
 pub use self::map::Map;
 pub use self::merge::Merge;
 pub use self::merge_n::{MergeMsg, MergeN};
-
 use super::Stage;
 use crate::graph::ThroughShape;
 

@@ -1,7 +1,9 @@
-use super::{Inlet, Outlet, Port};
 use std::fmt;
 use std::sync::Arc;
+
 use tokio::sync::Mutex;
+
+use super::{Inlet, Outlet, Port};
 
 pub trait SourceShape {
     type Out;
@@ -49,13 +51,9 @@ pub trait FanInShape2: SourceShape {
 pub struct InletsShape<T>(pub Arc<Mutex<Vec<Inlet<T>>>>);
 
 impl<T: Send> InletsShape<T> {
-    pub fn new(inlets: Vec<Inlet<T>>) -> Self {
-        Self(Arc::new(Mutex::new(inlets)))
-    }
+    pub fn new(inlets: Vec<Inlet<T>>) -> Self { Self(Arc::new(Mutex::new(inlets))) }
 
-    pub async fn get(&self, index: usize) -> Option<Inlet<T>> {
-        self.0.lock().await.get(index).map(|i| i.clone())
-    }
+    pub async fn get(&self, index: usize) -> Option<Inlet<T>> { self.0.lock().await.get(index).map(|i| i.clone()) }
 
     pub async fn close(&mut self) {
         for i in self.0.lock().await.iter_mut() {
@@ -65,20 +63,16 @@ impl<T: Send> InletsShape<T> {
 }
 
 impl<T> Clone for InletsShape<T> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
+    fn clone(&self) -> Self { Self(self.0.clone()) }
 }
 
 impl<T> fmt::Debug for InletsShape<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Inlets").finish()
-    }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.debug_struct("Inlets").finish() }
 }
 
 pub trait UniformFanInShape: SourceShape {
     type In;
-    //todo use once associated type defaults are stable
+    // todo use once associated type defaults are stable
     // type InletShape = Arc<Mutex<Inlet<Self::In>>>;
     // type InletsShape = Arc<Mutex<Vec<Self::InletShape>>>;
 

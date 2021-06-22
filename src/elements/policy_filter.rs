@@ -4,21 +4,23 @@ pub use protocol::*;
 mod policy;
 mod protocol;
 
+use std::collections::HashSet;
+use std::convert::TryFrom;
+use std::fmt::{self, Debug};
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use cast_trait_object::dyn_upcast;
+use oso::{Oso, ToPolar};
+use tokio::sync::Mutex;
+use tokio::sync::{broadcast, mpsc};
+
 use crate::elements::{telemetry, TelemetryValue, ToTelemetry};
 use crate::error::{GraphError, PolicyError, TelemetryError, TypeExpectation};
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Inlet, Outlet, Port};
 use crate::graph::{SinkShape, SourceShape};
 use crate::{AppData, ProctorContext, ProctorResult};
-use async_trait::async_trait;
-use cast_trait_object::dyn_upcast;
-use oso::{Oso, ToPolar};
-use std::collections::HashSet;
-use std::convert::TryFrom;
-use std::fmt::{self, Debug};
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use tokio::sync::{broadcast, mpsc};
 
 pub trait PolicySettings {
     fn required_subscription_fields(&self) -> HashSet<String>;
@@ -34,9 +36,7 @@ pub struct PolicyOutcome<T, C> {
 }
 
 impl<T, C> PolicyOutcome<T, C> {
-    pub fn new(item: T, context: C, bindings: telemetry::Table) -> Self {
-        Self { item, context, bindings }
-    }
+    pub fn new(item: T, context: C, bindings: telemetry::Table) -> Self { Self { item, context, bindings } }
 }
 
 const T_ITEM: &'static str = "item";
@@ -136,9 +136,7 @@ where
     }
 
     #[inline]
-    pub fn context_inlet(&self) -> Inlet<C> {
-        self.context_inlet.clone()
-    }
+    pub fn context_inlet(&self) -> Inlet<C> { self.context_inlet.clone() }
 }
 
 impl<T, C, A, P> SinkShape for PolicyFilter<T, C, A, P>
@@ -146,10 +144,9 @@ where
     P: QueryPolicy<Item = T, Context = C, Args = A>,
 {
     type In = T;
+
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> {
-        self.inlet.clone()
-    }
+    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
 }
 
 impl<T, C, A, P> SourceShape for PolicyFilter<T, C, A, P>
@@ -157,10 +154,9 @@ where
     P: QueryPolicy<Item = T, Context = C, Args = A>,
 {
     type Out = PolicyOutcome<T, C>;
+
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> {
-        self.outlet.clone()
-    }
+    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
 }
 
 #[dyn_upcast]
@@ -173,9 +169,7 @@ where
     P: QueryPolicy<Item = T, Context = C, Args = A> + 'static,
 {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
+    fn name(&self) -> &str { self.name.as_str() }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
@@ -328,21 +322,22 @@ where
                 );
                 outlet.send(PolicyOutcome::new(item, context.clone(), bindings)).await?;
                 Ok(())
-            }
+            },
 
             Ok(_) => {
                 tracing::info!(
-                    "item and context did not pass policy review (no passing result from knowledge base) - skipping item."
+                    "item and context did not pass policy review (no passing result from knowledge base) - skipping \
+                     item."
                 );
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
                 Ok(())
-            }
+            },
 
             Err(err) => {
                 tracing::warn!(error=?err, ?item, ?context, "error in policy review - skipping item.");
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
                 Err(err.into())
-            }
+            },
         }
     }
 
@@ -384,7 +379,7 @@ where
                 };
                 let _ignore_failure = tx.send(detail);
                 Ok(true)
-            }
+            },
 
             PolicyFilterCmd::ReplacePolicy { new_policy, tx } => {
                 oso.clear_rules();
@@ -395,7 +390,7 @@ where
 
                 let _ignore_failure = tx.send(());
                 Ok(true)
-            }
+            },
 
             PolicyFilterCmd::AppendPolicy { additional_policy: policy_source, tx } => {
                 match policy_source {
@@ -404,14 +399,14 @@ where
                 }
                 let _ignore_failure = tx.send(());
                 Ok(true)
-            }
+            },
 
             PolicyFilterCmd::ResetPolicy(tx) => {
                 oso.clear_rules();
                 policy.load_policy_engine(oso)?;
                 let _ignore_failrue = tx.send(());
                 Ok(true)
-            }
+            },
         }
     }
 }
@@ -423,9 +418,7 @@ where
     type Sender = PolicyFilterApi<C>;
 
     #[inline]
-    fn tx_api(&self) -> Self::Sender {
-        self.tx_api.clone()
-    }
+    fn tx_api(&self) -> Self::Sender { self.tx_api.clone() }
 }
 
 impl<T, C, A, P> stage::WithMonitor for PolicyFilter<T, C, A, P>
@@ -433,10 +426,9 @@ where
     P: QueryPolicy<Item = T, Context = C, Args = A>,
 {
     type Receiver = PolicyFilterMonitor<T, C>;
+
     #[inline]
-    fn rx_monitor(&self) -> Self::Receiver {
-        self.tx_monitor.subscribe()
-    }
+    fn rx_monitor(&self) -> Self::Receiver { self.tx_monitor.subscribe() }
 }
 
 impl<T, C, A, P> Debug for PolicyFilter<T, C, A, P>
@@ -459,15 +451,17 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::elements::telemetry;
-    use crate::phases::collection::TelemetrySubscription;
+    use std::collections::HashMap;
+
     use oso::PolarClass;
     use pretty_assertions::assert_eq;
     use serde::{Deserialize, Serialize};
-    use std::collections::HashMap;
     use tokio::sync::mpsc;
     use tokio_test::block_on;
+
+    use super::*;
+    use crate::elements::telemetry;
+    use crate::phases::collection::TelemetrySubscription;
 
     // Make sure the `PolicyFilter` object is threadsafe
     // #[test]
@@ -493,9 +487,7 @@ mod tests {
             maplit::hashset! {"location_code", }
         }
 
-        fn custom(&self) -> telemetry::Table {
-            self.qualities.clone()
-        }
+        fn custom(&self) -> telemetry::Table { self.qualities.clone() }
     }
 
     #[derive(Debug)]
@@ -504,9 +496,7 @@ mod tests {
     }
 
     impl TestPolicy {
-        pub fn new<S: Into<String>>(policy: S) -> Self {
-            Self { policy: policy.into() }
-        }
+        pub fn new<S: Into<String>>(policy: S) -> Self { Self { policy: policy.into() } }
     }
 
     impl PolicySubscription for TestPolicy {
@@ -518,9 +508,9 @@ mod tests {
     }
 
     impl QueryPolicy for TestPolicy {
-        type Item = User;
-        type Context = TestContext;
         type Args = (Self::Item, &'static str, &'static str);
+        type Context = TestContext;
+        type Item = User;
 
         fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
             oso.load_str(self.policy.as_str()).map_err(|err| err.into())

@@ -1,10 +1,12 @@
-use crate::elements::telemetry;
-use crate::ProctorContext;
+use std::collections::HashSet;
+use std::fmt::Debug;
+
 use chrono::{DateTime, Utc};
 use oso::PolarClass;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-use std::fmt::Debug;
+
+use crate::elements::telemetry;
+use crate::ProctorContext;
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FlinkEligibilityContext {
@@ -29,9 +31,7 @@ impl ProctorContext for FlinkEligibilityContext {
         }
     }
 
-    fn custom(&self) -> telemetry::Table {
-        self.custom.clone()
-    }
+    fn custom(&self) -> telemetry::Table { self.custom.clone() }
 }
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -75,12 +75,13 @@ impl ClusterStatus {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::elements::telemetry::ToTelemetry;
-    use crate::elements::Telemetry;
     use chrono::{DateTime, Utc};
     use lazy_static::lazy_static;
     use serde_test::{assert_tokens, Token};
+
+    use super::*;
+    use crate::elements::telemetry::ToTelemetry;
+    use crate::elements::Telemetry;
 
     lazy_static! {
         static ref DT_1: DateTime<Utc> = Utc::now();

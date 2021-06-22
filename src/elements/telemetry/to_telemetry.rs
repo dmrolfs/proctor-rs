@@ -6,7 +6,5 @@ pub trait ToTelemetry {
 }
 
 impl<T: Into<TelemetryValue>> ToTelemetry for T {
-    fn to_telemetry(self) -> TelemetryValue {
-        self.into()
-    }
+    fn to_telemetry(self) -> TelemetryValue { self.into() }
 }

@@ -1,7 +1,8 @@
-use super::stage::Stage;
-use crate::ProctorResult;
 use tokio::task::JoinHandle;
 use tracing::Instrument;
+
+use super::stage::Stage;
+use crate::ProctorResult;
 
 #[derive(Debug)]
 pub struct Node {

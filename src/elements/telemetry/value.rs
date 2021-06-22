@@ -1,12 +1,14 @@
-use crate::error::{TelemetryError, TypeExpectation};
-use config::Value as ConfigValue;
-use oso::{FromPolar, PolarValue, ToPolar};
-use serde::ser::{SerializeMap, SerializeSeq};
-use serde::{de, Serialize, Serializer};
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque};
 use std::convert::TryFrom;
 use std::fmt;
 use std::num::{ParseFloatError, ParseIntError};
+
+use config::Value as ConfigValue;
+use oso::{FromPolar, PolarValue, ToPolar};
+use serde::ser::{SerializeMap, SerializeSeq};
+use serde::{de, Serialize, Serializer};
+
+use crate::error::{TelemetryError, TypeExpectation};
 
 #[derive(Debug, Clone)]
 pub enum TelemetryValue {
@@ -42,7 +44,7 @@ impl TelemetryValue {
             (Self::Unit, Self::Unit) => (),
             (Self::Boolean(ref mut lhs), Self::Boolean(rhs)) => {
                 *lhs = lhs.bitor(rhs);
-            }
+            },
             (Self::Integer(ref mut lhs), Self::Integer(rhs)) => *lhs = *lhs + *rhs,
             (Self::Float(ref mut lhs), Self::Float(rhs)) => *lhs = *lhs + *rhs,
             (Self::Text(ref mut lhs), Self::Text(rhs)) => lhs.extend(rhs.chars()),
@@ -55,9 +57,7 @@ impl TelemetryValue {
 
 impl Default for TelemetryValue {
     #[tracing::instrument(level = "trace")]
-    fn default() -> Self {
-        Self::Unit
-    }
+    fn default() -> Self { Self::Unit }
 }
 
 impl fmt::Display for TelemetryValue {
@@ -101,11 +101,11 @@ impl ToPolar for TelemetryValue {
             Self::Seq(values) => {
                 let vs = values.into_iter().map(|v| v.to_polar()).collect();
                 PolarValue::List(vs)
-            }
+            },
             Self::Table(table) => {
                 let vs = table.into_iter().map(|(k, v)| (k, v.to_polar())).collect();
                 PolarValue::Map(vs)
-            }
+            },
             Self::Unit => PolarValue::Boolean(false),
         }
     }
@@ -129,35 +129,29 @@ impl Into<ConfigValue> for TelemetryValue {
             Self::Seq(values) => {
                 let vs: Vec<ConfigValue> = values.into_iter().map(|v| v.into()).collect();
                 ConfigValue::new(None, vs)
-            }
+            },
             Self::Table(table) => {
                 let tbl: HashMap<String, ConfigValue> =
                     table.into_iter().map(|(k, v)| (k, v.into())).collect::<HashMap<_, _>>();
                 ConfigValue::new(None, tbl)
-            }
+            },
             Self::Unit => ConfigValue::new(None, Option::<String>::None),
         }
     }
 }
 
 impl From<bool> for TelemetryValue {
-    fn from(value: bool) -> Self {
-        TelemetryValue::Boolean(value)
-    }
+    fn from(value: bool) -> Self { TelemetryValue::Boolean(value) }
 }
 
 impl From<usize> for TelemetryValue {
-    fn from(value: usize) -> Self {
-        TelemetryValue::Integer(value as i64)
-    }
+    fn from(value: usize) -> Self { TelemetryValue::Integer(value as i64) }
 }
 
 macro_rules! from_int_to_telemetry {
     ($i:ty) => {
         impl From<$i> for TelemetryValue {
-            fn from(value: $i) -> Self {
-                Self::Integer(value.into())
-            }
+            fn from(value: $i) -> Self { Self::Integer(value.into()) }
         }
     };
 }
@@ -173,9 +167,7 @@ from_int_to_telemetry!(i64);
 macro_rules! from_float_to_telemetry {
     ($f:ty) => {
         impl From<$f> for TelemetryValue {
-            fn from(value: $f) -> Self {
-                Self::Float(value.into())
-            }
+            fn from(value: $f) -> Self { Self::Float(value.into()) }
         }
     };
 }
@@ -184,63 +176,43 @@ from_float_to_telemetry!(f32);
 from_float_to_telemetry!(f64);
 
 impl From<String> for TelemetryValue {
-    fn from(rep: String) -> Self {
-        Self::Text(rep)
-    }
+    fn from(rep: String) -> Self { Self::Text(rep) }
 }
 
 impl<'a> From<&'a str> for TelemetryValue {
-    fn from(rep: &'a str) -> Self {
-        Self::Text(rep.to_string())
-    }
+    fn from(rep: &'a str) -> Self { Self::Text(rep.to_string()) }
 }
 
 impl<T: Into<TelemetryValue>> From<Vec<T>> for TelemetryValue {
-    fn from(values: Vec<T>) -> Self {
-        Self::Seq(values.into_iter().map(|v| v.into()).collect())
-    }
+    fn from(values: Vec<T>) -> Self { Self::Seq(values.into_iter().map(|v| v.into()).collect()) }
 }
 
 impl<T: Into<TelemetryValue>> From<VecDeque<T>> for TelemetryValue {
-    fn from(values: VecDeque<T>) -> Self {
-        Self::Seq(values.into_iter().map(|v| v.into()).collect())
-    }
+    fn from(values: VecDeque<T>) -> Self { Self::Seq(values.into_iter().map(|v| v.into()).collect()) }
 }
 
 impl<T: Into<TelemetryValue>> From<LinkedList<T>> for TelemetryValue {
-    fn from(values: LinkedList<T>) -> Self {
-        Self::Seq(values.into_iter().map(|v| v.into()).collect())
-    }
+    fn from(values: LinkedList<T>) -> Self { Self::Seq(values.into_iter().map(|v| v.into()).collect()) }
 }
 
 impl<T: Into<TelemetryValue>> From<HashSet<T>> for TelemetryValue {
-    fn from(values: HashSet<T>) -> Self {
-        Self::Seq(values.into_iter().map(|v| v.into()).collect())
-    }
+    fn from(values: HashSet<T>) -> Self { Self::Seq(values.into_iter().map(|v| v.into()).collect()) }
 }
 
 impl<T: Into<TelemetryValue>> From<BTreeSet<T>> for TelemetryValue {
-    fn from(values: BTreeSet<T>) -> Self {
-        Self::Seq(values.into_iter().map(|v| v.into()).collect())
-    }
+    fn from(values: BTreeSet<T>) -> Self { Self::Seq(values.into_iter().map(|v| v.into()).collect()) }
 }
 
 impl<T: Into<TelemetryValue>> From<BinaryHeap<T>> for TelemetryValue {
-    fn from(values: BinaryHeap<T>) -> Self {
-        Self::Seq(values.into_iter().map(|v| v.into()).collect())
-    }
+    fn from(values: BinaryHeap<T>) -> Self { Self::Seq(values.into_iter().map(|v| v.into()).collect()) }
 }
 
 impl<'a, T: Clone + Into<TelemetryValue>> From<&'a [T]> for TelemetryValue {
-    fn from(values: &'a [T]) -> Self {
-        Self::Seq(values.iter().cloned().map(|v| v.into()).collect())
-    }
+    fn from(values: &'a [T]) -> Self { Self::Seq(values.iter().cloned().map(|v| v.into()).collect()) }
 }
 
 impl<T: Into<TelemetryValue>> From<HashMap<String, T>> for TelemetryValue {
-    fn from(table: HashMap<String, T>) -> Self {
-        Self::Table(table.into_iter().map(|(k, v)| (k, v.into())).collect())
-    }
+    fn from(table: HashMap<String, T>) -> Self { Self::Table(table.into_iter().map(|(k, v)| (k, v.into())).collect()) }
 }
 
 impl<T: Into<TelemetryValue>> From<HashMap<&str, T>> for TelemetryValue {
@@ -250,9 +222,7 @@ impl<T: Into<TelemetryValue>> From<HashMap<&str, T>> for TelemetryValue {
 }
 
 impl<T: Into<TelemetryValue>> From<BTreeMap<String, T>> for TelemetryValue {
-    fn from(table: BTreeMap<String, T>) -> Self {
-        Self::Table(table.into_iter().map(|(k, v)| (k, v.into())).collect())
-    }
+    fn from(table: BTreeMap<String, T>) -> Self { Self::Table(table.into_iter().map(|(k, v)| (k, v.into())).collect()) }
 }
 
 impl<T: Into<TelemetryValue>> From<BTreeMap<&str, T>> for TelemetryValue {
@@ -281,21 +251,23 @@ impl From<PolarValue> for TelemetryValue {
             PolarValue::List(values) => {
                 let vs = values.into_iter().map(|v| v.into()).collect();
                 Self::Seq(vs)
-            }
+            },
             PolarValue::Map(table) => {
                 let vs = table.into_iter().map(|(k, v)| (k, v.into())).collect();
                 Self::Table(vs)
-            }
+            },
             PolarValue::Instance(_) => {
                 Self::Unit
                 // maybe Unit?
-                // Err(StageError::TypeError("PolarValue::Instance is not a supported telemetry type.".to_string()))
-            }
+                // Err(StageError::TypeError("PolarValue::Instance is not a supported telemetry
+                // type.".to_string()))
+            },
             PolarValue::Variable(_) => {
                 Self::Unit
                 // maybe Unit?
-                // Err(StageError::TypeError("PolarValue::Variable is not a supported telemetry type.".to_string()))
-            }
+                // Err(StageError::TypeError("PolarValue::Variable is not a supported telemetry
+                // type.".to_string()))
+            },
         }
     }
 }
@@ -320,7 +292,7 @@ impl TryFrom<TelemetryValue> for bool {
                         actual: Some(rep.to_string()),
                     }),
                 }
-            }
+            },
 
             value => Err(TelemetryError::TypeError {
                 expected: format!("{} value", TypeExpectation::Boolean),
@@ -371,6 +343,7 @@ try_from_telemetry_into_int!(i64);
 
 impl TryFrom<TelemetryValue> for f64 {
     type Error = TelemetryError;
+
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         match telemetry {
             TelemetryValue::Float(f64) => Ok(f64),
@@ -393,6 +366,7 @@ impl TryFrom<TelemetryValue> for f64 {
 
 impl TryFrom<TelemetryValue> for f32 {
     type Error = TelemetryError;
+
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         match telemetry {
             TelemetryValue::Float(f64) => Ok(f64 as f32),
@@ -558,23 +532,23 @@ impl<'de> Serialize for TelemetryValue {
             Self::Unit => {
                 // serializer.serialize_unit()
                 serializer.serialize_unit_variant("TelemetryValue", 6, "Unit")
-            }
+            },
             Self::Boolean(b) => {
                 serializer.serialize_bool(*b)
                 // serializer.serialize_newtype_variant("TelemetryValue", 2, "Boolean", b)
-            }
+            },
             Self::Integer(i) => {
                 serializer.serialize_i64(*i)
                 // serializer.serialize_newtype_variant("TelemetryValue", 0, "Integer", i)
-            }
+            },
             Self::Float(f) => {
                 serializer.serialize_f64(*f)
                 // serializer.serialize_newtype_variant("TelemetryValue", 1, "Float", f)
-            }
+            },
             Self::Text(t) => {
                 serializer.serialize_str(t.as_str())
                 // serializer.serialize_newtype_variant("TelemetryValue", 3, "Text", t)
-            }
+            },
             Self::Seq(values) => {
                 let mut seq = serializer.serialize_seq(Some(values.len()))?;
                 for element in values {
@@ -582,7 +556,7 @@ impl<'de> Serialize for TelemetryValue {
                 }
                 seq.end()
                 // serializer.serialize_newtype_variant("TelemetryValue",4, "Seq", values)
-            }
+            },
             Self::Table(table) => {
                 let mut map = serializer.serialize_map(Some(table.len()))?;
                 for (k, v) in table {
@@ -590,7 +564,7 @@ impl<'de> Serialize for TelemetryValue {
                 }
                 map.end()
                 // serializer.serialize_newtype_variant("TelemetryValue",5, "Table", table)
-            }
+            },
         }
     }
 }
@@ -608,9 +582,7 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
         impl<'de> de::Visitor<'de> for ValueVisitor {
             type Value = TelemetryValue;
 
-            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str("any valid telemetry value")
-            }
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.write_str("any valid telemetry value") }
 
             #[inline]
             #[tracing::instrument(level = "info")]
@@ -674,6 +646,7 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
                 tracing::info!(?value, "deserializing f32 value");
                 Ok(TelemetryValue::Float(value as f64))
             }
+
             #[inline]
             #[tracing::instrument(level = "info")]
             fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E> {
@@ -751,7 +724,7 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
                         val => {
                             tracing::info!(?key, value=?val, "adding deserialized entry.");
                             table.insert(key, val);
-                        }
+                        },
                     }
                 }
 
@@ -765,11 +738,12 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use fmt::Debug;
     use pretty_assertions::assert_eq;
     use serde::{Deserialize, Serialize};
     use serde_test::{assert_tokens, Token};
+
+    use super::*;
 
     #[derive(Debug, PartialEq, Serialize, Deserialize)]
     struct Foo {
@@ -1035,12 +1009,12 @@ mod tests {
 //             },
 //             PolarValue::Instance(_) => {
 //                 // maybe Unit?
-//                 Err(StageError::TypeError("PolarValue::Instance is not a supported telemetry type.".to_string()))
-//             },
+//                 Err(StageError::TypeError("PolarValue::Instance is not a supported telemetry
+// type.".to_string()))             },
 //             PolarValue::Variable(_) => {
 //                 // maybe Unit?
-//                 Err(StageError::TypeError("PolarValue::Variable is not a supported telemetry type.".to_string()))
-//             },
+//                 Err(StageError::TypeError("PolarValue::Variable is not a supported telemetry
+// type.".to_string()))             },
 //         }
 //     }
 // }

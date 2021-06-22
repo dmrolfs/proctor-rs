@@ -1,13 +1,15 @@
+use std::fmt::{self, Debug};
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use cast_trait_object::dyn_upcast;
+use tokio::sync::Mutex;
+use tokio::sync::{mpsc, oneshot};
+
 use crate::error::StageError;
 use crate::graph::shape::SinkShape;
 use crate::graph::{stage, Inlet, Port, Stage};
 use crate::{AppData, ProctorResult};
-use async_trait::async_trait;
-use cast_trait_object::dyn_upcast;
-use std::fmt::{self, Debug};
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use tokio::sync::{mpsc, oneshot};
 
 pub type FoldApi<Acc> = mpsc::UnboundedSender<FoldCmd<Acc>>;
 
@@ -58,7 +60,6 @@ impl<Acc> FoldCmd<Acc> {
 ///     let sink_handle = tokio::spawn(async move {
 ///         fold.run().await;
 ///     });
-///
 ///
 ///
 ///     match rx_sum.try_recv() {
@@ -120,9 +121,7 @@ where
     }
 
     #[inline]
-    pub fn take_final_rx(&mut self) -> Option<oneshot::Receiver<Acc>> {
-        self.rx_final.take()
-    }
+    pub fn take_final_rx(&mut self) -> Option<oneshot::Receiver<Acc>> { self.rx_final.take() }
 
     #[tracing::instrument(level = "info", name = "do run fold sink", skip(self))]
     async fn do_run(&mut self) {
@@ -188,10 +187,9 @@ where
     Acc: Debug,
 {
     type In = In;
+
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> {
-        self.inlet.clone()
-    }
+    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
 }
 
 #[dyn_upcast]
@@ -203,9 +201,7 @@ where
     Acc: AppData + Clone,
 {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_ref()
-    }
+    fn name(&self) -> &str { self.name.as_ref() }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
@@ -236,9 +232,7 @@ where
     type Sender = FoldApi<Acc>;
 
     #[inline]
-    fn tx_api(&self) -> Self::Sender {
-        self.tx_api.clone()
-    }
+    fn tx_api(&self) -> Self::Sender { self.tx_api.clone() }
 }
 
 impl<F, In, Acc> fmt::Debug for Fold<F, In, Acc>

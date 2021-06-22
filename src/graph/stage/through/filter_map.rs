@@ -1,9 +1,11 @@
+use std::fmt::{self, Debug};
+
+use async_trait::async_trait;
+use cast_trait_object::dyn_upcast;
+
 use crate::graph::{Inlet, Outlet, Port, Stage};
 use crate::graph::{SinkShape, SourceShape};
 use crate::{AppData, ProctorResult};
-use async_trait::async_trait;
-use cast_trait_object::dyn_upcast;
-use std::fmt::{self, Debug};
 
 /// The FilterMap stage both filters and maps on items.
 ///
@@ -15,37 +17,34 @@ use std::fmt::{self, Debug};
 /// # Examples
 ///
 /// ```rust
-/// use tokio::sync::mpsc;
-/// use proctor::graph::{Connect, Inlet};
 /// use proctor::graph::stage::{self, Stage};
-/// use proctor::graph::{ThroughShape, SinkShape, SourceShape};
+/// use proctor::graph::{Connect, Inlet};
+/// use proctor::graph::{SinkShape, SourceShape, ThroughShape};
+/// use tokio::sync::mpsc;
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
 ///     let my_data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 ///     let (tx, rx) = mpsc::channel(8);
 ///
-///     let mut filter_map = stage::FilterMap::new(
-///         "even values",
-///         |x| {
-///             if x % 2 == 0 {
-///                 Some(x * x)
-///             } else {
-///                 None
-///             }
-///         }
-///     );
+///     let mut filter_map = stage::FilterMap::new("even values", |x| if x % 2 == 0 { Some(x * x) } else { None });
 ///
-///     let mut fold = stage::Fold::new("sum even sq values", 0, |acc, x| acc + x );
+///     let mut fold = stage::Fold::new("sum even sq values", 0, |acc, x| acc + x);
 ///     let mut rx_sum_sq = fold.take_final_rx().unwrap();
 ///
 ///     filter_map.inlet().attach("test_channel", rx).await;
 ///     (filter_map.outlet(), fold.inlet()).connect().await;
 ///
-///     let filter_handle = tokio::spawn(async move { filter_map.run().await; });
-///     let fold_handle = tokio::spawn(async move { fold.run().await; });
+///     let filter_handle = tokio::spawn(async move {
+///         filter_map.run().await;
+///     });
+///     let fold_handle = tokio::spawn(async move {
+///         fold.run().await;
+///     });
 ///     let source_handle = tokio::spawn(async move {
-///         for x in my_data { tx.send(x).await.expect("failed to send data"); }
+///         for x in my_data {
+///             tx.send(x).await.expect("failed to send data");
+///         }
 ///     });
 ///
 ///     source_handle.await?;
@@ -85,9 +84,7 @@ where
         }
     }
 
-    pub fn with_block_logging(self) -> Self {
-        Self { log_blocks: true, ..self }
-    }
+    pub fn with_block_logging(self) -> Self { Self { log_blocks: true, ..self } }
 }
 
 impl<F, In, Out> SourceShape for FilterMap<F, In, Out>
@@ -97,9 +94,7 @@ where
     type Out = Out;
 
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> {
-        self.outlet.clone()
-    }
+    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
 }
 
 impl<F, In, Out> SinkShape for FilterMap<F, In, Out>
@@ -109,9 +104,7 @@ where
     type In = In;
 
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> {
-        self.inlet.clone()
-    }
+    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
 }
 
 #[dyn_upcast]
@@ -123,9 +116,7 @@ where
     Out: AppData,
 {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
+    fn name(&self) -> &str { self.name.as_str() }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
@@ -176,9 +167,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tokio::sync::mpsc;
     use tokio_test::block_on;
+
+    use super::*;
 
     #[test]
     fn test_basic_usage() {

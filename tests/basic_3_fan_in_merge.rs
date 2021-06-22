@@ -39,7 +39,7 @@ async fn test_basic_sequence_3_fan_in_merge() -> Result<()> {
             let e100: i32 = (101..=999).into_iter().sum();
             assert_eq!(actual, e1 + e10 + e100);
             Ok(())
-        }
+        },
         Err(_err) => panic!("failed to receive final sum"),
     }
 }

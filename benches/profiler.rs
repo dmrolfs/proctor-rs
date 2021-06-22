@@ -1,6 +1,7 @@
+use std::{fs::File, os::raw::c_int, path::Path};
+
 use criterion::profiler::Profiler;
 use pprof::ProfilerGuard;
-use std::{fs::File, os::raw::c_int, path::Path};
 
 /// Small custom profiler that can be used with Criterion to create
 /// a flamegraph for benchmarks.
@@ -16,10 +17,7 @@ use std::{fs::File, os::raw::c_int, path::Path};
 ///     // Use the criterion struct as normal here.
 /// }
 ///
-/// fn custom() -> Criterion {
-///     Criterion::default()
-///         .with_profiler(FlamegraphProfiler::new())
-/// }
+/// fn custom() -> Criterion { Criterion::default().with_profiler(FlamegraphProfiler::new()) }
 ///
 /// criterion_group! {
 ///     name = benches;
@@ -46,15 +44,14 @@ pub struct FlamegraphProfiler<'a> {
 
 impl<'a> FlamegraphProfiler<'a> {
     #[allow(dead_code)]
-    pub fn new(frequency: c_int) -> Self {
-        FlamegraphProfiler { frequency, active_profiler: None }
-    }
+    pub fn new(frequency: c_int) -> Self { FlamegraphProfiler { frequency, active_profiler: None } }
 }
 
 impl<'a> Profiler for FlamegraphProfiler<'a> {
     fn start_profiling(&mut self, _benchmark_id: &str, _benchmark_dir: &Path) {
         self.active_profiler = Some(ProfilerGuard::new(self.frequency).unwrap());
     }
+
     fn stop_profiling(&mut self, _benchmark_id: &str, benchmark_dir: &Path) {
         std::fs::create_dir_all(benchmark_dir).unwrap();
         let flamegraph_path = benchmark_dir.join("flamegraph.svg");

@@ -1,4 +1,4 @@
-//todo This file tried to define Telemetry as a Deserializer; meaning values could be directly
+// todo This file tried to define Telemetry as a Deserializer; meaning values could be directly
 // deserialized from it. I ran into problems getting Enum Variants right and particular trouble with
 // recursive structures; e.g., Seq of Tables, etc.
 
@@ -103,14 +103,14 @@
 //
 //     #[inline]
 //     #[tracing::instrument(level="trace", skip(visitor))]
-//     fn deserialize_string<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         visitor.visit_string(String::from_telemetry(self)?)
+//     fn deserialize_string<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error>
+// {         visitor.visit_string(String::from_telemetry(self)?)
 //     }
 //
 //     #[inline]
 //     #[tracing::instrument(level="trace", skip(visitor))]
-//     fn deserialize_option<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         match self {
+//     fn deserialize_option<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error>
+// {         match self {
 //             TelemetryValue::Unit => visitor.visit_none(),
 //             _ => visitor.visit_some(self),
 //         }
@@ -118,8 +118,8 @@
 //
 //     #[inline]
 //     #[tracing::instrument(level="trace", skip(visitor))]
-//     fn deserialize_newtype_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value, Self::Error>
-//     where
+//     fn deserialize_newtype_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value,
+// Self::Error>     where
 //         V: de::Visitor<'de>,
 //     {
 //         visitor.visit_newtype_struct(self)
@@ -295,8 +295,8 @@
 //     #[tracing::instrument(level="trace", skip())]
 //     fn structural_error(&self) -> StageError {
 //         StageError::GraphSerde(format!(
-//             "value of enum {} should be represented by either string or table with exactly one key",
-//             self.name
+//             "value of enum {} should be represented by either string or table with exactly one
+// key",             self.name
 //         ))
 //     }
 // }
@@ -332,30 +332,30 @@
 //     }
 //
 //     #[tracing::instrument(level="trace", skip(seed))]
-//     fn newtype_variant_seed<T: de::DeserializeSeed<'de>>(self, seed: T) -> Result<T::Value, Self::Error> {
-//         match self.value {
+//     fn newtype_variant_seed<T: de::DeserializeSeed<'de>>(self, seed: T) -> Result<T::Value,
+// Self::Error> {         match self.value {
 //             TelemetryValue::Table(t) => seed.deserialize(t.into_iter().next().unwrap().1),
 //             _ => unreachable!(),
 //         }
 //     }
 //
 //     #[tracing::instrument(level="trace", skip(visitor))]
-//     fn tuple_variant<V: de::Visitor<'de>>(self, _len: usize, visitor: V) -> Result<V::Value, Self::Error> {
-//         match self.value {
-//             TelemetryValue::Table(t) => de::Deserializer::deserialize_seq(t.into_iter().next().unwrap().1, visitor),
-//             _ => unreachable!(),
-//         }
+//     fn tuple_variant<V: de::Visitor<'de>>(self, _len: usize, visitor: V) -> Result<V::Value,
+// Self::Error> {         match self.value {
+//             TelemetryValue::Table(t) =>
+// de::Deserializer::deserialize_seq(t.into_iter().next().unwrap().1, visitor),             _ =>
+// unreachable!(),         }
 //     }
 //
 //     #[tracing::instrument(level="trace", skip(visitor))]
-//     fn struct_variant<V>(self, _fields: &'static [&'static str], visitor: V) -> Result<V::Value, Self::Error>
-//     where
+//     fn struct_variant<V>(self, _fields: &'static [&'static str], visitor: V) -> Result<V::Value,
+// Self::Error>     where
 //         V: de::Visitor<'de>,
 //     {
 //         match self.value {
-//             TelemetryValue::Table(t) => de::Deserializer::deserialize_map(t.into_iter().next().unwrap().1, visitor),
-//             _ => unreachable!(),
-//         }
+//             TelemetryValue::Table(t) =>
+// de::Deserializer::deserialize_map(t.into_iter().next().unwrap().1, visitor),             _ =>
+// unreachable!(),         }
 //     }
 // }
 //
@@ -472,14 +472,14 @@
 //
 //     #[inline]
 //     #[tracing::instrument(level="trace", skip(visitor))]
-//     fn deserialize_string<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         visitor.visit_string(String::try_from(self.0)?)
+//     fn deserialize_string<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error>
+// {         visitor.visit_string(String::try_from(self.0)?)
 //     }
 //
 //     #[inline]
 //     #[tracing::instrument(level="trace", skip(visitor))]
-//     fn deserialize_option<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-//         // Match an explicit nil as None and everything else as Some
+//     fn deserialize_option<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error>
+// {         // Match an explicit nil as None and everything else as Some
 //         match self.0 {
 //             TelemetryValue::Unit => visitor.visit_none(),
 //             _ => visitor.visit_some(self),

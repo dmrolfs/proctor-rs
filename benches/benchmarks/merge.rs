@@ -1,8 +1,9 @@
+use std::time::Duration;
+
 use anyhow::Result;
 use criterion::{black_box, criterion_group, Criterion};
 use proctor::graph::stage::{self, tick};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape, UniformFanInShape};
-use std::time::Duration;
 use tokio::sync::oneshot;
 
 async fn make_graph() -> (Graph, oneshot::Receiver<i32>) {
@@ -96,7 +97,7 @@ async fn run_scenario(g: Graph, rx_sum: oneshot::Receiver<i32>) -> Result<i32> {
     Ok(actual)
 }
 
-//todo: iter_batched() requires synchronous setup closure, so can't use
+// todo: iter_batched() requires synchronous setup closure, so can't use
 // fn benchmark_merge_5(c: &mut Criterion) {
 //     c.bench_function("merge_5_fan_in", |b| {
 //         let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();

@@ -1,10 +1,12 @@
+use std::fmt::{self, Debug};
+
+use async_trait::async_trait;
+use cast_trait_object::dyn_upcast;
+
 use crate::error::PlanError;
 use crate::graph::stage::Stage;
 use crate::graph::{Inlet, Outlet, Port, SinkShape, SourceShape, ThroughShape};
 use crate::{AppData, ProctorResult};
-use async_trait::async_trait;
-use cast_trait_object::dyn_upcast;
-use std::fmt::{self, Debug};
 
 pub trait DataDecisionStage: Stage + ThroughShape + 'static {
     type Decision;
@@ -54,27 +56,21 @@ impl<In, Decision, Out> SinkShape for Plan<In, Decision, Out> {
     type In = In;
 
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> {
-        self.inlet.clone()
-    }
+    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
 }
 
 impl<In, Decision, Out> SourceShape for Plan<In, Decision, Out> {
     type Out = Out;
 
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> {
-        self.outlet.clone()
-    }
+    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
 }
 
 #[dyn_upcast]
 #[async_trait]
 impl<In: AppData, Decision: AppData, Out: AppData> Stage for Plan<In, Decision, Out> {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
+    fn name(&self) -> &str { self.name.as_str() }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {

@@ -15,8 +15,8 @@ pub mod policy;
 //         engine.register_class(
 //             TaskStatus::get_polar_class_builder()
 //                 .name("TaskStatus")
-//                 .add_method("last_failure_within_seconds", TaskStatus::last_failure_within_seconds)
-//                 .build(),
+//                 .add_method("last_failure_within_seconds",
+// TaskStatus::last_failure_within_seconds)                 .build(),
 //         )?;
 //         engine.register_class(
 //             ClusterStatus::get_polar_class_builder()

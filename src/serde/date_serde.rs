@@ -1,6 +1,7 @@
+use std::fmt;
+
 use chrono::{DateTime, TimeZone, Utc};
 use serde::{self, de, Serializer};
-use std::fmt;
 
 const FORMAT: &'static str = "%+";
 
@@ -42,9 +43,7 @@ struct DateTimeFromIso8601Rfc3339FormatVisitor;
 impl<'de> de::Visitor<'de> for DateTimeFromIso8601Rfc3339FormatVisitor {
     type Value = DateTime<Utc>;
 
-    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "a datetime string")
-    }
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "a datetime string") }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
     where
@@ -59,9 +58,7 @@ struct OptionalDateTimeFromIso8601Rfc339FormatVisitor;
 impl<'de> de::Visitor<'de> for OptionalDateTimeFromIso8601Rfc339FormatVisitor {
     type Value = Option<DateTime<Utc>>;
 
-    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "null or a datetime string")
-    }
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "null or a datetime string") }
 
     fn visit_none<E>(self) -> Result<Self::Value, E>
     where
@@ -106,8 +103,8 @@ impl<'de> de::Visitor<'de> for OptionalDateTimeFromIso8601Rfc339FormatVisitor {
 //         use chrono::{DateTime, Utc, TimeZone};
 //         use serde::{self, Deserialize, Deserializer, Serializer};
 //
-//         pub fn serialize<S>(date: &Option<DateTime<Utc>>, serializer: S) -> Result<S::Ok, S::Error>
-//         where
+//         pub fn serialize<S>(date: &Option<DateTime<Utc>>, serializer: S) -> Result<S::Ok,
+// S::Error>         where
 //             S: Serializer,
 //         {
 //             let s = date.map(|d| format!("{}", d.format(super::FORMAT)));

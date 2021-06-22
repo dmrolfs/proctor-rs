@@ -1,11 +1,13 @@
+use std::collections::VecDeque;
+use std::fmt::Debug;
+
+use statrs::statistics::Statistics;
+
 use super::signal::SignalDetector;
 use super::{Point, Workload, WorkloadForecast};
 use crate::error::PlanError;
 use crate::flink::plan::forecast::regression::{LinearRegression, QuadraticRegression, RegressionStrategy};
 use crate::flink::MetricCatalog;
-use statrs::statistics::Statistics;
-use std::collections::VecDeque;
-use std::fmt::Debug;
 
 #[derive(Debug)]
 pub struct LeastSquaresWorkloadForecast {
@@ -18,9 +20,7 @@ pub struct LeastSquaresWorkloadForecast {
 const OBSERVATION_WINDOW_SIZE: usize = 20;
 
 impl Default for LeastSquaresWorkloadForecast {
-    fn default() -> Self {
-        LeastSquaresWorkloadForecast::new(OBSERVATION_WINDOW_SIZE, 5., 0.)
-    }
+    fn default() -> Self { LeastSquaresWorkloadForecast::new(OBSERVATION_WINDOW_SIZE, 5., 0.) }
 }
 
 impl LeastSquaresWorkloadForecast {
@@ -169,9 +169,7 @@ impl LeastSquaresWorkloadForecast {
     }
 
     #[inline]
-    fn exceeded_spike_threshold(&self) -> bool {
-        SPIKE_THRESHOLD <= self.consecutive_spikes
-    }
+    fn exceeded_spike_threshold(&self) -> bool { SPIKE_THRESHOLD <= self.consecutive_spikes }
 
     fn drop_data<R>(&mut self, range: R) -> Vec<Point>
     where
@@ -183,16 +181,18 @@ impl LeastSquaresWorkloadForecast {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::flink::plan::forecast::least_squares::LeastSquaresWorkloadForecast;
-    use crate::flink::plan::forecast::{Point, Workload};
-    use crate::flink::{FlowMetrics, UtilizationMetrics};
+    use std::collections::HashMap;
+
     use approx::{assert_abs_diff_eq, assert_relative_eq, assert_ulps_eq};
     use chrono::{DateTime, TimeZone, Utc};
     use num_traits::pow;
     use pretty_assertions::assert_eq;
     use statrs::statistics::Statistics;
-    use std::collections::HashMap;
+
+    use super::*;
+    use crate::flink::plan::forecast::least_squares::LeastSquaresWorkloadForecast;
+    use crate::flink::plan::forecast::{Point, Workload};
+    use crate::flink::{FlowMetrics, UtilizationMetrics};
 
     #[test]
     fn test_plan_forecast_measure_spike() -> anyhow::Result<()> {
@@ -504,7 +504,7 @@ mod tests {
                 (Ok(Workload::RecordsPerSecond(actual)), Some(e)) => {
                     tracing::info!(%actual, expected=%e, "[{}] testing workload prediction.", i);
                     assert_relative_eq!(actual, e, epsilon = 1.0e-4)
-                }
+                },
                 (Ok(Workload::NotEnoughData), None) => tracing::info!("[{}] okay - not enough data", i),
                 (workload, Some(e)) => panic!("[{}] failed to predict:{:?} -- expected:{}", i, workload, e),
                 (workload, None) => panic!("[{}] expected not enough data but calculated:{:?}", i, workload),

@@ -1,6 +1,7 @@
+use std::convert::TryFrom;
+
 use super::TelemetryValue;
 use crate::error::TelemetryError;
-use std::convert::TryFrom;
 
 pub trait FromTelemetry: Sized {
     fn from_telemetry(val: TelemetryValue) -> Result<Self, TelemetryError>;

@@ -1,15 +1,17 @@
-use crate::error::StageError;
-use crate::graph::shape::SourceShape;
-use crate::graph::{stage, Outlet, Port, Stage};
-use crate::{AppData, ProctorResult};
+use std::fmt::{self, Debug};
+use std::time::Duration;
+
 use async_stream::stream;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use futures_util::stream::StreamExt;
-use std::fmt::{self, Debug};
-use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 use tracing::Instrument;
+
+use crate::error::StageError;
+use crate::graph::shape::SourceShape;
+use crate::graph::{stage, Outlet, Port, Stage};
+use crate::{AppData, ProctorResult};
 
 pub type TickApi = mpsc::UnboundedSender<TickMsg>;
 
@@ -53,14 +55,14 @@ impl ContinueTicking for Constraint {
             Constraint::ByCount { count, limit } => {
                 *count += 1;
                 count <= limit
-            }
+            },
 
             Constraint::ByTime { stop, limit } => match stop {
                 None => {
                     *stop = Some(tokio::time::Instant::now() + *limit);
                     tracing::warn!(?stop, ?limit, "set tick time constraint");
                     true
-                }
+                },
 
                 Some(stop) => {
                     let now = tokio::time::Instant::now();
@@ -68,7 +70,7 @@ impl ContinueTicking for Constraint {
                     let diff = if do_next { Ok(*stop - now) } else { Err(now - *stop) };
                     tracing::warn!(?diff, %do_next, "eval tick time constraint.");
                     do_next
-                }
+                },
             },
         }
     }
@@ -78,21 +80,15 @@ impl Constraint {
     /// By default, Tick has no constraint and will produce ticks ongoing until it is stopped by
     /// either dropping the Tick source or sending it the [TickMsg::Stop] message.
     #[inline]
-    pub fn none() -> Constraint {
-        Constraint::None
-    }
+    pub fn none() -> Constraint { Constraint::None }
 
     /// Tick can be set to stop after a predefined count of ticks.
     #[inline]
-    pub fn by_count(limit: usize) -> Constraint {
-        Constraint::ByCount { count: 0, limit }
-    }
+    pub fn by_count(limit: usize) -> Constraint { Constraint::ByCount { count: 0, limit } }
 
     /// Tick can be set to stop after a predefined duration.
     #[inline]
-    pub fn by_time(limit: Duration) -> Constraint {
-        Constraint::ByTime { stop: None, limit }
-    }
+    pub fn by_time(limit: Duration) -> Constraint { Constraint::ByTime { stop: None, limit } }
 }
 
 /// Elements are emitted periodically with the specified interval. The tick element will be
@@ -101,10 +97,11 @@ impl Constraint {
 /// # Examples
 ///
 /// ```
+/// use std::time::Duration;
+///
 /// use proctor::graph::stage::tick;
 /// use proctor::graph::stage::{self, Stage};
 /// use proctor::graph::SourceShape;
-/// use std::time::Duration;
 /// use tokio::sync::mpsc;
 ///
 /// #[tokio::main]
@@ -116,7 +113,7 @@ impl Constraint {
 ///         Duration::from_millis(50),
 ///         Duration::from_millis(30),
 ///         17,
-///         tick::Constraint::by_count(limit)
+///         tick::Constraint::by_count(limit),
 ///     );
 ///     tick.outlet().attach("test_channel", tx).await;
 ///
@@ -169,10 +166,9 @@ impl<T> Tick<T> {
 
 impl<T> SourceShape for Tick<T> {
     type Out = T;
+
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> {
-        self.outlet.clone()
-    }
+    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
 }
 
 #[dyn_upcast]
@@ -182,9 +178,7 @@ where
     T: AppData + Clone + Unpin + Sync,
 {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_ref()
-    }
+    fn name(&self) -> &str { self.name.as_ref() }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
@@ -264,9 +258,7 @@ impl<T> stage::WithApi for Tick<T> {
     type Sender = TickApi;
 
     #[inline]
-    fn tx_api(&self) -> Self::Sender {
-        self.tx_api.clone()
-    }
+    fn tx_api(&self) -> Self::Sender { self.tx_api.clone() }
 }
 
 impl<T> Debug for Tick<T> {
@@ -285,11 +277,13 @@ impl<T> Debug for Tick<T> {
 //
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::graph::stage::WithApi;
     use std::time::Duration;
+
     use tokio::sync::{mpsc, oneshot};
     use tokio_test::block_on;
+
+    use super::*;
+    use crate::graph::stage::WithApi;
 
     #[test]
     fn test_stop_api() -> anyhow::Result<()> {

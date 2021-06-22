@@ -1,8 +1,10 @@
+use std::path::PathBuf;
+
+use serde::{Deserialize, Serialize};
+use tokio::sync::{broadcast, mpsc, oneshot};
+
 use crate::error::PolicyError;
 use crate::Ack;
-use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use tokio::sync::{broadcast, mpsc, oneshot};
 
 pub type PolicyFilterApi<C> = mpsc::UnboundedSender<PolicyFilterCmd<C>>;
 pub type PolicyFilterMonitor<T, C> = broadcast::Receiver<PolicyFilterEvent<T, C>>;
@@ -62,13 +64,9 @@ pub enum PolicySource {
 }
 
 impl PolicySource {
-    pub fn from_string<S: Into<String>>(policy: S) -> Self {
-        Self::String(policy.into())
-    }
+    pub fn from_string<S: Into<String>>(policy: S) -> Self { Self::String(policy.into()) }
 
-    pub fn from_path(policy_path: PathBuf) -> Self {
-        Self::File(policy_path)
-    }
+    pub fn from_path(policy_path: PathBuf) -> Self { Self::File(policy_path) }
 
     pub fn load_into(&self, oso: &oso::Oso) -> Result<(), PolicyError> {
         let result = match self {
@@ -94,7 +92,7 @@ impl PolicySource {
                 let mut p = String::new();
                 f.read_to_string(&mut p)?;
                 polar.load_str(p.as_str())
-            }
+            },
         };
         result.map_err(|err| err.into())
     }

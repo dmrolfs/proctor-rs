@@ -1,5 +1,6 @@
-use statrs::statistics::Statistics;
 use std::collections::VecDeque;
+
+use statrs::statistics::Statistics;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Anomaly {
@@ -73,7 +74,6 @@ impl SignalDetector {
     /// 0.5 gives the signal half of the influence that normal data points have.
     /// 1 gives the signal full influence that other data points have (least robust option).
     /// For non-stationary data, the influence option should be set somewhere between 0 and 1.
-    ///
     pub fn new(lag: usize, threshold: f64, influence: f64) -> Self {
         Self {
             threshold,
@@ -82,9 +82,7 @@ impl SignalDetector {
         }
     }
 
-    pub fn clear(&mut self) {
-        self.window.clear();
-    }
+    pub fn clear(&mut self) { self.window.clear(); }
 
     pub fn signal(&mut self, value: f64) -> Option<Anomaly> {
         if self.window.len() < self.window.capacity() {
@@ -167,8 +165,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{Anomaly, SignalDetector, SignalFilter};
     use pretty_assertions::assert_eq;
+
+    use super::{Anomaly, SignalDetector, SignalFilter};
 
     #[test]
     fn anomaly_sample_data() {

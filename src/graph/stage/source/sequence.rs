@@ -1,9 +1,11 @@
+use std::fmt;
+
+use async_trait::async_trait;
+use cast_trait_object::dyn_upcast;
+
 use crate::graph::shape::SourceShape;
 use crate::graph::{Outlet, Port, Stage};
 use crate::{AppData, ProctorResult};
-use async_trait::async_trait;
-use cast_trait_object::dyn_upcast;
-use std::fmt;
 
 /// Helper to create Source from Iterable. Example usage: Slice::new(vec![1,2,3]).
 ///
@@ -14,9 +16,9 @@ use std::fmt;
 /// # Examples
 ///
 /// ```
-/// use proctor::graph::Connect;
 /// use proctor::graph::stage::{self, Stage};
-/// use proctor::graph::{SourceShape, SinkShape};
+/// use proctor::graph::Connect;
+/// use proctor::graph::{SinkShape, SourceShape};
 ///
 /// #[tokio::main]
 /// async fn main() {
@@ -26,23 +28,23 @@ use std::fmt;
 ///             "I am serious.".to_string(),
 ///             "And don't call me".to_string(),
 ///             "Shirley!".to_string(),
-///         ]
+///         ],
 ///     );
 ///
-///     let mut sink = stage::Fold::new(
-///         "concatenate",
-///         "".to_string(),
-///         |acc, s: String| {
-///             let result = if !acc.is_empty() { acc + " " } else { acc };
-///             result + s.as_str()
-///         }
-///     );
+///     let mut sink = stage::Fold::new("concatenate", "".to_string(), |acc, s: String| {
+///         let result = if !acc.is_empty() { acc + " " } else { acc };
+///         result + s.as_str()
+///     });
 ///     let mut rx_quote = sink.take_final_rx().unwrap();
 ///
 ///     (src.outlet(), sink.inlet()).connect().await;
 ///
-///     let sink_handle = tokio::spawn(async move { sink.run().await; });
-///     let src_handle = tokio::spawn(async move { src.run().await; });
+///     let sink_handle = tokio::spawn(async move {
+///         sink.run().await;
+///     });
+///     let src_handle = tokio::spawn(async move {
+///         src.run().await;
+///     });
 ///
 ///     src_handle.await.unwrap();
 ///     sink_handle.await.unwrap();
@@ -80,9 +82,7 @@ where
     I: Iterator<Item = T> + Send + Sync + 'static,
 {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
+    fn name(&self) -> &str { self.name.as_str() }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
@@ -111,10 +111,9 @@ where
 
 impl<T, I> SourceShape for Sequence<T, I> {
     type Out = T;
+
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> {
-        self.outlet.clone()
-    }
+    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
 }
 
 impl<T, I> fmt::Debug for Sequence<T, I> {
@@ -130,10 +129,12 @@ impl<T, I> fmt::Debug for Sequence<T, I> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::{Arc, Mutex};
+
     use tokio::sync::mpsc;
     use tokio_test::block_on;
+
+    use super::*;
 
     #[test]
     fn test_basic_usage() {

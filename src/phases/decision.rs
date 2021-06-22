@@ -1,3 +1,10 @@
+use std::fmt::{self, Debug};
+
+use async_trait::async_trait;
+use cast_trait_object::dyn_upcast;
+use oso::{Oso, PolarValue, ToPolar};
+use tokio::sync::broadcast;
+
 use crate::elements::{
     PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, PolicyOutcome, QueryPolicy, QueryResult,
 };
@@ -6,11 +13,6 @@ use crate::error::PolicyError;
 use crate::graph::stage::{Stage, ThroughStage, WithApi, WithMonitor};
 use crate::graph::{stage, Connect, Graph, Inlet, Outlet, Port, SinkShape, SourceShape};
 use crate::{AppData, ProctorContext, ProctorResult};
-use async_trait::async_trait;
-use cast_trait_object::dyn_upcast;
-use oso::{Oso, PolarValue, ToPolar};
-use std::fmt::{self, Debug};
-use tokio::sync::broadcast;
 
 pub struct Decision<In, Out, C> {
     name: String,
@@ -25,8 +27,8 @@ pub struct Decision<In, Out, C> {
 // impl<T: AppData + ToPolar + Clone, C: ProctorContext> Decision<T, T, C> {
 //     #[tracing::instrument(level = "info", skip(name))]
 //     pub async fn basic<S: Into<String>>(
-//         name: S, policy: impl QueryPolicy<Item = T, Context = C, Args = (T, C, PolarValue)> + 'static,
-//     ) -> Self {
+//         name: S, policy: impl QueryPolicy<Item = T, Context = C, Args = (T, C, PolarValue)> +
+// 'static,     ) -> Self {
 //         let strip_policy_result: stage::Map<_, PolicyResult<T>, T> =
 //             stage::Map::new("strip_policy_result", |res: PolicyResult<T>| res.item);
 //         Self::with_transform(name, policy, strip_policy_result).await
@@ -84,9 +86,7 @@ impl<In: AppData + ToPolar + Clone, Out: AppData, C: ProctorContext> Decision<In
     }
 
     #[inline]
-    pub fn context_inlet(&self) -> Inlet<C> {
-        self.context_inlet.clone()
-    }
+    pub fn context_inlet(&self) -> Inlet<C> { self.context_inlet.clone() }
 
     fn policy_with_prelude(
         policy: impl QueryPolicy<Item = In, Context = C, Args = (In, C, PolarValue)> + 'static,
@@ -114,9 +114,9 @@ where
     C: ToPolar + Clone,
     P: QueryPolicy<Item = T, Context = C, Args = (T, C, PolarValue)>,
 {
-    type Item = T;
-    type Context = C;
     type Args = (T, C, PolarValue);
+    type Context = C;
+    type Item = T;
 
     #[inline]
     fn load_policy_engine(&self, engine: &mut Oso) -> Result<(), PolicyError> {
@@ -159,27 +159,21 @@ impl<In, Out, C> SinkShape for Decision<In, Out, C> {
     type In = In;
 
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> {
-        self.inlet.clone()
-    }
+    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
 }
 
 impl<In, Out, C> SourceShape for Decision<In, Out, C> {
     type Out = Out;
 
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> {
-        self.outlet.clone()
-    }
+    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
 }
 
 #[dyn_upcast]
 #[async_trait]
 impl<In: AppData, Out: AppData, C: ProctorContext> Stage for Decision<In, Out, C> {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
+    fn name(&self) -> &str { self.name.as_str() }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
@@ -239,16 +233,14 @@ impl<In: AppData, Out: AppData, C: ProctorContext> Decision<In, Out, C> {
 
 impl<In, Out, C> WithApi for Decision<In, Out, C> {
     type Sender = PolicyFilterApi<C>;
+
     #[inline]
-    fn tx_api(&self) -> Self::Sender {
-        self.tx_policy_api.clone()
-    }
+    fn tx_api(&self) -> Self::Sender { self.tx_policy_api.clone() }
 }
 
 impl<In, Out, C> WithMonitor for Decision<In, Out, C> {
     type Receiver = PolicyFilterMonitor<In, C>;
+
     #[inline]
-    fn rx_monitor(&self) -> Self::Receiver {
-        self.tx_policy_monitor.subscribe()
-    }
+    fn rx_monitor(&self) -> Self::Receiver { self.tx_policy_monitor.subscribe() }
 }

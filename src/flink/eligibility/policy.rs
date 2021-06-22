@@ -1,11 +1,13 @@
+use std::collections::HashSet;
+
+use oso::{Oso, PolarClass};
+
 use super::context::{ClusterStatus, FlinkEligibilityContext, TaskStatus};
 use crate::elements::{PolicySettings, PolicySource, PolicySubscription, QueryPolicy, QueryResult, Telemetry};
 use crate::error::PolicyError;
 use crate::flink::MetricCatalog;
 use crate::phases::collection::TelemetrySubscription;
 use crate::ProctorContext;
-use oso::{Oso, PolarClass};
-use std::collections::HashSet;
 
 #[derive(Debug)]
 pub struct EligibilityPolicy {
@@ -35,13 +37,11 @@ impl PolicySubscription for EligibilityPolicy {
 }
 
 impl QueryPolicy for EligibilityPolicy {
-    type Item = MetricCatalog;
-    type Context = FlinkEligibilityContext;
     type Args = (Self::Item, Self::Context);
+    type Context = FlinkEligibilityContext;
+    type Item = MetricCatalog;
 
-    fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
-        self.policy_source.load_into(oso)
-    }
+    fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> { self.policy_source.load_into(oso) }
 
     fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
         Telemetry::initialize_policy_engine(oso)?;

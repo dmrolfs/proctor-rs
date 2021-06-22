@@ -1,10 +1,12 @@
-use crate::error::PortError;
-use crate::AppData;
-use async_trait::async_trait;
 use std::fmt::{self, Debug};
 use std::sync::Arc;
+
+use async_trait::async_trait;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
+
+use crate::error::PortError;
+use crate::AppData;
 
 #[async_trait]
 pub trait Port: fmt::Debug {
@@ -70,9 +72,7 @@ pub async fn connect_out_to_in<T: AppData>(mut lhs: Outlet<T>, mut rhs: Inlet<T>
 pub struct Inlet<T>(String, Arc<Mutex<Option<(String, mpsc::Receiver<T>)>>>);
 
 impl<T> Inlet<T> {
-    pub fn new<S: Into<String>>(name: S) -> Self {
-        Self(name.into(), Arc::new(Mutex::new(None)))
-    }
+    pub fn new<S: Into<String>>(name: S) -> Self { Self(name.into(), Arc::new(Mutex::new(None))) }
 
     pub fn with_receiver<S0: Into<String>, S1: Into<String>>(
         name: S0, receiver_name: S1, rx: mpsc::Receiver<T>,
@@ -84,9 +84,7 @@ impl<T> Inlet<T> {
 #[async_trait]
 impl<T: Send> Port for Inlet<T> {
     #[inline]
-    fn name(&self) -> &str {
-        self.0.as_str()
-    }
+    fn name(&self) -> &str { self.0.as_str() }
 
     async fn close(&mut self) {
         let mut rx = self.1.lock().await;
@@ -94,20 +92,18 @@ impl<T: Send> Port for Inlet<T> {
             Some(r) => {
                 tracing::trace!(inlet=%self.0, "closing Inlet");
                 r.1.close()
-            }
+            },
             None => {
                 tracing::trace!(inlet=%self.0, "Inlet close ignored - not attached");
                 ()
-            }
+            },
         }
     }
 }
 
 impl<T> Clone for Inlet<T> {
     #[inline]
-    fn clone(&self) -> Self {
-        Self(self.0.clone(), self.1.clone())
-    }
+    fn clone(&self) -> Self { Self(self.0.clone(), self.1.clone()) }
 }
 
 impl<T: Debug> Inlet<T> {
@@ -116,9 +112,7 @@ impl<T: Debug> Inlet<T> {
         *port = Some((receiver_name.into(), rx));
     }
 
-    pub async fn is_attached(&self) -> bool {
-        self.1.lock().await.is_some()
-    }
+    pub async fn is_attached(&self) -> bool { self.1.lock().await.is_some() }
 
     pub async fn check_attachment(&self) -> Result<(), PortError> {
         if self.is_attached().await {
@@ -142,8 +136,8 @@ impl<T: Debug> Inlet<T> {
     /// # Examples
     ///
     /// ```
-    /// use tokio::sync::mpsc;
     /// use proctor::graph::Inlet;
+    /// use tokio::sync::mpsc;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -163,8 +157,8 @@ impl<T: Debug> Inlet<T> {
     /// Values are buffered:
     ///
     /// ```
-    /// use tokio::sync::mpsc;
     /// use proctor::graph::Inlet;
+    /// use tokio::sync::mpsc;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -201,17 +195,13 @@ impl<T: Debug> Inlet<T> {
 }
 
 impl<T> fmt::Debug for Inlet<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("Inlet").field(&self.0).finish()
-    }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.debug_tuple("Inlet").field(&self.0).finish() }
 }
 
 pub struct Outlet<T>(String, Arc<Mutex<Option<(String, mpsc::Sender<T>)>>>);
 
 impl<T> Outlet<T> {
-    pub fn new<S: Into<String>>(name: S) -> Self {
-        Self(name.into(), Arc::new(Mutex::new(None)))
-    }
+    pub fn new<S: Into<String>>(name: S) -> Self { Self(name.into(), Arc::new(Mutex::new(None))) }
 
     pub fn with_sender<S0: Into<String>, S1: Into<String>>(
         name: S0, sender_name: S1, tx: mpsc::Sender<T>,
@@ -223,9 +213,7 @@ impl<T> Outlet<T> {
 #[async_trait]
 impl<T: Send> Port for Outlet<T> {
     #[inline]
-    fn name(&self) -> &str {
-        self.0.as_str()
-    }
+    fn name(&self) -> &str { self.0.as_str() }
 
     async fn close(&mut self) {
         tracing::trace!(inlet=%self.name(), "closing Outlet");
@@ -234,9 +222,7 @@ impl<T: Send> Port for Outlet<T> {
 }
 
 impl<T> Clone for Outlet<T> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone(), self.1.clone())
-    }
+    fn clone(&self) -> Self { Self(self.0.clone(), self.1.clone()) }
 }
 
 impl<T: AppData> Outlet<T> {
@@ -245,9 +231,7 @@ impl<T: AppData> Outlet<T> {
         *port = Some((sender_name.into(), tx));
     }
 
-    pub async fn is_attached(&self) -> bool {
-        self.1.lock().await.is_some()
-    }
+    pub async fn is_attached(&self) -> bool { self.1.lock().await.is_some() }
 
     pub async fn check_attachment(&self) -> Result<(), PortError> {
         if self.is_attached().await {
@@ -284,8 +268,8 @@ impl<T: AppData> Outlet<T> {
     /// previously sent value was received.
     ///
     /// ```rust
-    /// use tokio::sync::mpsc;
     /// use proctor::graph::Outlet;
+    /// use tokio::sync::mpsc;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -317,9 +301,7 @@ impl<T: AppData> Outlet<T> {
 }
 
 impl<T> fmt::Debug for Outlet<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("Outlet").field(&self.0).finish()
-    }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.debug_tuple("Outlet").field(&self.0).finish() }
 }
 
 // //////////////////////////////////////
@@ -327,9 +309,10 @@ impl<T> fmt::Debug for Outlet<T> {
 //
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tokio::sync::mpsc;
     use tokio_test::block_on;
+
+    use super::*;
 
     #[test]
     fn test_cloning_outlet() {
@@ -355,8 +338,7 @@ mod tests {
     }
 }
 
-//
-//todo: I have not been able to work around:
+// todo: I have not been able to work around:
 // Cannot start a runtime from within a runtime. This happens because a function (like
 // `block_on`) attempted to block the current thread while the thread is being used to drive
 //

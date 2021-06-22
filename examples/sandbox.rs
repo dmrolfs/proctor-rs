@@ -1,3 +1,7 @@
+use std::collections::HashSet;
+use std::convert::TryFrom;
+use std::path::PathBuf;
+
 use ::serde::{Deserialize, Serialize};
 use anyhow::Result;
 use cast_trait_object::DynCastExt;
@@ -9,9 +13,6 @@ use proctor::phases::collection;
 use proctor::phases::collection::TelemetrySubscription;
 use proctor::settings::SourceSetting;
 use proctor::tracing::{get_subscriber, init_subscriber};
-use std::collections::HashSet;
-use std::convert::TryFrom;
-use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Data {
@@ -21,9 +22,7 @@ struct Data {
 }
 
 impl Default for Data {
-    fn default() -> Self {
-        Self { pos: None, value: None, cat: "".to_string() }
-    }
+    fn default() -> Self { Self { pos: None, value: None, cat: "".to_string() } }
 }
 
 const POS_FIELD: &str = "pos";
@@ -70,22 +69,22 @@ async fn main() -> Result<()> {
         .await;
 
     // let (mut sink, _, rx_acc) =
-    //     stage::Fold::<_, collection::TelemetryData, (Data, usize)>::new("sink", (Data::default(), 0), |(acc, count), rec: TelemetryData| {
-    //         let dt_format = "%+";
+    //     stage::Fold::<_, collection::TelemetryData, (Data, usize)>::new("sink", (Data::default(), 0),
+    // |(acc, count), rec: TelemetryData| {         let dt_format = "%+";
     //         let rec_last_failure = rec.get("last_failure").and_then(|r| {
     //             if r.is_empty() {
     //                 None
     //             } else {
-    //                 let lf = DateTime::parse_from_str(r.as_str(), dt_format).unwrap().with_timezone(&Utc);
-    //                 Some(lf)
+    //                 let lf = DateTime::parse_from_str(r.as_str(),
+    // dt_format).unwrap().with_timezone(&Utc);                 Some(lf)
     //             }
     //         });
     //
     //         let is_deploying = rec.get("is_deploying").unwrap().as_str().parse::<bool>().unwrap();
     //
-    //         let rec_latest_deployment = DateTime::parse_from_str(rec.get("last_deployment").unwrap().as_str(), dt_format)
-    //             .unwrap()
-    //             .with_timezone(&Utc);
+    //         let rec_latest_deployment =
+    // DateTime::parse_from_str(rec.get("last_deployment").unwrap().as_str(), dt_format)            
+    // .unwrap()             .with_timezone(&Utc);
     //
     //         let last_failure = match (acc.last_failure, rec_last_failure) {
     //             (None, None) => None,

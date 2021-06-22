@@ -1,3 +1,6 @@
+use std::convert::{TryFrom, TryInto};
+use std::path::PathBuf;
+
 use anyhow::Result;
 use clap::Clap;
 use config::Config;
@@ -5,8 +8,6 @@ use proctor::error::SettingsError;
 use proctor::settings::{HttpQuery, Settings, SourceSetting};
 use proctor::tracing::{get_subscriber, init_subscriber};
 use reqwest::Url;
-use std::convert::{TryFrom, TryInto};
-use std::path::PathBuf;
 
 fn main() -> Result<()> {
     let subscriber = get_subscriber("config", "trace");
@@ -131,13 +132,13 @@ fn load_configuration(mut c: Config, dir: &PathBuf, opts: &CliOptions) -> anyhow
         Some(config_path) => {
             let config_path = PathBuf::from(dir.join(config_path));
             c.merge(config::File::from(config_path).required(true))?;
-        }
+        },
         None => {
             let environment: Environment = std::env::var("APP_ENVIRONMENT")
                 .unwrap_or_else(|_| "local".into())
                 .try_into()?;
             c.merge(config::File::from(dir.join(environment.as_ref())).required(true))?;
-        }
+        },
     };
 
     Ok(c)

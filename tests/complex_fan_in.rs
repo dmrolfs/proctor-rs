@@ -1,9 +1,10 @@
 mod fixtures;
 
+use std::time::Duration;
+
 use anyhow::Result;
 use proctor::graph::stage::{self, tick};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape, UniformFanInShape};
-use std::time::Duration;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_complex_multi_stage_merge_5() -> Result<()> {
@@ -96,7 +97,7 @@ async fn test_complex_multi_stage_merge_5() -> Result<()> {
             let e13 = 13 * 13;
             assert_eq!(actual, e1 + e10 + e100 + e7 + e13);
             Ok(())
-        }
+        },
         Err(_err) => panic!("failed to receive final sum"),
     }
 }

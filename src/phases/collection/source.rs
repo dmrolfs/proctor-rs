@@ -1,15 +1,17 @@
+use std::fmt::Debug;
+use std::time::Duration;
+
+use futures::future::FutureExt;
+use serde::{de::DeserializeOwned, Serialize};
+use tokio::sync::mpsc;
+
 use crate::elements::Telemetry;
 use crate::error::{CollectionError, SettingsError};
 use crate::graph::stage::{tick, CompositeSource, Stage, WithApi};
 use crate::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use crate::settings::SourceSetting;
-use futures::future::FutureExt;
-use serde::{de::DeserializeOwned, Serialize};
-use std::fmt::Debug;
-use std::time::Duration;
-use tokio::sync::mpsc;
 
-//todo api access should follow new convention rt via returned tuple
+// todo api access should follow new convention rt via returned tuple
 pub type TelemetrySource = Box<dyn TelemetrySourceStage>;
 pub trait TelemetrySourceStage: Stage + SourceShape<Out = Telemetry> + 'static {}
 impl<T: 'static + Stage + SourceShape<Out = Telemetry>> TelemetrySourceStage for T {}
@@ -86,7 +88,8 @@ where
         let method = query.method.clone();
         let url = query.url.clone();
 
-        // let mut gen : dyn FnMut(()) -> dyn futures::future::Future<Output=SpringlineResult<TelemetryData>> = move |_| {
+        // let mut gen : dyn FnMut(()) -> dyn
+        // futures::future::Future<Output=SpringlineResult<TelemetryData>> = move |_| {
         let gen = move |_: ()| {
             let client = client.clone();
             let method = method.clone();

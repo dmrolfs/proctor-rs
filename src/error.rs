@@ -1,8 +1,10 @@
-use crate::elements::TelemetryValue;
-use chrono::{DateTime, Utc};
 use std::fmt;
 use std::fmt::Debug;
+
+use chrono::{DateTime, Utc};
 use thiserror::Error;
+
+use crate::elements::TelemetryValue;
 
 #[derive(Debug, Error)]
 pub enum ProctorError {
@@ -23,15 +25,11 @@ pub enum ProctorError {
 }
 
 impl From<PortError> for ProctorError {
-    fn from(that: PortError) -> Self {
-        ProctorError::GraphError(that.into())
-    }
+    fn from(that: PortError) -> Self { ProctorError::GraphError(that.into()) }
 }
 
 impl From<StageError> for ProctorError {
-    fn from(that: StageError) -> Self {
-        ProctorError::GraphError(that.into())
-    }
+    fn from(that: StageError) -> Self { ProctorError::GraphError(that.into()) }
 }
 
 #[derive(Debug, Error)]
@@ -56,7 +54,7 @@ pub enum CollectionError {
     #[error("{0}")]
     CsvError(#[from] csv::Error),
 
-    ///An error related to collection via an HTTP source.
+    /// An error related to collection via an HTTP source.
     #[error("{0}")]
     HttpError(#[from] reqwest::Error),
 
@@ -143,7 +141,6 @@ pub enum PlanError {
 }
 
 /// Set of errors occurring during policy initialization or evaluation.
-///
 #[derive(Debug, Error)]
 pub enum PolicyError {
     #[error("{0}")]
@@ -165,19 +162,17 @@ pub enum PolicyError {
     DataNotFound(String),
 
     #[error("failed to publish policy event: {0}")]
-    PublishError(#[source] anyhow::Error), //todo: if only PortError then specialize via #[from]
+    PublishError(#[source] anyhow::Error), // todo: if only PortError then specialize via #[from]
 }
 
 impl From<PortError> for PolicyError {
-    fn from(that: PortError) -> Self {
-        PolicyError::PublishError(that.into())
-    }
+    fn from(that: PortError) -> Self { PolicyError::PublishError(that.into()) }
 }
 
 /// Set of errors occurring while handling telemetry data
 #[derive(Debug, Error)]
 pub enum TelemetryError {
-    ///Invalid Type used in application
+    /// Invalid Type used in application
     #[error("invalid type used, expected {expected} type but was: {actual:?}")]
     TypeError { expected: String, actual: Option<String> },
 
@@ -258,9 +253,7 @@ pub enum PortError {
 }
 
 impl<T: 'static + Debug + Send + Sync> From<tokio::sync::mpsc::error::SendError<T>> for PortError {
-    fn from(that: tokio::sync::mpsc::error::SendError<T>) -> Self {
-        PortError::ChannelError(that.into())
-    }
+    fn from(that: tokio::sync::mpsc::error::SendError<T>) -> Self { PortError::ChannelError(that.into()) }
 }
 
 /// Error variants related to configuration.
@@ -290,21 +283,15 @@ pub enum SettingsError {
 }
 
 impl From<reqwest::header::InvalidHeaderName> for SettingsError {
-    fn from(that: reqwest::header::InvalidHeaderName) -> Self {
-        SettingsError::HttpRequestError(that.into())
-    }
+    fn from(that: reqwest::header::InvalidHeaderName) -> Self { SettingsError::HttpRequestError(that.into()) }
 }
 
 impl From<reqwest::header::InvalidHeaderValue> for SettingsError {
-    fn from(that: reqwest::header::InvalidHeaderValue) -> Self {
-        SettingsError::HttpRequestError(that.into())
-    }
+    fn from(that: reqwest::header::InvalidHeaderValue) -> Self { SettingsError::HttpRequestError(that.into()) }
 }
 
 impl From<toml::de::Error> for SettingsError {
-    fn from(that: toml::de::Error) -> Self {
-        SettingsError::SourceError(that.into())
-    }
+    fn from(that: toml::de::Error) -> Self { SettingsError::SourceError(that.into()) }
 }
 
 #[derive(Debug)]

@@ -3,17 +3,18 @@ mod port;
 mod shape;
 pub mod stage;
 
+use std::collections::VecDeque;
+use std::fmt;
+
+use tracing::Instrument;
+
+use self::node::Node;
 pub use self::port::{connect_out_to_in, Connect};
 pub use self::port::{Inlet, Outlet, Port};
 pub use self::shape::*;
-
-use self::node::Node;
 use self::stage::Stage;
 use crate::error::GraphError;
 use crate::ProctorResult;
-use std::collections::VecDeque;
-use std::fmt;
-use tracing::Instrument;
 
 /// A Graph represents a runnable stream processing graph.
 ///
@@ -27,9 +28,9 @@ use tracing::Instrument;
 /// # Examples
 ///
 /// ```
-/// use proctor::graph::{self, Graph, Connect};
 /// use proctor::graph::stage::{self, Stage};
-/// use proctor::graph::{SourceShape, ThroughShape, SinkShape};
+/// use proctor::graph::{self, Connect, Graph};
+/// use proctor::graph::{SinkShape, SourceShape, ThroughShape};
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
@@ -51,7 +52,7 @@ use tracing::Instrument;
 ///         Ok(sum_sq) => {
 ///             println!("sum of squares is {}", sum_sq);
 ///             assert_eq!(55, sum_sq)
-///         }
+///         },
 ///
 ///         Err(err) => panic!("sum of squares not calculated: {}", err),
 ///     }
@@ -75,9 +76,7 @@ impl Graph {
         self.nodes.push_back(node);
     }
 
-    fn node_names(&self) -> Vec<&str> {
-        self.nodes.iter().map(|n| n.name.as_str()).collect()
-    }
+    fn node_names(&self) -> Vec<&str> { self.nodes.iter().map(|n| n.name.as_str()).collect() }
 
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn check(&self) -> ProctorResult<()> {

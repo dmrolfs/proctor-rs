@@ -1,19 +1,21 @@
+use std::fmt::{self, Debug};
+
+use async_trait::async_trait;
+use cast_trait_object::dyn_upcast;
+
 use crate::graph::shape::{SinkShape, SourceShape};
 use crate::graph::{Inlet, Outlet, Port, Stage};
 use crate::{AppData, ProctorResult};
-use async_trait::async_trait;
-use cast_trait_object::dyn_upcast;
-use std::fmt::{self, Debug};
 
 /// Filter the incoming elements using a predicate.
 ///
 /// # Examples
 ///
 /// ```rust
-/// use tokio::sync::mpsc;
-/// use proctor::graph::{Connect, Inlet};
 /// use proctor::graph::stage::{self, Stage};
-/// use proctor::graph::{ThroughShape, SinkShape, SourceShape};
+/// use proctor::graph::{Connect, Inlet};
+/// use proctor::graph::{SinkShape, SourceShape, ThroughShape};
+/// use tokio::sync::mpsc;
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
@@ -21,16 +23,22 @@ use std::fmt::{self, Debug};
 ///     let (tx, rx) = mpsc::channel(8);
 ///
 ///     let mut filter = stage::Filter::new("even values", |x| x % 2 == 0);
-///     let mut fold = stage::Fold::new("sum even values", 0, |acc, x| acc + x );
+///     let mut fold = stage::Fold::new("sum even values", 0, |acc, x| acc + x);
 ///     let mut rx_sum_sq = fold.take_final_rx().unwrap();
 ///
 ///     filter.inlet().attach("test_channel", rx).await;
 ///     (filter.outlet(), fold.inlet()).connect().await;
 ///
-///     let filter_handle = tokio::spawn(async move { filter.run().await; });
-///     let fold_handle = tokio::spawn(async move { fold.run().await; });
+///     let filter_handle = tokio::spawn(async move {
+///         filter.run().await;
+///     });
+///     let fold_handle = tokio::spawn(async move {
+///         fold.run().await;
+///     });
 ///     let source_handle = tokio::spawn(async move {
-///         for x in my_data { tx.send(x).await.expect("failed to send data"); }
+///         for x in my_data {
+///             tx.send(x).await.expect("failed to send data");
+///         }
 ///     });
 ///
 ///     source_handle.await?;
@@ -64,9 +72,7 @@ where
         Self { name, predicate, inlet, outlet, log_blocks: false }
     }
 
-    pub fn with_block_logging(self) -> Self {
-        Self { log_blocks: true, ..self }
-    }
+    pub fn with_block_logging(self) -> Self { Self { log_blocks: true, ..self } }
 }
 
 impl<P, T> SourceShape for Filter<P, T>
@@ -76,9 +82,7 @@ where
     type Out = T;
 
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> {
-        self.outlet.clone()
-    }
+    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
 }
 
 impl<P, T> SinkShape for Filter<P, T>
@@ -88,9 +92,7 @@ where
     type In = T;
 
     #[inline]
-    fn inlet(&self) -> Inlet<Self::In> {
-        self.inlet.clone()
-    }
+    fn inlet(&self) -> Inlet<Self::In> { self.inlet.clone() }
 }
 
 #[dyn_upcast]
@@ -101,9 +103,7 @@ where
     T: AppData,
 {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
+    fn name(&self) -> &str { self.name.as_str() }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
@@ -155,10 +155,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use pretty_assertions::assert_eq;
     use tokio::sync::mpsc;
     use tokio_test::block_on;
+
+    use super::*;
 
     #[test]
     fn test_basic_usage() {

@@ -1,9 +1,11 @@
-use crate::elements::telemetry;
-use crate::ProctorContext;
-use oso::PolarClass;
-use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt::Debug;
+
+use oso::PolarClass;
+use serde::{Deserialize, Serialize};
+
+use crate::elements::telemetry;
+use crate::ProctorContext;
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FlinkDecisionContext {
@@ -26,9 +28,7 @@ impl ProctorContext for FlinkDecisionContext {
         }
     }
 
-    fn custom(&self) -> telemetry::Table {
-        self.custom.clone()
-    }
+    fn custom(&self) -> telemetry::Table { self.custom.clone() }
 }
 
 // /////////////////////////////////////////////////////
@@ -36,10 +36,11 @@ impl ProctorContext for FlinkDecisionContext {
 
 #[cfg(test)]
 mod tests {
+    use serde_test::{assert_tokens, Token};
+
     use super::*;
     use crate::elements::telemetry::ToTelemetry;
     use crate::elements::Telemetry;
-    use serde_test::{assert_tokens, Token};
 
     #[test]
     fn test_serde_flink_decision_context() {

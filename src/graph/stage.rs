@@ -2,14 +2,15 @@ mod sink;
 mod source;
 mod through;
 
+use std::fmt;
+
+use async_trait::async_trait;
+use cast_trait_object::dyn_upcast;
+
 pub use self::sink::*;
 pub use self::source::*;
 pub use self::through::*;
-
 use crate::ProctorResult;
-use async_trait::async_trait;
-use cast_trait_object::dyn_upcast;
-use std::fmt;
 
 /// Behavior driving graph stage lifecycle.
 ///

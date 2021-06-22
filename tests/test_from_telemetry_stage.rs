@@ -1,5 +1,7 @@
 mod fixtures;
 
+use std::path::PathBuf;
+
 use anyhow::Result;
 use cast_trait_object::DynCastExt;
 use chrono::{DateTime, TimeZone, Utc};
@@ -10,7 +12,6 @@ use proctor::phases::collection::make_telemetry_cvs_source;
 use proctor::settings::SourceSetting;
 use serde::{Deserialize, Serialize};
 use serde_test::{assert_tokens, Token};
-use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Data {

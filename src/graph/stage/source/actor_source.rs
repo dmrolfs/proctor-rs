@@ -1,10 +1,12 @@
+use std::fmt::{self, Debug};
+
+use async_trait::async_trait;
+use cast_trait_object::dyn_upcast;
+use tokio::sync::{mpsc, oneshot};
+
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Outlet, Port, SourceShape};
 use crate::{Ack, AppData, ProctorResult};
-use async_trait::async_trait;
-use cast_trait_object::dyn_upcast;
-use std::fmt::{self, Debug};
-use tokio::sync::{mpsc, oneshot};
 
 pub type ActorSourceApi<T> = mpsc::UnboundedSender<ActorSourceCmd<T>>;
 
@@ -29,7 +31,6 @@ impl<T> ActorSourceCmd<T> {
 }
 
 /// Actor-based protocol to source items into a graph flow.
-///
 pub struct ActorSource<T> {
     name: String,
     outlet: Outlet<T>,
@@ -48,19 +49,16 @@ impl<T> ActorSource<T> {
 
 impl<T> SourceShape for ActorSource<T> {
     type Out = T;
+
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> {
-        self.outlet.clone()
-    }
+    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
 }
 
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData> Stage for ActorSource<T> {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_ref()
-    }
+    fn name(&self) -> &str { self.name.as_ref() }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
@@ -80,20 +78,20 @@ impl<T: AppData> Stage for ActorSource<T> {
                         Ok(()) => {
                             let _ignore_failure = tx.send(());
                             ()
-                        }
+                        },
 
                         Err(err) => {
                             tracing::error!(error=?err, "failed to send item - completing actor source.");
                             break;
-                        }
+                        },
                     }
-                }
+                },
 
                 ActorSourceCmd::Stop(tx) => {
                     tracing::info!("stopping actor source.");
                     let _ignore_failure = tx.send(());
                     break;
-                }
+                },
             }
         }
 
@@ -109,10 +107,9 @@ impl<T: AppData> Stage for ActorSource<T> {
 
 impl<T> stage::WithApi for ActorSource<T> {
     type Sender = ActorSourceApi<T>;
+
     #[inline]
-    fn tx_api(&self) -> Self::Sender {
-        self.tx_api.clone()
-    }
+    fn tx_api(&self) -> Self::Sender { self.tx_api.clone() }
 }
 
 impl<T> Debug for ActorSource<T> {
@@ -129,10 +126,11 @@ impl<T> Debug for ActorSource<T> {
 //
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::graph::stage::WithApi;
     use tokio::sync::mpsc;
     use tokio_test::block_on;
+
+    use super::*;
+    use crate::graph::stage::WithApi;
 
     #[test]
     fn test_push_stop_api() {

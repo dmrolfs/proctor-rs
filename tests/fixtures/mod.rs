@@ -1,4 +1,3 @@
-//
 // pub fn init_tracing<S: AsRef<str>>(_name: S) {
 //     lazy_static::initialize(&proctor::telemetry::TEST_TRACING);
 //     tracing::info!("TRACING enabled");

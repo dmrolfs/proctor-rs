@@ -1,5 +1,9 @@
 mod fixtures;
 
+use std::collections::HashSet;
+use std::convert::TryFrom;
+use std::time::Duration;
+
 use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
 use oso::{PolarValue, ToPolar};
@@ -19,9 +23,6 @@ use proctor::phases::collection::TelemetrySubscription;
 use proctor::phases::decision::Decision;
 use proctor::{AppData, ProctorContext};
 use serde::de::DeserializeOwned;
-use std::collections::HashSet;
-use std::convert::TryFrom;
-use std::time::Duration;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
@@ -42,17 +43,11 @@ struct TestSettings {
 }
 
 impl PolicySettings for TestSettings {
-    fn required_subscription_fields(&self) -> HashSet<String> {
-        self.required_subscription_fields.clone()
-    }
+    fn required_subscription_fields(&self) -> HashSet<String> { self.required_subscription_fields.clone() }
 
-    fn optional_subscription_fields(&self) -> HashSet<String> {
-        self.optional_subscription_fields.clone()
-    }
+    fn optional_subscription_fields(&self) -> HashSet<String> { self.optional_subscription_fields.clone() }
 
-    fn source(&self) -> PolicySource {
-        self.source.clone()
-    }
+    fn source(&self) -> PolicySource { self.source.clone() }
 }
 
 fn make_test_policy(
@@ -78,15 +73,16 @@ fn make_test_policy(
 //         C: ProctorContext,
 //     {
 //         match self {
-//             DecisionHandler::StripPolicyResult => Decision::<In, In, C>::basic("basic_decision", policy).await,
+//             DecisionHandler::StripPolicyResult => Decision::<In, In, C>::basic("basic_decision",
+// policy).await,
 //
 //             DecisionHandler::CarryPolicyResult => {
-//                 Decision::<In, PolicyResult<In>, C>::carry_policy_result("carried_decision", policy).await
-//             }
+//                 Decision::<In, PolicyResult<In>, C>::carry_policy_result("carried_decision",
+// policy).await             }
 //
 //             DecisionHandler::WithTransform(xform) => {
-//                 Decision::<In, Out, C>::with_transform("transformed_decision", policy, xform).await
-//             }
+//                 Decision::<In, Out, C>::with_transform("transformed_decision", policy,
+// xform).await             }
 //         }
 //     }
 // }

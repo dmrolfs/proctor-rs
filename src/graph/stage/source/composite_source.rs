@@ -1,9 +1,11 @@
+use std::fmt::Debug;
+
+use async_trait::async_trait;
+use cast_trait_object::dyn_upcast;
+
 use crate::graph::shape::SourceShape;
 use crate::graph::{stage, Connect, Graph, Inlet, Outlet, Port, Stage};
 use crate::{AppData, ProctorResult};
-use async_trait::async_trait;
-use cast_trait_object::dyn_upcast;
-use std::fmt::Debug;
 
 /// Source shape that encapsulates externally created stages, supporting graph stage composition.
 ///
@@ -13,20 +15,21 @@ use std::fmt::Debug;
 /// #[macro_use]
 /// extern crate proctor_derive;
 ///
-/// use proctor::elements::Telemetry;
-/// use proctor::elements::telemetry::ToTelemetry;
-/// use proctor::graph::stage::{self, tick, Stage};
-/// use proctor::graph::{Connect, Graph, SinkShape, SourceShape};
-/// use proctor::AppData;
-/// use futures::future::FutureExt;
-/// use reqwest::header::HeaderMap;
-/// use serde::Deserialize;
 /// use std::collections::{BTreeMap, HashMap};
+/// use std::iter::FromIterator;
 /// use std::sync::Arc;
 /// use std::time::Duration;
-/// use tokio::sync::Mutex;
+///
+/// use futures::future::FutureExt;
+/// use proctor::elements::telemetry::ToTelemetry;
+/// use proctor::elements::Telemetry;
+/// use proctor::graph::stage::{self, tick, Stage};
+/// use proctor::graph::{Connect, Graph, SinkShape, SourceShape};
 /// use proctor::tracing::{get_subscriber, init_subscriber};
-/// use std::iter::FromIterator;
+/// use proctor::AppData;
+/// use reqwest::header::HeaderMap;
+/// use serde::Deserialize;
+/// use tokio::sync::Mutex;
 ///
 /// #[derive(Debug, Clone, Deserialize)]
 /// pub struct HttpBinResponse {
@@ -44,9 +47,9 @@ use std::fmt::Debug;
 ///     let main_span = tracing::info_span!("main");
 ///     let _main_span_guard = main_span.enter();
 ///
-///     //dmr: this is a hard fought example of how to modify an counter within an async closure.
-///     //dmr: important part is two-layer closure.
-///     //dmr: https://www.fpcomplete.com/blog/captures-closures-async/
+///     // dmr: this is a hard fought example of how to modify an counter within an async closure.
+///     // dmr: important part is two-layer closure.
+///     // dmr: https://www.fpcomplete.com/blog/captures-closures-async/
 ///     let count = Arc::new(Mutex::new(0_usize));
 ///
 ///     let mut tick = stage::Tick::with_constraint(
@@ -75,7 +78,10 @@ use std::fmt::Debug;
 ///         async move {
 ///             let url = "https://httpbin.org/get?f=foo&b=bar";
 ///             let mut default_headers = HeaderMap::new();
-///             default_headers.insert("x-api-key", "fe37af1e07mshd1763d86e5f2a8cp1714cfjsnb6145a35e7ca".parse().unwrap());
+///             default_headers.insert(
+///                 "x-api-key",
+///                 "fe37af1e07mshd1763d86e5f2a8cp1714cfjsnb6145a35e7ca".parse().unwrap(),
+///             );
 ///             let client = reqwest::Client::builder().default_headers(default_headers).build()?;
 ///             let resp = client
 ///                 .get(url)
@@ -102,14 +108,10 @@ use std::fmt::Debug;
 ///     cg.push_back(Box::new(generator)).await;
 ///     let mut composite = stage::CompositeSource::new("composite_source", cg, composite_outlet).await;
 ///
-///     let mut fold = stage::Fold::<_, Telemetry, _>::new(
-///         "gather latest",
-///         Telemetry::new(),
-///         |mut acc, mg| {
-///             acc.extend(mg);
-///             acc
-///         }
-///     );
+///     let mut fold = stage::Fold::<_, Telemetry, _>::new("gather latest", Telemetry::new(), |mut acc, mg| {
+///         acc.extend(mg);
+///         acc
+///     });
 ///     let rx_gather = fold.take_final_rx().unwrap();
 ///
 ///     (composite.outlet(), fold.inlet()).connect().await;
@@ -129,7 +131,9 @@ use std::fmt::Debug;
 ///             "args.2.b" => "bar".to_telemetry(),
 ///             "args.3.f" => "foo".to_telemetry(),
 ///             "args.3.b" => "bar".to_telemetry(),
-///         }.into_iter().collect()
+///         }
+///         .into_iter()
+///         .collect()
 ///     );
 ///
 ///     Ok(())
@@ -165,19 +169,16 @@ impl<Out: AppData> CompositeSource<Out> {
 
 impl<Out> SourceShape for CompositeSource<Out> {
     type Out = Out;
+
     #[inline]
-    fn outlet(&self) -> Outlet<Self::Out> {
-        self.outlet.clone()
-    }
+    fn outlet(&self) -> Outlet<Self::Out> { self.outlet.clone() }
 }
 
 #[dyn_upcast]
 #[async_trait]
 impl<Out: AppData> Stage for CompositeSource<Out> {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
+    fn name(&self) -> &str { self.name.as_str() }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
