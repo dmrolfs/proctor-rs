@@ -15,7 +15,7 @@ use proctor::elements::{
 use proctor::flink::decision::context::FlinkDecisionContext;
 use proctor::flink::decision::policy::DecisionPolicy;
 use proctor::flink::decision::result::{make_decision_transform, DecisionResult};
-use proctor::flink::{FlowMetrics, MetricCatalog, UtilizationMetrics};
+use proctor::flink::{ClusterMetrics, FlowMetrics, MetricCatalog};
 use proctor::graph::stage::{self, ThroughStage, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, Inlet, SinkShape, SourceShape, UniformFanInShape};
 use proctor::phases::collection;
@@ -62,36 +62,6 @@ fn make_test_policy(
     DecisionPolicy::new(settings)
 }
 
-// enum DecisionHandler<In, Out> {
-//     StripPolicyResult,
-//     CarryPolicyResult,
-//     WithTransform(Box<dyn ThroughStage<In, Out>>),
-// }
-//
-// impl<In, Out> DecisionHandler<In, Out>
-// where
-//     In: AppData + Clone + DeserializeOwned + ToPolar,
-// {
-//     pub async fn make_phase_stage<C>(
-//         &self, policy: impl QueryPolicy<Item = In, Context = C, Args = Args<In, C>> + 'static,
-//     ) -> impl ThroughStage<In, Out>
-//     where
-//         C: ProctorContext,
-//     {
-//         match self {
-//             DecisionHandler::StripPolicyResult => Decision::<In, In, C>::basic("basic_decision",
-// policy).await,
-//
-//             DecisionHandler::CarryPolicyResult => {
-//                 Decision::<In, PolicyResult<In>, C>::carry_policy_result("carried_decision",
-// policy).await             }
-//
-//             DecisionHandler::WithTransform(xform) => {
-//                 Decision::<In, Out, C>::with_transform("transformed_decision", policy,
-// xform).await             }
-//         }
-//     }
-// }
 
 struct TestFlow<In, Out, C> {
     pub graph_handle: JoinHandle<()>,
@@ -298,23 +268,34 @@ where
     }
 }
 
-fn make_test_item(timestamp: DateTime<Utc>, input_messages_per_sec: f64, inbox_lag: f64) -> MetricCatalog {
-    MetricCatalog {
-        timestamp,
-        flow: FlowMetrics {
-            input_messages_per_sec,
-            input_consumer_lag: inbox_lag,
-            records_out_per_sec: 0.0,
-            max_message_latency: 0.0,
-            net_in_utilization: 0.0,
-            net_out_utilization: 0.0,
-            sink_health_metrics: 0.0,
-            task_nr_records_in_per_sec: 0.0,
-            task_nr_records_out_per_sec: 0.0,
-        },
-        utilization: UtilizationMetrics { task_cpu_load: 0.0, network_io_utilization: 0.0 },
-        custom: std::collections::HashMap::default(),
+fn make_test_item_padding() -> Telemetry {
+    let padding = maplit::hashmap! {
+            "records_out_per_sec".to_string() => (0.).into(),
+            "max_message_latency".to_string() => (0.).into(),
+            "net_in_utilization".to_string() => (0.).into(),
+            "net_out_utilization".to_string() => (0.).into(),
+            "sink_health_metrics".to_string() => (0.).into(),
+            "task_nr_records_in_per_sec".to_string() => (0.).into(),
+            "task_nr_records_out_per_sec".to_string() => (0.).into(),
+            "task_cpu_load".to_string() => (0.).into(),
+            "network_io_utilization".to_string() => (0.).into(),
     }
+    .into_iter()
+    .collect();
+
+    padding
+}
+
+fn make_test_item(timestamp: DateTime<Utc>, input_messages_per_sec: f64, inbox_lag: f64) -> Telemetry {
+    let item = maplit::hashmap! {
+        "timestamp".to_string() => timestamp.timestamp().into(),
+        "input_messages_per_sec".to_string() => input_messages_per_sec.into(),
+        "input_consumer_lag".to_string() => inbox_lag.into(),
+    }
+    .into_iter()
+    .collect();
+
+    item
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -372,30 +353,30 @@ async fn test_decision_carry_policy_result() -> anyhow::Result<()> {
     let event = flow.recv_policy_event().await?;
     assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
 
+    tracing::info!("pushing test item padding - the extra parts req in a metrics subscription...");
+    let padding = make_test_item_padding();
+    flow.push_telemetry(padding).await?;
+
     let ts = *DT_1 + chrono::Duration::hours(1);
     let item = make_test_item(ts, std::f64::consts::PI, 1.0);
     tracing::warn!(?item, "DMR-A.1: created item to push.");
-    let telemetry = Telemetry::try_from(&item);
-    tracing::warn!(?item, ?telemetry, "DMR-A.2: converted item to telemetry and pushing...");
-    flow.push_telemetry(telemetry?).await?;
-    tracing::info!("waiting for item to reach sink...");
+    flow.push_telemetry(item).await?;
+    tracing::info!("DMR-waiting for item to reach sink...");
     assert!(
         flow.check_sink_accumulation("first", Duration::from_millis(250), |acc| acc.len() == 1)
             .await?
     );
 
     let item = make_test_item(ts, std::f64::consts::E, 2.0);
-    let telemetry = Telemetry::try_from(&item);
-    flow.push_telemetry(telemetry?).await?;
+    // let telemetry = Telemetry::try_from(&item);
+    flow.push_telemetry(item).await?;
     let event = flow.recv_policy_event().await?;
     assert!(matches!(event, elements::PolicyFilterEvent::ItemBlocked(_)));
     tracing::warn!(?event, "DMR-C: item dropped confirmed");
 
     let item = make_test_item(ts, std::f64::consts::LN_2, 1.0);
     tracing::warn!(?item, "DMR-D.1: created item to push.");
-    let telemetry = Telemetry::try_from(&item);
-    tracing::warn!(?item, ?telemetry, "DMR-D.2: converted item to telemetry and pushing...");
-    flow.push_telemetry(telemetry?).await?;
+    flow.push_telemetry(item).await?;
     tracing::info!("waiting for item to reach sink...");
     assert!(
         flow.check_sink_accumulation("first", Duration::from_millis(250), |acc| acc.len() == 2)
@@ -438,7 +419,6 @@ async fn test_decision_common() -> anyhow::Result<()> {
         .with_required_fields(proctor::flink::metric_catalog::METRIC_CATALOG_REQ_SUBSCRIPTION_FIELDS.clone())
         .with_optional_fields(maplit::hashset! {
             "all_sinks_healthy",
-            "nr_task_managers",
         });
 
     let policy = make_test_policy(&TestSettings {
@@ -482,32 +462,33 @@ async fn test_decision_common() -> anyhow::Result<()> {
     .await?;
 
     let event = flow.recv_policy_event().await?;
+    tracing::error!(?event, "DMR: TESTING policy event for context change");
     assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
+
+    tracing::info!("DMR: pushing metrics padding - req metrics subscriptions fields not used in test.");
+    flow.push_telemetry(make_test_item_padding()).await?;
 
     let ts = *DT_1 + chrono::Duration::hours(1);
     let item = make_test_item(ts, std::f64::consts::PI, 1.0);
     tracing::warn!(?item, "DMR-A.1: created item to push.");
-    let telemetry = Telemetry::try_from(&item);
-    tracing::warn!(?item, ?telemetry, "DMR-A.2: converted item to telemetry and pushing...");
-    flow.push_telemetry(telemetry?).await?;
-    tracing::info!("waiting for item to reach sink...");
+
+    flow.push_telemetry(item).await?;
+    tracing::info!("DMR-waiting for *first* item to reach sink...");
     assert!(
         flow.check_sink_accumulation("first", Duration::from_millis(500), |acc| acc.len() == 1)
             .await?
     );
 
     let item = make_test_item(ts, std::f64::consts::E, 2.0);
-    let telemetry = Telemetry::try_from(&item);
-    flow.push_telemetry(telemetry?).await?;
+    flow.push_telemetry(item).await?;
     let event = flow.recv_policy_event().await?;
+    tracing::error!(?event, "DMR-2: TESTING policy event for blockage");
     assert!(matches!(event, elements::PolicyFilterEvent::ItemBlocked(_)));
     tracing::warn!(?event, "DMR-C: item dropped confirmed");
 
     let item = make_test_item(ts, std::f64::consts::LN_2, 1.0);
     tracing::warn!(?item, "DMR-D.1: created item to push.");
-    let telemetry = Telemetry::try_from(&item);
-    tracing::warn!(?item, ?telemetry, "DMR-D.2: converted item to telemetry and pushing...");
-    flow.push_telemetry(telemetry?).await?;
+    flow.push_telemetry(item).await?;
     tracing::info!("waiting for item to reach sink...");
     assert!(
         flow.check_sink_accumulation("first", Duration::from_millis(250), |acc| acc.len() == 2)

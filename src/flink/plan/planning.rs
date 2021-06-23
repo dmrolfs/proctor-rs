@@ -6,42 +6,57 @@ use cast_trait_object::dyn_upcast;
 use super::FlinkScalePlan;
 use crate::error::PlanError;
 use crate::flink::decision::result::DecisionResult;
+use crate::flink::plan::appraisal::Appraisal;
+use crate::flink::plan::forecast::WorkloadForecast;
+use crate::flink::plan::Benchmark;
 use crate::flink::MetricCatalog;
 use crate::graph::stage::Stage;
 use crate::graph::{Inlet, Outlet, Port, SinkShape, SourceShape};
 use crate::phases::plan::DataDecisionStage;
 use crate::ProctorResult;
 
-pub struct FlinkScalePlanning {
+pub struct FlinkScalePlanning<F: WorkloadForecast> {
     name: String,
     inlet: Inlet<MetricCatalog>,
     decision_inlet: Inlet<DecisionResult<MetricCatalog>>,
     outlet: Outlet<FlinkScalePlan>,
+    forecast: F,
+    appraisal: Appraisal,
 }
 
-impl FlinkScalePlanning {
+impl<F: WorkloadForecast> FlinkScalePlanning<F> {
     #[tracing::instrument(level = "info", skip(name))]
-    pub fn new<S: Into<String>>(name: S) -> Self {
+    pub fn new<S: Into<String>>(name: S, forecast: F) -> Self {
         let name = name.into();
         let inlet = Inlet::new(name.clone());
         let decision_inlet = Inlet::new(format!("decision_{}", name.clone()));
         let outlet = Outlet::new(name.clone());
-        Self { name, inlet, decision_inlet, outlet }
+
+        Self {
+            name,
+            inlet,
+            decision_inlet,
+            outlet,
+            forecast,
+            appraisal: Appraisal::default(),
+        }
     }
 }
 
-impl Debug for FlinkScalePlanning {
+impl<F: WorkloadForecast> Debug for FlinkScalePlanning<F> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("FlinkScalePlanning")
             .field("name", &self.name)
             .field("inlet", &self.inlet)
             .field("decision_inlet", &self.decision_inlet)
             .field("outlet", &self.outlet)
+            .field("forecast", &self.forecast)
+            .field("appraisal", &self.appraisal)
             .finish()
     }
 }
 
-impl SourceShape for FlinkScalePlanning {
+impl<F: WorkloadForecast> SourceShape for FlinkScalePlanning<F> {
     type Out = FlinkScalePlan;
 
     #[inline]
@@ -50,7 +65,7 @@ impl SourceShape for FlinkScalePlanning {
     }
 }
 
-impl SinkShape for FlinkScalePlanning {
+impl<F: WorkloadForecast> SinkShape for FlinkScalePlanning<F> {
     type In = MetricCatalog;
 
     #[inline]
@@ -59,7 +74,7 @@ impl SinkShape for FlinkScalePlanning {
     }
 }
 
-impl DataDecisionStage for FlinkScalePlanning {
+impl<F: 'static + WorkloadForecast> DataDecisionStage for FlinkScalePlanning<F> {
     type Decision = DecisionResult<MetricCatalog>;
 
     #[inline]
@@ -70,7 +85,7 @@ impl DataDecisionStage for FlinkScalePlanning {
 
 #[dyn_upcast]
 #[async_trait]
-impl Stage for FlinkScalePlanning {
+impl<F: 'static + WorkloadForecast> Stage for FlinkScalePlanning<F> {
     #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
@@ -95,7 +110,7 @@ impl Stage for FlinkScalePlanning {
     }
 }
 
-impl FlinkScalePlanning {
+impl<F: WorkloadForecast> FlinkScalePlanning<F> {
     #[inline]
     async fn do_check(&self) -> Result<(), PlanError> {
         self.inlet.check_attachment().await?;
@@ -109,11 +124,13 @@ impl FlinkScalePlanning {
         let outlet = &self.outlet;
         let rx_data = &mut self.inlet;
         let rx_decision = &mut self.decision_inlet;
+        let forecast = &mut self.forecast;
+        let appraisal = &self.appraisal;
 
         loop {
             tokio::select! {
                 Some(data) = rx_data.recv() => {
-                    Self::handle_data_item(data).await?;
+                    Self::handle_data_item(data, forecast).await?;
                 },
 
                 Some(decision) = rx_decision.recv() => {
@@ -131,7 +148,8 @@ impl FlinkScalePlanning {
     }
 
     #[tracing::instrument(level = "info", skip(data), fields())]
-    async fn handle_data_item(data: MetricCatalog) -> Result<(), PlanError> {
+    async fn handle_data_item(data: MetricCatalog, forecast: &mut impl WorkloadForecast) -> Result<(), PlanError> {
+        forecast.add_observation(data.into());
         todo!()
     }
 

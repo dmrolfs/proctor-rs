@@ -2,11 +2,13 @@ use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedL
 use std::convert::TryFrom;
 use std::fmt;
 use std::num::{ParseFloatError, ParseIntError};
+use std::prelude::rust_2015::Result::Err;
 
 use config::Value as ConfigValue;
 use oso::{FromPolar, PolarValue, ToPolar};
+use serde::de::{EnumAccess, Error, MapAccess, SeqAccess, Unexpected, Visitor};
 use serde::ser::{SerializeMap, SerializeSeq};
-use serde::{de, Serialize, Serializer};
+use serde::{de, Deserializer, Serialize, Serializer};
 
 use crate::error::{TelemetryError, TypeExpectation};
 
@@ -674,6 +676,15 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
                 Ok(TelemetryValue::Integer(value as i64))
             }
 
+            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                // FIXME: This should *fail* if the value does not fit in the requested integer type
+                tracing::error!(?value, "deserializing u64 value - need to convert into i64");
+                Ok(TelemetryValue::Integer(value as i64))
+            }
+
             #[inline]
             #[tracing::instrument(level = "info")]
             fn visit_f32<E>(self, value: f32) -> Result<Self::Value, E> {
@@ -688,6 +699,14 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
                 Ok(TelemetryValue::Float(value))
             }
 
+            fn visit_char<E>(self, value: char) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                tracing::info!(?value, "deserializing char value");
+                Ok(TelemetryValue::Text(String::from(value)))
+            }
+
             #[inline]
             #[tracing::instrument(level = "info")]
             fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
@@ -698,11 +717,45 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
                 self.visit_string(String::from(value))
             }
 
+            fn visit_borrowed_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                tracing::info!(?value, "deserializing &str value");
+                self.visit_string(String::from(value))
+            }
+
             #[inline]
             #[tracing::instrument(level = "info")]
             fn visit_string<E>(self, value: String) -> Result<Self::Value, E> {
                 tracing::info!(?value, "deserializing string value");
                 Ok(TelemetryValue::Text(value))
+            }
+
+            fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                tracing::error!(?value, "deserializing bytes into telemetry is not supported");
+                Err(E::custom("deserializing bytes into telemetry is not supported"))
+            }
+
+            fn visit_borrowed_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                tracing::error!(?value, "deserializing borrowed bytes into telemetry is not supported");
+                Err(E::custom(
+                    "deserializing borrowed bytes into telemetry is not supported",
+                ))
+            }
+
+            fn visit_byte_buf<E>(self, value: Vec<u8>) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                tracing::error!(?value, "deserializing byte buf into telemetry is not supported");
+                Err(E::custom("deserializing byte buf into telemetry is not supported"))
             }
 
             #[inline]
@@ -727,6 +780,16 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
             fn visit_unit<E>(self) -> ::std::result::Result<TelemetryValue, E> {
                 tracing::info!("deserializing unit value");
                 Ok(TelemetryValue::Unit)
+            }
+
+            fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                tracing::error!("deserializing newtype struct into telemetry is not supported");
+                Err(D::Error::custom(
+                    "deserializing newtype struct into telemetry is not supported",
+                ))
             }
 
             #[inline]
@@ -763,6 +826,14 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
                 }
 
                 Ok(TelemetryValue::Table(table))
+            }
+
+            fn visit_enum<A>(self, data: A) -> Result<Self::Value, A::Error>
+            where
+                A: EnumAccess<'de>,
+            {
+                tracing::error!("deserializing enum into telemetry is not supported");
+                Err(A::Error::custom("deserializing enum into telemetry is not supported"))
             }
         }
 

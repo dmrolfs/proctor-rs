@@ -7,11 +7,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::elements::{TelemetryValue, ToTelemetry};
 use crate::error::{PlanError, TelemetryError, TypeExpectation};
+use crate::flink::MetricCatalog;
 
 #[serde_as]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Benchmark {
-    pub nr_task_managers: usize,
+    pub nr_task_managers: u8,
 
     pub records_out_per_sec: f64,
 
@@ -22,6 +23,16 @@ pub struct Benchmark {
 impl PartialOrd for Benchmark {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.nr_task_managers.cmp(&other.nr_task_managers))
+    }
+}
+
+impl From<MetricCatalog> for Benchmark {
+    fn from(that: MetricCatalog) -> Self {
+        Benchmark {
+            nr_task_managers: that.cluster.nr_task_managers,
+            records_out_per_sec: that.flow.records_out_per_sec,
+            timestamp: that.timestamp,
+        }
     }
 }
 
@@ -51,7 +62,7 @@ impl TryFrom<TelemetryValue> for Benchmark {
 
             let nr_task_managers = rep
                 .get(T_NR_TASK_MANAGERS)
-                .map(|v| usize::try_from(v.clone()))
+                .map(|v| u8::try_from(v.clone()))
                 .ok_or(PlanError::DataNotFound(T_NR_TASK_MANAGERS.to_string()))??;
 
             let records_out_per_sec = rep

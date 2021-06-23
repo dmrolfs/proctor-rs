@@ -2,8 +2,8 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::Add;
 
-use ::serde_with::{serde_as, TimestampMilliSeconds};
-use chrono::{DateTime, Utc};
+use ::serde_with::{serde_as, TimestampSeconds};
+use chrono::{DateTime, TimeZone, Utc};
 use lazy_static::lazy_static;
 use oso::PolarClass;
 use serde::{Deserialize, Serialize};
@@ -17,29 +17,30 @@ use crate::error::TelemetryError;
 // could write a rpcedural macro, but want to list effective serde names, such as for flattened.
 lazy_static! {
     pub static ref METRIC_CATALOG_REQ_SUBSCRIPTION_FIELDS: HashSet<&'static str> = maplit::hashset! {
-    "timestamp",
+        "timestamp",
 
-    // FlowMetrics
-    "input_messages_per_sec",
-    "input_consumer_lag",
-    "records_out_per_sec",
-    "max_message_latency",
-    "net_in_utilization",
-    "net_out_utilization",
-    "sink_health_metrics",
-    "task_nr_records_in_per_sec",
-    "task_nr_records_out_per_sec",
+        // FlowMetrics
+        "input_messages_per_sec",
+        "task_nr_records_in_per_sec",
+        "task_nr_records_out_per_sec",
+        "records_out_per_sec",
+        "input_consumer_lag",
+        "max_message_latency",
+        "net_in_utilization",
+        "net_out_utilization",
+        "sink_health_metrics",
 
-    // UtilizationMetrics
-    "task_cpu_load",
-    "network_io_utilization",
-};
+        // ClusterMetrics
+        "nr_task_managers",
+        "task_cpu_load",
+        "network_io_utilization",
+    };
 }
 
 #[serde_as]
 #[derive(PolarClass, Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct MetricCatalog {
-    #[serde_as(as = "TimestampMilliSeconds")]
+    #[serde_as(as = "TimestampSeconds")]
     pub timestamp: DateTime<Utc>,
 
     #[polar(attribute)]
@@ -48,7 +49,7 @@ pub struct MetricCatalog {
 
     #[polar(attribute)]
     #[serde(flatten)]
-    pub utilization: UtilizationMetrics,
+    pub cluster: ClusterMetrics,
 
     #[polar(attribute)]
     #[serde(flatten)]
@@ -62,10 +63,16 @@ pub struct FlowMetrics {
     pub input_messages_per_sec: f64,
 
     #[polar(attribute)]
-    pub input_consumer_lag: f64,
+    pub task_nr_records_in_per_sec: f64,
+
+    #[polar(attribute)]
+    pub task_nr_records_out_per_sec: f64,
 
     #[polar(attribute)]
     pub records_out_per_sec: f64,
+
+    #[polar(attribute)]
+    pub input_consumer_lag: f64,
 
     #[polar(attribute)]
     pub max_message_latency: f64,
@@ -78,16 +85,13 @@ pub struct FlowMetrics {
 
     #[polar(attribute)]
     pub sink_health_metrics: f64,
-
-    #[polar(attribute)]
-    pub task_nr_records_in_per_sec: f64,
-
-    #[polar(attribute)]
-    pub task_nr_records_out_per_sec: f64,
 }
 
 #[derive(PolarClass, Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
-pub struct UtilizationMetrics {
+pub struct ClusterMetrics {
+    #[polar(attribute)]
+    pub nr_task_managers: u8,
+
     #[polar(attribute)]
     pub task_cpu_load: f64,
 
@@ -100,7 +104,7 @@ impl MetricCatalog {
         Self {
             timestamp,
             flow: FlowMetrics::default(),
-            utilization: UtilizationMetrics::default(),
+            cluster: ClusterMetrics::default(),
             custom,
         }
     }
@@ -146,9 +150,11 @@ mod tests {
     use std::convert::TryFrom;
 
     use pretty_assertions::assert_eq;
+    use serde_test::{assert_tokens, Token};
 
     use super::*;
     use crate::elements::telemetry::ToTelemetry;
+    use crate::elements::Telemetry;
     use crate::error::TypeExpectation;
 
     #[derive(PartialEq, Debug)]
@@ -211,6 +217,126 @@ mod tests {
         let mut exp2 = am1.clone();
         exp2.extend(am2.clone());
         assert_eq!(d2.custom, exp2);
+    }
+
+    #[test]
+    fn test_metric_catalog_serde() {
+        let ts = chrono::Utc.ymd(1988, 5, 30).and_hms(9, 1, 17);
+        let metrics = MetricCatalog {
+            timestamp: ts,
+            flow: FlowMetrics {
+                input_messages_per_sec: 17.,
+                input_consumer_lag: 3.14,
+                records_out_per_sec: 0.0,
+                max_message_latency: 0.0,
+                net_in_utilization: 0.0,
+                net_out_utilization: 0.0,
+                sink_health_metrics: 0.0,
+                task_nr_records_in_per_sec: 0.0,
+                task_nr_records_out_per_sec: 0.0,
+            },
+            cluster: ClusterMetrics {
+                nr_task_managers: 4,
+                task_cpu_load: 0.0,
+                network_io_utilization: 0.0,
+            },
+            custom: maplit::hashmap! {
+                "bar".to_string() => 33.to_telemetry(),
+            },
+        };
+
+        assert_tokens(
+            &metrics,
+            &vec![
+                Token::Map { len: None },
+                Token::Str("timestamp"),
+                Token::I64(ts.timestamp()),
+                Token::Str("input_messages_per_sec"),
+                Token::F64(17.),
+                Token::Str("task_nr_records_in_per_sec"),
+                Token::F64(0.),
+                Token::Str("task_nr_records_out_per_sec"),
+                Token::F64(0.),
+                Token::Str("records_out_per_sec"),
+                Token::F64(0.),
+                Token::Str("input_consumer_lag"),
+                Token::F64(3.14),
+                Token::Str("max_message_latency"),
+                Token::F64(0.),
+                Token::Str("net_in_utilization"),
+                Token::F64(0.),
+                Token::Str("net_out_utilization"),
+                Token::F64(0.),
+                Token::Str("sink_health_metrics"),
+                Token::F64(0.),
+                Token::Str("nr_task_managers"),
+                Token::U8(4),
+                Token::Str("task_cpu_load"),
+                Token::F64(0.),
+                Token::Str("network_io_utilization"),
+                Token::F64(0.),
+                Token::Str("bar"),
+                Token::I64(33),
+                Token::MapEnd,
+            ],
+        )
+    }
+
+    #[test]
+    fn test_telemetry_from_metric_catalog() -> anyhow::Result<()> {
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_telemetry_from_metric_catalog");
+        let _main_span_guard = main_span.enter();
+
+        let ts = chrono::Utc.ymd(1988, 5, 30).and_hms(9, 1, 17);
+        let metrics = MetricCatalog {
+            timestamp: ts,
+            flow: FlowMetrics {
+                input_messages_per_sec: 17.,
+                input_consumer_lag: 3.14,
+                records_out_per_sec: 0.0,
+                max_message_latency: 0.0,
+                net_in_utilization: 0.0,
+                net_out_utilization: 0.0,
+                sink_health_metrics: 0.0,
+                task_nr_records_in_per_sec: 0.0,
+                task_nr_records_out_per_sec: 0.0,
+            },
+            cluster: ClusterMetrics {
+                nr_task_managers: 4,
+                task_cpu_load: 0.0,
+                network_io_utilization: 0.0,
+            },
+            custom: maplit::hashmap! {
+                "foo".to_string() => "David".to_telemetry(),
+                "bar".to_string() => 33.to_telemetry(),
+            },
+        };
+
+        let telemetry = Telemetry::try_from(&metrics)?;
+        assert_eq!(
+            telemetry,
+            TelemetryValue::Table(maplit::hashmap! {
+                "timestamp".to_string() => ts.timestamp().to_telemetry(),
+                "input_messages_per_sec".to_string() => (17.).to_telemetry(),
+                "task_nr_records_in_per_sec".to_string() => (0.).to_telemetry(),
+                "task_nr_records_out_per_sec".to_string() => (0.).to_telemetry(),
+                "records_out_per_sec".to_string() => (0.).to_telemetry(),
+                "input_consumer_lag".to_string() => 3.14.to_telemetry(),
+                "max_message_latency".to_string() => (0.).to_telemetry(),
+                "net_in_utilization".to_string() => (0.).to_telemetry(),
+                "net_out_utilization".to_string() => (0.).to_telemetry(),
+                "sink_health_metrics".to_string() => (0.).to_telemetry(),
+                "nr_task_managers".to_string() => 4.to_telemetry(),
+                "task_cpu_load".to_string() => (0.).to_telemetry(),
+                "network_io_utilization".to_string() => (0.).to_telemetry(),
+                "foo".to_string() => "David".to_telemetry(),
+                "bar".to_string() => 33.to_telemetry(),
+            })
+            .into()
+        );
+
+        Ok(())
     }
 
     // #[test]

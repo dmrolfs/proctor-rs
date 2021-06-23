@@ -196,6 +196,9 @@ pub enum TelemetryError {
 
     #[error("{0}")]
     ValueParseError(#[source] anyhow::Error),
+
+    #[error("type not support {0}")]
+    NotSupported(String),
 }
 
 #[derive(Debug)]

@@ -13,7 +13,7 @@ pub struct FlinkDecisionContext {
     pub all_sinks_healthy: bool,
 
     #[polar(attribute)]
-    pub nr_task_managers: i32,
+    pub nr_task_managers: u8,
 
     #[polar(attribute)]
     #[serde(flatten)]
@@ -60,7 +60,7 @@ mod tests {
             Token::Str("all_sinks_healthy"),
             Token::Bool(true),
             Token::Str("nr_task_managers"),
-            Token::I32(4),
+            Token::U8(4),
             Token::Str("custom_foo"),
             Token::Str("fred flintstone"),
             Token::Str("custom_bar"),

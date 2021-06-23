@@ -57,7 +57,7 @@ impl RegressionStrategy for LinearRegression {
     }
 
     fn calculate(&self, x: f64) -> Result<Workload, PlanError> {
-        Ok(Workload::RecordsPerSecond(self.slope * x + self.y_intercept))
+        Ok(Workload::RecordsInPerSecond(self.slope * x + self.y_intercept))
     }
 
     #[inline]
@@ -132,7 +132,7 @@ impl RegressionStrategy for QuadraticRegression {
     }
 
     fn calculate(&self, x: f64) -> Result<Workload, PlanError> {
-        Ok(Workload::RecordsPerSecond(self.a * pow(x, 2) + self.b * x + self.c))
+        Ok(Workload::RecordsInPerSecond(self.a * pow(x, 2) + self.b * x + self.c))
     }
 
     #[inline]

@@ -1,15 +1,14 @@
 use std::collections::BTreeMap;
 
 use itertools::Itertools;
-use oso::PolarClass;
 use serde::{Deserialize, Serialize};
 
 use super::Benchmark;
 
-#[derive(Debug, Default, PolarClass, Clone, Serialize, Deserialize)]
-pub struct ClusterPerformance(BTreeMap<usize, Benchmark>);
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct Appraisal(BTreeMap<u8, Benchmark>);
 
-impl ClusterPerformance {
+impl Appraisal {
     pub fn add_benchmark(&mut self, b: Benchmark) {
         let _ = self.0.insert(b.nr_task_managers, b);
     }
@@ -19,8 +18,8 @@ impl ClusterPerformance {
     }
 }
 
-impl std::ops::Add<Benchmark> for ClusterPerformance {
-    type Output = ClusterPerformance;
+impl std::ops::Add<Benchmark> for Appraisal {
+    type Output = Appraisal;
 
     fn add(mut self, rhs: Benchmark) -> Self::Output {
         self.add_benchmark(rhs);
@@ -28,7 +27,7 @@ impl std::ops::Add<Benchmark> for ClusterPerformance {
     }
 }
 
-impl ClusterPerformance {
+impl Appraisal {
     pub fn cluster_size_for_workload(&self, workload_rate: f64) -> Option<usize> {
         self.evaluate_neighbors(workload_rate)
             .map(|neighbors| neighbors.cluster_size_for_workload_rate(workload_rate))

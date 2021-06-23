@@ -50,6 +50,7 @@ impl Telemetry {
     /// Attempt to serialize the entire telemetry from the given type.
     #[tracing::instrument(level = "trace", skip())]
     pub fn try_from<T: Serialize + Debug>(from: &T) -> Result<Self, TelemetryError> {
+        // todo: mimic technique in config-rs more closely
         let mut serializer = flexbuffers::FlexbufferSerializer::new();
         from.serialize(&mut serializer)?;
         let data = serializer.take_buffer();
