@@ -680,9 +680,15 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
             where
                 E: Error,
             {
-                // FIXME: This should *fail* if the value does not fit in the requested integer type
-                tracing::error!(?value, "deserializing u64 value - need to convert into i64");
-                Ok(TelemetryValue::Integer(value as i64))
+                if value <= (i64::MAX as u64) {
+                    tracing::trace!(?value, "deserializing u64 as i64 value");
+                    Ok(TelemetryValue::Integer(value as i64))
+                } else {
+                    Err(E::custom(format!(
+                        "cannot not deserialize u64 value, {}, into telemetry integer value (maximum: {})",
+                        value, i64::MAX
+                    )))
+                }
             }
 
             #[inline]
