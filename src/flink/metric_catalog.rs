@@ -44,15 +44,15 @@ pub struct MetricCatalog {
     pub timestamp: DateTime<Utc>,
 
     #[polar(attribute)]
-    #[serde(flatten)]
+    #[serde(flatten)] // current subscription mechanism only supports flatten keys
     pub flow: FlowMetrics,
 
     #[polar(attribute)]
-    #[serde(flatten)]
+    #[serde(flatten)] // current subscription mechanism only supports flatten keys
     pub cluster: ClusterMetrics,
 
     #[polar(attribute)]
-    #[serde(flatten)]
+    #[serde(flatten)] // flatten to collect extra properties.
     pub custom: telemetry::Table,
 }
 

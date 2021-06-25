@@ -16,7 +16,7 @@ pub struct FlinkDecisionContext {
     pub nr_task_managers: u8,
 
     #[polar(attribute)]
-    #[serde(flatten)]
+    #[serde(flatten)] // flatten enables collection of extra properties
     pub custom: telemetry::Table,
 }
 

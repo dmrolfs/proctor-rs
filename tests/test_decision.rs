@@ -462,7 +462,7 @@ async fn test_decision_common() -> anyhow::Result<()> {
     .await?;
 
     let event = flow.recv_policy_event().await?;
-    tracing::error!(?event, "DMR: TESTING policy event for context change");
+    tracing::info!(?event, "DMR: TESTING policy event for context change");
     assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
 
     tracing::info!("DMR: pushing metrics padding - req metrics subscriptions fields not used in test.");
@@ -482,7 +482,7 @@ async fn test_decision_common() -> anyhow::Result<()> {
     let item = make_test_item(ts, std::f64::consts::E, 2.0);
     flow.push_telemetry(item).await?;
     let event = flow.recv_policy_event().await?;
-    tracing::error!(?event, "DMR-2: TESTING policy event for blockage");
+    tracing::info!(?event, "DMR-2: TESTING policy event for blockage");
     assert!(matches!(event, elements::PolicyFilterEvent::ItemBlocked(_)));
     tracing::warn!(?event, "DMR-C: item dropped confirmed");
 

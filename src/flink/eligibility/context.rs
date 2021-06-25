@@ -11,14 +11,15 @@ use crate::ProctorContext;
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FlinkEligibilityContext {
     #[polar(attribute)]
-    #[serde(flatten)]
+    #[serde(flatten)] // current subscription mechanism only supports flatten keys
     pub task_status: TaskStatus,
+
     #[polar(attribute)]
-    #[serde(flatten)]
+    #[serde(flatten)] // current subscription mechanism only supports flatten keys
     pub cluster_status: ClusterStatus,
 
     #[polar(attribute)]
-    #[serde(flatten)]
+    #[serde(flatten)] // flatten to collect extra properties.
     pub custom: telemetry::Table,
 }
 

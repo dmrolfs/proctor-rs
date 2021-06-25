@@ -435,25 +435,13 @@ mod tests {
 
     #[test]
     fn test_plan_forecast_predict_next_workload() -> anyhow::Result<()> {
-        lazy_static::initialize(&crate::tracing::TEST_TRACING);
-        let main_span = tracing::info_span!("test_plan_forecast_model_selection");
-        let _ = main_span.enter();
+        // lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        // let main_span = tracing::info_span!("test_plan_forecast_model_selection");
+        // let _ = main_span.enter();
 
         let now: i64 = 1624061766;
         tracing::error!("NOW: {}", now);
         let step = 15;
-        // let workload_expected: Vec<(f64, Option<f64>)> = vec![
-        //     (15.88, None),
-        //     (12.63, None),
-        //     (12.50, None),
-        //     (11.78, None),
-        //     (11.38, None),
-        //     (9.18, None),
-        //     (10.43, Some(7.06637)),
-        //     (11.02, Some(9.140279)),
-        //     (11.57, Some(10.311776)),
-        //     (11.97, Some(11.58355)),
-        // ];
 
         let workload_expected: Vec<(f64, Option<f64>)> = vec![
             (1., None),
