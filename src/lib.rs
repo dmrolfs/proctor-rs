@@ -1,6 +1,9 @@
 // #[macro_use]
 extern crate proctor_derive;
 
+#[macro_use]
+extern crate enum_display_derive;
+
 pub mod app_data;
 pub mod elements;
 pub mod error;

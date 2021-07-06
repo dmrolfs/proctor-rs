@@ -7,17 +7,58 @@ mod ridge_regression;
 mod signal;
 
 use std::cmp::Ordering;
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 
+use approx::{AbsDiffEq, RelativeEq};
 use serde::{Deserialize, Serialize};
 
 use crate::flink::plan::Benchmark;
 
 #[derive(Debug, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub enum Workload {
-    RecordsInPerSecond(f64),
+    RecordsInPerSecond(RecordsInPerSecond),
     NotEnoughData,
     HeuristicsExceedThreshold {},
+}
+
+#[derive(Debug, Default, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct RecordsInPerSecond(pub f64);
+
+impl AbsDiffEq for RecordsInPerSecond {
+    type Epsilon = f64;
+
+    #[inline]
+    fn default_epsilon() -> Self::Epsilon {
+        f64::default_epsilon()
+    }
+
+    #[inline]
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        f64::abs_diff_eq(&self.0, &other.0, epsilon)
+    }
+}
+
+impl RelativeEq for RecordsInPerSecond {
+    #[inline]
+    fn default_max_relative() -> Self::Epsilon {
+        f64::default_max_relative()
+    }
+
+    fn relative_eq(&self, other: &Self, epsilon: Self::Epsilon, max_relative: Self::Epsilon) -> bool {
+        f64::relative_eq(&self.0, &other.0, epsilon, max_relative)
+    }
+}
+
+impl From<RecordsInPerSecond> for Workload {
+    fn from(that: RecordsInPerSecond) -> Self {
+        Workload::RecordsInPerSecond(that)
+    }
+}
+
+impl fmt::Display for RecordsInPerSecond {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("{:.5?} in_records / s", self.0))
+    }
 }
 
 pub type Point = (f64, f64);
@@ -50,6 +91,7 @@ impl From<MetricCatalog> for WorkloadMeasurement {
 }
 
 pub trait WorkloadForecast: Debug + Sync + Send {
+    fn observations_needed(&self) -> (usize, usize);
     fn add_observation(&mut self, measurement: WorkloadMeasurement);
     fn clear(&mut self);
     fn predict_next_workload(&mut self) -> Result<Workload, PlanError>;

@@ -50,6 +50,11 @@ impl std::ops::Add<WorkloadMeasurement> for LeastSquaresWorkloadForecast {
 const SPIKE_THRESHOLD: usize = 3;
 
 impl WorkloadForecast for LeastSquaresWorkloadForecast {
+    #[inline]
+    fn observations_needed(&self) -> (usize, usize) {
+        (self.window_size, self.window_size - self.data.len())
+    }
+
     #[tracing::instrument(
         level="debug",
         skip(self),
@@ -200,6 +205,7 @@ mod tests {
     use super::*;
     use crate::flink::plan::forecast::least_squares::LeastSquaresWorkloadForecast;
     use crate::flink::plan::forecast::{Point, Workload};
+    use crate::flink::plan::RecordsInPerSecond;
     use crate::flink::{ClusterMetrics, FlowMetrics};
 
     #[test]
@@ -311,7 +317,7 @@ mod tests {
         let regression = QuadraticRegression::from_data(&data)?;
         if let Workload::RecordsInPerSecond(actual) = regression.calculate(11.)? {
             let expected = (-41. / 112.) * pow(11., 2) + (2111. / 700.) * 11. + (85181. / 2800.);
-            assert_relative_eq!(actual, expected, epsilon = 1.0e-10);
+            assert_relative_eq!(actual, RecordsInPerSecond(expected), epsilon = 1.0e-10);
         } else {
             panic!("failed to calculate regression");
         }
@@ -346,7 +352,7 @@ mod tests {
         assert_relative_eq!(regression.correlation_coefficient(), 0.853, epsilon = 1.0e-3);
 
         if let Workload::RecordsInPerSecond(actual) = regression.calculate(3.)? {
-            assert_relative_eq!(actual, 3., epsilon = accuracy);
+            assert_relative_eq!(actual, RecordsInPerSecond(3.), epsilon = accuracy);
         } else {
             panic!("failed to calculate regression");
         }
@@ -487,7 +493,7 @@ mod tests {
             match (forecast.predict_next_workload(), expected) {
                 (Ok(Workload::RecordsInPerSecond(actual)), Some(e)) => {
                     tracing::info!(%actual, expected=%e, "[{}] testing workload prediction.", i);
-                    assert_relative_eq!(actual, e, epsilon = 1.0e-4)
+                    assert_relative_eq!(actual, RecordsInPerSecond(e), epsilon = 1.0e-4)
                 },
                 (Ok(Workload::NotEnoughData), None) => tracing::info!("[{}] okay - not enough data", i),
                 (workload, Some(e)) => panic!("[{}] failed to predict:{:?} -- expected:{}", i, workload, e),

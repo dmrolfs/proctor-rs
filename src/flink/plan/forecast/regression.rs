@@ -5,7 +5,7 @@ use nalgebra::{Matrix3, Matrix3x1};
 use num_traits::pow;
 
 use crate::error::PlanError;
-use crate::flink::plan::forecast::{Point, Workload};
+use crate::flink::plan::forecast::{Point, RecordsInPerSecond, Workload};
 
 pub trait RegressionStrategy: Debug {
     fn name(&self) -> &str;
@@ -56,8 +56,9 @@ impl RegressionStrategy for LinearRegression {
         "LinearRegression"
     }
 
+    #[inline]
     fn calculate(&self, x: f64) -> Result<Workload, PlanError> {
-        Ok(Workload::RecordsInPerSecond(self.slope * x + self.y_intercept))
+        Ok(RecordsInPerSecond(self.slope * x + self.y_intercept).into())
     }
 
     #[inline]
@@ -132,7 +133,9 @@ impl RegressionStrategy for QuadraticRegression {
     }
 
     fn calculate(&self, x: f64) -> Result<Workload, PlanError> {
-        Ok(Workload::RecordsInPerSecond(self.a * pow(x, 2) + self.b * x + self.c))
+        Ok(Workload::RecordsInPerSecond(RecordsInPerSecond(
+            self.a * pow(x, 2) + self.b * x + self.c,
+        )))
     }
 
     #[inline]
