@@ -88,11 +88,10 @@ struct TestPolicy {
 }
 
 impl TestPolicy {
-    pub fn with_query<S0: Into<String>, S1: Into<String>>(policy: S0, query: S1) -> Self {
-        let policy = policy.into();
+    pub fn with_query(policy: impl AsRef<str>, query: impl AsRef<str>) -> Self {
         let polar = polar_core::polar::Polar::new();
         polar.load_str(policy.as_ref()).expect("failed to parse policy");
-        Self { policy, query: query.into() }
+        Self { policy: policy.as_ref().to_string(), query: query.as_ref().to_string() }
     }
 }
 
@@ -161,11 +160,11 @@ struct TestFlow {
 }
 
 impl TestFlow {
-    pub async fn new<S: Into<String>>(policy: S) -> Self {
+    pub async fn new(policy: impl AsRef<str>) -> Self {
         Self::with_query(policy, "eligible").await
     }
 
-    pub async fn with_query<S0: Into<String>, S1: Into<String>>(policy: S0, query: S1) -> Self {
+    pub async fn with_query(policy: impl AsRef<str>, query: impl AsRef<str>) -> Self {
         let item_source = stage::ActorSource::<TestItem>::new("item_source");
         let tx_item_source_api = item_source.tx_api();
 

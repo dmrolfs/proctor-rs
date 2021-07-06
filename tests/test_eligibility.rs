@@ -770,10 +770,9 @@ impl TestPolicy {
         Self::new_with_extension(policy, HashSet::<String>::new())
     }
 
-    pub fn new_with_extension<S0, S1>(policy: S0, subscription_extension: HashSet<S1>) -> Self
+    pub fn new_with_extension<S>(policy: impl AsRef<str>, subscription_extension: HashSet<S>) -> Self
     where
-        S0: AsRef<str>,
-        S1: Into<String>,
+        S: Into<String>,
     {
         let subscription_extension = subscription_extension.into_iter().map(|s| s.into()).collect();
 

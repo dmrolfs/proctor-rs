@@ -72,14 +72,17 @@ pub async fn connect_out_to_in<T: AppData>(mut lhs: Outlet<T>, mut rhs: Inlet<T>
 pub struct Inlet<T>(String, Arc<Mutex<Option<(String, mpsc::Receiver<T>)>>>);
 
 impl<T> Inlet<T> {
-    pub fn new<S: Into<String>>(name: S) -> Self {
-        Self(name.into(), Arc::new(Mutex::new(None)))
+    pub fn new(name: impl AsRef<str>) -> Self {
+        Self(name.as_ref().to_string(), Arc::new(Mutex::new(None)))
     }
 
-    pub fn with_receiver<S0: Into<String>, S1: Into<String>>(
-        name: S0, receiver_name: S1, rx: mpsc::Receiver<T>,
+    pub fn with_receiver(
+        name: impl AsRef<str>, receiver_name: impl AsRef<str>, rx: mpsc::Receiver<T>,
     ) -> Self {
-        Self(name.into(), Arc::new(Mutex::new(Some((receiver_name.into(), rx)))))
+        Self(
+            name.as_ref().to_string(),
+            Arc::new(Mutex::new(Some((receiver_name.as_ref().to_string(), rx))))
+        )
     }
 }
 
@@ -211,14 +214,12 @@ impl<T> fmt::Debug for Inlet<T> {
 pub struct Outlet<T>(String, Arc<Mutex<Option<(String, mpsc::Sender<T>)>>>);
 
 impl<T> Outlet<T> {
-    pub fn new<S: Into<String>>(name: S) -> Self {
-        Self(name.into(), Arc::new(Mutex::new(None)))
+    pub fn new(name: impl AsRef<str>) -> Self {
+        Self(name.as_ref().to_string(), Arc::new(Mutex::new(None)))
     }
 
-    pub fn with_sender<S0: Into<String>, S1: Into<String>>(
-        name: S0, sender_name: S1, tx: mpsc::Sender<T>,
-    ) -> Outlet<T> {
-        Self(name.into(), Arc::new(Mutex::new(Some((sender_name.into(), tx)))))
+    pub fn with_sender(name: impl AsRef<str>, sender_name: impl AsRef<str>, tx: mpsc::Sender<T>, ) -> Outlet<T> {
+        Self(name.as_ref().to_string(), Arc::new(Mutex::new(Some((sender_name.as_ref().to_string(), tx)))))
     }
 }
 

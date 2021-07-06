@@ -62,15 +62,13 @@ pub struct Sequence<T, I> {
 }
 
 impl<T, I> Sequence<T, I> {
-    pub fn new<S, I0>(name: S, data: I0) -> Self
+    pub fn new<I0>(name: impl AsRef<str>, data: I0) -> Self
     where
-        S: Into<String>,
         I0: IntoIterator<Item = T, IntoIter = I>,
     {
-        let name = name.into();
-        let outlet = Outlet::new(name.clone());
+        let outlet = Outlet::new(name.as_ref());
         let items = data.into_iter();
-        Self { name, items: Some(items), outlet }
+        Self { name: name.as_ref().to_string(), items: Some(items), outlet }
     }
 }
 

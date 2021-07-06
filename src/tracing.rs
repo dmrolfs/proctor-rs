@@ -20,11 +20,7 @@ lazy_static::lazy_static! {
 /// the returned subscriber, which is indeed quite complex.
 /// We need to explicitly call out that returned subscriber is `Send` and `Sync` to make it
 /// possible to pass it to `init_subscriber` later on.
-pub fn get_subscriber<S0, S1>(name: S0, env_filter: S1) -> impl Subscriber + Sync + Send
-where
-    S0: Into<String>,
-    S1: AsRef<str>,
-{
+pub fn get_subscriber(name: impl Into<String>, env_filter: impl AsRef<str>) -> impl Subscriber + Sync + Send {
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(env_filter));
 
     let (flame_subscriber, _guard) = FlameLayer::with_file("./tracing.folded").unwrap();

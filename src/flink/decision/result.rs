@@ -11,11 +11,10 @@ pub const SCALE_UP: &'static str = "up";
 pub const SCALE_DOWN: &'static str = "down";
 pub const NO_ACTION: &'static str = "no action";
 
-pub fn make_decision_transform<T, C, S>(name: S) -> impl ThroughStage<PolicyOutcome<T, C>, DecisionResult<T>>
+pub fn make_decision_transform<T, C>(name: impl AsRef<str>) -> impl ThroughStage<PolicyOutcome<T, C>, DecisionResult<T>>
 where
     T: AppData + Clone + PartialEq,
     C: ProctorContext,
-    S: Into<String>,
 {
     stage::Map::new(name, move |policy_result: PolicyOutcome<T, C>| {
         if let Some(TelemetryValue::Text(direction)) = policy_result.bindings.get(DECISION_BINDING) {

@@ -114,23 +114,21 @@ pub struct Collect {
 }
 
 impl Collect {
-    pub async fn new<T, F, S, U>(name: S, url: U, default_headers: HeaderMap, transform: F) -> Self
+    pub async fn new<T, F, U>(name: impl AsRef<str>, url: U, default_headers: HeaderMap, transform: F) -> Self
     where
         T: AppData + DeserializeOwned + 'static,
         F: FnMut(T) -> Telemetry + Send + Sync + 'static,
-        S: Into<String>,
         U: IntoUrl,
     {
-        let name = name.into();
         let target = url.into_url().expect("failed to parse url");
         let (graph, trigger, outlet) =
-            Self::make_graph::<T, _>(name.clone(), target.clone(), default_headers, transform).await;
+            Self::make_graph::<T, _>(name.as_ref(), target.clone(), default_headers, transform).await;
 
-        Self { name, target, graph: Some(graph), trigger, outlet }
+        Self { name: name.as_ref().to_string(), target, graph: Some(graph), trigger, outlet }
     }
 
     async fn make_graph<T, F>(
-        name: String, url: Url, default_headers: HeaderMap, transform: F,
+        name: &str, url: Url, default_headers: HeaderMap, transform: F,
     ) -> (Graph, Inlet<()>, Outlet<Telemetry>)
     where
         T: AppData + DeserializeOwned + 'static,

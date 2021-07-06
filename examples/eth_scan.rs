@@ -47,11 +47,8 @@ pub struct Currency {
 }
 
 impl Currency {
-    pub fn new<S>(code: CurrencyCode, name: S) -> Self
-    where
-        S: Into<String>,
-    {
-        Self { code, name: name.into() }
+    pub fn new(code: CurrencyCode, name: impl AsRef<str>) -> Self {
+        Self { code, name: name.as_ref().to_string() }
     }
 }
 
