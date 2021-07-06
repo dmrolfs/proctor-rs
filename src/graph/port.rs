@@ -108,7 +108,7 @@ impl<T: Send> Port for Inlet<T> {
 impl<T> Clone for Inlet<T> {
     #[inline]
     fn clone(&self) -> Self {
-        Self(self.0.clone(), self.1.clone())
+        Self(self.0.clone(), Arc::clone(&self.1))
     }
 }
 
@@ -237,7 +237,7 @@ impl<T: Send> Port for Outlet<T> {
 
 impl<T> Clone for Outlet<T> {
     fn clone(&self) -> Self {
-        Self(self.0.clone(), self.1.clone())
+        Self(self.0.clone(), Arc::clone(&self.1))
     }
 }
 

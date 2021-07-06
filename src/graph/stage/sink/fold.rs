@@ -129,7 +129,7 @@ where
     async fn do_run(&mut self) {
         let inlet = &mut self.inlet;
         let rx_api = &mut self.rx_api;
-        let acc = self.acc.clone();
+        let acc = Arc::clone(&self.acc);
 
         loop {
             tracing::trace!("handling next item..");

@@ -149,7 +149,7 @@ mod tests {
 
         let mut src = Sequence::new("my_data", my_data);
 
-        let recv_actual = actual.clone();
+        let recv_actual = Arc::clone(&actual);
         block_on(async move {
             src.outlet.attach("test_tx", tx).await;
             let src_handle = tokio::spawn(async move { src.run().await });

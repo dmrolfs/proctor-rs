@@ -61,7 +61,7 @@ use crate::{AppData, ProctorResult};
 ///     );
 ///
 ///     let gen = move |_| {
-///         let cc = count.clone();
+///         let cc = Arc::clone(&count);
 ///
 ///         let to_telemetry_data = move |r: HttpBinResponse| async move {
 ///             let mine = cc.clone();

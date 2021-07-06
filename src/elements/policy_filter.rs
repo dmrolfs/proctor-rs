@@ -250,7 +250,7 @@ where
                         &mut oso,
                         name.as_str(),
                         policy,
-                        context.clone(),
+                        Arc::clone(&context),
                     ).await?;
 
                     if !cont_loop {

@@ -280,6 +280,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "claim"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f81099d6bb72e1df6d50bb2347224b666a670912bb7f06dbe867a4a070ab3ce8"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
 name = "clap"
 version = "2.33.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1769,6 +1778,7 @@ dependencies = [
  "async-trait",
  "cast_trait_object",
  "chrono",
+ "claim",
  "clap 3.0.0-beta.2",
  "config",
  "criterion",
@@ -1798,6 +1808,7 @@ dependencies = [
  "serde 1.0.126",
  "serde-aux",
  "serde_json",
+ "serde_repr",
  "serde_test",
  "serde_with",
  "static_assertions",
@@ -2182,6 +2193,17 @@ dependencies = [
  "itoa",
  "ryu",
  "serde 1.0.126",
+]
+
+[[package]]
+name = "serde_repr"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98d0516900518c29efa217c298fa1f4e6c6ffc85ae29fd7f4ee48f176e1a9ed5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

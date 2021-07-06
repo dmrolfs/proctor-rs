@@ -686,7 +686,8 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
                 } else {
                     Err(E::custom(format!(
                         "cannot not deserialize u64 value, {}, into telemetry integer value (maximum: {})",
-                        value, i64::MAX
+                        value,
+                        i64::MAX
                     )))
                 }
             }

@@ -12,6 +12,8 @@ use crate::{AppData, ProctorResult};
 /// # Examples
 ///
 /// ```
+/// use std::sync::Arc;
+///
 /// use proctor::graph::stage::{self, Stage};
 /// use proctor::graph::Inlet;
 /// use proctor::graph::SinkShape;
@@ -23,9 +25,9 @@ use crate::{AppData, ProctorResult};
 ///     let (tx, rx) = mpsc::channel(100);
 ///
 ///     let actual = Vec::<i32>::new();
-///     let actual = std::sync::Arc::new(std::sync::Mutex::new(actual));
+///     let actual = Arc::new(std::sync::Mutex::new(actual));
 ///
-///     let fe_actual = actual.clone();
+///     let fe_actual = Arc::clone(&actual);
 ///     let mut foreach = stage::Foreach::new("collect", move |x| {
 ///         let data = fe_actual.lock();
 ///         if let Ok(mut data) = data {

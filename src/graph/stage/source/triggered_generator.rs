@@ -52,7 +52,7 @@
 ///     let count = Arc::new(Mutex::new(0_usize));
 ///
 ///     let gen = move |_| {
-///         let cc = count.clone();
+///         let cc = Arc::clone(&count);
 ///
 ///         async move {
 ///             let url = "https://httpbin.org/get?f=foo&b=bar";

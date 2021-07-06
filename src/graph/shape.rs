@@ -68,7 +68,7 @@ impl<T: Send> InletsShape<T> {
 
 impl<T> Clone for InletsShape<T> {
     fn clone(&self) -> Self {
-        Self(self.0.clone())
+        Self(Arc::clone(&self.0))
     }
 }
 

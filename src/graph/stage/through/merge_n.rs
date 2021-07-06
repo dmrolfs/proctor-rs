@@ -77,7 +77,7 @@ pub enum MergeMsg {
 ///     let h2 = spawn_transmission("HUNDREDS", 101..=999, tx_2);
 ///
 ///     let count = Arc::new(Mutex::new(0));
-///     let r_count = count.clone();
+///     let r_count = Arc::clone(&count);
 ///     let r = tokio::spawn(async move {
 ///         while let Some(item) = rx_merge.recv().await {
 ///             let mut tally = r_count.lock().await;

@@ -50,6 +50,15 @@ where
             _ => DecisionResult::NoAction(item),
         }
     }
+
+    #[inline]
+    pub fn item(&self) -> &T {
+        match self {
+            DecisionResult::ScaleUp(item) => item,
+            DecisionResult::ScaleDown(item) => item,
+            DecisionResult::NoAction(item) => item,
+        }
+    }
 }
 
 impl<T> Into<TelemetryValue> for DecisionResult<T>
