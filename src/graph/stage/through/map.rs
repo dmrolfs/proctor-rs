@@ -69,7 +69,12 @@ where
     pub fn new(name: impl AsRef<str>, operation: F) -> Self {
         let inlet = Inlet::new(name.as_ref());
         let outlet = Outlet::new(name.as_ref());
-        Self { name: name.as_ref().to_string(), operation, inlet, outlet }
+        Self {
+            name: name.as_ref().to_string(),
+            operation,
+            inlet,
+            outlet,
+        }
     }
 }
 

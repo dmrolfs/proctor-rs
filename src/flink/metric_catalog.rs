@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::ops::Add;
 
@@ -110,10 +111,10 @@ impl MetricCatalog {
     }
 
     // todo limited usefulness by itself; keys? iter support for custom and for entire catalog?
-    pub fn custom<T: std::convert::TryFrom<TelemetryValue>>(&self, metric: &str) -> Option<Result<T, TelemetryError>>
+    pub fn custom<T: TryFrom<TelemetryValue>>(&self, metric: &str) -> Option<Result<T, TelemetryError>>
     where
-        T: std::convert::TryFrom<TelemetryValue>,
-        TelemetryError: From<<T as std::convert::TryFrom<TelemetryValue>>::Error>,
+        T: TryFrom<TelemetryValue>,
+        TelemetryError: From<<T as TryFrom<TelemetryValue>>::Error>,
     {
         self.custom.get(metric).map(|telemetry| {
             let value = T::try_from(telemetry.clone())?;

@@ -124,7 +124,13 @@ impl Collect {
         let (graph, trigger, outlet) =
             Self::make_graph::<T, _>(name.as_ref(), target.clone(), default_headers, transform).await;
 
-        Self { name: name.as_ref().to_string(), target, graph: Some(graph), trigger, outlet }
+        Self {
+            name: name.as_ref().to_string(),
+            target,
+            graph: Some(graph),
+            trigger,
+            outlet,
+        }
     }
 
     async fn make_graph<T, F>(

@@ -44,8 +44,10 @@ num_cpus = "*"
 reqwest = { version = "*", features = ["blocking", "json"] }
 serde = "*"
 serde_json = "*"
-flexbuffers = "*"
 serde-aux = "*"
+serde_repr = "*"
+serde_with = { version = "*", features = ["chrono", "json", "macros"] }
+flexbuffers = "*"
 thiserror = "*"
 tokio = { version = "*", features = ["full"] }
 tokio-stream = "*"
@@ -67,7 +69,6 @@ clap = { version = "3.0.0-beta.2", features = ["yaml"] }
 csv = "*"
 toml = "*"
 cast_trait_object = "*"
-serde_with = { version = "*", features = ["chrono", "json", "macros"] }
 maplit = "*"
 regex = "*"
 itertools = "*"
@@ -75,8 +76,8 @@ itertools = "*"
 nalgebra = ">=0.27.1"
 statrs = "*"
 num-traits = "*"
-serde_repr = "*"
 approx = "*"
+dashmap = "*"
 
 [dev-dependencies]
 serde_test = "1"

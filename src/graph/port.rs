@@ -76,12 +76,10 @@ impl<T> Inlet<T> {
         Self(name.as_ref().to_string(), Arc::new(Mutex::new(None)))
     }
 
-    pub fn with_receiver(
-        name: impl AsRef<str>, receiver_name: impl AsRef<str>, rx: mpsc::Receiver<T>,
-    ) -> Self {
+    pub fn with_receiver(name: impl AsRef<str>, receiver_name: impl AsRef<str>, rx: mpsc::Receiver<T>) -> Self {
         Self(
             name.as_ref().to_string(),
-            Arc::new(Mutex::new(Some((receiver_name.as_ref().to_string(), rx))))
+            Arc::new(Mutex::new(Some((receiver_name.as_ref().to_string(), rx)))),
         )
     }
 }
@@ -218,8 +216,11 @@ impl<T> Outlet<T> {
         Self(name.as_ref().to_string(), Arc::new(Mutex::new(None)))
     }
 
-    pub fn with_sender(name: impl AsRef<str>, sender_name: impl AsRef<str>, tx: mpsc::Sender<T>, ) -> Outlet<T> {
-        Self(name.as_ref().to_string(), Arc::new(Mutex::new(Some((sender_name.as_ref().to_string(), tx)))))
+    pub fn with_sender(name: impl AsRef<str>, sender_name: impl AsRef<str>, tx: mpsc::Sender<T>) -> Outlet<T> {
+        Self(
+            name.as_ref().to_string(),
+            Arc::new(Mutex::new(Some((sender_name.as_ref().to_string(), tx)))),
+        )
     }
 }
 

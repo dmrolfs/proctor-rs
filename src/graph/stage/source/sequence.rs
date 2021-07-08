@@ -68,7 +68,11 @@ impl<T, I> Sequence<T, I> {
     {
         let outlet = Outlet::new(name.as_ref());
         let items = data.into_iter();
-        Self { name: name.as_ref().to_string(), items: Some(items), outlet }
+        Self {
+            name: name.as_ref().to_string(),
+            items: Some(items),
+            outlet,
+        }
     }
 }
 

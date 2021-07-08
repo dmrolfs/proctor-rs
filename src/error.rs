@@ -142,6 +142,12 @@ pub enum PlanError {
 
     #[error("{0}")]
     StageError(#[from] anyhow::Error),
+
+    #[error("{0}")]
+    IOError(#[from] std::io::Error),
+
+    #[error("{0}")]
+    SerdeError(#[from] serde_json::Error),
 }
 
 /// Set of errors occurring during policy initialization or evaluation.

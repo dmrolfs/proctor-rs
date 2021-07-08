@@ -3,12 +3,11 @@ use std::fmt::{self, Debug};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 
-use super::FlinkScalePlan;
 use crate::error::PlanError;
 use crate::flink::decision::result::DecisionResult;
-use crate::flink::plan::appraisal::Appraisal;
-use crate::flink::plan::forecast::WorkloadForecast;
-use crate::flink::plan::Benchmark;
+use crate::flink::plan::{
+    Appraisal, AppraisalRepository, Benchmark, FlinkScalePlan, RecordsPerSecond, Workload, WorkloadForecast,
+};
 use crate::flink::MetricCatalog;
 use crate::graph::stage::Stage;
 use crate::graph::{Inlet, Outlet, Port, SinkShape, SourceShape};
@@ -21,24 +20,23 @@ pub struct FlinkScalePlanning<F: WorkloadForecast> {
     decision_inlet: Inlet<DecisionResult<MetricCatalog>>,
     outlet: Outlet<FlinkScalePlan>,
     forecast: F,
-    appraisal: Appraisal,
+    appraisal_repository: Box<dyn AppraisalRepository>,
 }
 
 impl<F: WorkloadForecast> FlinkScalePlanning<F> {
     #[tracing::instrument(level = "info", skip(name))]
-    pub fn new<S: Into<String>>(name: S, forecast: F) -> Self {
-        let name = name.into();
+    pub fn new(name: &str, forecast: F, appraisal_repository: Box<dyn AppraisalRepository>) -> Self {
+        let name = name.to_string();
         let inlet = Inlet::new(name.clone());
         let decision_inlet = Inlet::new(format!("decision_{}", name.clone()));
         let outlet = Outlet::new(name.clone());
-
         Self {
             name,
             inlet,
             decision_inlet,
             outlet,
             forecast,
-            appraisal: Appraisal::default(),
+            appraisal_repository,
         }
     }
 }
@@ -51,7 +49,7 @@ impl<F: WorkloadForecast> Debug for FlinkScalePlanning<F> {
             .field("decision_inlet", &self.decision_inlet)
             .field("outlet", &self.outlet)
             .field("forecast", &self.forecast)
-            .field("appraisal", &self.appraisal)
+            .field("appraisal_repository", &self.appraisal_repository)
             .finish()
     }
 }
@@ -110,7 +108,7 @@ impl<F: 'static + WorkloadForecast> Stage for FlinkScalePlanning<F> {
     }
 }
 
-impl<F: WorkloadForecast> FlinkScalePlanning<F> {
+impl<F: 'static + WorkloadForecast> FlinkScalePlanning<F> {
     #[inline]
     async fn do_check(&self) -> Result<(), PlanError> {
         self.inlet.check_attachment().await?;
@@ -121,20 +119,35 @@ impl<F: WorkloadForecast> FlinkScalePlanning<F> {
 
     #[inline]
     async fn do_run(&mut self) -> Result<(), PlanError> {
+        use crate::flink::decision::result::DecisionResult as DR;
+
+        let name = self.name.clone();
         let outlet = &self.outlet;
         let rx_data = &mut self.inlet;
         let rx_decision = &mut self.decision_inlet;
         let forecast = &mut self.forecast;
-        let appraisal = &self.appraisal;
+        let appraisal_repository = &mut self.appraisal_repository;
+
+        let mut appraisal = appraisal_repository.load(name.as_str()).await?;
+        let mut anticipated_workload = RecordsPerSecond::default();
 
         loop {
             tokio::select! {
                 Some(data) = rx_data.recv() => {
-                    Self::handle_data_item(data, forecast).await?;
+                    if let Some(prediction) = Self::predict_anticipated_workload(data, forecast)? {
+                        tracing::debug!(prior_prediction=%anticipated_workload, %prediction, "updating anticipated workload.");
+                        anticipated_workload = prediction;
+                    }
                 },
 
                 Some(decision) = rx_decision.recv() => {
-                    Self::handle_decision(decision, outlet).await?;
+                    Self::update_appraisal(&decision, name.as_str(), &mut appraisal, appraisal_repository).await?;
+
+                    let _foo: () = if let DR::NoAction(ref metrics) = decision {
+                        Self::handle_do_not_scale_decision(metrics)?
+                    } else {
+                        Self::handle_scale_decision(decision, &anticipated_workload, &appraisal, outlet).await?
+                    };
                 },
 
                 else => {
@@ -147,16 +160,76 @@ impl<F: WorkloadForecast> FlinkScalePlanning<F> {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(data), fields())]
-    async fn handle_data_item(data: MetricCatalog, forecast: &mut impl WorkloadForecast) -> Result<(), PlanError> {
+    #[tracing::instrument(level = "info", skip(data))]
+    fn predict_anticipated_workload(
+        data: MetricCatalog, forecast: &mut impl WorkloadForecast,
+    ) -> Result<Option<RecordsPerSecond>, PlanError> {
         forecast.add_observation(data.into());
-        todo!()
+        let result = match forecast.predict_next_workload()? {
+            Workload::RecordsInPerSecond(rips) => Some(rips),
+
+            Workload::NotEnoughData => {
+                let (nr_required, nr_needed) = forecast.observations_needed();
+                tracing::debug!(
+                    %nr_required, %nr_needed,
+                    "not enough data points to make workload prediction - need {} more observations to make predictions.",
+                    nr_needed
+                );
+                None
+            },
+
+            Workload::HeuristicsExceedThreshold {} => {
+                tracing::warn!("forecast algorithm exceeded heuristics threshold - clearing");
+                forecast.clear();
+                None
+            },
+        };
+
+        Ok(result)
     }
 
-    #[tracing::instrument(level = "info", skip(), fields())]
-    async fn handle_decision(
-        decision: DecisionResult<MetricCatalog>, outlet: &Outlet<FlinkScalePlan>,
+    #[tracing::instrument(level = "info", skip())]
+    async fn update_appraisal(
+        decision: &DecisionResult<MetricCatalog>, name: &str, appraisal: &mut Appraisal,
+        repository: &mut Box<dyn AppraisalRepository>,
     ) -> Result<(), PlanError> {
+        use crate::flink::decision::result::DecisionResult as DR;
+
+        let update_repository = match decision {
+            DR::NoAction(_) => false,
+            DR::ScaleUp(metrics) => {
+                appraisal.add_upper_benchmark(metrics.into());
+                true
+            },
+            DR::ScaleDown(metrics) => {
+                appraisal.add_lower_benchmark(metrics.into());
+                true
+            },
+        };
+
+        if update_repository {
+            repository.save(name, appraisal).await?;
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip(_metrics))]
+    fn handle_do_not_scale_decision(_metrics: &MetricCatalog) -> Result<(), PlanError> {
+        tracing::debug!("Decision made not scale cluster up or down.");
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "info", skip(outlet))]
+    async fn handle_scale_decision(
+        decision: DecisionResult<MetricCatalog>, anticipated_workload: &RecordsPerSecond, appraisal: &Appraisal,
+        outlet: &Outlet<FlinkScalePlan>,
+    ) -> Result<(), PlanError> {
+        let cur_nr_task_managers = decision.item().cluster.nr_task_managers;
+        if let Some(required_cluster_size) = appraisal.cluster_size_for_workload(anticipated_workload) {
+        } else {
+        }
+        // todo WORK HERE
         todo!()
     }
 
@@ -166,6 +239,7 @@ impl<F: WorkloadForecast> FlinkScalePlanning<F> {
         self.inlet.close().await;
         self.decision_inlet.close().await;
         self.outlet.close().await;
+        self.appraisal_repository.close().await;
         Ok(())
     }
 }

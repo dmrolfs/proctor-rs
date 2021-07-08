@@ -12,19 +12,56 @@ use std::fmt::{self, Debug};
 use approx::{AbsDiffEq, RelativeEq};
 use serde::{Deserialize, Serialize};
 
+use crate::elements::TelemetryValue;
 use crate::flink::plan::Benchmark;
 
 #[derive(Debug, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub enum Workload {
-    RecordsInPerSecond(RecordsInPerSecond),
+    RecordsInPerSecond(RecordsPerSecond),
     NotEnoughData,
     HeuristicsExceedThreshold {},
 }
 
-#[derive(Debug, Default, PartialEq, PartialOrd, Serialize, Deserialize)]
-pub struct RecordsInPerSecond(pub f64);
+#[derive(Debug, Copy, Clone, Default, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct RecordsPerSecond(pub f64);
 
-impl AbsDiffEq for RecordsInPerSecond {
+impl fmt::Display for RecordsPerSecond {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("{:.5?} out_records / s", self.0))
+    }
+}
+
+impl AsRef<f64> for RecordsPerSecond {
+    fn as_ref(&self) -> &f64 {
+        &self.0
+    }
+}
+
+impl From<f64> for RecordsPerSecond {
+    fn from(rate: f64) -> Self {
+        Self(rate)
+    }
+}
+
+impl Into<f64> for RecordsPerSecond {
+    fn into(self) -> f64 {
+        self.0
+    }
+}
+
+impl From<RecordsPerSecond> for Workload {
+    fn from(that: RecordsPerSecond) -> Self {
+        Workload::RecordsInPerSecond(that)
+    }
+}
+
+impl From<RecordsPerSecond> for TelemetryValue {
+    fn from(that: RecordsPerSecond) -> Self {
+        Self::Float(that.0)
+    }
+}
+
+impl AbsDiffEq for RecordsPerSecond {
     type Epsilon = f64;
 
     #[inline]
@@ -38,7 +75,7 @@ impl AbsDiffEq for RecordsInPerSecond {
     }
 }
 
-impl RelativeEq for RecordsInPerSecond {
+impl RelativeEq for RecordsPerSecond {
     #[inline]
     fn default_max_relative() -> Self::Epsilon {
         f64::default_max_relative()
@@ -49,17 +86,6 @@ impl RelativeEq for RecordsInPerSecond {
     }
 }
 
-impl From<RecordsInPerSecond> for Workload {
-    fn from(that: RecordsInPerSecond) -> Self {
-        Workload::RecordsInPerSecond(that)
-    }
-}
-
-impl fmt::Display for RecordsInPerSecond {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!("{:.5?} in_records / s", self.0))
-    }
-}
 
 pub type Point = (f64, f64);
 

@@ -91,7 +91,10 @@ impl TestPolicy {
     pub fn with_query(policy: impl AsRef<str>, query: impl AsRef<str>) -> Self {
         let polar = polar_core::polar::Polar::new();
         polar.load_str(policy.as_ref()).expect("failed to parse policy");
-        Self { policy: policy.as_ref().to_string(), query: query.as_ref().to_string() }
+        Self {
+            policy: policy.as_ref().to_string(),
+            query: query.as_ref().to_string(),
+        }
     }
 }
 
