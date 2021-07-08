@@ -1,8 +1,7 @@
-use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, BufWriter};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -14,25 +13,22 @@ use serde_with::{DeserializeFromStr, SerializeDisplay};
 use crate::error::PlanError;
 use crate::flink::plan::Appraisal;
 
-// WORK HERE!
+pub fn make_appraisal_repository(settings: AppraisalSettings) -> Result<Box<dyn AppraisalRepository>, PlanError> {
+    match settings.storage {
+        AppraisalRepositoryType::Memory => Ok(Box::new(MemoryAppraisalRepository::default())),
+        AppraisalRepositoryType::File => {
+            let path = settings.storage_path.unwrap_or("appraisals.data".to_string());
+            Ok(Box::new(FileAppraisalRepository::new(path)))
+        },
+    }
+}
+
 
 #[async_trait]
 pub trait AppraisalRepository: Debug + Sync + Send {
     async fn load(&mut self, name: &str) -> Result<Appraisal, PlanError>;
     async fn save(&mut self, name: &str, appraisal: &Appraisal) -> Result<(), PlanError>;
     async fn close(self: Box<Self>) -> Result<(), PlanError>;
-}
-
-impl AppraisalRepository {
-    pub fn new(settings: AppraisalSettings) -> Result<Box<dyn AppraisalRepository>, PlanError> {
-        match settings.storage {
-            AppraisalRepositoryType::Memory => Ok(Box::new(MemoryAppraisalRepository::default())),
-            AppraisalRepositoryType::File => {
-                let path = settings.storage_path.unwrap_or("appraisals.data".to_string());
-                Ok(Box::new(FileAppraisalRepository::new(path)))
-            },
-        }
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -101,8 +97,6 @@ impl AppraisalRepository for MemoryAppraisalRepository {
 pub struct FileAppraisalRepository {
     root_path: PathBuf,
 }
-
-const APPRAISAL_EXT: &'static str = ".json";
 
 impl FileAppraisalRepository {
     pub fn new(root: impl AsRef<str>) -> Self {

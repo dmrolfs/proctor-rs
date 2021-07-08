@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use std::ops::Add;
 
 use ::serde_with::{serde_as, TimestampSeconds};
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
 use oso::PolarClass;
 use serde::{Deserialize, Serialize};
@@ -150,6 +150,7 @@ impl Add<&Self> for MetricCatalog {
 mod tests {
     use std::convert::TryFrom;
 
+    use chrono::TimeZone;
     use pretty_assertions::assert_eq;
     use serde_test::{assert_tokens, Token};
 
@@ -222,7 +223,7 @@ mod tests {
 
     #[test]
     fn test_metric_catalog_serde() {
-        let ts = chrono::Utc.ymd(1988, 5, 30).and_hms(9, 1, 17);
+        let ts = Utc.ymd(1988, 5, 30).and_hms(9, 1, 17);
         let metrics = MetricCatalog {
             timestamp: ts,
             flow: FlowMetrics {
@@ -289,7 +290,7 @@ mod tests {
         let main_span = tracing::info_span!("test_telemetry_from_metric_catalog");
         let _main_span_guard = main_span.enter();
 
-        let ts = chrono::Utc.ymd(1988, 5, 30).and_hms(9, 1, 17);
+        let ts = Utc.ymd(1988, 5, 30).and_hms(9, 1, 17);
         let metrics = MetricCatalog {
             timestamp: ts,
             flow: FlowMetrics {

@@ -1,8 +1,7 @@
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 
-use ::serde_with::{serde_as, TimestampMilliSeconds};
-use chrono::{DateTime, TimeZone, Utc};
+use ::serde_with::serde_as;
 use serde::{Deserialize, Serialize};
 
 use crate::elements::{TelemetryValue, ToTelemetry};

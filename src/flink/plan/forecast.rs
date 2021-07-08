@@ -13,7 +13,6 @@ use approx::{AbsDiffEq, RelativeEq};
 use serde::{Deserialize, Serialize};
 
 use crate::elements::TelemetryValue;
-use crate::flink::plan::Benchmark;
 
 #[derive(Debug, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub enum Workload {

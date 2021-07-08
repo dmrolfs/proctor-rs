@@ -8,8 +8,6 @@ use super::{Point, Workload, WorkloadForecast};
 use crate::error::PlanError;
 use crate::flink::plan::forecast::regression::{LinearRegression, QuadraticRegression, RegressionStrategy};
 use crate::flink::plan::forecast::WorkloadMeasurement;
-use crate::flink::plan::Benchmark;
-use crate::flink::MetricCatalog;
 
 #[derive(Debug)]
 pub struct LeastSquaresWorkloadForecast {
@@ -194,19 +192,15 @@ impl LeastSquaresWorkloadForecast {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
-    use approx::{assert_abs_diff_eq, assert_relative_eq, assert_ulps_eq};
+    use approx::assert_relative_eq;
     use chrono::{DateTime, TimeZone, Utc};
     use num_traits::pow;
     use pretty_assertions::assert_eq;
-    use statrs::statistics::Statistics;
 
     use super::*;
     use crate::flink::plan::forecast::least_squares::LeastSquaresWorkloadForecast;
     use crate::flink::plan::forecast::{Point, Workload};
     use crate::flink::plan::RecordsPerSecond;
-    use crate::flink::{ClusterMetrics, FlowMetrics};
 
     #[test]
     fn test_plan_forecast_measure_spike() -> anyhow::Result<()> {

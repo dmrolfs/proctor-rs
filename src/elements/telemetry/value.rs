@@ -6,7 +6,7 @@ use std::prelude::rust_2015::Result::Err;
 
 use config::Value as ConfigValue;
 use oso::{FromPolar, PolarValue, ToPolar};
-use serde::de::{EnumAccess, Error, MapAccess, SeqAccess, Unexpected, Visitor};
+use serde::de::{EnumAccess, Error};
 use serde::ser::{SerializeMap, SerializeSeq};
 use serde::{de, Deserializer, Serialize, Serializer};
 
@@ -789,7 +789,7 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
                 Ok(TelemetryValue::Unit)
             }
 
-            fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+            fn visit_newtype_struct<D>(self, _deserializer: D) -> Result<Self::Value, D::Error>
             where
                 D: Deserializer<'de>,
             {
@@ -835,7 +835,7 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
                 Ok(TelemetryValue::Table(table))
             }
 
-            fn visit_enum<A>(self, data: A) -> Result<Self::Value, A::Error>
+            fn visit_enum<A>(self, _data: A) -> Result<Self::Value, A::Error>
             where
                 A: EnumAccess<'de>,
             {
