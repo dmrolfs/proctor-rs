@@ -95,19 +95,38 @@ impl BenchNeighbors {
     }
 
     fn extrapolate_lo(workload_rate: &RecordsPerSecond, lo: &Benchmark) -> usize {
-        let ratio = lo.records_out_per_sec.0 / (lo.nr_task_managers as f64);
-        let calculated = (ratio * workload_rate.0).ceil() as usize;
+        let workload_rate: f64 = workload_rate.into();
+        let lo_rate: f64 = lo.records_out_per_sec.into();
+
+        let ratio: f64 = lo_rate / (lo.nr_task_managers as f64);
+        let calculated = (ratio * workload_rate).ceil() as usize;
         std::cmp::max(MINIMAL_CLUSTER_SIZE, calculated)
     }
 
     fn extrapolate_hi(workload_rate: &RecordsPerSecond, hi: &Benchmark) -> usize {
-        let ratio = hi.records_out_per_sec.0 / (hi.nr_task_managers as f64);
+        let hi_rate: f64 = hi.records_out_per_sec.into();
+
+        let ratio: f64 = hi_rate / (hi.nr_task_managers as f64);
         (ratio * workload_rate.0).ceil() as usize
     }
 
     fn interpolate(workload_rate: &RecordsPerSecond, lo: &Benchmark, hi: &Benchmark) -> usize {
-        let ratio =
-            (workload_rate.0 - lo.records_out_per_sec.0) / (hi.records_out_per_sec.0 - lo.records_out_per_sec.0);
+        let workload_rate: f64 = workload_rate.into();
+        let lo_rate: f64 = lo.records_out_per_sec.into();
+        let hi_rate: f64 = hi.records_out_per_sec.into();
+
+        let ratio: f64 = (workload_rate - lo_rate) / (hi_rate - lo_rate);
         (ratio * (lo.nr_task_managers as f64 + hi.nr_task_managers as f64)).ceil() as usize
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bench_neighbors_interpolate() -> anyhow::Result<()> {
+
     }
 }

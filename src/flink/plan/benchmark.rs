@@ -78,15 +78,6 @@ impl PartialOrd for Benchmark {
     }
 }
 
-// impl From<&MetricCatalog> for Benchmark {
-//     fn from(that: &MetricCatalog) -> Self {
-//         Self {
-//             nr_task_managers: that.cluster.nr_task_managers,
-//             records_out_per_sec: RecordsPerSecond(that.flow.records_out_per_sec),
-// //             timestamp: that.timestamp,
-// }
-// }
-// }
 
 // const T_TIMESTAMP: &'static str = "timestamp";
 const T_NR_TASK_MANAGERS: &'static str = "nr_task_managers";

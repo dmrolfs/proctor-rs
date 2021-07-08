@@ -49,6 +49,12 @@ impl Into<f64> for RecordsPerSecond {
     }
 }
 
+impl Into<f64> for &RecordsPerSecond {
+    fn into(self) -> f64 {
+        self.0
+    }
+}
+
 impl From<RecordsPerSecond> for Workload {
     fn from(that: RecordsPerSecond) -> Self {
         Workload::RecordsInPerSecond(that)
