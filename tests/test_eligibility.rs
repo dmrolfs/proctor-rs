@@ -324,6 +324,7 @@ impl<D: AppData + ToPolar + Clone> QueryPolicy for TestEligibilityPolicy<D> {
     }
 }
 
+#[allow(dead_code)]
 struct TestFlow<D, C> {
     pub graph_handle: JoinHandle<()>,
     pub tx_data_source_api: stage::ActorSourceApi<Telemetry>,

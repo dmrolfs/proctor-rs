@@ -1,14 +1,13 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
+use std::cmp;
 
-use async_trait::async_trait;
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use super::Benchmark;
-use crate::error::PlanError;
 use crate::flink::plan::benchmark::BenchmarkRange;
 use crate::flink::plan::RecordsPerSecond;
+use splines::{Key, Interpolation, Spline};
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Appraisal(BTreeMap<u8, BenchmarkRange>);
@@ -38,11 +37,12 @@ impl Appraisal {
 }
 
 impl Appraisal {
-    pub fn cluster_size_for_workload(&self, workload_rate: &RecordsPerSecond) -> Option<usize> {
+    pub fn cluster_size_for_workload(&self, workload_rate: &RecordsPerSecond) -> Option<u8> {
         self.evaluate_neighbors(workload_rate)
-            .map(|neighbors| neighbors.cluster_size_for_workload_rate(workload_rate))
+            .map(|neighbors| neighbors.cluster_size_for(workload_rate))
     }
 
+    #[tracing::instrument(level="debug")]
     fn evaluate_neighbors(&self, workload_rate: &RecordsPerSecond) -> Option<BenchNeighbors> {
         let mut lo = None;
         let mut hi = None;
@@ -63,6 +63,7 @@ impl Appraisal {
             }
         }
 
+        tracing::debug!(?lo, ?hi, "neighbors evaluated");
         self.make_neighbors(lo, hi)
     }
 
@@ -76,17 +77,17 @@ impl Appraisal {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 enum BenchNeighbors {
     BelowLowest(Benchmark),
     AboveHighest(Benchmark),
     Between { lo: Benchmark, hi: Benchmark },
 }
 
-const MINIMAL_CLUSTER_SIZE: usize = 1;
+const MINIMAL_CLUSTER_SIZE: u8 = 1;
 
 impl BenchNeighbors {
-    fn cluster_size_for_workload_rate(&self, workload_rate: &RecordsPerSecond) -> usize {
+    fn cluster_size_for(&self, workload_rate: &RecordsPerSecond) -> u8 {
         match self {
             BenchNeighbors::BelowLowest(lo) => Self::extrapolate_lo(workload_rate, lo),
             BenchNeighbors::AboveHighest(hi) => Self::extrapolate_hi(workload_rate, hi),
@@ -94,29 +95,44 @@ impl BenchNeighbors {
         }
     }
 
-    fn extrapolate_lo(workload_rate: &RecordsPerSecond, lo: &Benchmark) -> usize {
+    #[tracing::instrument(level="debug")]
+    fn extrapolate_lo(workload_rate: &RecordsPerSecond, lo: &Benchmark) -> u8 {
         let workload_rate: f64 = workload_rate.into();
         let lo_rate: f64 = lo.records_out_per_sec.into();
 
-        let ratio: f64 = lo_rate / (lo.nr_task_managers as f64);
-        let calculated = (ratio * workload_rate).ceil() as usize;
-        std::cmp::max(MINIMAL_CLUSTER_SIZE, calculated)
+        let ratio: f64 = (lo.nr_task_managers as f64) / lo_rate;
+        let calculated = (ratio * workload_rate).ceil() as u8;
+        tracing::debug!(%ratio, %calculated, "calculations: {} ceil:{}", ratio * workload_rate, (ratio * workload_rate).ceil());
+
+        let size = cmp::min(lo.nr_task_managers, cmp::max(MINIMAL_CLUSTER_SIZE, calculated));
+        tracing::debug!(%size, %ratio, %calculated, "extrapolated cluster size below lowest neighbor.");
+        size
     }
 
-    fn extrapolate_hi(workload_rate: &RecordsPerSecond, hi: &Benchmark) -> usize {
-        let hi_rate: f64 = hi.records_out_per_sec.into();
-
-        let ratio: f64 = hi_rate / (hi.nr_task_managers as f64);
-        (ratio * workload_rate.0).ceil() as usize
-    }
-
-    fn interpolate(workload_rate: &RecordsPerSecond, lo: &Benchmark, hi: &Benchmark) -> usize {
+    #[tracing::instrument(level="debug")]
+    fn extrapolate_hi(workload_rate: &RecordsPerSecond, hi: &Benchmark) -> u8 {
         let workload_rate: f64 = workload_rate.into();
-        let lo_rate: f64 = lo.records_out_per_sec.into();
         let hi_rate: f64 = hi.records_out_per_sec.into();
 
-        let ratio: f64 = (workload_rate - lo_rate) / (hi_rate - lo_rate);
-        (ratio * (lo.nr_task_managers as f64 + hi.nr_task_managers as f64)).ceil() as usize
+        let ratio: f64 = (hi.nr_task_managers as f64) / hi_rate;
+        let calculated = (ratio * workload_rate).ceil() as u8;
+        tracing::debug!(%ratio, %calculated, "calculations: {} ceil:{}", ratio * workload_rate, (ratio * workload_rate).ceil());
+
+        let size = cmp::max(hi.nr_task_managers, cmp::max(MINIMAL_CLUSTER_SIZE, calculated));
+        tracing::debug!(%size, %ratio, %calculated, "extrapolated cluster size above highest neighbor.");
+        size
+    }
+
+    #[tracing::instrument(level="debug")]
+    fn interpolate(workload_rate: &RecordsPerSecond, lo: &Benchmark, hi: &Benchmark) -> u8 {
+        let start = Key::new(lo.records_out_per_sec.into(), lo.nr_task_managers as f64, Interpolation::Linear);
+        let end = Key::new(hi.records_out_per_sec.into(), hi.nr_task_managers as f64, Interpolation::Linear);
+        let spline = Spline::from_vec(vec![start, end]);
+        let sampled: Option<f64> = spline.clamped_sample(workload_rate.into());
+
+        let size = sampled.unwrap().ceil() as u8;
+        tracing::debug!(%size, "interpolated cluster size between neighbors.");
+        size
     }
 }
 
@@ -124,9 +140,98 @@ impl BenchNeighbors {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
+    use claim::*;
 
     #[test]
     fn test_bench_neighbors_interpolate() -> anyhow::Result<()> {
+        let neighbors = BenchNeighbors::Between {
+            lo: Benchmark::new(2, 0.5.into()),
+            hi: Benchmark::new(4, 1.0.into()),
+        };
 
+        assert_eq!(3, neighbors.cluster_size_for(&0.75.into()));
+        assert_eq!(2, neighbors.cluster_size_for(&0.5.into()));
+        assert_eq!(4, neighbors.cluster_size_for(&1.0.into()));
+        assert_eq!(3, neighbors.cluster_size_for(&0.55.into()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_bench_between_neighbors_interpolate_clamped() -> anyhow::Result<()> {
+        let neighbors = BenchNeighbors::Between {
+            lo: Benchmark::new(2, 0.5.into()),
+            hi: Benchmark::new(4, 1.0.into()),
+        };
+
+        // verify outside of boundary is clamped
+        assert_eq!(2, neighbors.cluster_size_for(&0.05.into()));
+        assert_eq!(4, neighbors.cluster_size_for(&1.5.into()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_bench_below_lowest_neighbor_extrapolate() -> anyhow::Result<()> {
+        // lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        // let main_span = tracing::info_span!("test_bench_below_lowest_neighbor_extrapolate");
+        // let _main_span_guard = main_span.enter();
+
+        let neighbors = BenchNeighbors::BelowLowest(Benchmark::new(4, 1.0.into()));
+
+        assert_eq!(1, neighbors.cluster_size_for(&0.0.into()));
+        assert_eq!(1, neighbors.cluster_size_for(&0.1.into()));
+        assert_eq!(1, neighbors.cluster_size_for(&0.25.into()));
+        assert_eq!(2, neighbors.cluster_size_for(&0.35.into()));
+        assert_eq!(2, neighbors.cluster_size_for(&0.5.into()));
+        assert_eq!(3, neighbors.cluster_size_for(&0.6.into()));
+        assert_eq!(4, neighbors.cluster_size_for(&1.0.into()));
+        assert_eq!(4, neighbors.cluster_size_for(&10.0.into()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_bench_above_highest_neighbor_extrapolate() -> anyhow::Result<()> {
+        // lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        // let main_span = tracing::info_span!("test_bench_above_highest_neighbor_extrapolate");
+        // let _main_span_guard = main_span.enter();
+
+        let neighbors = BenchNeighbors::AboveHighest(Benchmark::new(4, 1.0.into()));
+
+        assert_eq!(4, neighbors.cluster_size_for(&0.0.into()));
+        assert_eq!(4, neighbors.cluster_size_for(&0.5.into()));
+        assert_eq!(4, neighbors.cluster_size_for(&1.0.into()));
+        assert_eq!(6, neighbors.cluster_size_for(&1.5.into()));
+        assert_eq!(8, neighbors.cluster_size_for(&2.0.into()));
+        assert_eq!(7, neighbors.cluster_size_for(&1.56.into()));
+        assert_eq!(7, neighbors.cluster_size_for(&1.66.into()));
+        assert_eq!(20, neighbors.cluster_size_for(&5.0.into()));
+        assert_eq!(21, neighbors.cluster_size_for(&5.00000000001.into()));
+        assert_eq!(40, neighbors.cluster_size_for(&10.0.into()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_bench_evaluate_neighbors() -> anyhow::Result<()> {
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_bench_evaluate_neighbors");
+        let _main_span_guard = main_span.enter();
+
+        let mut appraisal = Appraisal::default();
+        assert_none!(appraisal.evaluate_neighbors(&375.0.into()));
+
+        appraisal.add_upper_benchmark(Benchmark::new(4, 1.0.into()));
+        assert_eq!(
+            appraisal.evaluate_neighbors(&0.5.into()),
+            Some(BenchNeighbors::BelowLowest(Benchmark::new(4, 1.0.into())))
+        );
+        assert_eq!(
+            appraisal.evaluate_neighbors(&1.5.into()),
+            Some(BenchNeighbors::AboveHighest(Benchmark::new(4, 1.0.into())))
+        );
+        assert_eq!(
+            appraisal.evaluate_neighbors(&1.0.into()),
+            Some(BenchNeighbors::AboveHighest(Benchmark::new(4, 1.0.into())))
+        );
+        Ok(())
     }
 }

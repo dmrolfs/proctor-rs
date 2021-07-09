@@ -372,8 +372,8 @@ mod tests {
             (4., 11.97),
         ];
 
-        // let model_1 = LeastSquaresWorkloadForecast::do_select_model(&data_1)?;
-        // assert_eq!(model_1.name(), "QuadraticRegression");
+        let model_1 = LeastSquaresWorkloadForecast::do_select_model(&data_1)?;
+        assert_eq!(model_1.name(), "QuadraticRegression");
 
         let data_2 = vec![
             (1., 1.),
@@ -388,8 +388,8 @@ mod tests {
             (10., 10.),
         ];
 
-        // let model_2 = LeastSquaresWorkloadForecast::do_select_model(&data_2)?;
-        // assert_eq!(model_2.name(), "LinearRegression");
+        let model_2 = LeastSquaresWorkloadForecast::do_select_model(&data_2)?;
+        assert_eq!(model_2.name(), "LinearRegression");
 
         let data_3 = vec![
             (1., 0.),

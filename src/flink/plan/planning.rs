@@ -6,7 +6,7 @@ use cast_trait_object::dyn_upcast;
 use crate::error::PlanError;
 use crate::flink::decision::result::DecisionResult;
 use crate::flink::plan::{
-    Appraisal, AppraisalRepository, Benchmark, FlinkScalePlan, RecordsPerSecond, Workload, WorkloadForecast,
+    Appraisal, AppraisalRepository, FlinkScalePlan, RecordsPerSecond, Workload, WorkloadForecast,
 };
 use crate::flink::MetricCatalog;
 use crate::graph::stage::Stage;
@@ -227,7 +227,9 @@ impl<F: 'static + WorkloadForecast> FlinkScalePlanning<F> {
     ) -> Result<(), PlanError> {
         let cur_nr_task_managers = decision.item().cluster.nr_task_managers;
         if let Some(required_cluster_size) = appraisal.cluster_size_for_workload(anticipated_workload) {
+            todo!()
         } else {
+            todo!()
         }
         // todo WORK HERE
         todo!()
@@ -239,7 +241,7 @@ impl<F: 'static + WorkloadForecast> FlinkScalePlanning<F> {
         self.inlet.close().await;
         self.decision_inlet.close().await;
         self.outlet.close().await;
-        self.appraisal_repository.close().await;
+        self.appraisal_repository.close().await?;
         Ok(())
     }
 }

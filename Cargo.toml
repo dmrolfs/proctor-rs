@@ -78,6 +78,7 @@ statrs = "*"
 num-traits = "*"
 approx = "*"
 dashmap = "*"
+splines = "*"
 
 [dev-dependencies]
 serde_test = "1"

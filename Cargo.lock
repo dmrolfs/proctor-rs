@@ -1822,6 +1822,7 @@ dependencies = [
  "serde_repr",
  "serde_test",
  "serde_with",
+ "splines",
  "static_assertions",
  "statrs",
  "thiserror",
@@ -2332,6 +2333,12 @@ dependencies = [
  "libc",
  "winapi",
 ]
+
+[[package]]
+name = "splines"
+version = "4.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af852121b2b11ec87630ad1d818b488494a3310fd6c824975d0458d45448034d"
 
 [[package]]
 name = "stable_deref_trait"

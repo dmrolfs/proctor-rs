@@ -8,6 +8,7 @@ use crate::elements::{TelemetryValue, ToTelemetry};
 use crate::error::{PlanError, TelemetryError, TypeExpectation};
 use crate::flink::plan::RecordsPerSecond;
 use crate::flink::MetricCatalog;
+use approx::{AbsDiffEq, RelativeEq};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BenchmarkRange {
@@ -46,6 +47,47 @@ impl BenchmarkRange {
     }
 }
 
+impl AbsDiffEq for BenchmarkRange {
+    type Epsilon = <Benchmark as AbsDiffEq>::Epsilon;
+
+    #[inline]
+    fn default_epsilon() -> Self::Epsilon { <Benchmark as AbsDiffEq>::default_epsilon() }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        // couldn't use nested fn due to desire to use generic outer variable, epsilon.
+        let do_abs_diff_eq = |lhs: Option<&RecordsPerSecond>, rhs: Option<&RecordsPerSecond>| {
+            match (lhs, rhs) {
+                (None, None) => true,
+                (Some(lhs), Some(rhs)) => lhs.abs_diff_eq(rhs, epsilon),
+                _ => false,
+            }
+        };
+
+        (self.nr_task_managers == other.nr_task_managers)
+            && do_abs_diff_eq(self.lo_rate.as_ref(), other.lo_rate.as_ref())
+            && do_abs_diff_eq(self.hi_rate.as_ref(), other.hi_rate.as_ref())
+    }
+}
+
+impl RelativeEq for BenchmarkRange {
+    #[inline]
+    fn default_max_relative() -> Self::Epsilon { <Benchmark as RelativeEq>::default_max_relative() }
+
+    fn relative_eq(&self, other: &Self, epsilon: Self::Epsilon, max_relative: Self::Epsilon) -> bool {
+        let do_relative_eq = |lhs: Option<&RecordsPerSecond>, rhs: Option<&RecordsPerSecond>| {
+            match (lhs, rhs) {
+                (None, None) => true,
+                (Some(lhs), Some(rhs)) => lhs.relative_eq(rhs, epsilon, max_relative),
+                _ => false,
+            }
+        };
+
+        (self.nr_task_managers == other.nr_task_managers)
+        && do_relative_eq(self.lo_rate.as_ref(), other.lo_rate.as_ref())
+        && do_relative_eq(self.hi_rate.as_ref(), other.hi_rate.as_ref())
+    }
+}
+
 #[serde_as]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Benchmark {
@@ -54,6 +96,12 @@ pub struct Benchmark {
     pub records_out_per_sec: RecordsPerSecond,
     /* #[serde_as(as = "TimestampMilliSeconds")]
      * pub timestamp: DateTime<Utc>, */
+}
+
+impl Benchmark {
+    pub fn new(nr_task_managers: u8, records_out_per_sec: RecordsPerSecond) -> Self {
+        Self { nr_task_managers, records_out_per_sec, }
+    }
 }
 
 impl From<MetricCatalog> for Benchmark {
@@ -77,6 +125,28 @@ impl PartialOrd for Benchmark {
     }
 }
 
+impl AbsDiffEq for Benchmark {
+    type Epsilon = <RecordsPerSecond as AbsDiffEq>::Epsilon;
+
+    #[inline]
+    fn default_epsilon() -> Self::Epsilon { <RecordsPerSecond as AbsDiffEq>::default_epsilon() }
+
+    #[inline]
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        (self.nr_task_managers == other.nr_task_managers)
+            && (self.records_out_per_sec.abs_diff_eq(&other.records_out_per_sec, epsilon))
+    }
+}
+
+impl RelativeEq for Benchmark {
+    #[inline]
+    fn default_max_relative() -> Self::Epsilon { <RecordsPerSecond as RelativeEq>::default_max_relative() }
+
+    fn relative_eq(&self, other: &Self, epsilon: Self::Epsilon, max_relative: Self::Epsilon) -> bool {
+        (self.nr_task_managers == other.nr_task_managers)
+        && (self.records_out_per_sec.relative_eq(&other.records_out_per_sec, epsilon, max_relative))
+    }
+}
 
 // const T_TIMESTAMP: &'static str = "timestamp";
 const T_NR_TASK_MANAGERS: &'static str = "nr_task_managers";

@@ -15,7 +15,7 @@ use proctor::elements::{
 use proctor::flink::decision::context::FlinkDecisionContext;
 use proctor::flink::decision::policy::DecisionPolicy;
 use proctor::flink::decision::result::{make_decision_transform, DecisionResult};
-use proctor::flink::{ClusterMetrics, FlowMetrics, MetricCatalog};
+use proctor::flink::MetricCatalog;
 use proctor::graph::stage::{self, ThroughStage, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, Inlet, SinkShape, SourceShape, UniformFanInShape};
 use proctor::phases::collection;
@@ -63,6 +63,7 @@ fn make_test_policy(
 }
 
 
+#[allow(dead_code)]
 struct TestFlow<In, Out, C> {
     pub graph_handle: JoinHandle<()>,
     pub tx_data_source_api: stage::ActorSourceApi<Telemetry>,
