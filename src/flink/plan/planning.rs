@@ -146,7 +146,7 @@ impl<F: 'static + WorkloadForecast> FlinkScalePlanning<F> {
                     let _foo: () = if let DR::NoAction(ref metrics) = decision {
                         Self::handle_do_not_scale_decision(metrics)?
                     } else {
-                        Self::handle_scale_decision(decision, &anticipated_workload, &appraisal, outlet).await?
+                        Self::handle_scale_decision(decision, anticipated_workload, &appraisal, outlet).await?
                     };
                 },
 
@@ -222,7 +222,7 @@ impl<F: 'static + WorkloadForecast> FlinkScalePlanning<F> {
 
     #[tracing::instrument(level = "info", skip(outlet))]
     async fn handle_scale_decision(
-        decision: DecisionResult<MetricCatalog>, anticipated_workload: &RecordsPerSecond, appraisal: &Appraisal,
+        decision: DecisionResult<MetricCatalog>, anticipated_workload: RecordsPerSecond, appraisal: &Appraisal,
         outlet: &Outlet<FlinkScalePlan>,
     ) -> Result<(), PlanError> {
         let cur_nr_task_managers = decision.item().cluster.nr_task_managers;

@@ -43,24 +43,24 @@ impl Appraisal {
 }
 
 impl Appraisal {
-    pub fn cluster_size_for_workload(&self, workload_rate: &RecordsPerSecond) -> Option<u8> {
+    pub fn cluster_size_for_workload(&self, workload_rate: RecordsPerSecond) -> Option<u8> {
         self.evaluate_neighbors(workload_rate)
             .map(|neighbors| neighbors.cluster_size_for(workload_rate))
     }
 
     #[tracing::instrument(level = "debug")]
-    fn evaluate_neighbors(&self, workload_rate: &RecordsPerSecond) -> Option<BenchNeighbors> {
+    fn evaluate_neighbors(&self, workload_rate: RecordsPerSecond) -> Option<BenchNeighbors> {
         let mut lo = None;
         let mut hi = None;
 
         for (_, benchmark_range) in self.0.iter() {
             if let Some(ref entry_hi) = benchmark_range.hi_mark() {
-                if &entry_hi.records_out_per_sec <= workload_rate {
+                if entry_hi.records_out_per_sec <= workload_rate {
                     lo = Some(entry_hi.clone());
                 } else {
                     hi = Some(entry_hi.clone());
                     if let Some(ref entry_lo) = benchmark_range.lo_mark() {
-                        if &entry_lo.records_out_per_sec <= workload_rate {
+                        if entry_lo.records_out_per_sec <= workload_rate {
                             lo = Some(entry_lo.clone());
                         }
                     }
@@ -78,7 +78,8 @@ impl Appraisal {
             (None, None) => None,
             (Some(mark), None) => Some(BenchNeighbors::AboveHighest(mark)),
             (None, Some(mark)) => Some(BenchNeighbors::BelowLowest(mark)),
-            (Some(lo), Some(hi)) => Some(BenchNeighbors::Between { lo, hi }),
+            (Some(lo), Some(hi)) if lo <= hi => Some(BenchNeighbors::Between { lo, hi }),
+            (Some(hi), Some(lo)) => Some(BenchNeighbors::Between { lo, hi }),
         }
     }
 }
@@ -93,7 +94,7 @@ enum BenchNeighbors {
 const MINIMAL_CLUSTER_SIZE: u8 = 1;
 
 impl BenchNeighbors {
-    fn cluster_size_for(&self, workload_rate: &RecordsPerSecond) -> u8 {
+    fn cluster_size_for(&self, workload_rate: RecordsPerSecond) -> u8 {
         match self {
             BenchNeighbors::BelowLowest(lo) => Self::extrapolate_lo(workload_rate, lo),
             BenchNeighbors::AboveHighest(hi) => Self::extrapolate_hi(workload_rate, hi),
@@ -102,7 +103,7 @@ impl BenchNeighbors {
     }
 
     #[tracing::instrument(level = "debug")]
-    fn extrapolate_lo(workload_rate: &RecordsPerSecond, lo: &Benchmark) -> u8 {
+    fn extrapolate_lo(workload_rate: RecordsPerSecond, lo: &Benchmark) -> u8 {
         let workload_rate: f64 = workload_rate.into();
         let lo_rate: f64 = lo.records_out_per_sec.into();
 
@@ -116,7 +117,7 @@ impl BenchNeighbors {
     }
 
     #[tracing::instrument(level = "debug")]
-    fn extrapolate_hi(workload_rate: &RecordsPerSecond, hi: &Benchmark) -> u8 {
+    fn extrapolate_hi(workload_rate: RecordsPerSecond, hi: &Benchmark) -> u8 {
         let workload_rate: f64 = workload_rate.into();
         let hi_rate: f64 = hi.records_out_per_sec.into();
 
@@ -130,7 +131,7 @@ impl BenchNeighbors {
     }
 
     #[tracing::instrument(level = "debug")]
-    fn interpolate(workload_rate: &RecordsPerSecond, lo: &Benchmark, hi: &Benchmark) -> u8 {
+    fn interpolate(workload_rate: RecordsPerSecond, lo: &Benchmark, hi: &Benchmark) -> u8 {
         let start = Key::new(
             lo.records_out_per_sec.into(),
             lo.nr_task_managers as f64,
@@ -279,10 +280,10 @@ mod tests {
             hi: Benchmark::new(4, 1.0.into()),
         };
 
-        assert_eq!(3, neighbors.cluster_size_for(&0.75.into()));
-        assert_eq!(2, neighbors.cluster_size_for(&0.5.into()));
-        assert_eq!(4, neighbors.cluster_size_for(&1.0.into()));
-        assert_eq!(3, neighbors.cluster_size_for(&0.55.into()));
+        assert_eq!(3, neighbors.cluster_size_for(0.75.into()));
+        assert_eq!(2, neighbors.cluster_size_for(0.5.into()));
+        assert_eq!(4, neighbors.cluster_size_for(1.0.into()));
+        assert_eq!(3, neighbors.cluster_size_for(0.55.into()));
         Ok(())
     }
 
@@ -294,8 +295,25 @@ mod tests {
         };
 
         // verify outside of boundary is clamped
-        assert_eq!(2, neighbors.cluster_size_for(&0.05.into()));
-        assert_eq!(4, neighbors.cluster_size_for(&1.5.into()));
+        assert_eq!(2, neighbors.cluster_size_for(0.05.into()));
+        assert_eq!(4, neighbors.cluster_size_for(1.5.into()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_appraisal_interpolate_twin_neighbors() -> anyhow::Result<()> {
+        let neighbors = BenchNeighbors::Between {
+            lo: Benchmark::new(4, 3.0.into()),
+            hi: Benchmark::new(4, 5.0.into()),
+        };
+
+        assert_eq!(4, neighbors.cluster_size_for(3.5.into()));
+        assert_eq!(4, neighbors.cluster_size_for(4.0.into()));
+        assert_eq!(4, neighbors.cluster_size_for(4.75.into()));
+        assert_eq!(4, neighbors.cluster_size_for(3.0.into()));
+        assert_eq!(4, neighbors.cluster_size_for(5.0.into()));
+        assert_eq!(4, neighbors.cluster_size_for(2.5.into()));
+        assert_eq!(4, neighbors.cluster_size_for(9.5.into()));
         Ok(())
     }
 
@@ -307,14 +325,14 @@ mod tests {
 
         let neighbors = BenchNeighbors::BelowLowest(Benchmark::new(4, 1.0.into()));
 
-        assert_eq!(1, neighbors.cluster_size_for(&0.0.into()));
-        assert_eq!(1, neighbors.cluster_size_for(&0.1.into()));
-        assert_eq!(1, neighbors.cluster_size_for(&0.25.into()));
-        assert_eq!(2, neighbors.cluster_size_for(&0.35.into()));
-        assert_eq!(2, neighbors.cluster_size_for(&0.5.into()));
-        assert_eq!(3, neighbors.cluster_size_for(&0.6.into()));
-        assert_eq!(4, neighbors.cluster_size_for(&1.0.into()));
-        assert_eq!(4, neighbors.cluster_size_for(&10.0.into()));
+        assert_eq!(1, neighbors.cluster_size_for(0.0.into()));
+        assert_eq!(1, neighbors.cluster_size_for(0.1.into()));
+        assert_eq!(1, neighbors.cluster_size_for(0.25.into()));
+        assert_eq!(2, neighbors.cluster_size_for(0.35.into()));
+        assert_eq!(2, neighbors.cluster_size_for(0.5.into()));
+        assert_eq!(3, neighbors.cluster_size_for(0.6.into()));
+        assert_eq!(4, neighbors.cluster_size_for(1.0.into()));
+        assert_eq!(4, neighbors.cluster_size_for(10.0.into()));
         Ok(())
     }
 
@@ -326,16 +344,16 @@ mod tests {
 
         let neighbors = BenchNeighbors::AboveHighest(Benchmark::new(4, 1.0.into()));
 
-        assert_eq!(4, neighbors.cluster_size_for(&0.0.into()));
-        assert_eq!(4, neighbors.cluster_size_for(&0.5.into()));
-        assert_eq!(4, neighbors.cluster_size_for(&1.0.into()));
-        assert_eq!(6, neighbors.cluster_size_for(&1.5.into()));
-        assert_eq!(8, neighbors.cluster_size_for(&2.0.into()));
-        assert_eq!(7, neighbors.cluster_size_for(&1.56.into()));
-        assert_eq!(7, neighbors.cluster_size_for(&1.66.into()));
-        assert_eq!(20, neighbors.cluster_size_for(&5.0.into()));
-        assert_eq!(21, neighbors.cluster_size_for(&5.00000000001.into()));
-        assert_eq!(40, neighbors.cluster_size_for(&10.0.into()));
+        assert_eq!(4, neighbors.cluster_size_for(0.0.into()));
+        assert_eq!(4, neighbors.cluster_size_for(0.5.into()));
+        assert_eq!(4, neighbors.cluster_size_for(1.0.into()));
+        assert_eq!(6, neighbors.cluster_size_for(1.5.into()));
+        assert_eq!(8, neighbors.cluster_size_for(2.0.into()));
+        assert_eq!(7, neighbors.cluster_size_for(1.56.into()));
+        assert_eq!(7, neighbors.cluster_size_for(1.66.into()));
+        assert_eq!(20, neighbors.cluster_size_for(5.0.into()));
+        assert_eq!(21, neighbors.cluster_size_for(5.00000000001.into()));
+        assert_eq!(40, neighbors.cluster_size_for(10.0.into()));
         Ok(())
     }
 
@@ -346,49 +364,86 @@ mod tests {
         let _main_span_guard = main_span.enter();
 
         let mut appraisal = Appraisal::default();
-        assert_none!(appraisal.evaluate_neighbors(&375.0.into()));
+        assert_none!(appraisal.evaluate_neighbors(375.0.into()));
 
         appraisal.add_upper_benchmark(Benchmark::new(4, 1.0.into()));
         assert_eq!(
-            appraisal.evaluate_neighbors(&0.5.into()),
+            appraisal.evaluate_neighbors(0.5.into()),
             Some(BenchNeighbors::BelowLowest(Benchmark::new(4, 1.0.into())))
         );
         assert_eq!(
-            appraisal.evaluate_neighbors(&1.5.into()),
+            appraisal.evaluate_neighbors(1.5.into()),
             Some(BenchNeighbors::AboveHighest(Benchmark::new(4, 1.0.into())))
         );
         assert_eq!(
-            appraisal.evaluate_neighbors(&1.0.into()),
+            appraisal.evaluate_neighbors(1.0.into()),
             Some(BenchNeighbors::AboveHighest(Benchmark::new(4, 1.0.into())))
         );
         Ok(())
     }
 
-    // #[test]
-    // fn test_bench_simple_evaluate_neighbors() -> anyhow::Result<()> {
-    //     lazy_static::initialize(&crate::tracing::TEST_TRACING);
-    //     let main_span = tracing::info_span!("test_bench_evaluate_neighbors");
-    //     let _main_span_guard = main_span.enter();
-    //
-    //     let mut appraisal = Appraisal::default();
-    //     assert_none!(appraisal.evaluate_neighbors(&375.0.into()));
-    //
-    //     appraisal.add_upper_benchmark(Benchmark::new(4, 1.0.into()));
-    //     assert_eq!(
-    //         appraisal.evaluate_neighbors(&0.5.into()),
-    //         Some(BenchNeighbors::BelowLowest(Benchmark::new(4, 1.0.into())))
-    //     );
-    //     assert_eq!(
-    //         appraisal.evaluate_neighbors(&1.5.into()),
-    //         Some(BenchNeighbors::AboveHighest(Benchmark::new(4, 1.0.into())))
-    //     );
-    //     assert_eq!(
-    //         appraisal.evaluate_neighbors(&1.0.into()),
-    //         Some(BenchNeighbors::AboveHighest(Benchmark::new(4, 1.0.into())))
-    //     );
-    //     Ok(())
-    // }
-    //
+    #[test]
+    fn test_appraisal_evaluate_more_neighbors() -> anyhow::Result<()> {
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_bench_evaluate_neighbors");
+        let _main_span_guard = main_span.enter();
+
+        let mut appraisal = Appraisal::default();
+        appraisal.add_upper_benchmark(Benchmark::new(2, 3.0.into()));
+
+        appraisal.add_upper_benchmark(Benchmark::new(4, 5.0.into()));
+        appraisal.add_lower_benchmark(Benchmark::new(4, 3.0.into()));
+
+        appraisal.add_upper_benchmark(Benchmark::new(6, 5.5.into()));
+        appraisal.add_upper_benchmark(Benchmark::new(9, 7.0.into()));
+        appraisal.add_upper_benchmark(Benchmark::new(12, 9.0.into()));
+
+        assert_eq!(
+            appraisal.evaluate_neighbors(1.0.into()),
+            Some(BenchNeighbors::BelowLowest(Benchmark::new(2, 3.0.into())))
+        );
+        assert_eq!(
+            appraisal.evaluate_neighbors(3.25.into()),
+            Some(BenchNeighbors::Between {
+                lo: Benchmark::new(4, 3.0.into()),
+                hi: Benchmark::new(4, 5.0.into()),
+            })
+        );
+        assert_eq!(
+            appraisal.evaluate_neighbors(5.0.into()),
+            Some(BenchNeighbors::Between {
+                lo: Benchmark::new(4, 5.0.into()),
+                hi: Benchmark::new(6, 5.5.into()),
+            })
+        );
+        assert_eq!(
+            appraisal.evaluate_neighbors(6.17.into()),
+            Some(BenchNeighbors::Between {
+                lo: Benchmark::new(6, 5.5.into()),
+                hi: Benchmark::new(9, 7.0.into()),
+            })
+        );
+        assert_eq!(
+            appraisal.evaluate_neighbors(100.0.into()),
+            Some(BenchNeighbors::AboveHighest(Benchmark::new(12, 9.0.into())))
+        );
+
+
+        //     assert_eq!(
+        //         appraisal.evaluate_neighbors(&0.5.into()),
+        //         Some(BenchNeighbors::BelowLowest(Benchmark::new(4, 1.0.into())))
+        //     );
+        //     assert_eq!(
+        //         appraisal.evaluate_neighbors(&1.5.into()),
+        //         Some(BenchNeighbors::AboveHighest(Benchmark::new(4, 1.0.into())))
+        //     );
+        //     assert_eq!(
+        //         appraisal.evaluate_neighbors(&1.0.into()),
+        //         Some(BenchNeighbors::AboveHighest(Benchmark::new(4, 1.0.into())))
+        //     );
+        Ok(())
+    }
+
     // proptest!{
     //     #[test]
     //     fn test_bench_sampled_evaluate_neighbors() -> anyhow::Result<()> {
