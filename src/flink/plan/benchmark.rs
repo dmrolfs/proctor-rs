@@ -2,27 +2,27 @@ use std::cmp::Ordering;
 use std::convert::TryFrom;
 
 use ::serde_with::serde_as;
+use approx::{AbsDiffEq, RelativeEq};
 use serde::{Deserialize, Serialize};
 
 use crate::elements::{TelemetryValue, ToTelemetry};
 use crate::error::{PlanError, TelemetryError, TypeExpectation};
 use crate::flink::plan::RecordsPerSecond;
 use crate::flink::MetricCatalog;
-use approx::{AbsDiffEq, RelativeEq};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BenchmarkRange {
     pub nr_task_managers: u8,
-    pub lo_rate: Option<RecordsPerSecond>,
-    pub hi_rate: Option<RecordsPerSecond>,
+    lo_rate: Option<RecordsPerSecond>,
+    hi_rate: Option<RecordsPerSecond>,
 }
 
 impl BenchmarkRange {
-    pub fn lo_from(b: Benchmark) -> Self {
+    pub fn lo_from(b: &Benchmark) -> Self {
         Self::new(b.nr_task_managers, Some(b.records_out_per_sec), None)
     }
 
-    pub fn hi_from(b: Benchmark) -> Self {
+    pub fn hi_from(b: &Benchmark) -> Self {
         Self::new(b.nr_task_managers, None, Some(b.records_out_per_sec))
     }
 
@@ -45,22 +45,89 @@ impl BenchmarkRange {
             records_out_per_sec,
         })
     }
+
+    #[inline]
+    pub fn clear_lo(&mut self) {
+        self.lo_rate.take();
+    }
+
+    #[inline]
+    pub fn clear_hi(&mut self) {
+        self.hi_rate.take();
+    }
+
+    pub fn set_lo_rate(&mut self, lo_rate: RecordsPerSecond) {
+        // Tests whether this BenchmarkRange is inconsistent with a low benchmark. This test is not as
+        // strong as to verify consistency; however it can be used to invalidate a BenchmarkRange.
+        //
+        // A BenchmarkRange may become invalid due to circumstances in the environment beyond the
+        // application's control. This method helps identify circumstances where a BenchmarkRange
+        // should be dropped to avoid bad cluster size estimates for workload.
+        fn check_consistency(my_hi_rate: &Option<RecordsPerSecond>, new_lo_rate: RecordsPerSecond) -> bool {
+            my_hi_rate.map(|hi| new_lo_rate <= hi).unwrap_or(true)
+        }
+
+        let dumped_hi = if !check_consistency(&self.hi_rate, lo_rate) {
+            let doa = self.hi_rate.take();
+            tracing::debug!(
+                "dropping my_hi_rate({:?}) - inconsistent with new_lo_rate({})",
+                doa,
+                lo_rate
+            );
+            doa
+        } else {
+            None
+        };
+
+        let dumped_lo = self.lo_rate.replace(lo_rate);
+        let dumped = (dumped_lo, dumped_hi);
+        tracing::debug!(?dumped, benchmark_range=?self, "updated lo benchmark")
+    }
+
+    pub fn set_hi_rate(&mut self, hi_rate: RecordsPerSecond) {
+        /// Tests whether this BenchmarkRange is inconsistent with an upper benchmark. This test is
+        /// not as strong as to verify consistency; however it can be used to invalidate a
+        /// BenchmarkRange.
+        ///
+        /// A BenchmarkRange may become invalid due to circumstances in the environment beyond the
+        /// application's control. This method helps identify circumstances where a BenchmarkRange
+        /// should be dropped to avoid bad cluster size estimates for workload.
+        fn check_consistency(my_lo_rate: &Option<RecordsPerSecond>, new_hi_rate: RecordsPerSecond) -> bool {
+            my_lo_rate.map(|lo| lo <= new_hi_rate).unwrap_or(true)
+        }
+
+        let dumped_lo = if !check_consistency(&self.lo_rate, hi_rate) {
+            let doa = self.lo_rate.take();
+            tracing::debug!(
+                "dropping my_lo_rate({:?}) - inconsistent with new_hi_rate({})",
+                doa,
+                hi_rate
+            );
+            doa
+        } else {
+            None
+        };
+
+        let dumped_hi = self.hi_rate.replace(hi_rate);
+        let dumped = (dumped_lo, dumped_hi);
+        tracing::debug!(?dumped, benchmark_range=?self, "updated hi benchmark")
+    }
 }
 
 impl AbsDiffEq for BenchmarkRange {
     type Epsilon = <Benchmark as AbsDiffEq>::Epsilon;
 
     #[inline]
-    fn default_epsilon() -> Self::Epsilon { <Benchmark as AbsDiffEq>::default_epsilon() }
+    fn default_epsilon() -> Self::Epsilon {
+        <Benchmark as AbsDiffEq>::default_epsilon()
+    }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         // couldn't use nested fn due to desire to use generic outer variable, epsilon.
-        let do_abs_diff_eq = |lhs: Option<&RecordsPerSecond>, rhs: Option<&RecordsPerSecond>| {
-            match (lhs, rhs) {
-                (None, None) => true,
-                (Some(lhs), Some(rhs)) => lhs.abs_diff_eq(rhs, epsilon),
-                _ => false,
-            }
+        let do_abs_diff_eq = |lhs: Option<&RecordsPerSecond>, rhs: Option<&RecordsPerSecond>| match (lhs, rhs) {
+            (None, None) => true,
+            (Some(lhs), Some(rhs)) => lhs.abs_diff_eq(rhs, epsilon),
+            _ => false,
         };
 
         (self.nr_task_managers == other.nr_task_managers)
@@ -71,36 +138,33 @@ impl AbsDiffEq for BenchmarkRange {
 
 impl RelativeEq for BenchmarkRange {
     #[inline]
-    fn default_max_relative() -> Self::Epsilon { <Benchmark as RelativeEq>::default_max_relative() }
+    fn default_max_relative() -> Self::Epsilon {
+        <Benchmark as RelativeEq>::default_max_relative()
+    }
 
     fn relative_eq(&self, other: &Self, epsilon: Self::Epsilon, max_relative: Self::Epsilon) -> bool {
-        let do_relative_eq = |lhs: Option<&RecordsPerSecond>, rhs: Option<&RecordsPerSecond>| {
-            match (lhs, rhs) {
-                (None, None) => true,
-                (Some(lhs), Some(rhs)) => lhs.relative_eq(rhs, epsilon, max_relative),
-                _ => false,
-            }
+        let do_relative_eq = |lhs: Option<&RecordsPerSecond>, rhs: Option<&RecordsPerSecond>| match (lhs, rhs) {
+            (None, None) => true,
+            (Some(lhs), Some(rhs)) => lhs.relative_eq(rhs, epsilon, max_relative),
+            _ => false,
         };
 
         (self.nr_task_managers == other.nr_task_managers)
-        && do_relative_eq(self.lo_rate.as_ref(), other.lo_rate.as_ref())
-        && do_relative_eq(self.hi_rate.as_ref(), other.hi_rate.as_ref())
+            && do_relative_eq(self.lo_rate.as_ref(), other.lo_rate.as_ref())
+            && do_relative_eq(self.hi_rate.as_ref(), other.hi_rate.as_ref())
     }
 }
 
 #[serde_as]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Benchmark {
     pub nr_task_managers: u8,
-
     pub records_out_per_sec: RecordsPerSecond,
-    /* #[serde_as(as = "TimestampMilliSeconds")]
-     * pub timestamp: DateTime<Utc>, */
 }
 
 impl Benchmark {
     pub fn new(nr_task_managers: u8, records_out_per_sec: RecordsPerSecond) -> Self {
-        Self { nr_task_managers, records_out_per_sec, }
+        Self { nr_task_managers, records_out_per_sec }
     }
 }
 
@@ -129,7 +193,9 @@ impl AbsDiffEq for Benchmark {
     type Epsilon = <RecordsPerSecond as AbsDiffEq>::Epsilon;
 
     #[inline]
-    fn default_epsilon() -> Self::Epsilon { <RecordsPerSecond as AbsDiffEq>::default_epsilon() }
+    fn default_epsilon() -> Self::Epsilon {
+        <RecordsPerSecond as AbsDiffEq>::default_epsilon()
+    }
 
     #[inline]
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
@@ -140,22 +206,24 @@ impl AbsDiffEq for Benchmark {
 
 impl RelativeEq for Benchmark {
     #[inline]
-    fn default_max_relative() -> Self::Epsilon { <RecordsPerSecond as RelativeEq>::default_max_relative() }
+    fn default_max_relative() -> Self::Epsilon {
+        <RecordsPerSecond as RelativeEq>::default_max_relative()
+    }
 
     fn relative_eq(&self, other: &Self, epsilon: Self::Epsilon, max_relative: Self::Epsilon) -> bool {
         (self.nr_task_managers == other.nr_task_managers)
-        && (self.records_out_per_sec.relative_eq(&other.records_out_per_sec, epsilon, max_relative))
+            && (self
+                .records_out_per_sec
+                .relative_eq(&other.records_out_per_sec, epsilon, max_relative))
     }
 }
 
-// const T_TIMESTAMP: &'static str = "timestamp";
 const T_NR_TASK_MANAGERS: &'static str = "nr_task_managers";
 const T_RECORDS_OUT_PER_SEC: &'static str = "records_out_per_sec";
 
 impl From<Benchmark> for TelemetryValue {
     fn from(that: Benchmark) -> Self {
         TelemetryValue::Table(maplit::hashmap! {
-            // T_TIMESTAMP.to_string() => that.timestamp.timestamp().to_telemetry(),
             T_NR_TASK_MANAGERS.to_string() => that.nr_task_managers.to_telemetry(),
             T_RECORDS_OUT_PER_SEC.to_string() => that.records_out_per_sec.to_telemetry(),
         })
@@ -167,11 +235,6 @@ impl TryFrom<TelemetryValue> for Benchmark {
 
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         if let TelemetryValue::Table(rep) = telemetry {
-            // let timestamp = rep
-            //     .get(T_TIMESTAMP)
-            //     .map(|v| i64::try_from(v.clone()).map(|secs| Utc.timestamp(secs, 0)))
-            //     .ok_or(PlanError::DataNotFound(T_NR_TASK_MANAGERS.to_string()))??;
-
             let nr_task_managers = rep
                 .get(T_NR_TASK_MANAGERS)
                 .map(|v| u8::try_from(v.clone()))
@@ -182,7 +245,6 @@ impl TryFrom<TelemetryValue> for Benchmark {
                 .map(|v| f64::try_from(v.clone()))
                 .ok_or(PlanError::DataNotFound(T_RECORDS_OUT_PER_SEC.to_string()))??;
 
-            // Ok(Benchmark { timestamp, nr_task_managers, records_out_per_sec })
             Ok(Benchmark {
                 nr_task_managers,
                 records_out_per_sec: RecordsPerSecond(records_out_per_sec),
@@ -194,5 +256,74 @@ impl TryFrom<TelemetryValue> for Benchmark {
             }
             .into())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+
+    #[test]
+    fn test_bench_add_lower_benchmark() -> anyhow::Result<()> {
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_bench_add_lower_benchmark");
+        let _main_span_guard = main_span.enter();
+
+        let mut actual = BenchmarkRange::new(4, None, None);
+
+        actual.set_lo_rate(1.0.into());
+        assert_eq!(actual, BenchmarkRange::new(4, Some(1.0.into()), None));
+
+        actual.set_lo_rate(3.0.into());
+        assert_eq!(actual, BenchmarkRange::new(4, Some(3.0.into()), None));
+
+        actual.set_hi_rate(5.0.into());
+        actual.set_lo_rate(1.0.into());
+        assert_eq!(actual, BenchmarkRange::new(4, Some(1.0.into()), Some(5.0.into())));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_bench_add_upper_benchmark() -> anyhow::Result<()> {
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_bench_add_upper_benchmark");
+        let _main_span_guard = main_span.enter();
+
+        let mut actual = BenchmarkRange::new(4, None, None);
+
+        actual.set_hi_rate(1.0.into());
+        assert_eq!(actual, BenchmarkRange::new(4, None, Some(1.0.into())));
+
+        actual.set_hi_rate(3.0.into());
+        assert_eq!(actual, BenchmarkRange::new(4, None, Some(3.0.into())));
+
+        actual.set_lo_rate(1.0.into());
+        actual.set_hi_rate(1.0.into());
+        assert_eq!(actual, BenchmarkRange::new(4, Some(1.0.into()), Some(1.0.into())));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_bench_add_lower_upper_benchmarks() -> anyhow::Result<()> {
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_bench_add_lower_upper_benchmarks");
+        let _main_span_guard = main_span.enter();
+
+        let mut actual = BenchmarkRange::new(4, None, None);
+        actual.set_lo_rate(1.0.into());
+        actual.set_hi_rate(5.0.into());
+        assert_eq!(actual, BenchmarkRange::new(4, Some(1.0.into()), Some(5.0.into())));
+
+        actual.set_lo_rate(7.0.into());
+        assert_eq!(actual, BenchmarkRange::new(4, Some(7.0.into()), None));
+
+        actual.set_hi_rate(2.5.into());
+        assert_eq!(actual, BenchmarkRange::new(4, None, Some(2.5.into())));
+
+        Ok(())
     }
 }

@@ -1,34 +1,40 @@
+use std::cmp;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
-use std::cmp;
 
 use serde::{Deserialize, Serialize};
+use splines::{Interpolation, Key, Spline};
 
 use super::Benchmark;
 use crate::flink::plan::benchmark::BenchmarkRange;
 use crate::flink::plan::RecordsPerSecond;
-use splines::{Key, Interpolation, Spline};
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Appraisal(BTreeMap<u8, BenchmarkRange>);
 
 impl Appraisal {
     pub fn add_lower_benchmark(&mut self, b: Benchmark) {
         if let Some(entry) = self.0.get_mut(&b.nr_task_managers) {
-            entry.lo_rate = Some(b.records_out_per_sec);
+            entry.set_lo_rate(b.records_out_per_sec);
         } else {
-            let entry = BenchmarkRange::lo_from(b);
+            let entry = BenchmarkRange::lo_from(&b);
             self.0.insert(entry.nr_task_managers, entry);
         }
+
+        // todo: dropped clearing appraisal inconsistencies (see todo at file bottom)
+        // self.clear_inconsistencies_for_new_lo(&b);
     }
 
     pub fn add_upper_benchmark(&mut self, b: Benchmark) {
         if let Some(entry) = self.0.get_mut(&b.nr_task_managers) {
-            entry.hi_rate = Some(b.records_out_per_sec);
+            entry.set_hi_rate(b.records_out_per_sec);
         } else {
-            let entry = BenchmarkRange::hi_from(b);
+            let entry = BenchmarkRange::hi_from(&b);
             self.0.insert(entry.nr_task_managers, entry);
         }
+
+        // todo: dropped clearing appraisal inconsistencies (see todo at file bottom)
+        // self.clear_inconsistencies_for_new_hi(b);
     }
 
     pub fn clear(&mut self) {
@@ -42,7 +48,7 @@ impl Appraisal {
             .map(|neighbors| neighbors.cluster_size_for(workload_rate))
     }
 
-    #[tracing::instrument(level="debug")]
+    #[tracing::instrument(level = "debug")]
     fn evaluate_neighbors(&self, workload_rate: &RecordsPerSecond) -> Option<BenchNeighbors> {
         let mut lo = None;
         let mut hi = None;
@@ -95,7 +101,7 @@ impl BenchNeighbors {
         }
     }
 
-    #[tracing::instrument(level="debug")]
+    #[tracing::instrument(level = "debug")]
     fn extrapolate_lo(workload_rate: &RecordsPerSecond, lo: &Benchmark) -> u8 {
         let workload_rate: f64 = workload_rate.into();
         let lo_rate: f64 = lo.records_out_per_sec.into();
@@ -109,7 +115,7 @@ impl BenchNeighbors {
         size
     }
 
-    #[tracing::instrument(level="debug")]
+    #[tracing::instrument(level = "debug")]
     fn extrapolate_hi(workload_rate: &RecordsPerSecond, hi: &Benchmark) -> u8 {
         let workload_rate: f64 = workload_rate.into();
         let hi_rate: f64 = hi.records_out_per_sec.into();
@@ -123,10 +129,18 @@ impl BenchNeighbors {
         size
     }
 
-    #[tracing::instrument(level="debug")]
+    #[tracing::instrument(level = "debug")]
     fn interpolate(workload_rate: &RecordsPerSecond, lo: &Benchmark, hi: &Benchmark) -> u8 {
-        let start = Key::new(lo.records_out_per_sec.into(), lo.nr_task_managers as f64, Interpolation::Linear);
-        let end = Key::new(hi.records_out_per_sec.into(), hi.nr_task_managers as f64, Interpolation::Linear);
+        let start = Key::new(
+            lo.records_out_per_sec.into(),
+            lo.nr_task_managers as f64,
+            Interpolation::Linear,
+        );
+        let end = Key::new(
+            hi.records_out_per_sec.into(),
+            hi.nr_task_managers as f64,
+            Interpolation::Linear,
+        );
         let spline = Spline::from_vec(vec![start, end]);
         let sampled: Option<f64> = spline.clamped_sample(workload_rate.into());
 
@@ -139,12 +153,127 @@ impl BenchNeighbors {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use pretty_assertions::assert_eq;
     use claim::*;
+    use pretty_assertions::assert_eq;
+    use proptest::prelude::*;
+
+    use super::*;
 
     #[test]
-    fn test_bench_neighbors_interpolate() -> anyhow::Result<()> {
+    fn test_apprasial_add_lower_benchmark() -> anyhow::Result<()> {
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_appraisal_add_lower_benchmark");
+        let _main_span_guard = main_span.enter();
+
+        let mut appraisal = Appraisal::default();
+        assert!(appraisal.0.is_empty());
+
+        appraisal.add_lower_benchmark(Benchmark::new(4, 1.0.into()));
+        assert_eq!(
+            appraisal,
+            Appraisal(maplit::btreemap! { 4 => BenchmarkRange::new(4, Some(1.0.into()), None), })
+        );
+
+        appraisal.add_lower_benchmark(Benchmark::new(4, 3.0.into()));
+        assert_eq!(
+            appraisal,
+            Appraisal(maplit::btreemap! { 4 => BenchmarkRange::new(4, Some(3.0.into()), None), })
+        );
+
+        appraisal.add_lower_benchmark(Benchmark::new(2, 0.5.into()));
+        assert_eq!(
+            appraisal,
+            Appraisal(maplit::btreemap! {
+                2 => BenchmarkRange::new(2, Some(0.5.into()), None),
+                4 => BenchmarkRange::new(4, Some(3.0.into()), None),
+            })
+        );
+
+        appraisal.add_upper_benchmark(Benchmark::new(4, 5.0.into()));
+        appraisal.add_lower_benchmark(Benchmark::new(4, 1.0.into()));
+        assert_eq!(
+            appraisal,
+            Appraisal(maplit::btreemap! {
+            2 => BenchmarkRange::new(2, Some(0.5.into()), None),
+            4 => BenchmarkRange::new(4, Some(1.0.into()), Some(5.0.into())), }),
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_appraisal_add_upper_benchmark() -> anyhow::Result<()> {
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_appraisal_add_upper_benchmark");
+        let _main_span_guard = main_span.enter();
+
+        let mut appraisal = Appraisal::default();
+        assert!(appraisal.0.is_empty());
+
+        appraisal.add_upper_benchmark(Benchmark::new(4, 1.0.into()));
+        assert_eq!(
+            appraisal,
+            Appraisal(maplit::btreemap! { 4 => BenchmarkRange::new(4, None, Some(1.0.into())), })
+        );
+
+        appraisal.add_upper_benchmark(Benchmark::new(4, 3.0.into()));
+        assert_eq!(
+            appraisal,
+            Appraisal(maplit::btreemap! { 4 => BenchmarkRange::new(4, None, Some(3.0.into())), })
+        );
+
+        appraisal.add_upper_benchmark(Benchmark::new(2, 0.5.into()));
+        assert_eq!(
+            appraisal,
+            Appraisal(maplit::btreemap! {
+                2 => BenchmarkRange::new(2, None, Some(0.5.into())),
+                4 => BenchmarkRange::new(4, None, Some(3.0.into())),
+            })
+        );
+
+        appraisal.add_lower_benchmark(Benchmark::new(4, 1.0.into()));
+        appraisal.add_upper_benchmark(Benchmark::new(4, 1.0.into()));
+        assert_eq!(
+            appraisal,
+            Appraisal(maplit::btreemap! {
+            2 => BenchmarkRange::new(2, None, Some(0.5.into())),
+            4 => BenchmarkRange::new(4, Some(1.0.into()), Some(1.0.into())), }),
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_appraisal_add_lower_upper_benchmarks() -> anyhow::Result<()> {
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_appraisal_add_lower_upper_benchmarks");
+        let _main_span_guard = main_span.enter();
+
+        let mut appraisal = Appraisal::default();
+        appraisal.add_lower_benchmark(Benchmark::new(4, 1.0.into()));
+        appraisal.add_upper_benchmark(Benchmark::new(4, 5.0.into()));
+        assert_eq!(
+            appraisal,
+            Appraisal(maplit::btreemap! { 4 => BenchmarkRange::new(4, Some(1.0.into()), Some(5.0.into())), }),
+        );
+
+        appraisal.add_lower_benchmark(Benchmark::new(4, 7.0.into()));
+        assert_eq!(
+            appraisal,
+            Appraisal(maplit::btreemap! { 4 => BenchmarkRange::new(4, Some(7.0.into()), None), })
+        );
+
+        appraisal.add_upper_benchmark(Benchmark::new(4, 2.5.into()));
+        assert_eq!(
+            appraisal,
+            Appraisal(maplit::btreemap! { 4 => BenchmarkRange::new(4, None, Some(2.5.into())) })
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_appraisal_neighbors_interpolate() -> anyhow::Result<()> {
         let neighbors = BenchNeighbors::Between {
             lo: Benchmark::new(2, 0.5.into()),
             hi: Benchmark::new(4, 1.0.into()),
@@ -158,7 +287,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bench_between_neighbors_interpolate_clamped() -> anyhow::Result<()> {
+    fn test_appraisal_between_neighbors_interpolate_clamped() -> anyhow::Result<()> {
         let neighbors = BenchNeighbors::Between {
             lo: Benchmark::new(2, 0.5.into()),
             hi: Benchmark::new(4, 1.0.into()),
@@ -171,7 +300,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bench_below_lowest_neighbor_extrapolate() -> anyhow::Result<()> {
+    fn test_appraisal_below_lowest_neighbor_extrapolate() -> anyhow::Result<()> {
         // lazy_static::initialize(&crate::tracing::TEST_TRACING);
         // let main_span = tracing::info_span!("test_bench_below_lowest_neighbor_extrapolate");
         // let _main_span_guard = main_span.enter();
@@ -190,7 +319,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bench_above_highest_neighbor_extrapolate() -> anyhow::Result<()> {
+    fn test_appraisal_above_highest_neighbor_extrapolate() -> anyhow::Result<()> {
         // lazy_static::initialize(&crate::tracing::TEST_TRACING);
         // let main_span = tracing::info_span!("test_bench_above_highest_neighbor_extrapolate");
         // let _main_span_guard = main_span.enter();
@@ -211,7 +340,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bench_evaluate_neighbors() -> anyhow::Result<()> {
+    fn test_appraisal_simple_evaluate_neighbors() -> anyhow::Result<()> {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_bench_evaluate_neighbors");
         let _main_span_guard = main_span.enter();
@@ -234,4 +363,64 @@ mod tests {
         );
         Ok(())
     }
+
+    // #[test]
+    // fn test_bench_simple_evaluate_neighbors() -> anyhow::Result<()> {
+    //     lazy_static::initialize(&crate::tracing::TEST_TRACING);
+    //     let main_span = tracing::info_span!("test_bench_evaluate_neighbors");
+    //     let _main_span_guard = main_span.enter();
+    //
+    //     let mut appraisal = Appraisal::default();
+    //     assert_none!(appraisal.evaluate_neighbors(&375.0.into()));
+    //
+    //     appraisal.add_upper_benchmark(Benchmark::new(4, 1.0.into()));
+    //     assert_eq!(
+    //         appraisal.evaluate_neighbors(&0.5.into()),
+    //         Some(BenchNeighbors::BelowLowest(Benchmark::new(4, 1.0.into())))
+    //     );
+    //     assert_eq!(
+    //         appraisal.evaluate_neighbors(&1.5.into()),
+    //         Some(BenchNeighbors::AboveHighest(Benchmark::new(4, 1.0.into())))
+    //     );
+    //     assert_eq!(
+    //         appraisal.evaluate_neighbors(&1.0.into()),
+    //         Some(BenchNeighbors::AboveHighest(Benchmark::new(4, 1.0.into())))
+    //     );
+    //     Ok(())
+    // }
+    //
+    // proptest!{
+    //     #[test]
+    //     fn test_bench_sampled_evaluate_neighbors() -> anyhow::Result<()> {
+    //
+    //     }
+    // }
 }
+
+
+// todo: not pursuing because clearing inconsistencies at appraisal group level seems more and
+// as a premature optimization. Keeping at Benchmark range simply because it doesn't make sense
+// that a lo-bound could have a higher throughput than a hi-bound and therefore we should reset.
+// fn clear_inconsistencies_for_new_lo(&mut self, new_lo: &Benchmark) {
+//     for (nr, bench) in self.0.iter_mut() {
+//         if *nr < new_lo.nr_task_managers {
+//             if let Some(lo_mark) = bench.lo_mark() {
+//                 if new_lo.records_out_per_sec < lo_mark.records_out_per_sec {
+//                     bench.clear_lo();
+//                 }
+//             }
+//         } else if new_lo.nr_task_managers < *nr {
+//             if let Some(lo_mark) = bench.lo_mark() {
+//                 if lo_mark.records_out_per_sec < new_lo.records_out_per_sec {
+//                     bench.clear_lo();
+//                 }
+//             }
+//
+//             if let Some(hi_mark) = bench.hi_mark() {
+//                 if hi_mark.records_out_per_sec < new_lo.records_out_per_sec {
+//                     bench.clear_hi();
+//                 }
+//             }
+//         }
+//     }
+// }
