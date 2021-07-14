@@ -128,7 +128,10 @@ impl<F: 'static + WorkloadForecast> FlinkScalePlanning<F> {
         let forecast = &mut self.forecast;
         let appraisal_repository = &mut self.appraisal_repository;
 
-        let mut appraisal = appraisal_repository.load(name.as_str()).await?.unwrap_or(Appraisal::default());
+        let mut appraisal = appraisal_repository
+            .load(name.as_str())
+            .await?
+            .unwrap_or(Appraisal::default());
         let mut anticipated_workload = RecordsPerSecond::default();
 
         loop {

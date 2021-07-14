@@ -10,7 +10,6 @@ use crate::elements::{TelemetryValue, ToTelemetry};
 use crate::error::{PlanError, TelemetryError, TypeExpectation};
 use crate::flink::plan::RecordsPerSecond;
 use crate::flink::MetricCatalog;
-use std::fmt::Formatter;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BenchmarkRange {

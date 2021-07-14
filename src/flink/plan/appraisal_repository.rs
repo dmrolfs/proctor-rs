@@ -1,18 +1,18 @@
 use std::fmt::{Debug, Display};
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, BufWriter};
-use std::path::{PathBuf, Path};
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
+use serde_json::error::Category;
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 
 use crate::error::PlanError;
 use crate::flink::plan::Appraisal;
-use serde_json::error::Category;
 
 pub fn make_appraisal_repository(settings: AppraisalSettings) -> Result<Box<dyn AppraisalRepository>, PlanError> {
     match settings.storage {
@@ -22,14 +22,6 @@ pub fn make_appraisal_repository(settings: AppraisalSettings) -> Result<Box<dyn 
             Ok(Box::new(FileAppraisalRepository::new(path)))
         },
     }
-}
-
-
-#[async_trait]
-pub trait AppraisalRepository: Debug + Sync + Send {
-    async fn load(&self, job_name: &str) -> Result<Option<Appraisal>, PlanError>;
-    async fn save(&mut self, job_name: &str, appraisal: &Appraisal) -> Result<(), PlanError>;
-    async fn close(self: Box<Self>) -> Result<(), PlanError>;
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -59,6 +51,13 @@ impl FromStr for AppraisalRepositoryType {
     }
 }
 
+
+#[async_trait]
+pub trait AppraisalRepository: Debug + Sync + Send {
+    async fn load(&self, job_name: &str) -> Result<Option<Appraisal>, PlanError>;
+    async fn save(&mut self, job_name: &str, appraisal: &Appraisal) -> Result<(), PlanError>;
+    async fn close(self: Box<Self>) -> Result<(), PlanError>;
+}
 
 #[derive(Debug, Default)]
 pub struct MemoryAppraisalRepository(Arc<DashMap<String, Appraisal>>);
@@ -95,8 +94,7 @@ pub struct FileAppraisalRepository {
 
 impl FileAppraisalRepository {
     pub fn new(root: impl AsRef<str>) -> Self {
-        let mut root_path = PathBuf::from(root.as_ref());
-        Self { root_path }
+        Self { root_path: PathBuf::from(root.as_ref()) }
     }
 
     fn file_name_for(&self, job_name: &str) -> String {
@@ -115,7 +113,9 @@ impl FileAppraisalRepository {
     fn file_for(&self, path: impl AsRef<Path>, read_write: bool) -> Result<File, std::io::Error> {
         let mut options = OpenOptions::new();
         options.read(true);
-        if read_write { options.write(true).create(true); }
+        if read_write {
+            options.write(true).create(true);
+        }
         Ok(options.open(path)?)
     }
 }
@@ -130,7 +130,7 @@ impl AppraisalRepository for FileAppraisalRepository {
 
         match appraisal_history {
             Ok(history_file) => {
-                let mut reader = BufReader::new(history_file);
+                let reader = BufReader::new(history_file);
                 let appraisal = match serde_json::from_reader(reader) {
                     Ok(a) => Ok(Some(a)),
                     Err(err) if err.classify() == Category::Eof => {
@@ -166,16 +166,16 @@ impl AppraisalRepository for FileAppraisalRepository {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use pretty_assertions::{assert_eq};
-    use claim::{assert_none, assert_some, assert_ok};
+    use claim::{assert_none, assert_ok, assert_some};
+    use pretty_assertions::assert_eq;
     use tokio_test::block_on;
-    use crate::flink::plan::Benchmark;
-    use crate::flink::plan::benchmark::BenchmarkRange;
-    use chrono::format::Item;
-    use tokio::sync::Mutex;
 
-    async fn do_test_repository<'a>( repo: &mut impl AppraisalRepository, jobs_a_b: (&'a str, &'a str), ) -> anyhow::Result<()> {
+    use super::*;
+    use crate::flink::plan::Benchmark;
+
+    async fn do_test_repository<'a>(
+        repo: &mut impl AppraisalRepository, jobs_a_b: (&'a str, &'a str),
+    ) -> anyhow::Result<()> {
         let (name_a, name_b) = jobs_a_b;
         let actual = repo.load(name_a).await;
         let actual = assert_ok!(actual);
@@ -239,11 +239,11 @@ mod tests {
         let aaa = "AAA";
         let bbb = "BBB";
         let mut repo = FileAppraisalRepository::new("./target");
-        let (aaa_path, bbb_path) = block_on( async {
+        let (aaa_path, bbb_path) = block_on(async {
             (
                 repo.path_for(repo.file_name_for(aaa).as_str()),
-            repo.path_for(repo.file_name_for(bbb).as_str())
-                )
+                repo.path_for(repo.file_name_for(bbb).as_str()),
+            )
         });
 
         block_on(async {

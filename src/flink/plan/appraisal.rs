@@ -158,7 +158,6 @@ impl BenchNeighbors {
 mod tests {
     use claim::*;
     use pretty_assertions::assert_eq;
-    use proptest::prelude::*;
 
     use super::*;
 
