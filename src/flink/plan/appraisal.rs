@@ -9,6 +9,8 @@ use super::Benchmark;
 use crate::flink::plan::benchmark::BenchmarkRange;
 use crate::flink::plan::RecordsPerSecond;
 
+const MINIMAL_CLUSTER_SIZE: u8 = 1;
+
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Appraisal(BTreeMap<u8, BenchmarkRange>);
 
@@ -43,9 +45,10 @@ impl Appraisal {
 }
 
 impl Appraisal {
-    pub fn cluster_size_for_workload(&self, workload_rate: RecordsPerSecond) -> Option<u8> {
+    pub fn cluster_size_for_workload(&self, workload_rate: RecordsPerSecond) -> u8 {
         self.evaluate_neighbors(workload_rate)
             .map(|neighbors| neighbors.cluster_size_for(workload_rate))
+            .unwrap_or(MINIMAL_CLUSTER_SIZE)
     }
 
     #[tracing::instrument(level = "debug")]
@@ -56,12 +59,12 @@ impl Appraisal {
         for (_, benchmark_range) in self.0.iter() {
             if let Some(ref entry_hi) = benchmark_range.hi_mark() {
                 if entry_hi.records_out_per_sec <= workload_rate {
-                    lo = Some(entry_hi.clone());
+                    lo = Some(*entry_hi);
                 } else {
-                    hi = Some(entry_hi.clone());
+                    hi = Some(*entry_hi);
                     if let Some(ref entry_lo) = benchmark_range.lo_mark() {
                         if entry_lo.records_out_per_sec <= workload_rate {
-                            lo = Some(entry_lo.clone());
+                            lo = Some(*entry_lo);
                         }
                     }
                     break;
@@ -69,8 +72,9 @@ impl Appraisal {
             }
         }
 
-        tracing::debug!(?lo, ?hi, "neighbors evaluated");
-        self.make_neighbors(lo, hi)
+        let neighbors = self.make_neighbors(lo, hi);
+        tracing::debug!(?neighbors, "neighbors evaluated");
+        neighbors
     }
 
     fn make_neighbors(&self, lo: Option<Benchmark>, hi: Option<Benchmark>) -> Option<BenchNeighbors> {
@@ -90,8 +94,6 @@ enum BenchNeighbors {
     AboveHighest(Benchmark),
     Between { lo: Benchmark, hi: Benchmark },
 }
-
-const MINIMAL_CLUSTER_SIZE: u8 = 1;
 
 impl BenchNeighbors {
     fn cluster_size_for(&self, workload_rate: RecordsPerSecond) -> u8 {
@@ -395,6 +397,8 @@ mod tests {
         appraisal.add_lower_benchmark(Benchmark::new(4, 3.0.into()));
 
         appraisal.add_upper_benchmark(Benchmark::new(6, 5.5.into()));
+        appraisal.add_lower_benchmark(Benchmark::new(6, 3.0.into()));
+
         appraisal.add_upper_benchmark(Benchmark::new(9, 7.0.into()));
         appraisal.add_upper_benchmark(Benchmark::new(12, 9.0.into()));
 
@@ -412,7 +416,7 @@ mod tests {
         assert_eq!(
             appraisal.evaluate_neighbors(5.0.into()),
             Some(BenchNeighbors::Between {
-                lo: Benchmark::new(4, 5.0.into()),
+                lo: Benchmark::new(6, 3.0.into()),
                 hi: Benchmark::new(6, 5.5.into()),
             })
         );
@@ -428,28 +432,51 @@ mod tests {
             Some(BenchNeighbors::AboveHighest(Benchmark::new(12, 9.0.into())))
         );
 
-
-        //     assert_eq!(
-        //         appraisal.evaluate_neighbors(&0.5.into()),
-        //         Some(BenchNeighbors::BelowLowest(Benchmark::new(4, 1.0.into())))
-        //     );
-        //     assert_eq!(
-        //         appraisal.evaluate_neighbors(&1.5.into()),
-        //         Some(BenchNeighbors::AboveHighest(Benchmark::new(4, 1.0.into())))
-        //     );
-        //     assert_eq!(
-        //         appraisal.evaluate_neighbors(&1.0.into()),
-        //         Some(BenchNeighbors::AboveHighest(Benchmark::new(4, 1.0.into())))
-        //     );
         Ok(())
     }
 
-    // proptest!{
-    //     #[test]
-    //     fn test_bench_sampled_evaluate_neighbors() -> anyhow::Result<()> {
-    //
-    //     }
-    // }
+    #[test]
+    fn test_appraisal_estimate_cluster_size() -> anyhow::Result<()> {
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_appraisal_estimate_cluster_size");
+        let _main_span_guard = main_span.enter();
+
+        let mut appraisal = Appraisal::default();
+        assert_eq!(1, appraisal.cluster_size_for_workload(1_000_000.0.into()));
+
+        appraisal.add_upper_benchmark(Benchmark::new(2, 3.0.into()));
+
+        appraisal.add_upper_benchmark(Benchmark::new(4, 5.0.into()));
+        appraisal.add_lower_benchmark(Benchmark::new(4, 3.25.into()));
+
+        appraisal.add_upper_benchmark(Benchmark::new(6, 10.0.into()));
+        appraisal.add_lower_benchmark(Benchmark::new(6, 1.0.into()));
+
+        appraisal.add_upper_benchmark(Benchmark::new(9, 15.0.into()));
+        appraisal.add_upper_benchmark(Benchmark::new(12, 25.0.into()));
+
+        tracing::warn!("DMR: starting assertions...");
+        assert_eq!(1, appraisal.cluster_size_for_workload(1.05.into()));
+        assert_eq!(2, appraisal.cluster_size_for_workload(1.75.into()));
+        assert_eq!(2, appraisal.cluster_size_for_workload(2.75.into()));
+        assert_eq!(3, appraisal.cluster_size_for_workload(3.2.into()));
+        assert_eq!(4, appraisal.cluster_size_for_workload(3.75.into()));
+        assert_eq!(6, appraisal.cluster_size_for_workload(5.0.into()));
+        assert_eq!(6, appraisal.cluster_size_for_workload(10.0.into()));
+        assert_eq!(7, appraisal.cluster_size_for_workload(11.0.into()));
+        assert_eq!(8, appraisal.cluster_size_for_workload(12.0.into()));
+        assert_eq!(8, appraisal.cluster_size_for_workload(13.0.into()));
+        assert_eq!(9, appraisal.cluster_size_for_workload(14.0.into()));
+        assert_eq!(9, appraisal.cluster_size_for_workload(15.0.into()));
+
+        assert_eq!(10, appraisal.cluster_size_for_workload(18.0.into()));
+        assert_eq!(11, appraisal.cluster_size_for_workload(21.0.into()));
+        assert_eq!(12, appraisal.cluster_size_for_workload(24.0.into()));
+
+        assert_eq!(48, appraisal.cluster_size_for_workload(100.0.into()));
+
+        Ok(())
+    }
 }
 
 

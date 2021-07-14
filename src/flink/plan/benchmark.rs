@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 use std::convert::TryFrom;
+use std::fmt;
 
 use ::serde_with::serde_as;
 use approx::{AbsDiffEq, RelativeEq};
@@ -9,11 +10,18 @@ use crate::elements::{TelemetryValue, ToTelemetry};
 use crate::error::{PlanError, TelemetryError, TypeExpectation};
 use crate::flink::plan::RecordsPerSecond;
 use crate::flink::MetricCatalog;
+use std::fmt::Formatter;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BenchmarkRange {
     pub nr_task_managers: u8,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     lo_rate: Option<RecordsPerSecond>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     hi_rate: Option<RecordsPerSecond>,
 }
 
@@ -160,6 +168,12 @@ impl RelativeEq for BenchmarkRange {
 pub struct Benchmark {
     pub nr_task_managers: u8,
     pub records_out_per_sec: RecordsPerSecond,
+}
+
+impl fmt::Display for Benchmark {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[{}:{}]", self.nr_task_managers, self.records_out_per_sec)
+    }
 }
 
 impl Benchmark {

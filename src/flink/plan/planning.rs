@@ -128,7 +128,7 @@ impl<F: 'static + WorkloadForecast> FlinkScalePlanning<F> {
         let forecast = &mut self.forecast;
         let appraisal_repository = &mut self.appraisal_repository;
 
-        let mut appraisal = appraisal_repository.load(name.as_str()).await?;
+        let mut appraisal = appraisal_repository.load(name.as_str()).await?.unwrap_or(Appraisal::default());
         let mut anticipated_workload = RecordsPerSecond::default();
 
         loop {
@@ -226,11 +226,7 @@ impl<F: 'static + WorkloadForecast> FlinkScalePlanning<F> {
         outlet: &Outlet<FlinkScalePlan>,
     ) -> Result<(), PlanError> {
         let cur_nr_task_managers = decision.item().cluster.nr_task_managers;
-        if let Some(required_cluster_size) = appraisal.cluster_size_for_workload(anticipated_workload) {
-            todo!()
-        } else {
-            todo!()
-        }
+        let required_cluster_size = appraisal.cluster_size_for_workload(anticipated_workload);
         // todo WORK HERE
         todo!()
     }
@@ -241,7 +237,7 @@ impl<F: 'static + WorkloadForecast> FlinkScalePlanning<F> {
         self.inlet.close().await;
         self.decision_inlet.close().await;
         self.outlet.close().await;
-        self.appraisal_repository.close().await?;
+        // self.appraisal_repository.close().await?;
         Ok(())
     }
 }
