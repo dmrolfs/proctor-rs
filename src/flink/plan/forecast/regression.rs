@@ -171,8 +171,17 @@ mod tests {
 
         let actual = QuadraticRegression::from_data(&data)?;
         assert_relative_eq!(actual.a, (-41. / 112.), epsilon = 1.0e-10);
-        assert_relative_eq!(actual.b, (2111. / 700.), epsilon = 1.0e-10);
-        assert_relative_eq!(actual.c, (85181. / 2800.), epsilon = 1.0e-10);
+        assert_relative_eq!(actual.b, (2_111. / 700.), epsilon = 1.0e-10);
+        assert_relative_eq!(actual.c, (85_181. / 2_800.), epsilon = 1.0e-10);
+        Ok(())
+    }
+
+    #[test]
+    fn test_quadratic_regression_integration() -> anyhow::Result<()> {
+        let data = vec![(1., 32.5), (3., 37.3), (5., 36.4), (7., 32.4), (9., 28.5)];
+        let regression = QuadraticRegression::from_data(&data)?;
+        let actual = regression.total_records_within(1.25.into(), 8.4.into())?;
+        assert_relative_eq!(actual, 249.468_468_824_405, epsilon = 1.0e-10);
         Ok(())
     }
 
@@ -201,7 +210,7 @@ mod tests {
     }
 
     #[test]
-    fn test__linear_regression_prediction() -> anyhow::Result<()> {
+    fn test_linear_regression_prediction() -> anyhow::Result<()> {
         // example taken from https://tutorme.com/blog/post/quadratic-regression/
         let data = vec![(1., 1.), (2., 3.), (3., 2.), (4., 3.), (5., 5.)];
         let regression = LinearRegression::from_data(&data)?;
@@ -214,6 +223,15 @@ mod tests {
         } else {
             panic!("failed to calculate regression");
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_linear_regression_integration() -> anyhow::Result<()> {
+        let data = vec![(1., 1.), (2., 3.), (3., 2.), (4., 3.), (5., 5.)];
+        let regression = LinearRegression::from_data(&data)?;
+        let actual = regression.total_records_within(1.25.into(), 4.89.into())?;
+        assert_relative_eq!(actual, 10.395_84, epsilon = 1.0e-10);
         Ok(())
     }
 }
