@@ -8,6 +8,7 @@ use super::{Point, Workload, WorkloadForecast};
 use crate::error::PlanError;
 use crate::flink::plan::forecast::regression::{LinearRegression, QuadraticRegression, RegressionStrategy};
 use crate::flink::plan::forecast::WorkloadMeasurement;
+use crate::flink::plan::TimestampSeconds;
 
 #[derive(Debug)]
 pub struct LeastSquaresWorkloadForecast {
@@ -33,6 +34,10 @@ impl LeastSquaresWorkloadForecast {
             spike_detector: SignalDetector::new(window, spike_threshold, spike_influence),
             consecutive_spikes: 0,
         }
+    }
+
+    fn data_slice(&self) -> &[Point] {
+        self.data.as_slices().0
     }
 }
 
@@ -75,6 +80,7 @@ impl WorkloadForecast for LeastSquaresWorkloadForecast {
         }
 
         self.data.push_back(data);
+        self.data.make_contiguous();
     }
 
     fn clear(&mut self) {
@@ -84,23 +90,38 @@ impl WorkloadForecast for LeastSquaresWorkloadForecast {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    fn predict_next_workload(&mut self) -> Result<Workload, PlanError> {
+    fn predict_next_workload(&self) -> Result<Workload, PlanError> {
         if !self.have_enough_data_for_prediction() {
             return Ok(Workload::NotEnoughData);
         }
 
-        let prediction = self.do_predict_workload()?;
+        let data = self.data_slice();
+        let prediction = if let Some(next_timestamp) = Self::estimate_next_timestamp(data) {
+            let model = Self::do_select_model(data)?;
+            model.workload_at(next_timestamp.into())
+        } else {
+            Ok(Workload::NotEnoughData)
+        };
+
         tracing::debug!(?prediction, "workload prediction calculated");
-        Ok(prediction)
+        Ok(prediction?)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    fn total_records_between(&self, start: TimestampSeconds, end: TimestampSeconds) -> Result<f64, PlanError> {
+        let data = self.data_slice();
+        let model = Self::do_select_model(data)?;
+        let total_events = model.total_records_within(start, end)?;
+        tracing::debug!("total events between within [{}, {}] = {}", start, end, total_events);
+        Ok(total_events)
     }
 }
 
 impl LeastSquaresWorkloadForecast {
-    fn do_predict_workload(&self) -> Result<Workload, PlanError> {
-        let data: Vec<Point> = self.data.iter().copied().collect();
+    fn do_predict_workload(data: &[Point]) -> Result<Workload, PlanError> {
         if let Some(next_timestamp) = Self::estimate_next_timestamp(&data) {
             let model = Self::do_select_model(&data)?;
-            model.calculate(next_timestamp)
+            model.workload_at(next_timestamp.into())
         } else {
             Ok(Workload::NotEnoughData)
         }
@@ -200,7 +221,6 @@ mod tests {
     use super::*;
     use crate::flink::plan::forecast::least_squares::LeastSquaresWorkloadForecast;
     use crate::flink::plan::forecast::{Point, Workload};
-    use crate::flink::plan::RecordsPerSecond;
 
     #[test]
     fn test_plan_forecast_measure_spike() -> anyhow::Result<()> {
@@ -293,63 +313,10 @@ mod tests {
     }
 
     #[test]
-    fn test_plan_forecast_quadratic_regression_coefficients() -> anyhow::Result<()> {
-        // example take from https://www.symbolab.com/solver/system-of-equations-calculator/9669a%2B1225b%2B165c%3D5174.3%2C%201225a%2B165b%2B25c%3D809.7%2C%20165a%2B25b%2B5c%3D167.1#
-        let data = vec![(1., 32.5), (3., 37.3), (5., 36.4), (7., 32.4), (9., 28.5)];
-
-        let actual = QuadraticRegression::from_data(&data)?;
-        assert_relative_eq!(actual.a, (-41. / 112.), epsilon = 1.0e-10);
-        assert_relative_eq!(actual.b, (2111. / 700.), epsilon = 1.0e-10);
-        assert_relative_eq!(actual.c, (85181. / 2800.), epsilon = 1.0e-10);
-        Ok(())
-    }
-
-    #[test]
-    fn test_plan_forecast_quadratic_regression_prediction() -> anyhow::Result<()> {
-        // example take from https://www.symbolab.com/solver/system-of-equations-calculator/9669a%2B1225b%2B165c%3D5174.3%2C%201225a%2B165b%2B25c%3D809.7%2C%20165a%2B25b%2B5c%3D167.1#
-        let data = vec![(1., 32.5), (3., 37.3), (5., 36.4), (7., 32.4), (9., 28.5)];
-        let regression = QuadraticRegression::from_data(&data)?;
-        if let Workload::RecordsInPerSecond(actual) = regression.calculate(11.)? {
-            let expected = (-41. / 112.) * pow(11., 2) + (2111. / 700.) * 11. + (85181. / 2800.);
-            assert_relative_eq!(actual, RecordsPerSecond(expected), epsilon = 1.0e-10);
-        } else {
-            panic!("failed to calculate regression");
-        }
-        Ok(())
-    }
-
-    #[test]
     fn test_plan_forecast_estimate_next_timestamp() -> anyhow::Result<()> {
         let data = vec![(1., 32.5), (3., 37.3), (5., 36.4), (7., 32.4), (9., 28.5)];
         let actual = LeastSquaresWorkloadForecast::estimate_next_timestamp(&data).unwrap();
         assert_relative_eq!(actual, 11., epsilon = 1.0e-10);
-        Ok(())
-    }
-
-    #[test]
-    fn test_plan_forecast_linear_coefficients() -> anyhow::Result<()> {
-        // example taken from https://tutorme.com/blog/post/quadratic-regression/
-        let data = vec![(1., 1.), (2., 3.), (3., 2.), (4., 3.), (5., 5.)];
-        let actual = LinearRegression::from_data(&data)?;
-        assert_relative_eq!(actual.slope, 0.8, epsilon = 1.0e-10);
-        assert_relative_eq!(actual.y_intercept, 0.4, epsilon = 1.0e-10);
-        Ok(())
-    }
-
-    #[test]
-    fn test_plan_forecast_linear_regression() -> anyhow::Result<()> {
-        // example taken from https://tutorme.com/blog/post/quadratic-regression/
-        let data = vec![(1., 1.), (2., 3.), (3., 2.), (4., 3.), (5., 5.)];
-        let regression = LinearRegression::from_data(&data)?;
-
-        let accuracy = 0.69282037;
-        assert_relative_eq!(regression.correlation_coefficient(), 0.853, epsilon = 1.0e-3);
-
-        if let Workload::RecordsInPerSecond(actual) = regression.calculate(3.)? {
-            assert_relative_eq!(actual, RecordsPerSecond(3.), epsilon = accuracy);
-        } else {
-            panic!("failed to calculate regression");
-        }
         Ok(())
     }
 
@@ -428,7 +395,7 @@ mod tests {
 
     fn make_measurement(timestamp: DateTime<Utc>, workload: f64) -> WorkloadMeasurement {
         WorkloadMeasurement {
-            timestamp_secs: timestamp.timestamp() as f64,
+            timestamp_secs: timestamp.timestamp(),
             task_nr_records_in_per_sec: workload,
         }
     }
@@ -487,7 +454,7 @@ mod tests {
             match (forecast.predict_next_workload(), expected) {
                 (Ok(Workload::RecordsInPerSecond(actual)), Some(e)) => {
                     tracing::info!(%actual, expected=%e, "[{}] testing workload prediction.", i);
-                    assert_relative_eq!(actual, RecordsPerSecond(e), epsilon = 1.0e-4)
+                    assert_relative_eq!(actual, e.into(), epsilon = 1.0e-4)
                 },
                 (Ok(Workload::NotEnoughData), None) => tracing::info!("[{}] okay - not enough data", i),
                 (workload, Some(e)) => panic!("[{}] failed to predict:{:?} -- expected:{}", i, workload, e),

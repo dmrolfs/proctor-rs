@@ -191,7 +191,7 @@ impl From<&MetricCatalog> for Benchmark {
     fn from(that: &MetricCatalog) -> Self {
         Self {
             nr_task_managers: that.cluster.nr_task_managers,
-            records_out_per_sec: RecordsPerSecond(that.flow.records_out_per_sec),
+            records_out_per_sec: that.flow.records_out_per_sec.into(),
         }
     }
 }
@@ -260,7 +260,7 @@ impl TryFrom<TelemetryValue> for Benchmark {
 
             Ok(Benchmark {
                 nr_task_managers,
-                records_out_per_sec: RecordsPerSecond(records_out_per_sec),
+                records_out_per_sec: records_out_per_sec.into(),
             })
         } else {
             Err(TelemetryError::TypeError {

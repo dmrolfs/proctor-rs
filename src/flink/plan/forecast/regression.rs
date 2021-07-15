@@ -6,11 +6,12 @@ use num_traits::pow;
 
 use crate::error::PlanError;
 use crate::flink::plan::forecast::{Point, Workload};
-use crate::flink::plan::RecordsPerSecond;
+use crate::flink::plan::{RecordsPerSecond, TimestampSeconds};
 
 pub trait RegressionStrategy: Debug {
-    fn name(&self) -> &str;
-    fn calculate(&self, x: f64) -> Result<Workload, PlanError>;
+    fn name(&self) -> &'static str;
+    fn workload_at(&self, ts: TimestampSeconds) -> Result<Workload, PlanError>;
+    fn total_records_within(&self, start: TimestampSeconds, end: TimestampSeconds) -> Result<f64, PlanError>;
     fn correlation_coefficient(&self) -> f64;
 }
 
@@ -52,17 +53,22 @@ impl LinearRegression {
 }
 
 impl RegressionStrategy for LinearRegression {
-    #[inline]
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "LinearRegression"
     }
 
-    #[inline]
-    fn calculate(&self, x: f64) -> Result<Workload, PlanError> {
-        Ok(RecordsPerSecond(self.slope * x + self.y_intercept).into())
+    fn workload_at(&self, ts: TimestampSeconds) -> Result<Workload, PlanError> {
+        let x: f64 = ts.into();
+        Ok(RecordsPerSecond::new(self.slope * x + self.y_intercept).into())
     }
 
-    #[inline]
+    fn total_records_within(&self, start: TimestampSeconds, end: TimestampSeconds) -> Result<f64, PlanError> {
+        let start_x = start.into();
+        let end_x = end.into();
+        let integral = |x: f64| (self.slope / 2.) * pow(x, 2) + self.y_intercept * x;
+        Ok(integral(end_x) - integral(start_x))
+    }
+
     fn correlation_coefficient(&self) -> f64 {
         self.correlation_coefficient
     }
@@ -128,19 +134,86 @@ impl QuadraticRegression {
 }
 
 impl RegressionStrategy for QuadraticRegression {
-    #[inline]
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "QuadraticRegression"
     }
 
-    fn calculate(&self, x: f64) -> Result<Workload, PlanError> {
-        Ok(Workload::RecordsInPerSecond(RecordsPerSecond(
+    fn workload_at(&self, ts: TimestampSeconds) -> Result<Workload, PlanError> {
+        let x: f64 = ts.into();
+        Ok(Workload::RecordsInPerSecond(RecordsPerSecond::new(
             self.a * pow(x, 2) + self.b * x + self.c,
         )))
     }
 
-    #[inline]
+    fn total_records_within(&self, start: TimestampSeconds, end: TimestampSeconds) -> Result<f64, PlanError> {
+        let start_x = start.into();
+        let end_x = end.into();
+        let integral = |x: f64| self.a / 3. * pow(x, 3) + self.b / 2. * pow(x, 2) + self.c * x;
+        Ok(integral(end_x) - integral(start_x))
+    }
+
     fn correlation_coefficient(&self) -> f64 {
         self.correlation_coefficient
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use approx::assert_relative_eq;
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+
+    #[test]
+    fn test_quadratic_regression_coefficients() -> anyhow::Result<()> {
+        // example take from https://www.symbolab.com/solver/system-of-equations-calculator/9669a%2B1225b%2B165c%3D5174.3%2C%201225a%2B165b%2B25c%3D809.7%2C%20165a%2B25b%2B5c%3D167.1#
+        let data = vec![(1., 32.5), (3., 37.3), (5., 36.4), (7., 32.4), (9., 28.5)];
+
+        let actual = QuadraticRegression::from_data(&data)?;
+        assert_relative_eq!(actual.a, (-41. / 112.), epsilon = 1.0e-10);
+        assert_relative_eq!(actual.b, (2111. / 700.), epsilon = 1.0e-10);
+        assert_relative_eq!(actual.c, (85181. / 2800.), epsilon = 1.0e-10);
+        Ok(())
+    }
+
+    #[test]
+    fn test_quadratic_regression_prediction() -> anyhow::Result<()> {
+        // example take from https://www.symbolab.com/solver/system-of-equations-calculator/9669a%2B1225b%2B165c%3D5174.3%2C%201225a%2B165b%2B25c%3D809.7%2C%20165a%2B25b%2B5c%3D167.1#
+        let data = vec![(1., 32.5), (3., 37.3), (5., 36.4), (7., 32.4), (9., 28.5)];
+        let regression = QuadraticRegression::from_data(&data)?;
+        if let Workload::RecordsInPerSecond(actual) = regression.workload_at(11.into())? {
+            let expected = (-41. / 112.) * pow(11., 2) + (2111. / 700.) * 11. + (85181. / 2800.);
+            assert_relative_eq!(actual, expected.into(), epsilon = 1.0e-10);
+        } else {
+            panic!("failed to calculate regression");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_linear_regression_coefficients() -> anyhow::Result<()> {
+        // example taken from https://tutorme.com/blog/post/quadratic-regression/
+        let data = vec![(1., 1.), (2., 3.), (3., 2.), (4., 3.), (5., 5.)];
+        let actual = LinearRegression::from_data(&data)?;
+        assert_relative_eq!(actual.slope, 0.8, epsilon = 1.0e-10);
+        assert_relative_eq!(actual.y_intercept, 0.4, epsilon = 1.0e-10);
+        Ok(())
+    }
+
+    #[test]
+    fn test__linear_regression_prediction() -> anyhow::Result<()> {
+        // example taken from https://tutorme.com/blog/post/quadratic-regression/
+        let data = vec![(1., 1.), (2., 3.), (3., 2.), (4., 3.), (5., 5.)];
+        let regression = LinearRegression::from_data(&data)?;
+
+        let accuracy = 0.69282037;
+        assert_relative_eq!(regression.correlation_coefficient(), 0.853, epsilon = 1.0e-3);
+
+        if let Workload::RecordsInPerSecond(actual) = regression.workload_at(3.into())? {
+            assert_relative_eq!(actual, 3.0.into(), epsilon = accuracy);
+        } else {
+            panic!("failed to calculate regression");
+        }
+        Ok(())
     }
 }
