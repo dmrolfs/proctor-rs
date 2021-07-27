@@ -316,8 +316,8 @@ async fn test_decision_carry_policy_result() -> anyhow::Result<()> {
         required_subscription_fields: HashSet::new(),
         optional_subscription_fields: HashSet::new(),
         source: PolicySource::String(
-            r#"scale_up(item, context, _) if 3.0 < item.flow.input_messages_per_sec;
-            scale_down(item, context, _) if item.flow.input_messages_per_sec < 1.0;"#
+            r#"scale_up(item, _context, _) if 3.0 < item.flow.input_messages_per_sec;
+            scale_down(item, _context, _) if item.flow.input_messages_per_sec < 1.0;"#
                 .to_string(),
         ),
     });
@@ -426,8 +426,8 @@ async fn test_decision_common() -> anyhow::Result<()> {
         required_subscription_fields: HashSet::new(),
         optional_subscription_fields: HashSet::new(),
         source: PolicySource::String(
-            r#"scale_up(item, context, _) if 3.0 < item.flow.input_messages_per_sec;
-            scale_down(item, context, _) if item.flow.input_messages_per_sec < 1.0;"#
+            r#"scale_up(item, _context, _) if 3.0 < item.flow.input_messages_per_sec;
+            scale_down(item, _context, _) if item.flow.input_messages_per_sec < 1.0;"#
                 .to_string(),
         ),
     });
