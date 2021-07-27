@@ -34,6 +34,7 @@ anyhow = "*"
 async-stream = "*"
 async-trait = "*"
 chrono = "*"
+time = "*"
 config = { version = "*", default-features = false, features = ["toml", "hjson"] }
 derive_more = "*"
 futures = "*"
