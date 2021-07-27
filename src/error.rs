@@ -137,6 +137,15 @@ pub enum PlanError {
     #[error("0")]
     ForecastError(anyhow::Error),
 
+    #[error("not enough data to build forecast model - supplied:{supplied} need:{need}")]
+    NotEnoughData {
+        supplied: usize,
+        need: usize,
+    },
+
+    #[error("duration, {0}ms, exceeds supported limit")]
+    DurationLimitExceeded(u128),
+
     #[error("failed to solve linear resolution regression for timestamp {0:?}")]
     LinearResolutionFailed(DateTime<Utc>),
 

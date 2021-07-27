@@ -5,17 +5,11 @@ use nalgebra::{Matrix3, Matrix3x1};
 use num_traits::pow;
 
 use crate::error::PlanError;
-use crate::flink::plan::forecast::{Point, Workload};
-use crate::flink::plan::{RecordsPerSecond, TimestampSeconds};
+use crate::flink::plan::forecast::Point;
+use crate::flink::plan::{RecordsPerSecond, TimestampSeconds, WorkloadForecast};
 
-pub trait RegressionStrategy: Debug {
-    fn name(&self) -> &'static str;
-    fn workload_at(&self, ts: TimestampSeconds) -> Result<Workload, PlanError>;
-    fn total_records_within(&self, start: TimestampSeconds, end: TimestampSeconds) -> Result<f64, PlanError>;
-    fn correlation_coefficient(&self) -> f64;
-}
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug)]
 pub struct LinearRegression {
     pub slope: f64,
     pub y_intercept: f64,
@@ -52,21 +46,19 @@ impl LinearRegression {
     }
 }
 
-impl RegressionStrategy for LinearRegression {
+impl WorkloadForecast for LinearRegression {
     fn name(&self) -> &'static str {
         "LinearRegression"
     }
 
-    fn workload_at(&self, ts: TimestampSeconds) -> Result<Workload, PlanError> {
-        let x: f64 = ts.into();
+    fn workload_at(&self, timestamp: TimestampSeconds) -> Result<RecordsPerSecond, PlanError> {
+        let x: f64 = timestamp.into();
         Ok(RecordsPerSecond::new(self.slope * x + self.y_intercept).into())
     }
 
-    fn total_records_within(&self, start: TimestampSeconds, end: TimestampSeconds) -> Result<f64, PlanError> {
-        let start_x = start.into();
-        let end_x = end.into();
+    fn total_records_between(&self, start: TimestampSeconds, end: TimestampSeconds) -> Result<f64, PlanError> {
         let integral = |x: f64| (self.slope / 2.) * pow(x, 2) + self.y_intercept * x;
-        Ok(integral(end_x) - integral(start_x))
+        Ok(integral(end.into()) - integral(start.into()))
     }
 
     fn correlation_coefficient(&self) -> f64 {
@@ -74,7 +66,7 @@ impl RegressionStrategy for LinearRegression {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug)]
 pub struct QuadraticRegression {
     pub a: f64,
     pub b: f64,
@@ -133,23 +125,19 @@ impl QuadraticRegression {
     }
 }
 
-impl RegressionStrategy for QuadraticRegression {
+impl WorkloadForecast for QuadraticRegression {
     fn name(&self) -> &'static str {
         "QuadraticRegression"
     }
 
-    fn workload_at(&self, ts: TimestampSeconds) -> Result<Workload, PlanError> {
-        let x: f64 = ts.into();
-        Ok(Workload::RecordsInPerSecond(RecordsPerSecond::new(
-            self.a * pow(x, 2) + self.b * x + self.c,
-        )))
+    fn workload_at(&self, timestamp: TimestampSeconds) -> Result<RecordsPerSecond, PlanError> {
+        let x: f64 = timestamp.into();
+        Ok(RecordsPerSecond::new(self.a * pow(x, 2) + self.b * x + self.c))
     }
 
-    fn total_records_within(&self, start: TimestampSeconds, end: TimestampSeconds) -> Result<f64, PlanError> {
-        let start_x = start.into();
-        let end_x = end.into();
+    fn total_records_between(&self, start: TimestampSeconds, end: TimestampSeconds) -> Result<f64, PlanError> {
         let integral = |x: f64| self.a / 3. * pow(x, 3) + self.b / 2. * pow(x, 2) + self.c * x;
-        Ok(integral(end_x) - integral(start_x))
+        Ok(integral(end.into()) - integral(start.into()))
     }
 
     fn correlation_coefficient(&self) -> f64 {
@@ -160,7 +148,7 @@ impl RegressionStrategy for QuadraticRegression {
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
-    use pretty_assertions::assert_eq;
+    use claim::assert_ok;
 
     use super::*;
 
@@ -180,7 +168,7 @@ mod tests {
     fn test_quadratic_regression_integration() -> anyhow::Result<()> {
         let data = vec![(1., 32.5), (3., 37.3), (5., 36.4), (7., 32.4), (9., 28.5)];
         let regression = QuadraticRegression::from_data(&data)?;
-        let actual = regression.total_records_within(1.25.into(), 8.4.into())?;
+        let actual = regression.total_records_between(1.25.into(), 8.4.into())?;
         assert_relative_eq!(actual, 249.468_468_824_405, epsilon = 1.0e-10);
         Ok(())
     }
@@ -190,12 +178,9 @@ mod tests {
         // example take from https://www.symbolab.com/solver/system-of-equations-calculator/9669a%2B1225b%2B165c%3D5174.3%2C%201225a%2B165b%2B25c%3D809.7%2C%20165a%2B25b%2B5c%3D167.1#
         let data = vec![(1., 32.5), (3., 37.3), (5., 36.4), (7., 32.4), (9., 28.5)];
         let regression = QuadraticRegression::from_data(&data)?;
-        if let Workload::RecordsInPerSecond(actual) = regression.workload_at(11.into())? {
-            let expected = (-41. / 112.) * pow(11., 2) + (2111. / 700.) * 11. + (85181. / 2800.);
-            assert_relative_eq!(actual, expected.into(), epsilon = 1.0e-10);
-        } else {
-            panic!("failed to calculate regression");
-        }
+        let actual = assert_ok!(regression.workload_at(11.into()));
+        let expected = (-41. / 112.) * pow(11., 2) + (2111. / 700.) * 11. + (85181. / 2800.);
+        assert_relative_eq!(actual, expected.into(), epsilon = 1.0e-10);
         Ok(())
     }
 
@@ -218,11 +203,8 @@ mod tests {
         let accuracy = 0.69282037;
         assert_relative_eq!(regression.correlation_coefficient(), 0.853, epsilon = 1.0e-3);
 
-        if let Workload::RecordsInPerSecond(actual) = regression.workload_at(3.into())? {
-            assert_relative_eq!(actual, 3.0.into(), epsilon = accuracy);
-        } else {
-            panic!("failed to calculate regression");
-        }
+        let actual = assert_ok!(regression.workload_at(3.into()));
+        assert_relative_eq!(actual, 3.0.into(), epsilon = accuracy);
         Ok(())
     }
 
@@ -230,7 +212,7 @@ mod tests {
     fn test_linear_regression_integration() -> anyhow::Result<()> {
         let data = vec![(1., 1.), (2., 3.), (3., 2.), (4., 3.), (5., 5.)];
         let regression = LinearRegression::from_data(&data)?;
-        let actual = regression.total_records_within(1.25.into(), 4.89.into())?;
+        let actual = regression.total_records_between(1.25.into(), 4.89.into())?;
         assert_relative_eq!(actual, 10.395_84, epsilon = 1.0e-10);
         Ok(())
     }

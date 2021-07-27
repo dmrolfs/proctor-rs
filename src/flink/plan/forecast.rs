@@ -8,8 +8,10 @@ mod signal;
 
 use std::cmp::Ordering;
 use std::fmt::{self, Debug};
+use std::time::Duration;
 
 use approx::{AbsDiffEq, RelativeEq};
+use chrono::{DateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::elements::TelemetryValue;
@@ -21,8 +23,167 @@ pub enum Workload {
     HeuristicsExceedThreshold {},
 }
 
-// remove pub?
-// add TimestampSecs newtype following same form
+#[derive(Debug, Copy, Clone, Default, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct TimestampSeconds(f64);
+
+impl TimestampSeconds {
+    pub fn new_secs(ts_secs: i64) -> Self {
+        if (f64::MAX as i64) < ts_secs {
+            panic!(
+                "maximum timestamp seconds support is {} - cannot create with {}",
+                f64::MAX as i64,
+                ts_secs
+            );
+        }
+
+        Self(ts_secs as f64)
+    }
+
+    pub fn new_precise(ts_secs: f64) -> Self {
+        Self(ts_secs)
+    }
+
+    pub fn as_utc(&self) -> DateTime<Utc> {
+        let secs: i64 = self.0.trunc() as i64;
+        let nanos: u32 = (self.0.fract() * 1_000_000_000.) as u32;
+        Utc.timestamp(secs, nanos)
+    }
+}
+
+impl fmt::Display for TimestampSeconds {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("{}_s", self.0))
+    }
+}
+
+impl AsRef<f64> for TimestampSeconds {
+    fn as_ref(&self) -> &f64 {
+        &self.0
+    }
+}
+
+impl From<DateTime<Utc>> for TimestampSeconds {
+    fn from(that: DateTime<Utc>) -> Self {
+        let ts = (that.timestamp_millis() as f64) / 1_000.;
+        ts.into()
+    }
+}
+
+impl From<f64> for TimestampSeconds {
+    fn from(timestamp_secs: f64) -> Self {
+        Self::new_precise(timestamp_secs)
+    }
+}
+
+
+impl From<i64> for TimestampSeconds {
+    fn from(timestamp_secs: i64) -> Self {
+        Self::new_secs(timestamp_secs)
+    }
+}
+
+impl Into<f64> for TimestampSeconds {
+    fn into(self) -> f64 {
+        self.0
+    }
+}
+
+impl Into<f64> for &TimestampSeconds {
+    fn into(self) -> f64 {
+        self.0
+    }
+}
+
+impl Into<i64> for TimestampSeconds {
+    fn into(self) -> i64 {
+        self.0 as i64
+    }
+}
+
+impl Into<i64> for &TimestampSeconds {
+    fn into(self) -> i64 {
+        self.0 as i64
+    }
+}
+
+impl From<TimestampSeconds> for TelemetryValue {
+    fn from(that: TimestampSeconds) -> Self {
+        Self::Float(that.0)
+    }
+}
+
+impl std::ops::Add<Duration> for TimestampSeconds {
+    type Output = TimestampSeconds;
+
+    fn add(self, rhs: Duration) -> Self::Output {
+        Self(self.0 + rhs.as_secs_f64())
+    }
+}
+
+impl std::ops::Add<chrono::Duration> for TimestampSeconds {
+    type Output = TimestampSeconds;
+
+    fn add(self, rhs: chrono::Duration) -> Self::Output {
+        let millis = rhs.num_milliseconds() as f64;
+        let secs = millis / 1_000.;
+        Self(self.0 + secs)
+    }
+}
+
+impl std::ops::Sub<Duration> for TimestampSeconds {
+    type Output = TimestampSeconds;
+
+    fn sub(self, rhs: Duration) -> Self::Output {
+        Self(self.0 - rhs.as_secs_f64())
+    }
+}
+
+impl std::ops::Sub<chrono::Duration> for TimestampSeconds {
+    type Output = TimestampSeconds;
+
+    fn sub(self, rhs: chrono::Duration) -> Self::Output {
+        let millis = rhs.num_milliseconds() as f64;
+        let secs = millis / 1_000.;
+        Self(self.0 - secs)
+    }
+}
+
+impl std::ops::Add<Duration> for &TimestampSeconds {
+    type Output = TimestampSeconds;
+
+    fn add(self, rhs: Duration) -> Self::Output {
+        TimestampSeconds(self.0 + rhs.as_secs_f64())
+    }
+}
+
+impl std::ops::Add<chrono::Duration> for &TimestampSeconds {
+    type Output = TimestampSeconds;
+
+    fn add(self, rhs: chrono::Duration) -> Self::Output {
+        let millis = rhs.num_milliseconds() as f64;
+        let secs = millis / 1_000.;
+        TimestampSeconds(self.0 + secs)
+    }
+}
+
+impl std::ops::Sub<Duration> for &TimestampSeconds {
+    type Output = TimestampSeconds;
+
+    fn sub(self, rhs: Duration) -> Self::Output {
+        TimestampSeconds(self.0 - rhs.as_secs_f64())
+    }
+}
+
+impl std::ops::Sub<chrono::Duration> for &TimestampSeconds {
+    type Output = TimestampSeconds;
+
+    fn sub(self, rhs: chrono::Duration) -> Self::Output {
+        let millis = rhs.num_milliseconds() as f64;
+        let secs = millis / 1_000.;
+        TimestampSeconds(self.0 - secs)
+    }
+}
+
 
 #[derive(Debug, Copy, Clone, Default, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct RecordsPerSecond(f64);
@@ -30,6 +191,14 @@ pub struct RecordsPerSecond(f64);
 impl RecordsPerSecond {
     pub fn new(recs_per_sec: f64) -> Self {
         Self(recs_per_sec)
+    }
+
+    pub fn max(lhs: RecordsPerSecond, rhs: RecordsPerSecond) -> RecordsPerSecond {
+        f64::max(lhs.0, rhs.0).into()
+    }
+
+    pub fn min(lhs: RecordsPerSecond, rhs: RecordsPerSecond) -> RecordsPerSecond {
+        f64::min(lhs.0, rhs.0).into()
     }
 }
 
@@ -100,83 +269,6 @@ impl RelativeEq for RecordsPerSecond {
     }
 }
 
-#[derive(Debug, Copy, Clone, Default, PartialEq, PartialOrd, Serialize, Deserialize)]
-pub struct TimestampSeconds(f64);
-
-impl TimestampSeconds {
-    pub fn new_secs(ts_secs: i64) -> Self {
-        if (f64::MAX as i64) < ts_secs {
-            panic!(
-                "maximum timestamp seconds support is {} - cannot create with {}",
-                f64::MAX as i64,
-                ts_secs
-            );
-        }
-
-        Self(ts_secs as f64)
-    }
-
-    pub fn new_precise(ts_secs: f64) -> Self {
-        Self(ts_secs)
-    }
-}
-
-impl fmt::Display for TimestampSeconds {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!("{}_s", self.0))
-    }
-}
-
-impl AsRef<f64> for TimestampSeconds {
-    fn as_ref(&self) -> &f64 {
-        &self.0
-    }
-}
-
-impl From<f64> for TimestampSeconds {
-    fn from(timestamp_secs: f64) -> Self {
-        Self::new_precise(timestamp_secs)
-    }
-}
-
-
-impl From<i64> for TimestampSeconds {
-    fn from(timestamp_secs: i64) -> Self {
-        Self::new_secs(timestamp_secs)
-    }
-}
-
-impl Into<f64> for TimestampSeconds {
-    fn into(self) -> f64 {
-        self.0
-    }
-}
-
-impl Into<f64> for &TimestampSeconds {
-    fn into(self) -> f64 {
-        self.0
-    }
-}
-
-impl Into<i64> for TimestampSeconds {
-    fn into(self) -> i64 {
-        self.0 as i64
-    }
-}
-
-impl Into<i64> for &TimestampSeconds {
-    fn into(self) -> i64 {
-        self.0 as i64
-    }
-}
-
-impl From<TimestampSeconds> for TelemetryValue {
-    fn from(that: TimestampSeconds) -> Self {
-        Self::Float(that.0)
-    }
-}
-
-
 pub type Point = (f64, f64);
 
 impl From<WorkloadMeasurement> for Point {
@@ -209,10 +301,18 @@ impl From<MetricCatalog> for WorkloadMeasurement {
     }
 }
 
-pub trait WorkloadForecast: Debug + Sync + Send {
+pub trait WorkloadForecastBuilder: Debug + Sync + Send {
     fn observations_needed(&self) -> (usize, usize);
     fn add_observation(&mut self, measurement: WorkloadMeasurement);
     fn clear(&mut self);
-    fn predict_next_workload(&self) -> Result<Workload, PlanError>;
+    fn build_forecast(&mut self) -> Result<Box<dyn WorkloadForecast>, PlanError>;
+}
+
+pub trait WorkloadForecast: Debug {
+    fn name(&self) -> &'static str;
+    fn workload_at(&self, timestamp: TimestampSeconds) -> Result<RecordsPerSecond, PlanError>;
     fn total_records_between(&self, start: TimestampSeconds, end: TimestampSeconds) -> Result<f64, PlanError>;
+    fn correlation_coefficient(&self) -> f64;
+
+    // fn predict_next_workload(&self) -> Result<Workload, PlanError>;
 }

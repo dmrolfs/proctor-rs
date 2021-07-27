@@ -1,74 +1,105 @@
 use std::collections::VecDeque;
 use std::fmt::Debug;
 
-use statrs::statistics::Statistics;
+use serde::{Deserialize, Serialize};
 
 use super::signal::SignalDetector;
-use super::{Point, Workload, WorkloadForecast};
+use super::{Point, WorkloadForecast};
 use crate::error::PlanError;
-use crate::flink::plan::forecast::regression::{LinearRegression, QuadraticRegression, RegressionStrategy};
+use crate::flink::plan::forecast::regression::{LinearRegression, QuadraticRegression};
 use crate::flink::plan::forecast::WorkloadMeasurement;
-use crate::flink::plan::TimestampSeconds;
+use crate::flink::plan::WorkloadForecastBuilder;
 
-#[derive(Debug)]
-pub struct LeastSquaresWorkloadForecast {
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SpikeSettings {
+    std_deviation_threshold: f64,
+    influence: f64,
+    length_threshold: usize,
+}
+
+const SPIKE_STD_DEV_THRESHOLD: f64 = 3.;
+const SPIKE_INFLUENCE: f64 = 0.;
+const SPIKE_LENGTH_THRESHOLD: usize = 3;
+
+impl Default for SpikeSettings {
+    fn default() -> Self {
+        Self {
+            std_deviation_threshold: SPIKE_STD_DEV_THRESHOLD,
+            influence: SPIKE_INFLUENCE,
+            length_threshold: SPIKE_LENGTH_THRESHOLD,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LeastSquaresWorkloadForecastBuilder {
     window_size: usize,
+    spike_length_threshold: usize,
     data: VecDeque<Point>,
     spike_detector: SignalDetector,
-    consecutive_spikes: usize,
+    spike_length: usize,
 }
 
 const OBSERVATION_WINDOW_SIZE: usize = 20;
 
-impl Default for LeastSquaresWorkloadForecast {
+impl Default for LeastSquaresWorkloadForecastBuilder {
     fn default() -> Self {
-        LeastSquaresWorkloadForecast::new(OBSERVATION_WINDOW_SIZE, 5., 0.)
+        LeastSquaresWorkloadForecastBuilder::new(OBSERVATION_WINDOW_SIZE, SpikeSettings::default())
     }
 }
 
-impl LeastSquaresWorkloadForecast {
-    pub fn new(window: usize, spike_threshold: f64, spike_influence: f64) -> Self {
+impl LeastSquaresWorkloadForecastBuilder {
+    pub fn new(window: usize, spike_settings: SpikeSettings) -> Self {
         Self {
             window_size: window,
+            spike_length_threshold: spike_settings.length_threshold,
             data: VecDeque::with_capacity(window),
-            spike_detector: SignalDetector::new(window, spike_threshold, spike_influence),
-            consecutive_spikes: 0,
+            spike_detector: SignalDetector::new(
+                window,
+                spike_settings.std_deviation_threshold,
+                spike_settings.influence,
+            ),
+            spike_length: 0,
         }
     }
 
     fn data_slice(&self) -> &[Point] {
         self.data.as_slices().0
     }
-}
 
-impl std::ops::Add<WorkloadMeasurement> for LeastSquaresWorkloadForecast {
-    type Output = LeastSquaresWorkloadForecast;
+    fn assess_spike(&mut self, observation: Point) -> usize {
+        if let Some(_spike) = self.spike_detector.signal(observation.1) {
+            self.spike_length += 1;
+            tracing::debug!(consecutive_spikes=%self.spike_length, "anomaly detected at {:?}", observation);
+        } else {
+            self.spike_length = 0;
+        }
 
-    fn add(mut self, rhs: WorkloadMeasurement) -> Self::Output {
-        self.add_observation(rhs);
-        self
+        self.spike_length
+    }
+
+    fn exceeded_spike_threshold(&self) -> bool {
+        self.spike_length_threshold <= self.spike_length
+    }
+
+    fn drop_data(&mut self, range: impl std::ops::RangeBounds<usize>) -> Vec<Point> {
+        self.spike_length = 0;
+        self.data.drain(range).collect()
     }
 }
 
-const SPIKE_THRESHOLD: usize = 3;
-
-impl WorkloadForecast for LeastSquaresWorkloadForecast {
-    #[inline]
+impl WorkloadForecastBuilder for LeastSquaresWorkloadForecastBuilder {
     fn observations_needed(&self) -> (usize, usize) {
-        (self.window_size, self.window_size - self.data.len())
+        (self.window_size - self.data.len(), self.window_size)
     }
 
-    #[tracing::instrument(
-        level="debug",
-        skip(self),
-        fields(consecutive_spikes=%self.consecutive_spikes)
-    )]
+    #[tracing::instrument(level="debug", skip(self), fields(spike_length=%self.spike_length,),)]
     fn add_observation(&mut self, measurement: WorkloadMeasurement) {
         let data = measurement.into();
-        self.measure_spike(data);
+        self.assess_spike(data);
         // drop up to start of spike in order to establish new prediction function
         if self.exceeded_spike_threshold() {
-            let remaining = self.drop_data(..(self.data.len() - SPIKE_THRESHOLD));
+            let remaining = self.drop_data(..(self.data.len() - self.spike_length_threshold));
             tracing::debug!(
                 ?remaining,
                 "exceeded spike threshold - dropping observation before spike."
@@ -80,146 +111,170 @@ impl WorkloadForecast for LeastSquaresWorkloadForecast {
         }
 
         self.data.push_back(data);
-        self.data.make_contiguous();
     }
 
     fn clear(&mut self) {
         self.data.clear();
         self.spike_detector.clear();
-        self.consecutive_spikes = 0;
+        self.spike_length = 0;
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
-    fn predict_next_workload(&self) -> Result<Workload, PlanError> {
-        if !self.have_enough_data_for_prediction() {
-            return Ok(Workload::NotEnoughData);
+    fn build_forecast(&mut self) -> Result<Box<dyn WorkloadForecast>, PlanError> {
+        if !self.have_enough_data() {
+            return Err(PlanError::NotEnoughData { supplied: self.data.len(), need: self.window_size, });
         }
 
-        let data = self.data_slice();
-        let prediction = if let Some(next_timestamp) = Self::estimate_next_timestamp(data) {
-            let model = Self::do_select_model(data)?;
-            model.workload_at(next_timestamp.into())
-        } else {
-            Ok(Workload::NotEnoughData)
-        };
-
-        tracing::debug!(?prediction, "workload prediction calculated");
-        Ok(prediction?)
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    fn total_records_between(&self, start: TimestampSeconds, end: TimestampSeconds) -> Result<f64, PlanError> {
+        self.data.make_contiguous();
         let data = self.data_slice();
         let model = Self::do_select_model(data)?;
-        let total_events = model.total_records_within(start, end)?;
-        tracing::debug!("total events between within [{}, {}] = {}", start, end, total_events);
-        Ok(total_events)
-    }
-}
-
-impl LeastSquaresWorkloadForecast {
-    fn do_predict_workload(data: &[Point]) -> Result<Workload, PlanError> {
-        if let Some(next_timestamp) = Self::estimate_next_timestamp(&data) {
-            let model = Self::do_select_model(&data)?;
-            model.workload_at(next_timestamp.into())
-        } else {
-            Ok(Workload::NotEnoughData)
-        }
-    }
-
-    #[tracing::instrument(level = "debug", skip(data))]
-    fn do_select_model(data: &[Point]) -> Result<Box<dyn RegressionStrategy>, PlanError> {
-        let linear = LinearRegression::from_data(&data)?;
-        let quadratic = QuadraticRegression::from_data(&data)?;
-
-        let model: Box<dyn RegressionStrategy> =
-            match (linear.correlation_coefficient, quadratic.correlation_coefficient) {
-                (_, quad_coeff) if quad_coeff.is_nan() => Box::new(linear),
-                (linear_coeff, _) if linear_coeff.is_nan() => Box::new(quadratic),
-                (l, q) if l < q => Box::new(quadratic),
-                _ => Box::new(linear),
-            };
-
-        tracing::debug!(
-            ?linear,
-            ?quadratic,
-            "selected workload prediction model: {}",
-            model.name()
-        );
         Ok(model)
     }
-
-    fn estimate_next_timestamp(data: &[Point]) -> Option<f64> {
-        data.get(data.len() - 1).map(|(x, _)| {
-            // calculate average only if there's data.
-            let avg_ts_delta = Self::splines(data)
-                .into_iter()
-                .map(|((x1, _), (x2, _))| x2 - x1)
-                .collect::<Vec<_>>()
-                .mean();
-            x + avg_ts_delta
-        })
-    }
-
-    fn splines(data: &[Point]) -> Vec<(Point, Point)> {
-        if data.len() < 2 {
-            return Vec::default();
-        }
-
-        let mut result = Vec::with_capacity(data.len() - 1);
-
-        let mut prev: Option<Point> = None;
-        for (x2, y2) in data.iter() {
-            if let Some((x1, y1)) = prev {
-                result.push(((x1, y1), (*x2, *y2)));
-            }
-
-            prev = Some((*x2, *y2));
-        }
-
-        result
-    }
 }
 
-impl LeastSquaresWorkloadForecast {
-    fn have_enough_data_for_prediction(&self) -> bool {
-        tracing::debug!(observations=%self.data.len(), required=%self.window_size, "have enough data ?= {}", self.data.len() == self.data.capacity());
+impl LeastSquaresWorkloadForecastBuilder {
+    pub fn have_enough_data(&self) -> bool {
         self.window_size <= self.data.len()
     }
 
-    fn measure_spike(&mut self, observation: Point) -> usize {
-        if let Some(_spike) = self.spike_detector.signal(observation.1) {
-            self.consecutive_spikes += 1;
-            tracing::debug!(consecutive_spikes=%self.consecutive_spikes, "anomaly detected at {:?}", observation);
-        } else {
-            self.consecutive_spikes = 0;
-        }
+    #[tracing::instrument(level = "debug", skip(data))]
+    fn do_select_model(data: &[Point]) -> Result<Box<dyn WorkloadForecast>, PlanError> {
+        let linear = LinearRegression::from_data(&data)?;
+        let linear_r = linear.correlation_coefficient;
+        let quadratic = QuadraticRegression::from_data(&data)?;
+        let quadratic_r = quadratic.correlation_coefficient;
 
-        self.consecutive_spikes
-    }
+        let model: Box<dyn WorkloadForecast> = match (linear_r, quadratic_r) {
+            (_, q_r) if q_r.is_nan() => Box::new(linear),
+            (l_r, _) if l_r.is_nan() => Box::new(quadratic),
+            (l_r, q_r) if l_r < q_r => Box::new(quadratic),
+            _ => Box::new(linear),
+        };
 
-    #[inline]
-    fn exceeded_spike_threshold(&self) -> bool {
-        SPIKE_THRESHOLD <= self.consecutive_spikes
-    }
-
-    fn drop_data<R>(&mut self, range: R) -> Vec<Point>
-    where
-        R: std::ops::RangeBounds<usize>,
-    {
-        self.data.drain(range).collect()
+        tracing::debug!(%linear_r, %quadratic_r, "selected workload prediction model: {}", model.name());
+        Ok(model)
     }
 }
+
+impl std::ops::Add<WorkloadMeasurement> for LeastSquaresWorkloadForecastBuilder {
+    type Output = LeastSquaresWorkloadForecastBuilder;
+
+    fn add(mut self, rhs: WorkloadMeasurement) -> Self::Output {
+        self.add_observation(rhs);
+        self
+    }
+}
+
+
+// #[derive(Debug)]
+// pub struct LeastSquaresWorkloadForecast {
+//     window_size: usize,
+//     data: VecDeque<Point>,
+//     spike_detector: SignalDetector,
+//     consecutive_spikes: usize,
+// }
+
+
+// impl WorkloadForecast for LeastSquaresWorkloadForecast {
+// todo WORK HERE AND PLANNING
+// at valid time calculate workload_rate
+// between now and recovery time, caluclate total records
+// calculate recovery rate via total records and catch up time
+// target rate = max(recovery rate, workload rate)
+
+// #[tracing::instrument(level = "debug", skip(self))]
+// fn workload_at(&self, timestamp: TimestampSeconds) -> Result<Workload, PlanError> {
+//     if !self.have_enough_data_for_prediction() {
+//         return Ok(Workload::NotEnoughData);
+//     }
+//
+//     let data = self.data_slice();
+//     let model = Self::do_select_model(data)?;
+//     let prediction = model.workload_at(timestamp);
+//
+//     tracing::debug!(?prediction, "workload[{}] =  {:?}", timestamp, prediction);
+//     Ok(prediction?)
+// }
+//
+// #[tracing::instrument(level = "debug", skip(self))]
+// fn total_records_between(&self, start: TimestampSeconds, end: TimestampSeconds) -> Result<f64,
+// PlanError> {     let data = self.data_slice();
+//     let model = Self::do_select_model(data)?;
+//     let total_events = model.total_records_within(start, end)?;
+//     tracing::debug!("total events between within [{}, {}] = {}", start, end, total_events);
+//     Ok(total_events)
+// }
+//
+// #[tracing::instrument(level = "debug", skip(self))]
+// fn predict_next_workload(&self) -> Result<Workload, PlanError> {
+//     todo!()  // remove
+// if !self.have_enough_data_for_prediction() {
+//     return Ok(Workload::NotEnoughData);
+// }
+//
+// let data = self.data_slice();
+// let prediction = if let Some(next_timestamp) = Self::estimate_next_timestamp(data) {
+//     let model = Self::do_select_model(data)?;
+//     model.workload_at(next_timestamp.into())
+// } else {
+//     Ok(Workload::NotEnoughData)
+// };
+//
+// tracing::debug!(?prediction, "workload prediction calculated");
+// Ok(prediction?)
+// }
+// }
+
+// impl LeastSquaresWorkloadForecast {
+//     fn do_predict_workload(data: &[Point]) -> Result<Workload, PlanError> {
+//         if let Some(next_timestamp) = Self::estimate_next_timestamp(&data) {
+//             let model = Self::do_select_model(&data)?;
+//             model.workload_at(next_timestamp.into())
+//         } else {
+//             Ok(Workload::NotEnoughData)
+//         }
+//     }
+//
+//     fn estimate_next_timestamp(data: &[Point]) -> Option<TimestampSeconds> {
+//         data.get(data.len() - 1).map(|(x, _)| {
+//             // calculate average only if there's data.
+//             let avg_ts_delta = Self::splines(data)
+//                 .into_iter()
+//                 .map(|((x1, _), (x2, _))| x2 - x1)
+//                 .collect::<Vec<_>>()
+//                 .mean();
+//             (x + avg_ts_delta).into()
+//         })
+//     }
+//
+//     fn splines(data: &[Point]) -> Vec<(Point, Point)> {
+//         if data.len() < 2 {
+//             return Vec::default();
+//         }
+//
+//         let mut result = Vec::with_capacity(data.len() - 1);
+//
+//         let mut prev: Option<Point> = None;
+//         for (x2, y2) in data.iter() {
+//             if let Some((x1, y1)) = prev {
+//                 result.push(((x1, y1), (*x2, *y2)));
+//             }
+//
+//             prev = Some((*x2, *y2));
+//         }
+//
+//         result
+//     }
+// }
+
 
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
     use chrono::{DateTime, TimeZone, Utc};
-    use num_traits::pow;
     use pretty_assertions::assert_eq;
+    use claim::{assert_ok, assert_err, assert_matches};
 
     use super::*;
-    use crate::flink::plan::forecast::least_squares::LeastSquaresWorkloadForecast;
     use crate::flink::plan::forecast::{Point, Workload};
 
     #[test]
@@ -241,10 +296,17 @@ mod tests {
 
         let test_scenario = |influence: f64, measurements: Vec<usize>| {
             let test_data: Vec<(Point, usize)> = data.clone().into_iter().zip(measurements).collect();
-            let mut forecast = LeastSquaresWorkloadForecast::new(30, 5., influence);
+
+            let spike_settings: SpikeSettings = SpikeSettings {
+                std_deviation_threshold: 5.,
+                influence,
+                length_threshold: SPIKE_LENGTH_THRESHOLD,
+            };
+
+            let mut forecast_builder = LeastSquaresWorkloadForecastBuilder::new(30, spike_settings);
 
             for (pt, expected) in test_data.into_iter() {
-                let actual = forecast.measure_spike(pt);
+                let actual = forecast_builder.assess_spike(pt);
                 assert_eq!((influence, pt, actual), (influence, pt, expected));
             }
         };
@@ -312,13 +374,13 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_plan_forecast_estimate_next_timestamp() -> anyhow::Result<()> {
-        let data = vec![(1., 32.5), (3., 37.3), (5., 36.4), (7., 32.4), (9., 28.5)];
-        let actual = LeastSquaresWorkloadForecast::estimate_next_timestamp(&data).unwrap();
-        assert_relative_eq!(actual, 11., epsilon = 1.0e-10);
-        Ok(())
-    }
+    // #[test]
+    // fn test_plan_forecast_estimate_next_timestamp() -> anyhow::Result<()> {
+    //     let data = vec![(1., 32.5), (3., 37.3), (5., 36.4), (7., 32.4), (9., 28.5)];
+    //     let actual = LeastSquaresWorkloadForecast::estimate_next_timestamp(&data).unwrap();
+    //     assert_relative_eq!(actual, 11., epsilon = 1.0e-10);
+    //     Ok(())
+    // }
 
     #[test]
     fn test_plan_forecast_model_selection() -> anyhow::Result<()> {
@@ -339,7 +401,7 @@ mod tests {
             (4., 11.97),
         ];
 
-        let model_1 = LeastSquaresWorkloadForecast::do_select_model(&data_1)?;
+        let model_1 = LeastSquaresWorkloadForecastBuilder::do_select_model(&data_1)?;
         assert_eq!(model_1.name(), "QuadraticRegression");
 
         let data_2 = vec![
@@ -355,7 +417,7 @@ mod tests {
             (10., 10.),
         ];
 
-        let model_2 = LeastSquaresWorkloadForecast::do_select_model(&data_2)?;
+        let model_2 = LeastSquaresWorkloadForecastBuilder::do_select_model(&data_2)?;
         assert_eq!(model_2.name(), "LinearRegression");
 
         let data_3 = vec![
@@ -371,7 +433,7 @@ mod tests {
             (10., 0.),
         ];
 
-        let model_3 = LeastSquaresWorkloadForecast::do_select_model(&data_3)?;
+        let model_3 = LeastSquaresWorkloadForecastBuilder::do_select_model(&data_3)?;
         assert_eq!(model_3.name(), "LinearRegression");
 
         let data_4 = vec![
@@ -387,7 +449,7 @@ mod tests {
             (10., 17.),
         ];
 
-        let model_4 = LeastSquaresWorkloadForecast::do_select_model(&data_4)?;
+        let model_4 = LeastSquaresWorkloadForecastBuilder::do_select_model(&data_4)?;
         assert_eq!(model_4.name(), "LinearRegression");
 
         Ok(())
@@ -401,13 +463,13 @@ mod tests {
     }
 
     #[test]
-    fn test_plan_forecast_predict_next_workload() -> anyhow::Result<()> {
-        // lazy_static::initialize(&crate::tracing::TEST_TRACING);
-        // let main_span = tracing::info_span!("test_plan_forecast_model_selection");
-        // let _ = main_span.enter();
+    fn test_plan_forecast_predict_workload() -> anyhow::Result<()> {
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_plan_forecast_predict_workload");
+        let _ = main_span.enter();
 
         let now: i64 = 1624061766;
-        tracing::error!("NOW: {}", now);
+        tracing::info!("NOW: {}", now);
         let step = 15;
 
         let workload_expected: Vec<(f64, Option<f64>)> = vec![
@@ -430,35 +492,46 @@ mod tests {
             (17., None),
             (18., None),
             (19., None),
-            (20., Some(21.16895)),
-            (21., Some(22.22487)),
-            (22., Some(23.3613)),
-            (23., Some(24.12737)),
-            (24., Some(25.7717)),
-            (25., Some(26.5299)),
-            (26., Some(27.8993)),
-            (27., Some(28.4287)),
-            (28., Some(29.3014)),
-            (29., Some(30.159987)),
-            (30., Some(31.30939)),
+            (20., Some(20.15286)),
+            (21., Some(21.20346)),
+            (22., Some(22.32689)),
+            (23., Some(23.11524)),
+            (24., Some(24.69824)),
+            (25., Some(25.47945)),
+            (26., Some(26.81368)),
+            (27., Some(27.38790)),
+            (28., Some(28.27270)),
+            (29., Some(29.14475)),
+            (30., Some(30.27993)),
         ];
 
-        let mut forecast = LeastSquaresWorkloadForecast::new(20, 5., 0.5);
+        let spike_settings: SpikeSettings = SpikeSettings {
+            std_deviation_threshold: 5.,
+            influence: 0.5,
+            length_threshold: SPIKE_LENGTH_THRESHOLD,
+        };
+
+        let mut forecast_builder = LeastSquaresWorkloadForecastBuilder::new(20, spike_settings);
 
         for (i, (workload, expected)) in workload_expected.into_iter().enumerate() {
             let ts = Utc.timestamp(now + (i as i64) * step, 0);
-            tracing::info!("timestamp: {:?}", ts);
-            let measurement = make_measurement(ts, workload);
-            forecast.add_observation(measurement);
+            tracing::info!("i:{}-timestamp:{:?} ==> test_workload:{} expected:{:?}", i, ts, workload, expected);
 
-            match (forecast.predict_next_workload(), expected) {
-                (Ok(Workload::RecordsInPerSecond(actual)), Some(e)) => {
-                    tracing::info!(%actual, expected=%e, "[{}] testing workload prediction.", i);
-                    assert_relative_eq!(actual, e.into(), epsilon = 1.0e-4)
-                },
-                (Ok(Workload::NotEnoughData), None) => tracing::info!("[{}] okay - not enough data", i),
-                (workload, Some(e)) => panic!("[{}] failed to predict:{:?} -- expected:{}", i, workload, e),
-                (workload, None) => panic!("[{}] expected not enough data but calculated:{:?}", i, workload),
+            let measurement = make_measurement(ts, workload);
+            forecast_builder.add_observation(measurement);
+
+            let forecast = forecast_builder.build_forecast();
+            if let Some(e) = expected {
+                let forecast = assert_ok!(forecast);
+                let actual = assert_ok!(forecast.workload_at(ts.into()));
+                tracing::info!(%actual, expected=%e, "[{}] testing workload prediction.", i);
+                assert_relative_eq!(actual, e.into(), epsilon = 1.0e-4)
+            } else {
+                let plan_error = assert_err!(forecast);
+                claim::assert_matches!(
+                    plan_error,
+                    PlanError::NotEnoughData { supplied:i, need:20 }
+                );
             }
         }
 

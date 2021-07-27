@@ -134,12 +134,12 @@ impl BenchNeighbors {
 
     #[tracing::instrument(level = "debug")]
     fn interpolate(workload_rate: RecordsPerSecond, lo: &Benchmark, hi: &Benchmark) -> u8 {
-        let start = Key::new(
+        let start: Key<f64, f64> = Key::new(
             lo.records_out_per_sec.into(),
             lo.nr_task_managers as f64,
             Interpolation::Linear,
         );
-        let end = Key::new(
+        let end: Key<f64, f64> = Key::new(
             hi.records_out_per_sec.into(),
             hi.nr_task_managers as f64,
             Interpolation::Linear,

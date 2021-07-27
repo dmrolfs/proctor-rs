@@ -86,7 +86,6 @@ impl<T> Inlet<T> {
 
 #[async_trait]
 impl<T: Send> Port for Inlet<T> {
-    #[inline]
     fn name(&self) -> &str {
         self.0.as_str()
     }
@@ -107,7 +106,6 @@ impl<T: Send> Port for Inlet<T> {
 }
 
 impl<T> Clone for Inlet<T> {
-    #[inline]
     fn clone(&self) -> Self {
         Self(self.0.clone(), Arc::clone(&self.1))
     }
@@ -226,7 +224,6 @@ impl<T> Outlet<T> {
 
 #[async_trait]
 impl<T: Send> Port for Outlet<T> {
-    #[inline]
     fn name(&self) -> &str {
         self.0.as_str()
     }
