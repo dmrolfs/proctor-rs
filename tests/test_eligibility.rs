@@ -542,7 +542,7 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
     let policy = make_test_policy(&TestSettings {
         required_subscription_fields: HashSet::default(),
         optional_subscription_fields: HashSet::default(),
-        source: PolicySource::String(r#"eligible(item, environment) if environment.location_code == 33;"#.to_string()),
+        source: PolicySource::String(r#"eligible(_item, environment) if environment.location_code == 33;"#.to_string()),
     });
     let mut flow: TestFlow<Data, TestEligibilityContext> =
         TestFlow::new(TelemetrySubscription::new("all_data"), policy).await?;
@@ -844,7 +844,7 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
         "timestamp",
     });
 
-    let policy = TestPolicy::new(r#"eligible(item, environment) if environment.cluster_status.location_code == 33;"#);
+    let policy = TestPolicy::new(r#"eligible(_item, environment) if environment.cluster_status.location_code == 33;"#);
 
     let mut flow = TestFlow::new(subscription, policy).await?;
 
@@ -964,7 +964,7 @@ async fn test_eligibility_w_custom_fields() -> anyhow::Result<()> {
     });
 
     let policy = TestPolicy::new_with_extension(
-        r#"eligible(item, environment) if
+        r#"eligible(_item, environment) if
             c = environment.custom() and
             c.cat = "Otis";"#,
         maplit::hashset! {"cat"},
@@ -1027,7 +1027,7 @@ async fn test_eligibility_w_item_n_env() -> anyhow::Result<()> {
     let policy = TestPolicy::new_with_extension(
         r#"eligible(item, env) if proper_cat(item, env) and lag_2(item, env);
 proper_cat(_, env) if env.custom.cat = "Otis";
-lag_2(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
+lag_2(_item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
         maplit::hashset! { "cat" },
     );
 

@@ -467,12 +467,12 @@ where
 mod tests {
     use std::collections::HashMap;
 
+    use claim::assert_ok;
     use oso::PolarClass;
     use pretty_assertions::assert_eq;
     use serde::{Deserialize, Serialize};
     use tokio::sync::mpsc;
     use tokio_test::block_on;
-    use claim::assert_ok;
 
     use super::*;
     use crate::elements::telemetry;
@@ -531,24 +531,24 @@ mod tests {
         type Context = TestContext;
         type Item = User;
 
-        #[tracing::instrument(level="info", skip(oso))]
+        #[tracing::instrument(level = "info", skip(oso))]
         fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
             oso.load_str(self.policy.as_str()).map_err(|err| err.into())
         }
 
-        #[tracing::instrument(level="info", skip(oso))]
+        #[tracing::instrument(level = "info", skip(oso))]
         fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
             oso.register_class(User::get_polar_class())?;
             oso.register_class(TestContext::get_polar_class())?;
             Ok(())
         }
 
-        #[tracing::instrument(level="info")]
+        #[tracing::instrument(level = "info")]
         fn make_query_args(&self, item: &Self::Item, _context: &Self::Context) -> Self::Args {
             (item.clone(), "foo", "bar")
         }
 
-        #[tracing::instrument(level="info", skip(engine))]
+        #[tracing::instrument(level = "info", skip(engine))]
         fn query_policy(&self, engine: &Oso, args: Self::Args) -> Result<QueryResult, PolicyError> {
             QueryResult::from_query(engine.query_rule("allow", args)?)
         }

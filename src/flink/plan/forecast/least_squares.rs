@@ -121,7 +121,7 @@ impl WorkloadForecastBuilder for LeastSquaresWorkloadForecastBuilder {
 
     fn build_forecast(&mut self) -> Result<Box<dyn WorkloadForecast>, PlanError> {
         if !self.have_enough_data() {
-            return Err(PlanError::NotEnoughData { supplied: self.data.len(), need: self.window_size, });
+            return Err(PlanError::NotEnoughData { supplied: self.data.len(), need: self.window_size });
         }
 
         self.data.make_contiguous();
@@ -271,8 +271,8 @@ impl std::ops::Add<WorkloadMeasurement> for LeastSquaresWorkloadForecastBuilder 
 mod tests {
     use approx::assert_relative_eq;
     use chrono::{DateTime, TimeZone, Utc};
+    use claim::{assert_err, assert_matches, assert_ok};
     use pretty_assertions::assert_eq;
-    use claim::{assert_ok, assert_err, assert_matches};
 
     use super::*;
     use crate::flink::plan::forecast::{Point, Workload};
@@ -515,7 +515,13 @@ mod tests {
 
         for (i, (workload, expected)) in workload_expected.into_iter().enumerate() {
             let ts = Utc.timestamp(now + (i as i64) * step, 0);
-            tracing::info!("i:{}-timestamp:{:?} ==> test_workload:{} expected:{:?}", i, ts, workload, expected);
+            tracing::info!(
+                "i:{}-timestamp:{:?} ==> test_workload:{} expected:{:?}",
+                i,
+                ts,
+                workload,
+                expected
+            );
 
             let measurement = make_measurement(ts, workload);
             forecast_builder.add_observation(measurement);
@@ -528,10 +534,7 @@ mod tests {
                 assert_relative_eq!(actual, e.into(), epsilon = 1.0e-4)
             } else {
                 let plan_error = assert_err!(forecast);
-                claim::assert_matches!(
-                    plan_error,
-                    PlanError::NotEnoughData { supplied:i, need:20 }
-                );
+                claim::assert_matches!(plan_error, PlanError::NotEnoughData { supplied: i, need: 20 });
             }
         }
 

@@ -283,7 +283,7 @@ async fn test_policy_filter_before_context_baseline() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_policy_filter_before_context_baseline");
     let _ = main_span.enter();
 
-    let flow = TestFlow::new(r#"eligible(item, context) if context.location_code == 33;"#).await;
+    let flow = TestFlow::new(r#"eligible(_item, context) if context.location_code == 33;"#).await;
     let item = TestItem {
         flow: TestFlowMetrics { input_messages_per_sec: 3.1415926535 },
         timestamp: Utc::now().into(),
@@ -303,7 +303,7 @@ async fn test_policy_filter_happy_context() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_policy_filter_happy_context");
     let _ = main_span.enter();
 
-    let flow = TestFlow::new(r#"eligible(item, context, _) if context.location_code == 33;"#).await;
+    let flow = TestFlow::new(r#"eligible(_item, context, _) if context.location_code == 33;"#).await;
 
     tracing::info!("DMR: 01. Make sure empty env...");
 
@@ -366,7 +366,7 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_policy_filter_w_pass_and_blocks");
     let _ = main_span.enter();
 
-    let mut flow = TestFlow::new(r#"eligible(item, context, _) if context.location_code == 33;"#).await;
+    let mut flow = TestFlow::new(r#"eligible(_item, context, _) if context.location_code == 33;"#).await;
     flow.push_context(TestContext::new(33)).await?;
     let event = flow.recv_policy_event().await?;
     assert!(matches!(event, elements::PolicyFilterEvent::ContextChanged(_)));
@@ -428,7 +428,7 @@ async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
     let _ = main_span.enter();
 
     let mut flow = TestFlow::new(
-        r#"eligible(item, context, c) if
+        r#"eligible(_item, context, c) if
             c = context.custom() and
             c.cat = "Otis";"#,
     )
@@ -483,9 +483,9 @@ async fn test_policy_w_binding() -> anyhow::Result<()> {
 
     let mut flow = TestFlow::with_query(
         r#"
-        eligible(_, context, length) if length = 13;
+        eligible(_, _context, length) if length = 13;
 
-        eligible(item, context, c) if
+        eligible(_item, context, c) if
             c = context.custom() and
             c.cat = "Otis" and
             cut;
@@ -554,7 +554,7 @@ proper_cat(_, env, c) if
 c = env.custom() and
 c.cat = "Otis";
 
-lag_2(item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
+lag_2(_item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
     )
     .await;
 
@@ -592,7 +592,7 @@ async fn test_policy_w_method() -> anyhow::Result<()> {
     let _ = main_span.enter();
 
     let flow = TestFlow::new(
-        r#"eligible(item, env, _) if
+        r#"eligible(item, _env, _) if
 34 < item.input_messages_per_sec(item.inbox_lag)
 and item.input_messages_per_sec(item.inbox_lag) < 36;"#,
     )
@@ -688,7 +688,7 @@ async fn test_append_policy() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_append_policy");
     let _ = main_span.enter();
 
-    let policy_1 = r#"eligible(item: TestMetricCatalog{ inbox_lag: 2 }, _, _);"#;
+    let policy_1 = r#"eligible(_item: TestMetricCatalog{ inbox_lag: 2 }, _, _);"#;
     let policy_2 = r#"eligible(_, env: TestContext, c) if c = env.custom() and c.cat = "Otis";"#;
 
     let flow = TestFlow::new(policy_1).await;
@@ -748,7 +748,7 @@ async fn test_reset_policy() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_reset_policy");
     let _ = main_span.enter();
 
-    let policy_1 = r#"eligible(item: TestMetricCatalog{ inbox_lag: 2 }, _, _);"#;
+    let policy_1 = r#"eligible(_item: TestMetricCatalog{ inbox_lag: 2 }, _, _);"#;
     let policy_2 = r#"eligible(_, env, c) if c = env.custom() and c.cat = "Otis";"#;
 
     let flow = TestFlow::new(policy_1).await;

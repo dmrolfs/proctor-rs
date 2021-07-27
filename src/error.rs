@@ -138,10 +138,7 @@ pub enum PlanError {
     ForecastError(anyhow::Error),
 
     #[error("not enough data to build forecast model - supplied:{supplied} need:{need}")]
-    NotEnoughData {
-        supplied: usize,
-        need: usize,
-    },
+    NotEnoughData { supplied: usize, need: usize },
 
     #[error("duration, {0}ms, exceeds supported limit")]
     DurationLimitExceeded(u128),
