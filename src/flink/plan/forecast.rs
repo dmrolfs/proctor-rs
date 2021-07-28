@@ -1,6 +1,7 @@
 use crate::error::PlanError;
 use crate::flink::MetricCatalog;
 
+mod calculator;
 mod least_squares;
 mod regression;
 mod ridge_regression;
@@ -11,6 +12,7 @@ use std::fmt::{self, Debug};
 use std::time::Duration;
 
 use approx::{AbsDiffEq, RelativeEq};
+pub use calculator::ForecastCalculator;
 use chrono::{DateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 

@@ -12,9 +12,9 @@ use crate::flink::plan::RecordsPerSecond;
 const MINIMAL_CLUSTER_SIZE: u8 = 1;
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Appraisal(BTreeMap<u8, BenchmarkRange>);
+pub struct PerformanceHistory(BTreeMap<u8, BenchmarkRange>);
 
-impl Appraisal {
+impl PerformanceHistory {
     pub fn add_lower_benchmark(&mut self, b: Benchmark) {
         if let Some(entry) = self.0.get_mut(&b.nr_task_managers) {
             entry.set_lo_rate(b.records_out_per_sec);
@@ -23,7 +23,7 @@ impl Appraisal {
             self.0.insert(entry.nr_task_managers, entry);
         }
 
-        // todo: dropped clearing appraisal inconsistencies (see todo at file bottom)
+        // todo: dropped clearing performance history inconsistencies (see todo at file bottom)
         // self.clear_inconsistencies_for_new_lo(&b);
     }
 
@@ -35,7 +35,7 @@ impl Appraisal {
             self.0.insert(entry.nr_task_managers, entry);
         }
 
-        // todo: dropped clearing appraisal inconsistencies (see todo at file bottom)
+        // todo: dropped clearing performance history inconsistencies (see todo at file bottom)
         // self.clear_inconsistencies_for_new_hi(b);
     }
 
@@ -44,7 +44,7 @@ impl Appraisal {
     }
 }
 
-impl Appraisal {
+impl PerformanceHistory {
     pub fn cluster_size_for_workload(&self, workload_rate: RecordsPerSecond) -> u8 {
         self.evaluate_neighbors(workload_rate)
             .map(|neighbors| neighbors.cluster_size_for(workload_rate))
@@ -162,40 +162,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_apprasial_add_lower_benchmark() -> anyhow::Result<()> {
+    fn test_performance_history_add_upper_benchmark_add_lower_benchmark() -> anyhow::Result<()> {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
-        let main_span = tracing::info_span!("test_appraisal_add_lower_benchmark");
+        let main_span = tracing::info_span!("test_performance_history_add_lower_benchmark");
         let _main_span_guard = main_span.enter();
 
-        let mut appraisal = Appraisal::default();
-        assert!(appraisal.0.is_empty());
+        let mut performance_history = PerformanceHistory::default();
+        assert!(performance_history.0.is_empty());
 
-        appraisal.add_lower_benchmark(Benchmark::new(4, 1.0.into()));
+        performance_history.add_lower_benchmark(Benchmark::new(4, 1.0.into()));
         assert_eq!(
-            appraisal,
-            Appraisal(maplit::btreemap! { 4 => BenchmarkRange::new(4, Some(1.0.into()), None), })
+            performance_history,
+            PerformanceHistory(maplit::btreemap! { 4 => BenchmarkRange::new(4, Some(1.0.into()), None), })
         );
 
-        appraisal.add_lower_benchmark(Benchmark::new(4, 3.0.into()));
+        performance_history.add_lower_benchmark(Benchmark::new(4, 3.0.into()));
         assert_eq!(
-            appraisal,
-            Appraisal(maplit::btreemap! { 4 => BenchmarkRange::new(4, Some(3.0.into()), None), })
+            performance_history,
+            PerformanceHistory(maplit::btreemap! { 4 => BenchmarkRange::new(4, Some(3.0.into()), None), })
         );
 
-        appraisal.add_lower_benchmark(Benchmark::new(2, 0.5.into()));
+        performance_history.add_lower_benchmark(Benchmark::new(2, 0.5.into()));
         assert_eq!(
-            appraisal,
-            Appraisal(maplit::btreemap! {
+            performance_history,
+            PerformanceHistory(maplit::btreemap! {
                 2 => BenchmarkRange::new(2, Some(0.5.into()), None),
                 4 => BenchmarkRange::new(4, Some(3.0.into()), None),
             })
         );
 
-        appraisal.add_upper_benchmark(Benchmark::new(4, 5.0.into()));
-        appraisal.add_lower_benchmark(Benchmark::new(4, 1.0.into()));
+        performance_history.add_upper_benchmark(Benchmark::new(4, 5.0.into()));
+        performance_history.add_lower_benchmark(Benchmark::new(4, 1.0.into()));
         assert_eq!(
-            appraisal,
-            Appraisal(maplit::btreemap! {
+            performance_history,
+            PerformanceHistory(maplit::btreemap! {
             2 => BenchmarkRange::new(2, Some(0.5.into()), None),
             4 => BenchmarkRange::new(4, Some(1.0.into()), Some(5.0.into())), }),
         );
@@ -204,40 +204,40 @@ mod tests {
     }
 
     #[test]
-    fn test_appraisal_add_upper_benchmark() -> anyhow::Result<()> {
+    fn test_performance_history_add_upper_benchmark() -> anyhow::Result<()> {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
-        let main_span = tracing::info_span!("test_appraisal_add_upper_benchmark");
+        let main_span = tracing::info_span!("test_performance_history_add_upper_benchmark");
         let _main_span_guard = main_span.enter();
 
-        let mut appraisal = Appraisal::default();
-        assert!(appraisal.0.is_empty());
+        let mut performance_history = PerformanceHistory::default();
+        assert!(performance_history.0.is_empty());
 
-        appraisal.add_upper_benchmark(Benchmark::new(4, 1.0.into()));
+        performance_history.add_upper_benchmark(Benchmark::new(4, 1.0.into()));
         assert_eq!(
-            appraisal,
-            Appraisal(maplit::btreemap! { 4 => BenchmarkRange::new(4, None, Some(1.0.into())), })
+            performance_history,
+            PerformanceHistory(maplit::btreemap! { 4 => BenchmarkRange::new(4, None, Some(1.0.into())), })
         );
 
-        appraisal.add_upper_benchmark(Benchmark::new(4, 3.0.into()));
+        performance_history.add_upper_benchmark(Benchmark::new(4, 3.0.into()));
         assert_eq!(
-            appraisal,
-            Appraisal(maplit::btreemap! { 4 => BenchmarkRange::new(4, None, Some(3.0.into())), })
+            performance_history,
+            PerformanceHistory(maplit::btreemap! { 4 => BenchmarkRange::new(4, None, Some(3.0.into())), })
         );
 
-        appraisal.add_upper_benchmark(Benchmark::new(2, 0.5.into()));
+        performance_history.add_upper_benchmark(Benchmark::new(2, 0.5.into()));
         assert_eq!(
-            appraisal,
-            Appraisal(maplit::btreemap! {
+            performance_history,
+            PerformanceHistory(maplit::btreemap! {
                 2 => BenchmarkRange::new(2, None, Some(0.5.into())),
                 4 => BenchmarkRange::new(4, None, Some(3.0.into())),
             })
         );
 
-        appraisal.add_lower_benchmark(Benchmark::new(4, 1.0.into()));
-        appraisal.add_upper_benchmark(Benchmark::new(4, 1.0.into()));
+        performance_history.add_lower_benchmark(Benchmark::new(4, 1.0.into()));
+        performance_history.add_upper_benchmark(Benchmark::new(4, 1.0.into()));
         assert_eq!(
-            appraisal,
-            Appraisal(maplit::btreemap! {
+            performance_history,
+            PerformanceHistory(maplit::btreemap! {
             2 => BenchmarkRange::new(2, None, Some(0.5.into())),
             4 => BenchmarkRange::new(4, Some(1.0.into()), Some(1.0.into())), }),
         );
@@ -246,36 +246,36 @@ mod tests {
     }
 
     #[test]
-    fn test_appraisal_add_lower_upper_benchmarks() -> anyhow::Result<()> {
+    fn test_performance_history_add_lower_upper_benchmarks() -> anyhow::Result<()> {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
-        let main_span = tracing::info_span!("test_appraisal_add_lower_upper_benchmarks");
+        let main_span = tracing::info_span!("test_performance_history_add_lower_upper_benchmarks");
         let _main_span_guard = main_span.enter();
 
-        let mut appraisal = Appraisal::default();
-        appraisal.add_lower_benchmark(Benchmark::new(4, 1.0.into()));
-        appraisal.add_upper_benchmark(Benchmark::new(4, 5.0.into()));
+        let mut performance_history = PerformanceHistory::default();
+        performance_history.add_lower_benchmark(Benchmark::new(4, 1.0.into()));
+        performance_history.add_upper_benchmark(Benchmark::new(4, 5.0.into()));
         assert_eq!(
-            appraisal,
-            Appraisal(maplit::btreemap! { 4 => BenchmarkRange::new(4, Some(1.0.into()), Some(5.0.into())), }),
+            performance_history,
+            PerformanceHistory(maplit::btreemap! { 4 => BenchmarkRange::new(4, Some(1.0.into()), Some(5.0.into())), }),
         );
 
-        appraisal.add_lower_benchmark(Benchmark::new(4, 7.0.into()));
+        performance_history.add_lower_benchmark(Benchmark::new(4, 7.0.into()));
         assert_eq!(
-            appraisal,
-            Appraisal(maplit::btreemap! { 4 => BenchmarkRange::new(4, Some(7.0.into()), None), })
+            performance_history,
+            PerformanceHistory(maplit::btreemap! { 4 => BenchmarkRange::new(4, Some(7.0.into()), None), })
         );
 
-        appraisal.add_upper_benchmark(Benchmark::new(4, 2.5.into()));
+        performance_history.add_upper_benchmark(Benchmark::new(4, 2.5.into()));
         assert_eq!(
-            appraisal,
-            Appraisal(maplit::btreemap! { 4 => BenchmarkRange::new(4, None, Some(2.5.into())) })
+            performance_history,
+            PerformanceHistory(maplit::btreemap! { 4 => BenchmarkRange::new(4, None, Some(2.5.into())) })
         );
 
         Ok(())
     }
 
     #[test]
-    fn test_appraisal_neighbors_interpolate() -> anyhow::Result<()> {
+    fn test_performance_history_neighbors_interpolate() -> anyhow::Result<()> {
         let neighbors = BenchNeighbors::Between {
             lo: Benchmark::new(2, 0.5.into()),
             hi: Benchmark::new(4, 1.0.into()),
@@ -289,7 +289,7 @@ mod tests {
     }
 
     #[test]
-    fn test_appraisal_between_neighbors_interpolate_clamped() -> anyhow::Result<()> {
+    fn test_performance_history_between_neighbors_interpolate_clamped() -> anyhow::Result<()> {
         let neighbors = BenchNeighbors::Between {
             lo: Benchmark::new(2, 0.5.into()),
             hi: Benchmark::new(4, 1.0.into()),
@@ -302,7 +302,7 @@ mod tests {
     }
 
     #[test]
-    fn test_appraisal_interpolate_twin_neighbors() -> anyhow::Result<()> {
+    fn test_performance_history_interpolate_twin_neighbors() -> anyhow::Result<()> {
         let neighbors = BenchNeighbors::Between {
             lo: Benchmark::new(4, 3.0.into()),
             hi: Benchmark::new(4, 5.0.into()),
@@ -319,7 +319,7 @@ mod tests {
     }
 
     #[test]
-    fn test_appraisal_below_lowest_neighbor_extrapolate() -> anyhow::Result<()> {
+    fn test_performance_history_below_lowest_neighbor_extrapolate() -> anyhow::Result<()> {
         // lazy_static::initialize(&crate::tracing::TEST_TRACING);
         // let main_span = tracing::info_span!("test_bench_below_lowest_neighbor_extrapolate");
         // let _main_span_guard = main_span.enter();
@@ -338,7 +338,7 @@ mod tests {
     }
 
     #[test]
-    fn test_appraisal_above_highest_neighbor_extrapolate() -> anyhow::Result<()> {
+    fn test_performance_history_above_highest_neighbor_extrapolate() -> anyhow::Result<()> {
         // lazy_static::initialize(&crate::tracing::TEST_TRACING);
         // let main_span = tracing::info_span!("test_bench_above_highest_neighbor_extrapolate");
         // let _main_span_guard = main_span.enter();
@@ -359,75 +359,75 @@ mod tests {
     }
 
     #[test]
-    fn test_appraisal_simple_evaluate_neighbors() -> anyhow::Result<()> {
+    fn test_performance_history_simple_evaluate_neighbors() -> anyhow::Result<()> {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_bench_evaluate_neighbors");
         let _main_span_guard = main_span.enter();
 
-        let mut appraisal = Appraisal::default();
-        assert_none!(appraisal.evaluate_neighbors(375.0.into()));
+        let mut performance_history = PerformanceHistory::default();
+        assert_none!(performance_history.evaluate_neighbors(375.0.into()));
 
-        appraisal.add_upper_benchmark(Benchmark::new(4, 1.0.into()));
+        performance_history.add_upper_benchmark(Benchmark::new(4, 1.0.into()));
         assert_eq!(
-            appraisal.evaluate_neighbors(0.5.into()),
+            performance_history.evaluate_neighbors(0.5.into()),
             Some(BenchNeighbors::BelowLowest(Benchmark::new(4, 1.0.into())))
         );
         assert_eq!(
-            appraisal.evaluate_neighbors(1.5.into()),
+            performance_history.evaluate_neighbors(1.5.into()),
             Some(BenchNeighbors::AboveHighest(Benchmark::new(4, 1.0.into())))
         );
         assert_eq!(
-            appraisal.evaluate_neighbors(1.0.into()),
+            performance_history.evaluate_neighbors(1.0.into()),
             Some(BenchNeighbors::AboveHighest(Benchmark::new(4, 1.0.into())))
         );
         Ok(())
     }
 
     #[test]
-    fn test_appraisal_evaluate_more_neighbors() -> anyhow::Result<()> {
+    fn test_performance_history_evaluate_more_neighbors() -> anyhow::Result<()> {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_bench_evaluate_neighbors");
         let _main_span_guard = main_span.enter();
 
-        let mut appraisal = Appraisal::default();
-        appraisal.add_upper_benchmark(Benchmark::new(2, 3.0.into()));
+        let mut performance_history = PerformanceHistory::default();
+        performance_history.add_upper_benchmark(Benchmark::new(2, 3.0.into()));
 
-        appraisal.add_upper_benchmark(Benchmark::new(4, 5.0.into()));
-        appraisal.add_lower_benchmark(Benchmark::new(4, 3.0.into()));
+        performance_history.add_upper_benchmark(Benchmark::new(4, 5.0.into()));
+        performance_history.add_lower_benchmark(Benchmark::new(4, 3.0.into()));
 
-        appraisal.add_upper_benchmark(Benchmark::new(6, 5.5.into()));
-        appraisal.add_lower_benchmark(Benchmark::new(6, 3.0.into()));
+        performance_history.add_upper_benchmark(Benchmark::new(6, 5.5.into()));
+        performance_history.add_lower_benchmark(Benchmark::new(6, 3.0.into()));
 
-        appraisal.add_upper_benchmark(Benchmark::new(9, 7.0.into()));
-        appraisal.add_upper_benchmark(Benchmark::new(12, 9.0.into()));
+        performance_history.add_upper_benchmark(Benchmark::new(9, 7.0.into()));
+        performance_history.add_upper_benchmark(Benchmark::new(12, 9.0.into()));
 
         assert_eq!(
-            appraisal.evaluate_neighbors(1.0.into()),
+            performance_history.evaluate_neighbors(1.0.into()),
             Some(BenchNeighbors::BelowLowest(Benchmark::new(2, 3.0.into())))
         );
         assert_eq!(
-            appraisal.evaluate_neighbors(3.25.into()),
+            performance_history.evaluate_neighbors(3.25.into()),
             Some(BenchNeighbors::Between {
                 lo: Benchmark::new(4, 3.0.into()),
                 hi: Benchmark::new(4, 5.0.into()),
             })
         );
         assert_eq!(
-            appraisal.evaluate_neighbors(5.0.into()),
+            performance_history.evaluate_neighbors(5.0.into()),
             Some(BenchNeighbors::Between {
                 lo: Benchmark::new(6, 3.0.into()),
                 hi: Benchmark::new(6, 5.5.into()),
             })
         );
         assert_eq!(
-            appraisal.evaluate_neighbors(6.17.into()),
+            performance_history.evaluate_neighbors(6.17.into()),
             Some(BenchNeighbors::Between {
                 lo: Benchmark::new(6, 5.5.into()),
                 hi: Benchmark::new(9, 7.0.into()),
             })
         );
         assert_eq!(
-            appraisal.evaluate_neighbors(100.0.into()),
+            performance_history.evaluate_neighbors(100.0.into()),
             Some(BenchNeighbors::AboveHighest(Benchmark::new(12, 9.0.into())))
         );
 
@@ -435,51 +435,51 @@ mod tests {
     }
 
     #[test]
-    fn test_appraisal_estimate_cluster_size() -> anyhow::Result<()> {
+    fn test_performance_history_estimate_cluster_size() -> anyhow::Result<()> {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
-        let main_span = tracing::info_span!("test_appraisal_estimate_cluster_size");
+        let main_span = tracing::info_span!("test_performance_history_estimate_cluster_size");
         let _main_span_guard = main_span.enter();
 
-        let mut appraisal = Appraisal::default();
-        assert_eq!(1, appraisal.cluster_size_for_workload(1_000_000.0.into()));
+        let mut performance_history = PerformanceHistory::default();
+        assert_eq!(1, performance_history.cluster_size_for_workload(1_000_000.0.into()));
 
-        appraisal.add_upper_benchmark(Benchmark::new(2, 3.0.into()));
+        performance_history.add_upper_benchmark(Benchmark::new(2, 3.0.into()));
 
-        appraisal.add_upper_benchmark(Benchmark::new(4, 5.0.into()));
-        appraisal.add_lower_benchmark(Benchmark::new(4, 3.25.into()));
+        performance_history.add_upper_benchmark(Benchmark::new(4, 5.0.into()));
+        performance_history.add_lower_benchmark(Benchmark::new(4, 3.25.into()));
 
-        appraisal.add_upper_benchmark(Benchmark::new(6, 10.0.into()));
-        appraisal.add_lower_benchmark(Benchmark::new(6, 1.0.into()));
+        performance_history.add_upper_benchmark(Benchmark::new(6, 10.0.into()));
+        performance_history.add_lower_benchmark(Benchmark::new(6, 1.0.into()));
 
-        appraisal.add_upper_benchmark(Benchmark::new(9, 15.0.into()));
-        appraisal.add_upper_benchmark(Benchmark::new(12, 25.0.into()));
+        performance_history.add_upper_benchmark(Benchmark::new(9, 15.0.into()));
+        performance_history.add_upper_benchmark(Benchmark::new(12, 25.0.into()));
 
         tracing::warn!("DMR: starting assertions...");
-        assert_eq!(1, appraisal.cluster_size_for_workload(1.05.into()));
-        assert_eq!(2, appraisal.cluster_size_for_workload(1.75.into()));
-        assert_eq!(2, appraisal.cluster_size_for_workload(2.75.into()));
-        assert_eq!(3, appraisal.cluster_size_for_workload(3.2.into()));
-        assert_eq!(4, appraisal.cluster_size_for_workload(3.75.into()));
-        assert_eq!(6, appraisal.cluster_size_for_workload(5.0.into()));
-        assert_eq!(6, appraisal.cluster_size_for_workload(10.0.into()));
-        assert_eq!(7, appraisal.cluster_size_for_workload(11.0.into()));
-        assert_eq!(8, appraisal.cluster_size_for_workload(12.0.into()));
-        assert_eq!(8, appraisal.cluster_size_for_workload(13.0.into()));
-        assert_eq!(9, appraisal.cluster_size_for_workload(14.0.into()));
-        assert_eq!(9, appraisal.cluster_size_for_workload(15.0.into()));
+        assert_eq!(1, performance_history.cluster_size_for_workload(1.05.into()));
+        assert_eq!(2, performance_history.cluster_size_for_workload(1.75.into()));
+        assert_eq!(2, performance_history.cluster_size_for_workload(2.75.into()));
+        assert_eq!(3, performance_history.cluster_size_for_workload(3.2.into()));
+        assert_eq!(4, performance_history.cluster_size_for_workload(3.75.into()));
+        assert_eq!(6, performance_history.cluster_size_for_workload(5.0.into()));
+        assert_eq!(6, performance_history.cluster_size_for_workload(10.0.into()));
+        assert_eq!(7, performance_history.cluster_size_for_workload(11.0.into()));
+        assert_eq!(8, performance_history.cluster_size_for_workload(12.0.into()));
+        assert_eq!(8, performance_history.cluster_size_for_workload(13.0.into()));
+        assert_eq!(9, performance_history.cluster_size_for_workload(14.0.into()));
+        assert_eq!(9, performance_history.cluster_size_for_workload(15.0.into()));
 
-        assert_eq!(10, appraisal.cluster_size_for_workload(18.0.into()));
-        assert_eq!(11, appraisal.cluster_size_for_workload(21.0.into()));
-        assert_eq!(12, appraisal.cluster_size_for_workload(24.0.into()));
+        assert_eq!(10, performance_history.cluster_size_for_workload(18.0.into()));
+        assert_eq!(11, performance_history.cluster_size_for_workload(21.0.into()));
+        assert_eq!(12, performance_history.cluster_size_for_workload(24.0.into()));
 
-        assert_eq!(48, appraisal.cluster_size_for_workload(100.0.into()));
+        assert_eq!(48, performance_history.cluster_size_for_workload(100.0.into()));
 
         Ok(())
     }
 }
 
 
-// todo: not pursuing because clearing inconsistencies at appraisal group level seems more and
+// todo: not pursuing because clearing inconsistencies at performance_history group level seems more and
 // as a premature optimization. Keeping at Benchmark range simply because it doesn't make sense
 // that a lo-bound could have a higher throughput than a hi-bound and therefore we should reset.
 // fn clear_inconsistencies_for_new_lo(&mut self, new_lo: &Benchmark) {

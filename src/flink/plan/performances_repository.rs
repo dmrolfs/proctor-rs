@@ -12,39 +12,39 @@ use serde_json::error::Category;
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 
 use crate::error::PlanError;
-use crate::flink::plan::Appraisal;
+use crate::flink::plan::PerformanceHistory;
 
-pub fn make_appraisal_repository(settings: AppraisalSettings) -> Result<Box<dyn AppraisalRepository>, PlanError> {
+pub fn make_performance_repository(settings: PerformanceRepositorySettings) -> Result<Box<dyn PerformanceRepository>, PlanError> {
     match settings.storage {
-        AppraisalRepositoryType::Memory => Ok(Box::new(MemoryAppraisalRepository::default())),
-        AppraisalRepositoryType::File => {
-            let path = settings.storage_path.unwrap_or("appraisals.data".to_string());
-            Ok(Box::new(FileAppraisalRepository::new(path)))
+        PerformanceRepositoryType::Memory => Ok(Box::new(PerformanceMemoryRepository::default())),
+        PerformanceRepositoryType::File => {
+            let path = settings.storage_path.unwrap_or("performance_history.data".to_string());
+            Ok(Box::new(PerformanceFileRepository::new(path)))
         },
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct AppraisalSettings {
-    pub storage: AppraisalRepositoryType,
+pub struct PerformanceRepositorySettings {
+    pub storage: PerformanceRepositoryType,
     pub storage_path: Option<String>,
 }
 
 #[derive(Debug, Display, SerializeDisplay, DeserializeFromStr)]
-pub enum AppraisalRepositoryType {
+pub enum PerformanceRepositoryType {
     Memory,
     File,
 }
 
-impl FromStr for AppraisalRepositoryType {
+impl FromStr for PerformanceRepositoryType {
     type Err = PlanError;
 
     fn from_str(rep: &str) -> Result<Self, Self::Err> {
         match rep.to_lowercase().as_str() {
-            "memory" => Ok(AppraisalRepositoryType::Memory),
-            "file" => Ok(AppraisalRepositoryType::File),
+            "memory" => Ok(PerformanceRepositoryType::Memory),
+            "file" => Ok(PerformanceRepositoryType::File),
             s => Err(PlanError::ParseError(format!(
-                "unknown appraisal repository type, {}",
+                "unknown performance repository type, {}",
                 s
             ))),
         }
@@ -53,30 +53,30 @@ impl FromStr for AppraisalRepositoryType {
 
 
 #[async_trait]
-pub trait AppraisalRepository: Debug + Sync + Send {
-    async fn load(&self, job_name: &str) -> Result<Option<Appraisal>, PlanError>;
-    async fn save(&mut self, job_name: &str, appraisal: &Appraisal) -> Result<(), PlanError>;
+pub trait PerformanceRepository: Debug + Sync + Send {
+    async fn load(&self, job_name: &str) -> Result<Option<PerformanceHistory>, PlanError>;
+    async fn save(&mut self, job_name: &str, performance_history: &PerformanceHistory) -> Result<(), PlanError>;
     async fn close(self: Box<Self>) -> Result<(), PlanError>;
 }
 
 #[derive(Debug, Default)]
-pub struct MemoryAppraisalRepository(Arc<DashMap<String, Appraisal>>);
+pub struct PerformanceMemoryRepository(Arc<DashMap<String, PerformanceHistory>>);
 
-impl MemoryAppraisalRepository {}
+impl PerformanceMemoryRepository {}
 
 #[async_trait]
-impl AppraisalRepository for MemoryAppraisalRepository {
+impl PerformanceRepository for PerformanceMemoryRepository {
     #[tracing::instrument(level = "info", skip(self))]
-    async fn load(&self, job_name: &str) -> Result<Option<Appraisal>, PlanError> {
-        let appraisal = self.0.get(job_name).map(|a| a.clone());
-        tracing::debug!(?appraisal, "memory loaded appraisal.");
-        Ok(appraisal)
+    async fn load(&self, job_name: &str) -> Result<Option<PerformanceHistory>, PlanError> {
+        let performance_history = self.0.get(job_name).map(|a| a.clone());
+        tracing::debug!(?performance_history, "memory loaded performance history.");
+        Ok(performance_history)
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn save(&mut self, job_name: &str, appraisal: &Appraisal) -> Result<(), PlanError> {
-        let old = self.0.insert(job_name.to_string(), appraisal.clone());
-        tracing::debug!(?old, "replacing appraisal in repository.");
+    async fn save(&mut self, job_name: &str, performance_history: &PerformanceHistory) -> Result<(), PlanError> {
+        let old = self.0.insert(job_name.to_string(), performance_history.clone());
+        tracing::debug!(?old, "replacing performance history in repository.");
         Ok(())
     }
 
@@ -88,11 +88,11 @@ impl AppraisalRepository for MemoryAppraisalRepository {
 }
 
 #[derive(Debug)]
-pub struct FileAppraisalRepository {
+pub struct PerformanceFileRepository {
     root_path: PathBuf,
 }
 
-impl FileAppraisalRepository {
+impl PerformanceFileRepository {
     pub fn new(root: impl AsRef<str>) -> Self {
         Self { root_path: PathBuf::from(root.as_ref()) }
     }
@@ -105,7 +105,7 @@ impl FileAppraisalRepository {
     fn path_for(&self, filename: &str) -> PathBuf {
         let mut path = self.root_path.clone();
         path.push(filename);
-        tracing::debug!(?path, "looking for appraisal repository at file path.");
+        tracing::debug!(?path, "looking for performance repository at file path.");
         path
     }
 
@@ -121,27 +121,27 @@ impl FileAppraisalRepository {
 }
 
 #[async_trait]
-impl AppraisalRepository for FileAppraisalRepository {
+impl PerformanceRepository for PerformanceFileRepository {
     #[tracing::instrument(level = "info", skip(self))]
-    async fn load(&self, job_name: &str) -> Result<Option<Appraisal>, PlanError> {
-        let appraisal_history_path = self.path_for(self.file_name_for(job_name).as_str());
-        let appraisal_history = self.file_for(appraisal_history_path.clone(), false);
-        tracing::debug!(?appraisal_history, "file_for: {}", job_name);
+    async fn load(&self, job_name: &str) -> Result<Option<PerformanceHistory>, PlanError> {
+        let performance_history_path = self.path_for(self.file_name_for(job_name).as_str());
+        let performance_history = self.file_for(performance_history_path.clone(), false);
+        tracing::debug!(?performance_history, "file_for: {}", job_name);
 
-        match appraisal_history {
+        match performance_history {
             Ok(history_file) => {
                 let reader = BufReader::new(history_file);
-                let appraisal = match serde_json::from_reader(reader) {
+                let ph = match serde_json::from_reader(reader) {
                     Ok(a) => Ok(Some(a)),
                     Err(err) if err.classify() == Category::Eof => {
-                        tracing::debug!(?appraisal_history_path, "appraisal history empty, creating new.");
+                        tracing::debug!(?performance_history_path, "performance history empty, creating new.");
                         Ok(None)
                     },
                     Err(err) => Err(err),
                 };
-                tracing::debug!(?appraisal, "file loaded appraisal.");
+                tracing::debug!(performance_history=?ph, "file loaded performance history.");
 
-                Ok(appraisal?)
+                Ok(ph?)
             },
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(err) => Err(err.into()),
@@ -149,12 +149,12 @@ impl AppraisalRepository for FileAppraisalRepository {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    async fn save(&mut self, job_name: &str, appraisal: &Appraisal) -> Result<(), PlanError> {
-        let appraisal_history_path = self.path_for(self.file_name_for(job_name).as_str());
-        let appraisal_history = self.file_for(appraisal_history_path.clone(), true)?;
-        let writer = BufWriter::new(appraisal_history);
-        serde_json::to_writer(writer, appraisal)?;
-        tracing::debug!(?appraisal_history_path, "saved appraisal data");
+    async fn save(&mut self, job_name: &str, performance_history: &PerformanceHistory) -> Result<(), PlanError> {
+        let performance_history_path = self.path_for(self.file_name_for(job_name).as_str());
+        let performance_history_file = self.file_for(performance_history_path.clone(), true)?;
+        let writer = BufWriter::new(performance_history_file);
+        serde_json::to_writer(writer, performance_history)?;
+        tracing::debug!(?performance_history_path, "saved performance history data");
         Ok(())
     }
 
@@ -174,34 +174,34 @@ mod tests {
     use crate::flink::plan::Benchmark;
 
     async fn do_test_repository<'a>(
-        repo: &mut impl AppraisalRepository, jobs_a_b: (&'a str, &'a str),
+        repo: &mut impl PerformanceRepository, jobs_a_b: (&'a str, &'a str),
     ) -> anyhow::Result<()> {
         let (name_a, name_b) = jobs_a_b;
         let actual = repo.load(name_a).await;
         let actual = assert_ok!(actual);
         assert_none!(actual);
 
-        let mut appraisal = Appraisal::default();
-        appraisal.add_upper_benchmark(Benchmark::new(4, 3.5.into()));
-        let actual = repo.save(name_a, &appraisal).await;
+        let mut ph = PerformanceHistory::default();
+        ph.add_upper_benchmark(Benchmark::new(4, 3.5.into()));
+        let actual = repo.save(name_a, &ph).await;
         assert_ok!(actual);
 
-        appraisal.add_upper_benchmark(Benchmark::new(4, 21.3.into()));
-        appraisal.add_upper_benchmark(Benchmark::new(12, 37.324.into()));
-        let actual = repo.save(name_b, &appraisal).await;
+        ph.add_upper_benchmark(Benchmark::new(4, 21.3.into()));
+        ph.add_upper_benchmark(Benchmark::new(12, 37.324.into()));
+        let actual = repo.save(name_b, &ph).await;
         assert_ok!(actual);
 
         let actual_a = repo.load(name_a).await;
         let actual_a = assert_ok!(actual_a);
         let actual_a = assert_some!(actual_a);
-        let mut expected = Appraisal::default();
+        let mut expected = PerformanceHistory::default();
         expected.add_upper_benchmark(Benchmark::new(4, 3.5.into()));
         assert_eq!(actual_a, expected);
 
         let actual_b = repo.load(name_b).await;
         let actual_b = assert_ok!(actual_b);
         let actual_b = assert_some!(actual_b);
-        let mut expected = Appraisal::default();
+        let mut expected = PerformanceHistory::default();
         expected.add_upper_benchmark(Benchmark::new(4, 21.3.into()));
         expected.add_upper_benchmark(Benchmark::new(12, 37.324.into()));
         assert_eq!(actual_b, expected);
@@ -214,12 +214,12 @@ mod tests {
     }
 
     #[test]
-    fn test_memory_appraisal_repository() -> anyhow::Result<()> {
+    fn test_performance_memory_repository() -> anyhow::Result<()> {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
-        let main_span = tracing::info_span!("test_memory_appraisal_repository");
+        let main_span = tracing::info_span!("test_performance_memory_repository");
         let _main_span_guard = main_span.enter();
 
-        let mut repo = MemoryAppraisalRepository::default();
+        let mut repo = PerformanceMemoryRepository::default();
         block_on(async {
             let test_result = do_test_repository(&mut repo, ("AAA", "BBB")).await;
             assert_ok!(test_result);
@@ -231,14 +231,14 @@ mod tests {
     }
 
     #[test]
-    fn test_file_appraisal_repository() -> anyhow::Result<()> {
+    fn test_performance_file_repository() -> anyhow::Result<()> {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
-        let main_span = tracing::info_span!("test_file_appraisal_repository");
+        let main_span = tracing::info_span!("test_performance_file_repository");
         let _main_span_guard = main_span.enter();
 
         let aaa = "AAA";
         let bbb = "BBB";
-        let mut repo = FileAppraisalRepository::new("./target");
+        let mut repo = PerformanceFileRepository::new("./target");
         let (aaa_path, bbb_path) = block_on(async {
             (
                 repo.path_for(repo.file_name_for(aaa).as_str()),
