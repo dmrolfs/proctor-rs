@@ -1,5 +1,5 @@
 pub use performance_history::PerformanceHistory;
-pub use performances_repository::{
+pub use performance_repository::{
     PerformanceRepository, PerformanceRepositoryType, PerformanceRepositorySettings, PerformanceMemoryRepository,
 };
 pub use benchmark::Benchmark;
@@ -7,7 +7,7 @@ pub use forecast::*;
 pub use planning::FlinkScalePlanning;
 
 mod performance_history;
-mod performances_repository;
+mod performance_repository;
 mod benchmark;
 mod forecast;
 mod planning;

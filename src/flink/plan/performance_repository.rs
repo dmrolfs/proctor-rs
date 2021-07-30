@@ -14,6 +14,10 @@ use serde_with::{DeserializeFromStr, SerializeDisplay};
 use crate::error::PlanError;
 use crate::flink::plan::PerformanceHistory;
 
+#[cfg(test)]
+use mockall::{automock, predicate::*};
+
+
 pub fn make_performance_repository(settings: PerformanceRepositorySettings) -> Result<Box<dyn PerformanceRepository>, PlanError> {
     match settings.storage {
         PerformanceRepositoryType::Memory => Ok(Box::new(PerformanceMemoryRepository::default())),
@@ -51,7 +55,7 @@ impl FromStr for PerformanceRepositoryType {
     }
 }
 
-
+#[cfg_attr(test, automock)]
 #[async_trait]
 pub trait PerformanceRepository: Debug + Sync + Send {
     async fn load(&self, job_name: &str) -> Result<Option<PerformanceHistory>, PlanError>;

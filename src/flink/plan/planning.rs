@@ -6,10 +6,7 @@ use cast_trait_object::dyn_upcast;
 
 use crate::error::PlanError;
 use crate::flink::decision::result::DecisionResult;
-use crate::flink::plan::{
-    PerformanceHistory, PerformanceRepository, FlinkScalePlan, ForecastCalculator, RecordsPerSecond, TimestampSeconds,
-    WorkloadForecast, WorkloadForecastBuilder, WorkloadMeasurement,
-};
+use crate::flink::plan::{ PerformanceHistory, PerformanceRepository, FlinkScalePlan, ForecastCalculator, WorkloadForecastBuilder, };
 use crate::flink::MetricCatalog;
 use crate::graph::stage::Stage;
 use crate::graph::{Inlet, Outlet, Port, SinkShape, SourceShape};
@@ -116,7 +113,7 @@ impl<F: 'static + WorkloadForecastBuilder> Stage for FlinkScalePlanning<F> {
     }
 }
 
-impl<F: WorkloadForecastBuilder> FlinkScalePlanning<F> {
+impl<F: 'static + WorkloadForecastBuilder> FlinkScalePlanning<F> {
     #[inline]
     async fn do_check(&self) -> Result<(), PlanError> {
         self.inlet.check_attachment().await?;
@@ -150,7 +147,7 @@ impl<F: WorkloadForecastBuilder> FlinkScalePlanning<F> {
                 Some(decision) = rx_decision.recv() => {
                     Self::update_performance_history(&decision, name.as_str(), &mut performance_history, performance_repository).await?;
 
-                    let _foo: () = if let DR::NoAction(ref metrics) = decision {
+                    if let DR::NoAction(ref metrics) = decision {
                         Self::handle_do_not_scale_decision(metrics)?
                     } else {
                         Self::handle_scale_decision(decision, calculator, &mut performance_history, outlet).await?
@@ -234,21 +231,29 @@ impl<F: WorkloadForecastBuilder> FlinkScalePlanning<F> {
         performance_history: &mut PerformanceHistory,
         outlet: &Outlet<FlinkScalePlan>,
     ) -> Result<(), PlanError> {
-        let current_nr_task_managers = decision.item().cluster.nr_task_managers;
-        let buffered_records = decision.item().flow.input_consumer_lag; //todo: how to support other options
-        let anticipated_workload = calculator.calculate_target_rate(buffered_records)?;
-        let required_nr_task_managers = performance_history.cluster_size_for_workload(anticipated_workload);
-        if required_nr_task_managers != current_nr_task_managers {
-            tracing::info!(%required_nr_task_managers, %current_nr_task_managers, "scaling plan is to adjust nr task managers to {}", required_nr_task_managers);
-            let plan = FlinkScalePlan {
-                target_nr_task_managers: required_nr_task_managers,
-                current_nr_task_managers,
-            };
+        if calculator.have_enough_data() {
+            let current_nr_task_managers = decision.item().cluster.nr_task_managers;
+            let buffered_records = decision.item().flow.input_consumer_lag; //todo: how to support other options
+            let anticipated_workload = calculator.calculate_target_rate(buffered_records)?;
+            let required_nr_task_managers = performance_history.cluster_size_for_workload(anticipated_workload);
+            if required_nr_task_managers != current_nr_task_managers {
+                tracing::info!(%required_nr_task_managers, %current_nr_task_managers, "scaling plan is to adjust nr task managers to {}", required_nr_task_managers);
+                let plan = FlinkScalePlan {
+                    target_nr_task_managers: required_nr_task_managers,
+                    current_nr_task_managers,
+                };
 
-            outlet.send(plan).await?;
+                outlet.send(plan).await?;
+            } else {
+                tracing::warn!(%required_nr_task_managers, %current_nr_task_managers, "performance history suggests no change in cluster size needed.");
+                //todo: should we clear some of the history????
+            }
         } else {
-            tracing::warn!(%required_nr_task_managers, %current_nr_task_managers, "performance history suggests no change in cluster size needed.");
-            //todo: should we clear some of the history????
+            tracing::info!(
+                needed=%calculator.observations_needed().0,
+                required=%calculator.observations_needed().1,
+                "passing on planning decision since more observations are required to forecast workflow."
+            )
         }
 
         Ok(())
@@ -264,3 +269,4 @@ impl<F: WorkloadForecastBuilder> FlinkScalePlanning<F> {
         Ok(())
     }
 }
+

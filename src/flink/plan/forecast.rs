@@ -18,11 +18,24 @@ use serde::{Deserialize, Serialize};
 
 use crate::elements::TelemetryValue;
 
-#[derive(Debug, PartialEq, PartialOrd, Serialize, Deserialize)]
-pub enum Workload {
-    RecordsInPerSecond(RecordsPerSecond),
-    NotEnoughData,
-    HeuristicsExceedThreshold {},
+#[cfg(test)]
+use mockall::{automock, predicate::*};
+
+
+#[cfg_attr(test, automock)]
+pub trait WorkloadForecastBuilder: Debug + Sync + Send {
+    fn observations_needed(&self) -> (usize, usize);
+    fn add_observation(&mut self, measurement: WorkloadMeasurement);
+    fn clear(&mut self);
+    fn build_forecast(&mut self) -> Result<Box<dyn WorkloadForecast>, PlanError>;
+}
+
+#[cfg_attr(test, automock)]
+pub trait WorkloadForecast: Debug {
+    fn name(&self) -> &'static str;
+    fn workload_at(&self, timestamp: TimestampSeconds) -> Result<RecordsPerSecond, PlanError>;
+    fn total_records_between(&self, start: TimestampSeconds, end: TimestampSeconds) -> Result<f64, PlanError>;
+    fn correlation_coefficient(&self) -> f64;
 }
 
 #[derive(Debug, Copy, Clone, Default, PartialEq, PartialOrd, Serialize, Deserialize)]
@@ -186,6 +199,28 @@ impl std::ops::Sub<chrono::Duration> for &TimestampSeconds {
     }
 }
 
+impl AbsDiffEq for TimestampSeconds {
+    type Epsilon = f64;
+
+    fn default_epsilon() -> Self::Epsilon {
+        f64::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        f64::abs_diff_eq(&self.0, &other.0, epsilon)
+    }
+}
+
+impl RelativeEq for TimestampSeconds {
+    fn default_max_relative() -> Self::Epsilon {
+        f64::default_max_relative()
+    }
+
+    fn relative_eq(&self, other: &Self, epsilon: Self::Epsilon, max_relative: Self::Epsilon) -> bool {
+        f64::relative_eq(&self.0, &other.0, epsilon, max_relative)
+    }
+}
+
 
 #[derive(Debug, Copy, Clone, Default, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct RecordsPerSecond(f64);
@@ -234,12 +269,6 @@ impl Into<f64> for &RecordsPerSecond {
     }
 }
 
-impl From<RecordsPerSecond> for Workload {
-    fn from(that: RecordsPerSecond) -> Self {
-        Workload::RecordsInPerSecond(that)
-    }
-}
-
 impl From<RecordsPerSecond> for TelemetryValue {
     fn from(that: RecordsPerSecond) -> Self {
         Self::Float(that.0)
@@ -249,19 +278,16 @@ impl From<RecordsPerSecond> for TelemetryValue {
 impl AbsDiffEq for RecordsPerSecond {
     type Epsilon = f64;
 
-    #[inline]
     fn default_epsilon() -> Self::Epsilon {
         f64::default_epsilon()
     }
 
-    #[inline]
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         f64::abs_diff_eq(&self.0, &other.0, epsilon)
     }
 }
 
 impl RelativeEq for RecordsPerSecond {
-    #[inline]
     fn default_max_relative() -> Self::Epsilon {
         f64::default_max_relative()
     }
@@ -301,20 +327,4 @@ impl From<MetricCatalog> for WorkloadMeasurement {
             task_nr_records_in_per_sec: metrics.flow.task_nr_records_in_per_sec,
         }
     }
-}
-
-pub trait WorkloadForecastBuilder: Debug + Sync + Send {
-    fn observations_needed(&self) -> (usize, usize);
-    fn add_observation(&mut self, measurement: WorkloadMeasurement);
-    fn clear(&mut self);
-    fn build_forecast(&mut self) -> Result<Box<dyn WorkloadForecast>, PlanError>;
-}
-
-pub trait WorkloadForecast: Debug {
-    fn name(&self) -> &'static str;
-    fn workload_at(&self, timestamp: TimestampSeconds) -> Result<RecordsPerSecond, PlanError>;
-    fn total_records_between(&self, start: TimestampSeconds, end: TimestampSeconds) -> Result<f64, PlanError>;
-    fn correlation_coefficient(&self) -> f64;
-
-    // fn predict_next_workload(&self) -> Result<Workload, PlanError>;
 }

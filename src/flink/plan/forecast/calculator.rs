@@ -15,9 +15,9 @@ impl<F: WorkloadForecastBuilder> ForecastCalculator<F> {
     pub fn new(
         forecast_builder: F, restart: Duration, max_catch_up: Duration, valid_offset: Duration,
     ) -> Result<Self, PlanError> {
-        let restart = Self::check_duration(restart)?;
-        let max_catch_up = Self::check_duration(max_catch_up)?;
-        let valid_offset = Self::check_duration(valid_offset)?;
+        let restart = Self::check_duration("restart", restart)?;
+        let max_catch_up = Self::check_duration("max_catch_up", max_catch_up)?;
+        let valid_offset = Self::check_duration("valid_offset", valid_offset)?;
         Ok(Self {
             forecast_builder,
             restart,
@@ -26,12 +26,21 @@ impl<F: WorkloadForecastBuilder> ForecastCalculator<F> {
         })
     }
 
-    fn check_duration(d: Duration) -> Result<Duration, PlanError> {
+    fn check_duration(label: &str, d: Duration) -> Result<Duration, PlanError> {
+        if d == Duration::ZERO {
+            return Err(PlanError::ZeroDuration(format!("workload forecast {}", label)));
+        }
+
         if (f64::MAX as u128) < d.as_millis() {
             return Err(PlanError::DurationLimitExceeded(d.as_millis()));
         }
 
         Ok(d)
+    }
+
+    pub fn have_enough_data(&self) -> bool {
+        let (needed, _required) = self.observations_needed();
+        needed == 0
     }
 
     pub fn observations_needed(&self) -> (usize, usize) {
@@ -48,9 +57,9 @@ impl<F: WorkloadForecastBuilder> ForecastCalculator<F> {
     }
 
     #[tracing::instrument(
-    level="debug",
-    skip(self),
-    fields(restart=?self.restart, max_catch_up=?self.max_catch_up, valid_offset=?self.valid_offset)
+        level="debug",
+        skip(self),
+        fields(restart=?self.restart, max_catch_up=?self.max_catch_up, valid_offset=?self.valid_offset)
     )]
     pub fn calculate_target_rate(&mut self, buffered_records: f64) -> Result<RecordsPerSecond, PlanError> {
         let now = chrono::Utc::now().into();
@@ -97,5 +106,109 @@ impl<F: WorkloadForecastBuilder> ForecastCalculator<F> {
     fn recovery_rate(&self, total_records: f64) -> RecordsPerSecond {
         let catch_up = self.max_catch_up.as_secs_f64();
         RecordsPerSecond::new(total_records / catch_up)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::flink::plan::forecast::*;
+    use claim::*;
+    use pretty_assertions::assert_eq;
+    use mockall::*;
+    use mockall::predicate::*;
+    use approx::assert_relative_eq;
+
+    #[test]
+    fn test_creation() {
+        let d1 = Duration::from_secs(2 * 60);
+        let d2 = Duration::from_secs(13 * 60);
+        let d3 = Duration::from_secs(5 * 60);
+
+        assert_ok!(ForecastCalculator::new(MockWorkloadForecastBuilder::new(), d1, d2, d3));
+        assert_ok!(ForecastCalculator::new(MockWorkloadForecastBuilder::new(), d1, Duration::from_millis(123_456_7), d3));
+        let err1 = assert_err!(ForecastCalculator::new(MockWorkloadForecastBuilder::new(), Duration::ZERO, d1, d3));
+        claim::assert_matches!(err1, PlanError::ZeroDuration(msg) if msg == "workload forecast restart".to_string());
+        let err2 = assert_err!(ForecastCalculator::new(MockWorkloadForecastBuilder::new(), d1, Duration::ZERO, d3));
+        claim::assert_matches!(err2, PlanError::ZeroDuration(msg) if msg == "workload forecast max_catch_up".to_string());
+        let err3 = assert_err!(ForecastCalculator::new(MockWorkloadForecastBuilder::new(), d1, d2, Duration::ZERO));
+        claim::assert_matches!(err3, PlanError::ZeroDuration(msg) if msg == "workload forecast valid_offset".to_string());
+    }
+
+    #[test]
+    fn test_recovery_rate() {
+        let restart = Duration::from_secs(2 * 60);
+        let max_catch_up = Duration::from_secs(13 * 60);
+        let valid_offset = Duration::from_secs(5 * 60);
+
+        let c1 = assert_ok!(ForecastCalculator::new(MockWorkloadForecastBuilder::new(), restart, max_catch_up, valid_offset));
+        assert_relative_eq!(c1.recovery_rate(100.), RecordsPerSecond::new(0.128_205), epsilon = 1.0e-6);
+        assert_relative_eq!(c1.recovery_rate(0.), RecordsPerSecond::new(0.), epsilon = 1.0e-6);
+
+        let c2 = assert_ok!(ForecastCalculator::new(MockWorkloadForecastBuilder::new(), restart, Duration::from_millis(123_456_7), valid_offset));
+        assert_relative_eq!(c2.recovery_rate(std::f64::consts::PI * 1_000.), RecordsPerSecond::new(2.544_691_907_032_82), epsilon = 1.0e-10);
+
+        let c3 = assert_err!(ForecastCalculator::new(MockWorkloadForecastBuilder::new(), restart, Duration::ZERO, valid_offset));
+        claim::assert_matches!(c3, PlanError::ZeroDuration(msg) if msg == "workload forecast max_catch_up".to_string());
+    }
+
+    #[test]
+    fn test_calculate_valid_timestamp_after_recovery() {
+        let restart = Duration::from_secs(2 * 60);
+        let max_catch_up = Duration::from_secs(13 * 60);
+        let valid_offset = Duration::from_millis(5 * 60 * 1_000 + 750);
+        let c1 = assert_ok!(ForecastCalculator::new(MockWorkloadForecastBuilder::new(), restart, max_catch_up, valid_offset));
+        let ts: TimestampSeconds = Utc::now().into();
+        let incr = (5. * 60. * 1_000. + 750.) / 1_000.;
+        assert_relative_eq!(c1.calculate_valid_timestamp_after_recovery(ts), TimestampSeconds(ts.0 + incr), epsilon = 1.0e-10);
+    }
+
+    #[test]
+    fn test_calculate_recovery_timestamp_from() {
+        let restart = Duration::from_secs(2 * 60);
+        let max_catch_up = Duration::from_millis(13 * 60 * 1_000 + 400);
+        let valid_offset = Duration::from_secs(5 * 60);
+        let c1 = assert_ok!(ForecastCalculator::new(MockWorkloadForecastBuilder::new(), restart, max_catch_up, valid_offset));
+        let ts: TimestampSeconds = Utc::now().into();
+        let incr = 2. * 60. + ((13. * 60. * 1_000.) + 400.) / 1_000.;
+        assert_relative_eq!(c1.calculate_recovery_timestamp_from(ts), TimestampSeconds(ts.0 + incr), epsilon = 1.0e-10);
+    }
+
+    #[test]
+    fn test_calculate_target_rate() -> anyhow::Result<()> {
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_calculate_target_rate");
+        let _main_span_guard = main_span.enter();
+
+        let restart = Duration::from_secs(2 * 60);
+        let max_catch_up = Duration::from_secs(13 * 60);
+        let valid_offset = Duration::from_secs(5 * 60);
+
+        fn mock_workload_calc_builder(valid_workload: RecordsPerSecond) -> impl WorkloadForecastBuilder {
+            let mut builder = MockWorkloadForecastBuilder::new();
+            builder.expect_build_forecast()
+                .times(1)
+                .returning(move || {
+                    let mut forecast = MockWorkloadForecast::new();
+                    forecast.expect_total_records_between()
+                        .times(1)
+                        .returning(|_, _| Ok(100.));
+                    forecast.expect_workload_at()
+                        .times(1)
+                        .returning(move |_| Ok(valid_workload));
+                    Ok(Box::new(forecast))
+                });
+
+            builder
+        }
+
+        let mut c1 = assert_ok!(ForecastCalculator::new(mock_workload_calc_builder(0.25.into()), restart, max_catch_up, valid_offset));
+        let actual = assert_ok!(c1.calculate_target_rate(333.));
+        assert_relative_eq!(actual, RecordsPerSecond(0.5551282), epsilon = 1.0e-7);
+
+        let mut c2 = assert_ok!(ForecastCalculator::new(mock_workload_calc_builder(314.159.into()), restart, max_catch_up, valid_offset));
+        let actual = assert_ok!(c2.calculate_target_rate(333.));
+        assert_relative_eq!(actual, RecordsPerSecond(314.159), epsilon = 1.0e-10);
+        Ok(())
     }
 }

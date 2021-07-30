@@ -271,11 +271,11 @@ impl std::ops::Add<WorkloadMeasurement> for LeastSquaresWorkloadForecastBuilder 
 mod tests {
     use approx::assert_relative_eq;
     use chrono::{DateTime, TimeZone, Utc};
-    use claim::{assert_err, assert_matches, assert_ok};
+    use claim::{assert_err, assert_ok};
     use pretty_assertions::assert_eq;
 
     use super::*;
-    use crate::flink::plan::forecast::{Point, Workload};
+    use crate::flink::plan::forecast::Point;
 
     #[test]
     fn test_plan_forecast_measure_spike() -> anyhow::Result<()> {
@@ -534,7 +534,7 @@ mod tests {
                 assert_relative_eq!(actual, e.into(), epsilon = 1.0e-4)
             } else {
                 let plan_error = assert_err!(forecast);
-                claim::assert_matches!(plan_error, PlanError::NotEnoughData { supplied: i, need: 20 });
+                claim::assert_matches!((i, plan_error), (i, PlanError::NotEnoughData { supplied: s, need: 20 }) if s == i + 1);
             }
         }
 

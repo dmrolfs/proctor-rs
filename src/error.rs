@@ -143,6 +143,9 @@ pub enum PlanError {
     #[error("duration, {0}ms, exceeds supported limit")]
     DurationLimitExceeded(u128),
 
+    #[error("zero duration for {0} not supported")]
+    ZeroDuration(String),
+
     #[error("failed to solve linear resolution regression for timestamp {0:?}")]
     LinearResolutionFailed(DateTime<Utc>),
 
