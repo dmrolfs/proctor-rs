@@ -7,6 +7,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use dashmap::DashMap;
+#[cfg(test)]
+use mockall::{automock, predicate::*};
 use serde::{Deserialize, Serialize};
 use serde_json::error::Category;
 use serde_with::{DeserializeFromStr, SerializeDisplay};
@@ -14,11 +16,10 @@ use serde_with::{DeserializeFromStr, SerializeDisplay};
 use crate::error::PlanError;
 use crate::flink::plan::PerformanceHistory;
 
-#[cfg(test)]
-use mockall::{automock, predicate::*};
 
-
-pub fn make_performance_repository(settings: PerformanceRepositorySettings) -> Result<Box<dyn PerformanceRepository>, PlanError> {
+pub fn make_performance_repository(
+    settings: PerformanceRepositorySettings,
+) -> Result<Box<dyn PerformanceRepository>, PlanError> {
     match settings.storage {
         PerformanceRepositoryType::Memory => Ok(Box::new(PerformanceMemoryRepository::default())),
         PerformanceRepositoryType::File => {

@@ -479,8 +479,8 @@ mod tests {
 }
 
 
-// todo: not pursuing because clearing inconsistencies at performance_history group level seems more and
-// as a premature optimization. Keeping at Benchmark range simply because it doesn't make sense
+// todo: not pursuing because clearing inconsistencies at performance_history group level seems more
+// and as a premature optimization. Keeping at Benchmark range simply because it doesn't make sense
 // that a lo-bound could have a higher throughput than a hi-bound and therefore we should reset.
 // fn clear_inconsistencies_for_new_lo(&mut self, new_lo: &Benchmark) {
 //     for (nr, bench) in self.0.iter_mut() {

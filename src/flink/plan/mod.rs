@@ -1,15 +1,15 @@
-pub use performance_history::PerformanceHistory;
-pub use performance_repository::{
-    PerformanceRepository, PerformanceRepositoryType, PerformanceRepositorySettings, PerformanceMemoryRepository,
-};
 pub use benchmark::Benchmark;
 pub use forecast::*;
+pub use performance_history::PerformanceHistory;
+pub use performance_repository::{
+    PerformanceMemoryRepository, PerformanceRepository, PerformanceRepositorySettings, PerformanceRepositoryType,
+};
 pub use planning::FlinkScalePlanning;
 
+mod benchmark;
+pub mod forecast;
 mod performance_history;
 mod performance_repository;
-mod benchmark;
-mod forecast;
 mod planning;
 
 #[derive(Debug, Clone, PartialEq)]

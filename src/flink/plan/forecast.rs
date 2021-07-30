@@ -2,7 +2,7 @@ use crate::error::PlanError;
 use crate::flink::MetricCatalog;
 
 mod calculator;
-mod least_squares;
+pub mod least_squares;
 mod regression;
 mod ridge_regression;
 mod signal;
@@ -14,12 +14,12 @@ use std::time::Duration;
 use approx::{AbsDiffEq, RelativeEq};
 pub use calculator::ForecastCalculator;
 use chrono::{DateTime, TimeZone, Utc};
+pub use least_squares::{LeastSquaresWorkloadForecastBuilder, SpikeSettings};
+#[cfg(test)]
+use mockall::{automock, predicate::*};
 use serde::{Deserialize, Serialize};
 
 use crate::elements::TelemetryValue;
-
-#[cfg(test)]
-use mockall::{automock, predicate::*};
 
 
 #[cfg_attr(test, automock)]
@@ -301,17 +301,14 @@ pub type Point = (f64, f64);
 
 impl From<WorkloadMeasurement> for Point {
     fn from(measurement: WorkloadMeasurement) -> Self {
-        (
-            measurement.timestamp_secs as f64,
-            measurement.task_nr_records_in_per_sec,
-        )
+        (measurement.timestamp_secs as f64, measurement.workload.into())
     }
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct WorkloadMeasurement {
     pub timestamp_secs: i64,
-    pub task_nr_records_in_per_sec: f64,
+    pub workload: RecordsPerSecond,
 }
 
 impl PartialOrd for WorkloadMeasurement {
@@ -324,7 +321,7 @@ impl From<MetricCatalog> for WorkloadMeasurement {
     fn from(metrics: MetricCatalog) -> Self {
         Self {
             timestamp_secs: metrics.timestamp.timestamp(),
-            task_nr_records_in_per_sec: metrics.flow.task_nr_records_in_per_sec,
+            workload: metrics.flow.task_nr_records_in_per_sec.into(),
         }
     }
 }

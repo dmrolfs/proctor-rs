@@ -12,14 +12,14 @@ use crate::flink::plan::WorkloadForecastBuilder;
 
 #[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SpikeSettings {
-    std_deviation_threshold: f64,
-    influence: f64,
-    length_threshold: usize,
+    pub std_deviation_threshold: f64,
+    pub influence: f64,
+    pub length_threshold: usize,
 }
 
-const SPIKE_STD_DEV_THRESHOLD: f64 = 3.;
-const SPIKE_INFLUENCE: f64 = 0.;
-const SPIKE_LENGTH_THRESHOLD: usize = 3;
+pub const SPIKE_STD_DEV_THRESHOLD: f64 = 3.;
+pub const SPIKE_INFLUENCE: f64 = 0.;
+pub const SPIKE_LENGTH_THRESHOLD: usize = 3;
 
 impl Default for SpikeSettings {
     fn default() -> Self {
@@ -458,7 +458,7 @@ mod tests {
     fn make_measurement(timestamp: DateTime<Utc>, workload: f64) -> WorkloadMeasurement {
         WorkloadMeasurement {
             timestamp_secs: timestamp.timestamp(),
-            task_nr_records_in_per_sec: workload,
+            workload: workload.into(),
         }
     }
 

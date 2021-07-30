@@ -6,7 +6,9 @@ use cast_trait_object::dyn_upcast;
 
 use crate::error::PlanError;
 use crate::flink::decision::result::DecisionResult;
-use crate::flink::plan::{ PerformanceHistory, PerformanceRepository, FlinkScalePlan, ForecastCalculator, WorkloadForecastBuilder, };
+use crate::flink::plan::{
+    FlinkScalePlan, ForecastCalculator, PerformanceHistory, PerformanceRepository, WorkloadForecastBuilder,
+};
 use crate::flink::MetricCatalog;
 use crate::graph::stage::Stage;
 use crate::graph::{Inlet, Outlet, Port, SinkShape, SourceShape};
@@ -226,14 +228,12 @@ impl<F: 'static + WorkloadForecastBuilder> FlinkScalePlanning<F> {
 
     #[tracing::instrument(level = "info", skip(outlet))]
     async fn handle_scale_decision(
-        decision: DecisionResult<MetricCatalog>,
-        calculator: &mut ForecastCalculator<F>,
-        performance_history: &mut PerformanceHistory,
-        outlet: &Outlet<FlinkScalePlan>,
+        decision: DecisionResult<MetricCatalog>, calculator: &mut ForecastCalculator<F>,
+        performance_history: &mut PerformanceHistory, outlet: &Outlet<FlinkScalePlan>,
     ) -> Result<(), PlanError> {
         if calculator.have_enough_data() {
             let current_nr_task_managers = decision.item().cluster.nr_task_managers;
-            let buffered_records = decision.item().flow.input_consumer_lag; //todo: how to support other options
+            let buffered_records = decision.item().flow.input_consumer_lag; // todo: how to support other options
             let anticipated_workload = calculator.calculate_target_rate(buffered_records)?;
             let required_nr_task_managers = performance_history.cluster_size_for_workload(anticipated_workload);
             if required_nr_task_managers != current_nr_task_managers {
@@ -246,7 +246,7 @@ impl<F: 'static + WorkloadForecastBuilder> FlinkScalePlanning<F> {
                 outlet.send(plan).await?;
             } else {
                 tracing::warn!(%required_nr_task_managers, %current_nr_task_managers, "performance history suggests no change in cluster size needed.");
-                //todo: should we clear some of the history????
+                // todo: should we clear some of the history????
             }
         } else {
             tracing::info!(
@@ -269,4 +269,3 @@ impl<F: 'static + WorkloadForecastBuilder> FlinkScalePlanning<F> {
         Ok(())
     }
 }
-
