@@ -1,5 +1,3 @@
-mod fixtures;
-
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::marker::PhantomData;

@@ -1,5 +1,3 @@
-mod fixtures;
-
 use anyhow::Result;
 use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape, UniformFanInShape};
 

@@ -1,5 +1,3 @@
-mod fixtures;
-
 use std::time::Duration;
 
 use anyhow::Result;

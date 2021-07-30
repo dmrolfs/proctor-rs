@@ -1,5 +1,3 @@
-mod fixtures;
-
 use std::collections::{HashMap, HashSet};
 use std::f64::consts;
 

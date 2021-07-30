@@ -1,5 +1,3 @@
-mod fixtures;
-
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -75,7 +73,7 @@ async fn test_basic_2_clearinghouse_subscription() -> anyhow::Result<()> {
 /// returns pos field (count, sum)
 async fn test_scenario(focus: HashSet<String>) -> anyhow::Result<(i64, i64)> {
     let base_path = std::env::current_dir()?;
-    let cvs_path = base_path.join(PathBuf::from("tests/data/cats.csv"));
+    let cvs_path = base_path.join(PathBuf::from("./tests/data/cats.csv"));
     let cvs_setting = SourceSetting::Csv { path: cvs_path };
     let cvs = collection::make_telemetry_cvs_source::<Data, _>("cvs", &cvs_setting)?;
 

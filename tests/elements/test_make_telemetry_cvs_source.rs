@@ -1,5 +1,3 @@
-mod fixtures;
-
 use std::convert::TryFrom;
 
 use ::anyhow::Result;
@@ -45,7 +43,7 @@ async fn test_make_telemetry_cvs_source() -> Result<()> {
     let _main_span_guard = main_span.enter();
 
     let base_path = std::env::current_dir()?;
-    let path = base_path.join(PathBuf::from("tests/data/eligibility.csv"));
+    let path = base_path.join(PathBuf::from("./tests/data/eligibility.csv"));
     let setting = SourceSetting::Csv { path };
 
     let source = make_telemetry_cvs_source::<Data, _>("local", &setting)?;
