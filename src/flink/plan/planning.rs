@@ -22,13 +22,14 @@ pub struct FlinkScalePlanning<F: WorkloadForecastBuilder> {
     outlet: Outlet<FlinkScalePlan>,
     forecast_calculator: ForecastCalculator<F>,
     performance_repository: Box<dyn PerformanceRepository>,
+    min_scaling_step: u8,
 }
 
 impl<F: WorkloadForecastBuilder> FlinkScalePlanning<F> {
     #[tracing::instrument(level = "info", skip(name))]
     pub fn new(
         name: &str, restart_duration: Duration, max_catch_up_duration: Duration, recovery_valid_offset: Duration,
-        forecast_builder: F, performance_repository: Box<dyn PerformanceRepository>,
+        forecast_builder: F, performance_repository: Box<dyn PerformanceRepository>, min_scaling_step: u8,
     ) -> Result<Self, PlanError> {
         let name = name.to_string();
         let inlet = Inlet::new(name.clone());
@@ -48,6 +49,7 @@ impl<F: WorkloadForecastBuilder> FlinkScalePlanning<F> {
             outlet,
             forecast_calculator,
             performance_repository,
+            min_scaling_step,
         })
     }
 }
@@ -61,6 +63,7 @@ impl<F: WorkloadForecastBuilder> Debug for FlinkScalePlanning<F> {
             .field("outlet", &self.outlet)
             .field("forecast_calculator", &self.forecast_calculator)
             .field("performance_repository", &self.performance_repository)
+            .field("min_scaling_step", &self.min_scaling_step)
             .finish()
     }
 }
@@ -116,7 +119,6 @@ impl<F: 'static + WorkloadForecastBuilder> Stage for FlinkScalePlanning<F> {
 }
 
 impl<F: 'static + WorkloadForecastBuilder> FlinkScalePlanning<F> {
-    #[inline]
     async fn do_check(&self) -> Result<(), PlanError> {
         self.inlet.check_attachment().await?;
         self.decision_inlet.check_attachment().await?;
@@ -124,7 +126,6 @@ impl<F: 'static + WorkloadForecastBuilder> FlinkScalePlanning<F> {
         Ok(())
     }
 
-    #[inline]
     async fn do_run(&mut self) -> Result<(), PlanError> {
         use crate::flink::decision::result::DecisionResult as DR;
 
@@ -152,7 +153,7 @@ impl<F: 'static + WorkloadForecastBuilder> FlinkScalePlanning<F> {
                     if let DR::NoAction(ref metrics) = decision {
                         Self::handle_do_not_scale_decision(metrics)?
                     } else {
-                        Self::handle_scale_decision(decision, calculator, &mut performance_history, outlet).await?
+                        Self::handle_scale_decision(decision, calculator, &mut performance_history, outlet, self.min_scaling_step).await?
                     };
                 },
 
@@ -165,34 +166,6 @@ impl<F: 'static + WorkloadForecastBuilder> FlinkScalePlanning<F> {
 
         Ok(())
     }
-
-    // #[tracing::instrument(level = "info", skip(data))]
-    // fn predict_anticipated_workload(
-    //     data: MetricCatalog, forecast: &mut ForecastCalculator<F>,
-    // ) -> Result<Option<RecordsPerSecond>, PlanError> {
-    //     forecast.add_observation(data.into());
-    //     let result = match forecast..predict_next_workload()? {
-    //         Workload::RecordsInPerSecond(rips) => Some(rips),
-    //
-    //         Workload::NotEnoughData => {
-    //             let (nr_required, nr_needed) = forecast.observations_needed();
-    //             tracing::debug!(
-    //                 %nr_required, %nr_needed,
-    //                 "not enough data points to make workload prediction - need {} more observations
-    // to make predictions.",                 nr_needed
-    //             );
-    //             None
-    //         },
-    //
-    //         Workload::HeuristicsExceedThreshold {} => {
-    //             tracing::warn!("forecast algorithm exceeded heuristics threshold - clearing");
-    //             forecast.clear();
-    //             None
-    //         },
-    //     };
-    //
-    //     Ok(result)
-    // }
 
     #[tracing::instrument(level = "info", skip())]
     async fn update_performance_history(
@@ -229,23 +202,22 @@ impl<F: 'static + WorkloadForecastBuilder> FlinkScalePlanning<F> {
     #[tracing::instrument(level = "info", skip(outlet))]
     async fn handle_scale_decision(
         decision: DecisionResult<MetricCatalog>, calculator: &mut ForecastCalculator<F>,
-        performance_history: &mut PerformanceHistory, outlet: &Outlet<FlinkScalePlan>,
+        performance_history: &mut PerformanceHistory, outlet: &Outlet<FlinkScalePlan>, min_scaling_step: u8,
     ) -> Result<(), PlanError> {
         if calculator.have_enough_data() {
             let current_nr_task_managers = decision.item().cluster.nr_task_managers;
             let buffered_records = decision.item().flow.input_consumer_lag; // todo: how to support other options
-            let anticipated_workload = calculator.calculate_target_rate(buffered_records)?;
+            let anticipated_workload = calculator.calculate_target_rate(decision.item().timestamp, buffered_records)?;
             let required_nr_task_managers = performance_history.cluster_size_for_workload(anticipated_workload);
-            if required_nr_task_managers != current_nr_task_managers {
-                tracing::info!(%required_nr_task_managers, %current_nr_task_managers, "scaling plan is to adjust nr task managers to {}", required_nr_task_managers);
-                let plan = FlinkScalePlan {
-                    target_nr_task_managers: required_nr_task_managers,
-                    current_nr_task_managers,
-                };
-
+            if let Some(plan) = FlinkScalePlan::new(decision, required_nr_task_managers, min_scaling_step) {
+                tracing::info!(?plan, "pushing scale plan.");
                 outlet.send(plan).await?;
             } else {
-                tracing::warn!(%required_nr_task_managers, %current_nr_task_managers, "performance history suggests no change in cluster size needed.");
+                tracing::warn!(
+                    %required_nr_task_managers,
+                    %current_nr_task_managers,
+                    "performance history suggests no change in cluster size needed."
+                );
                 // todo: should we clear some of the history????
             }
         } else {
@@ -259,7 +231,6 @@ impl<F: 'static + WorkloadForecastBuilder> FlinkScalePlanning<F> {
         Ok(())
     }
 
-    #[inline]
     async fn do_close(mut self: Box<Self>) -> Result<(), PlanError> {
         tracing::trace!("closing flink scale planning ports.");
         self.inlet.close().await;
@@ -267,5 +238,109 @@ impl<F: 'static + WorkloadForecastBuilder> FlinkScalePlanning<F> {
         self.outlet.close().await;
         self.performance_repository.close().await?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use approx::assert_relative_eq;
+    use chrono::{TimeZone, Utc};
+    use claim::*;
+    use lazy_static::lazy_static;
+    // use mockall::predicate::*;
+    // use mockall::*;
+    use pretty_assertions::assert_eq;
+    use tokio::sync::mpsc;
+    use tokio::sync::Mutex;
+    use tokio_test::block_on;
+
+    use super::*;
+    use crate::elements::telemetry;
+    use crate::flink::plan::benchmark::BenchmarkRange;
+    use crate::flink::plan::forecast::*;
+    use crate::flink::{ClusterMetrics, FlowMetrics};
+
+    const STEP: i64 = 15;
+    const NOW: i64 = 1624061766 + (30 * STEP);
+
+    lazy_static! {
+        static ref METRICS: MetricCatalog = MetricCatalog {
+            timestamp: Utc.timestamp(NOW, 0),
+            flow: FlowMetrics {
+                input_consumer_lag: 314.15926535897932384264,
+                ..FlowMetrics::default()
+            },
+            cluster: ClusterMetrics { nr_task_managers: 4, ..ClusterMetrics::default() },
+            custom: telemetry::Table::default(),
+        };
+        static ref SCALE_UP: DecisionResult<MetricCatalog> = DecisionResult::ScaleUp(METRICS.clone());
+        static ref SCALE_DOWN: DecisionResult<MetricCatalog> = DecisionResult::ScaleDown(METRICS.clone());
+        static ref NO_SCALE: DecisionResult<MetricCatalog> = DecisionResult::NoAction(METRICS.clone());
+    }
+
+    fn setup_calculator() -> Arc<Mutex<ForecastCalculator<LeastSquaresWorkloadForecastBuilder>>> {
+        let mut calc = ForecastCalculator::new(
+            LeastSquaresWorkloadForecastBuilder::new(20, SpikeSettings { influence: 0.25, ..SpikeSettings::default() }),
+            Duration::from_secs(2 * 60),  // restart
+            Duration::from_secs(13 * 60), // max_catch_up
+            Duration::from_secs(5 * 60),  // valid_offset
+        )
+        .unwrap();
+
+        (1..=30).into_iter().for_each(|tick| {
+            let ts = Utc.timestamp(NOW - (30 - tick) * STEP, 0);
+            calc.add_observation(WorkloadMeasurement {
+                timestamp_secs: ts.timestamp(),
+                workload: (tick as f64).into(),
+            });
+        });
+
+        Arc::new(Mutex::new(calc))
+    }
+
+    #[test]
+    fn test_flink_planning_handle_scale_decision() {
+        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_flink_planning_handle_scale_decision");
+        let _main_span_guard = main_span.enter();
+
+        let (probe_tx, mut probe_rx) = mpsc::channel(8);
+        let mut outlet = Outlet::new("plan outlet");
+
+        let mut calc = setup_calculator();
+        let min_step = 2;
+
+        block_on(async move {
+            outlet.attach("plan_outlet", probe_tx).await;
+            let calc_2 = Arc::clone(&calc);
+
+            let history = Arc::new(Mutex::new(PerformanceHistory::default()));
+            let history_2 = Arc::clone(&history);
+
+            tracing::warn!("DMR - testing scale-up with empty history...");
+            let handle = tokio::spawn(async move {
+                let c = &mut *calc_2.lock().await;
+                let h = &mut *history_2.lock().await;
+                assert_ok!(FlinkScalePlanning::handle_scale_decision(SCALE_UP.clone(), c, h, &outlet, min_step).await);
+            });
+
+            assert_ok!(handle.await);
+
+            let expected = FlinkScalePlan {
+                target_nr_task_managers: min_step + METRICS.cluster.nr_task_managers,
+                current_nr_task_managers: METRICS.cluster.nr_task_managers,
+            };
+            let actual = probe_rx.recv().await;
+            tracing::info!(
+                ?expected,
+                ?actual,
+                ?history,
+                ?calc,
+                "scale up decision with no history..."
+            );
+            assert_eq!(Some(expected), actual);
+        });
     }
 }

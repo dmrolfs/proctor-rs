@@ -88,6 +88,12 @@ impl PerformanceHistory {
     }
 }
 
+impl From<BTreeMap<u8, BenchmarkRange>> for PerformanceHistory {
+    fn from(that: BTreeMap<u8, BenchmarkRange>) -> Self {
+        Self(that)
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 enum BenchNeighbors {
     BelowLowest(Benchmark),

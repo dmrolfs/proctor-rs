@@ -241,7 +241,7 @@ impl RecordsPerSecond {
 
 impl fmt::Display for RecordsPerSecond {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!("{:.5?} out_records / s", self.0))
+        f.write_fmt(format_args!("{:.5?}_records/s", self.0))
     }
 }
 

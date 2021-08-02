@@ -1,9 +1,11 @@
 use std::time::Duration;
 
+use chrono::{DateTime, Utc};
+
 use super::{RecordsPerSecond, TimestampSeconds, WorkloadForecast, WorkloadForecastBuilder, WorkloadMeasurement};
 use crate::error::PlanError;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ForecastCalculator<F: WorkloadForecastBuilder> {
     forecast_builder: F,
     pub restart: Duration,
@@ -58,19 +60,26 @@ impl<F: WorkloadForecastBuilder> ForecastCalculator<F> {
 
     #[tracing::instrument(
         level="debug",
-        skip(self),
-        fields(restart=?self.restart, max_catch_up=?self.max_catch_up, valid_offset=?self.valid_offset)
+        skip(self, trigger_timestamp),
+        fields(
+            trigger=?trigger_timestamp,
+            restart=?self.restart,
+            max_catch_up=?self.max_catch_up,
+            valid_offset=?self.valid_offset
+        )
     )]
-    pub fn calculate_target_rate(&mut self, buffered_records: f64) -> Result<RecordsPerSecond, PlanError> {
-        let now = chrono::Utc::now().into();
-        let recovery = self.calculate_recovery_timestamp_from(now);
+    pub fn calculate_target_rate(
+        &mut self, trigger_timestamp: DateTime<Utc>, buffered_records: f64,
+    ) -> Result<RecordsPerSecond, PlanError> {
+        let trigger = trigger_timestamp.into();
+        let recovery = self.calculate_recovery_timestamp_from(trigger);
         let valid = self.calculate_valid_timestamp_after_recovery(recovery);
-        tracing::debug!( now=?now.as_utc(), recovery=?recovery.as_utc(), valid=?valid.as_utc(), "scaling adjustment timestamps estimated." );
+        tracing::debug!( recovery=?recovery.as_utc(), valid=?valid.as_utc(), "cluster scaling timestamp markers estimated." );
 
         let forecast = self.forecast_builder.build_forecast()?;
         tracing::debug!(?forecast, "workload forecast model calculated.");
 
-        let total_records = self.total_records_between(&forecast, now, recovery)? + buffered_records;
+        let total_records = self.total_records_between(&forecast, trigger, recovery)? + buffered_records;
         tracing::debug!(%total_records, "estimated total records to process before valid time");
 
         let recovery_rate = self.recovery_rate(total_records);
@@ -242,6 +251,7 @@ mod tests {
         let main_span = tracing::info_span!("test_calculate_target_rate");
         let _main_span_guard = main_span.enter();
 
+        let now = Utc::now();
         let restart = Duration::from_secs(2 * 60);
         let max_catch_up = Duration::from_secs(13 * 60);
         let valid_offset = Duration::from_secs(5 * 60);
@@ -267,7 +277,7 @@ mod tests {
             max_catch_up,
             valid_offset
         ));
-        let actual = assert_ok!(c1.calculate_target_rate(333.));
+        let actual = assert_ok!(c1.calculate_target_rate(now, 333.));
         assert_relative_eq!(actual, RecordsPerSecond(0.5551282), epsilon = 1.0e-7);
 
         let mut c2 = assert_ok!(ForecastCalculator::new(
@@ -276,7 +286,7 @@ mod tests {
             max_catch_up,
             valid_offset
         ));
-        let actual = assert_ok!(c2.calculate_target_rate(333.));
+        let actual = assert_ok!(c2.calculate_target_rate(now, 333.));
         assert_relative_eq!(actual, RecordsPerSecond(314.159), epsilon = 1.0e-10);
         Ok(())
     }
