@@ -1,5 +1,5 @@
 use std::convert::TryFrom;
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 
 use crate::elements::{PolicyOutcome, TelemetryValue, ToTelemetry};
 use crate::error::{DecisionError, TelemetryError, TypeExpectation};
@@ -57,6 +57,21 @@ where
             DecisionResult::ScaleDown(item) => item,
             DecisionResult::NoAction(item) => item,
         }
+    }
+}
+
+impl<T> fmt::Display for DecisionResult<T>
+where
+    T: Debug + Clone + PartialEq,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let label = match self {
+            DecisionResult::ScaleUp(_) => "scale_up",
+            DecisionResult::ScaleDown(_) => "scale_down",
+            DecisionResult::NoAction(_) => "no_action",
+        };
+
+        write!(f, "{}", label)
     }
 }
 

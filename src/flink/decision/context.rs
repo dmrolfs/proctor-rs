@@ -13,7 +13,7 @@ pub struct FlinkDecisionContext {
     pub all_sinks_healthy: bool,
 
     #[polar(attribute)]
-    pub nr_task_managers: u8,
+    pub nr_task_managers: u16,
 
     #[polar(attribute)]
     #[serde(flatten)] // flatten enables collection of extra properties
@@ -60,7 +60,7 @@ mod tests {
             Token::Str("all_sinks_healthy"),
             Token::Bool(true),
             Token::Str("nr_task_managers"),
-            Token::U8(4),
+            Token::U16(4),
             Token::Str("custom_foo"),
             Token::Str("fred flintstone"),
             Token::Str("custom_bar"),

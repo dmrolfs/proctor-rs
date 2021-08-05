@@ -2,9 +2,10 @@ pub use benchmark::Benchmark;
 pub use forecast::*;
 pub use performance_history::PerformanceHistory;
 pub use performance_repository::{
-    PerformanceMemoryRepository, PerformanceRepository, PerformanceRepositorySettings, PerformanceRepositoryType,
+    make_performance_repository, PerformanceMemoryRepository, PerformanceRepository, PerformanceRepositorySettings,
+    PerformanceRepositoryType,
 };
-pub use planning::FlinkScalePlanning;
+pub use planning::FlinkPlanning;
 
 use crate::flink::decision::result::DecisionResult;
 use crate::flink::MetricCatalog;
@@ -15,32 +16,32 @@ mod performance_history;
 mod performance_repository;
 mod planning;
 
+const MINIMAL_CLUSTER_SIZE: u16 = 1;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct FlinkScalePlan {
-    target_nr_task_managers: u8,
-    current_nr_task_managers: u8,
+    target_nr_task_managers: u16,
+    current_nr_task_managers: u16,
 }
 
 impl FlinkScalePlan {
     pub fn new(
-        decision: DecisionResult<MetricCatalog>, required_nr_task_managers: u8, min_scaling_step: u8,
+        decision: DecisionResult<MetricCatalog>, calculated_nr_task_managers: Option<u16>, min_scaling_step: u16,
     ) -> Option<Self> {
         use DecisionResult as DR;
 
         let current_nr_task_managers = decision.item().cluster.nr_task_managers;
         let scale_plan_for =
-            |target_nr_task_managers: u8| Some(FlinkScalePlan { target_nr_task_managers, current_nr_task_managers });
+            |target_nr_task_managers: u16| Some(FlinkScalePlan { target_nr_task_managers, current_nr_task_managers });
 
-        match decision {
-            DR::ScaleUp(_) if current_nr_task_managers < required_nr_task_managers => {
-                scale_plan_for(required_nr_task_managers)
-            },
+        match (decision, calculated_nr_task_managers) {
+            (DR::ScaleUp(_), Some(calculated)) if current_nr_task_managers < calculated => scale_plan_for(calculated),
 
-            DR::ScaleUp(_) => {
+            (DR::ScaleUp(_), _) => {
                 let corrected_nr_task_managers = current_nr_task_managers + min_scaling_step;
 
                 tracing::warn!(
-                    calculated_nr_task_managers=%required_nr_task_managers,
+                    ?calculated_nr_task_managers,
                     %current_nr_task_managers,
                     %corrected_nr_task_managers,
                     %min_scaling_step,
@@ -50,29 +51,27 @@ impl FlinkScalePlan {
                 scale_plan_for(corrected_nr_task_managers)
             },
 
-            DR::ScaleDown(_) if required_nr_task_managers < current_nr_task_managers => {
-                scale_plan_for(required_nr_task_managers)
-            },
+            (DR::ScaleDown(_), Some(calculated)) if calculated < current_nr_task_managers => scale_plan_for(calculated),
 
-            DR::ScaleDown(_) => {
+            (DR::ScaleDown(_), _) => {
                 let corrected_nr_task_managers = if min_scaling_step < current_nr_task_managers {
                     current_nr_task_managers - min_scaling_step
                 } else {
-                    1
+                    MINIMAL_CLUSTER_SIZE
                 };
 
                 tracing::warn!(
-                    calculated_nr_task_managers=%required_nr_task_managers,
+                    ?calculated_nr_task_managers,
                     %current_nr_task_managers,
                     %min_scaling_step,
                     %corrected_nr_task_managers,
-                    "scale up calculation was not sufficient - applying minimal scaling step."
+                    "scale down calculation was not sufficient - applying minimal scaling step."
                 );
 
                 scale_plan_for(corrected_nr_task_managers)
             },
 
-            DR::NoAction(_) => None,
+            (DR::NoAction(_), _) => None,
         }
     }
 }

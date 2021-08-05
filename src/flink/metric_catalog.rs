@@ -21,9 +21,7 @@ lazy_static! {
         "timestamp",
 
         // FlowMetrics
-        "input_messages_per_sec",
-        "task_nr_records_in_per_sec",
-        "task_nr_records_out_per_sec",
+        "records_in_per_sec",
         "records_out_per_sec",
         "input_consumer_lag",
         "max_message_latency",
@@ -61,14 +59,13 @@ pub struct MetricCatalog {
 pub struct FlowMetrics {
     // this will need to be in context:  historical_input_messages_per_sec: VecDeque<(f64, DateTime<Utc>)>,
     #[polar(attribute)]
-    pub input_messages_per_sec: f64,
+    pub records_in_per_sec: f64,
 
-    #[polar(attribute)]
-    pub task_nr_records_in_per_sec: f64,
+    // #[polar(attribute)]
+    // pub task_nr_records_in_per_sec: f64,
 
-    #[polar(attribute)]
-    pub task_nr_records_out_per_sec: f64,
-
+    // #[polar(attribute)]
+    // pub task_nr_records_out_per_sec: f64,
     #[polar(attribute)]
     pub records_out_per_sec: f64,
 
@@ -91,7 +88,7 @@ pub struct FlowMetrics {
 #[derive(PolarClass, Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ClusterMetrics {
     #[polar(attribute)]
-    pub nr_task_managers: u8,
+    pub nr_task_managers: u16,
 
     #[polar(attribute)]
     pub task_cpu_load: f64,
@@ -227,15 +224,13 @@ mod tests {
         let metrics = MetricCatalog {
             timestamp: ts,
             flow: FlowMetrics {
-                input_messages_per_sec: 17.,
+                records_in_per_sec: 17.,
                 input_consumer_lag: 3.14,
                 records_out_per_sec: 0.0,
                 max_message_latency: 0.0,
                 net_in_utilization: 0.0,
                 net_out_utilization: 0.0,
                 sink_health_metrics: 0.0,
-                task_nr_records_in_per_sec: 0.0,
-                task_nr_records_out_per_sec: 0.0,
             },
             cluster: ClusterMetrics {
                 nr_task_managers: 4,
@@ -253,12 +248,8 @@ mod tests {
                 Token::Map { len: None },
                 Token::Str("timestamp"),
                 Token::I64(ts.timestamp()),
-                Token::Str("input_messages_per_sec"),
+                Token::Str("records_in_per_sec"),
                 Token::F64(17.),
-                Token::Str("task_nr_records_in_per_sec"),
-                Token::F64(0.),
-                Token::Str("task_nr_records_out_per_sec"),
-                Token::F64(0.),
                 Token::Str("records_out_per_sec"),
                 Token::F64(0.),
                 Token::Str("input_consumer_lag"),
@@ -272,7 +263,7 @@ mod tests {
                 Token::Str("sink_health_metrics"),
                 Token::F64(0.),
                 Token::Str("nr_task_managers"),
-                Token::U8(4),
+                Token::U16(4),
                 Token::Str("task_cpu_load"),
                 Token::F64(0.),
                 Token::Str("network_io_utilization"),
@@ -294,15 +285,13 @@ mod tests {
         let metrics = MetricCatalog {
             timestamp: ts,
             flow: FlowMetrics {
-                input_messages_per_sec: 17.,
+                records_in_per_sec: 17.,
                 input_consumer_lag: 3.14,
                 records_out_per_sec: 0.0,
                 max_message_latency: 0.0,
                 net_in_utilization: 0.0,
                 net_out_utilization: 0.0,
                 sink_health_metrics: 0.0,
-                task_nr_records_in_per_sec: 0.0,
-                task_nr_records_out_per_sec: 0.0,
             },
             cluster: ClusterMetrics {
                 nr_task_managers: 4,
@@ -320,9 +309,7 @@ mod tests {
             telemetry,
             TelemetryValue::Table(maplit::hashmap! {
                 "timestamp".to_string() => ts.timestamp().to_telemetry(),
-                "input_messages_per_sec".to_string() => (17.).to_telemetry(),
-                "task_nr_records_in_per_sec".to_string() => (0.).to_telemetry(),
-                "task_nr_records_out_per_sec".to_string() => (0.).to_telemetry(),
+                "records_in_per_sec".to_string() => (17.).to_telemetry(),
                 "records_out_per_sec".to_string() => (0.).to_telemetry(),
                 "input_consumer_lag".to_string() => 3.14.to_telemetry(),
                 "max_message_latency".to_string() => (0.).to_telemetry(),

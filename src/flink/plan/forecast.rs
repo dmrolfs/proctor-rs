@@ -321,7 +321,7 @@ impl From<MetricCatalog> for WorkloadMeasurement {
     fn from(metrics: MetricCatalog) -> Self {
         Self {
             timestamp_secs: metrics.timestamp.timestamp(),
-            workload: metrics.flow.task_nr_records_in_per_sec.into(),
+            workload: metrics.flow.records_in_per_sec.into(),
         }
     }
 }

@@ -7,12 +7,10 @@ use splines::{Interpolation, Key, Spline};
 
 use super::Benchmark;
 use crate::flink::plan::benchmark::BenchmarkRange;
-use crate::flink::plan::RecordsPerSecond;
-
-const MINIMAL_CLUSTER_SIZE: u8 = 1;
+use crate::flink::plan::{RecordsPerSecond, MINIMAL_CLUSTER_SIZE};
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
-pub struct PerformanceHistory(BTreeMap<u8, BenchmarkRange>);
+pub struct PerformanceHistory(BTreeMap<u16, BenchmarkRange>);
 
 impl PerformanceHistory {
     pub fn add_lower_benchmark(&mut self, b: Benchmark) {
@@ -45,10 +43,9 @@ impl PerformanceHistory {
 }
 
 impl PerformanceHistory {
-    pub fn cluster_size_for_workload(&self, workload_rate: RecordsPerSecond) -> u8 {
+    pub fn cluster_size_for_workload(&self, workload_rate: RecordsPerSecond) -> Option<u16> {
         self.evaluate_neighbors(workload_rate)
             .map(|neighbors| neighbors.cluster_size_for(workload_rate))
-            .unwrap_or(MINIMAL_CLUSTER_SIZE)
     }
 
     #[tracing::instrument(level = "debug")]
@@ -88,8 +85,8 @@ impl PerformanceHistory {
     }
 }
 
-impl From<BTreeMap<u8, BenchmarkRange>> for PerformanceHistory {
-    fn from(that: BTreeMap<u8, BenchmarkRange>) -> Self {
+impl From<BTreeMap<u16, BenchmarkRange>> for PerformanceHistory {
+    fn from(that: BTreeMap<u16, BenchmarkRange>) -> Self {
         Self(that)
     }
 }
@@ -102,7 +99,7 @@ enum BenchNeighbors {
 }
 
 impl BenchNeighbors {
-    fn cluster_size_for(&self, workload_rate: RecordsPerSecond) -> u8 {
+    fn cluster_size_for(&self, workload_rate: RecordsPerSecond) -> u16 {
         match self {
             BenchNeighbors::BelowLowest(lo) => Self::extrapolate_lo(workload_rate, lo),
             BenchNeighbors::AboveHighest(hi) => Self::extrapolate_hi(workload_rate, hi),
@@ -111,12 +108,12 @@ impl BenchNeighbors {
     }
 
     #[tracing::instrument(level = "debug")]
-    fn extrapolate_lo(workload_rate: RecordsPerSecond, lo: &Benchmark) -> u8 {
+    fn extrapolate_lo(workload_rate: RecordsPerSecond, lo: &Benchmark) -> u16 {
         let workload_rate: f64 = workload_rate.into();
         let lo_rate: f64 = lo.records_out_per_sec.into();
 
         let ratio: f64 = (lo.nr_task_managers as f64) / lo_rate;
-        let calculated = (ratio * workload_rate).ceil() as u8;
+        let calculated = (ratio * workload_rate).ceil() as u16;
         tracing::debug!(%ratio, %calculated, "calculations: {} ceil:{}", ratio * workload_rate, (ratio * workload_rate).ceil());
 
         let size = cmp::min(lo.nr_task_managers, cmp::max(MINIMAL_CLUSTER_SIZE, calculated));
@@ -125,12 +122,12 @@ impl BenchNeighbors {
     }
 
     #[tracing::instrument(level = "debug")]
-    fn extrapolate_hi(workload_rate: RecordsPerSecond, hi: &Benchmark) -> u8 {
+    fn extrapolate_hi(workload_rate: RecordsPerSecond, hi: &Benchmark) -> u16 {
         let workload_rate: f64 = workload_rate.into();
         let hi_rate: f64 = hi.records_out_per_sec.into();
 
         let ratio: f64 = (hi.nr_task_managers as f64) / hi_rate;
-        let calculated = (ratio * workload_rate).ceil() as u8;
+        let calculated = (ratio * workload_rate).ceil() as u16;
         tracing::debug!(%ratio, %calculated, "calculations: {} ceil:{}", ratio * workload_rate, (ratio * workload_rate).ceil());
 
         let size = cmp::max(hi.nr_task_managers, cmp::max(MINIMAL_CLUSTER_SIZE, calculated));
@@ -139,7 +136,7 @@ impl BenchNeighbors {
     }
 
     #[tracing::instrument(level = "debug")]
-    fn interpolate(workload_rate: RecordsPerSecond, lo: &Benchmark, hi: &Benchmark) -> u8 {
+    fn interpolate(workload_rate: RecordsPerSecond, lo: &Benchmark, hi: &Benchmark) -> u16 {
         let start: Key<f64, f64> = Key::new(
             lo.records_out_per_sec.into(),
             lo.nr_task_managers as f64,
@@ -153,7 +150,7 @@ impl BenchNeighbors {
         let spline = Spline::from_vec(vec![start, end]);
         let sampled: Option<f64> = spline.clamped_sample(workload_rate.into());
 
-        let size = sampled.unwrap().ceil() as u8;
+        let size = sampled.unwrap().ceil() as u16;
         tracing::debug!(%size, "interpolated cluster size between neighbors.");
         size
     }
@@ -447,7 +444,7 @@ mod tests {
         let _main_span_guard = main_span.enter();
 
         let mut performance_history = PerformanceHistory::default();
-        assert_eq!(1, performance_history.cluster_size_for_workload(1_000_000.0.into()));
+        assert_eq!(None, performance_history.cluster_size_for_workload(1_000_000.0.into()));
 
         performance_history.add_upper_benchmark(Benchmark::new(2, 3.0.into()));
 
@@ -461,24 +458,24 @@ mod tests {
         performance_history.add_upper_benchmark(Benchmark::new(12, 25.0.into()));
 
         tracing::warn!("DMR: starting assertions...");
-        assert_eq!(1, performance_history.cluster_size_for_workload(1.05.into()));
-        assert_eq!(2, performance_history.cluster_size_for_workload(1.75.into()));
-        assert_eq!(2, performance_history.cluster_size_for_workload(2.75.into()));
-        assert_eq!(3, performance_history.cluster_size_for_workload(3.2.into()));
-        assert_eq!(4, performance_history.cluster_size_for_workload(3.75.into()));
-        assert_eq!(6, performance_history.cluster_size_for_workload(5.0.into()));
-        assert_eq!(6, performance_history.cluster_size_for_workload(10.0.into()));
-        assert_eq!(7, performance_history.cluster_size_for_workload(11.0.into()));
-        assert_eq!(8, performance_history.cluster_size_for_workload(12.0.into()));
-        assert_eq!(8, performance_history.cluster_size_for_workload(13.0.into()));
-        assert_eq!(9, performance_history.cluster_size_for_workload(14.0.into()));
-        assert_eq!(9, performance_history.cluster_size_for_workload(15.0.into()));
+        assert_eq!(Some(1), performance_history.cluster_size_for_workload(1.05.into()));
+        assert_eq!(Some(2), performance_history.cluster_size_for_workload(1.75.into()));
+        assert_eq!(Some(2), performance_history.cluster_size_for_workload(2.75.into()));
+        assert_eq!(Some(3), performance_history.cluster_size_for_workload(3.2.into()));
+        assert_eq!(Some(4), performance_history.cluster_size_for_workload(3.75.into()));
+        assert_eq!(Some(6), performance_history.cluster_size_for_workload(5.0.into()));
+        assert_eq!(Some(6), performance_history.cluster_size_for_workload(10.0.into()));
+        assert_eq!(Some(7), performance_history.cluster_size_for_workload(11.0.into()));
+        assert_eq!(Some(8), performance_history.cluster_size_for_workload(12.0.into()));
+        assert_eq!(Some(8), performance_history.cluster_size_for_workload(13.0.into()));
+        assert_eq!(Some(9), performance_history.cluster_size_for_workload(14.0.into()));
+        assert_eq!(Some(9), performance_history.cluster_size_for_workload(15.0.into()));
 
-        assert_eq!(10, performance_history.cluster_size_for_workload(18.0.into()));
-        assert_eq!(11, performance_history.cluster_size_for_workload(21.0.into()));
-        assert_eq!(12, performance_history.cluster_size_for_workload(24.0.into()));
+        assert_eq!(Some(10), performance_history.cluster_size_for_workload(18.0.into()));
+        assert_eq!(Some(11), performance_history.cluster_size_for_workload(21.0.into()));
+        assert_eq!(Some(12), performance_history.cluster_size_for_workload(24.0.into()));
 
-        assert_eq!(48, performance_history.cluster_size_for_workload(100.0.into()));
+        assert_eq!(Some(48), performance_history.cluster_size_for_workload(100.0.into()));
 
         Ok(())
     }

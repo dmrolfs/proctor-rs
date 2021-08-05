@@ -90,7 +90,7 @@ static_assertions = "*"
 pretty_assertions = "*"
 claim = "*"
 proptest = "*"
-
+fake = { version = "*", features = ["chrono"] }
 
 [[bench]]
 name = "bench_main"

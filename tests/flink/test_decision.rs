@@ -274,8 +274,6 @@ fn make_test_item_padding() -> Telemetry {
             "net_in_utilization".to_string() => (0.).into(),
             "net_out_utilization".to_string() => (0.).into(),
             "sink_health_metrics".to_string() => (0.).into(),
-            "task_nr_records_in_per_sec".to_string() => (0.).into(),
-            "task_nr_records_out_per_sec".to_string() => (0.).into(),
             "task_cpu_load".to_string() => (0.).into(),
             "network_io_utilization".to_string() => (0.).into(),
     }
@@ -285,10 +283,10 @@ fn make_test_item_padding() -> Telemetry {
     padding
 }
 
-fn make_test_item(timestamp: DateTime<Utc>, input_messages_per_sec: f64, inbox_lag: f64) -> Telemetry {
+fn make_test_item(timestamp: DateTime<Utc>, records_in_per_sec: f64, inbox_lag: f64) -> Telemetry {
     let item = maplit::hashmap! {
         "timestamp".to_string() => timestamp.timestamp().into(),
-        "input_messages_per_sec".to_string() => input_messages_per_sec.into(),
+        "records_in_per_sec".to_string() => records_in_per_sec.into(),
         "input_consumer_lag".to_string() => inbox_lag.into(),
     }
     .into_iter()
@@ -314,8 +312,8 @@ async fn test_decision_carry_policy_result() -> anyhow::Result<()> {
         required_subscription_fields: HashSet::new(),
         optional_subscription_fields: HashSet::new(),
         source: PolicySource::String(
-            r#"scale_up(item, _context, _) if 3.0 < item.flow.input_messages_per_sec;
-            scale_down(item, _context, _) if item.flow.input_messages_per_sec < 1.0;"#
+            r#"scale_up(item, _context, _) if 3.0 < item.flow.records_in_per_sec;
+            scale_down(item, _context, _) if item.flow.records_in_per_sec < 1.0;"#
                 .to_string(),
         ),
     });
@@ -393,7 +391,7 @@ async fn test_decision_carry_policy_result() -> anyhow::Result<()> {
                 .cloned()
                 .map(|d| String::try_from(d).expect("failed to get string from telemetry value"));
 
-            (a.item.flow.input_messages_per_sec, direction)
+            (a.item.flow.records_in_per_sec, direction)
         })
         .collect();
 
@@ -424,8 +422,8 @@ async fn test_decision_common() -> anyhow::Result<()> {
         required_subscription_fields: HashSet::new(),
         optional_subscription_fields: HashSet::new(),
         source: PolicySource::String(
-            r#"scale_up(item, _context, _) if 3.0 < item.flow.input_messages_per_sec;
-            scale_down(item, _context, _) if item.flow.input_messages_per_sec < 1.0;"#
+            r#"scale_up(item, _context, _) if 3.0 < item.flow.records_in_per_sec;
+            scale_down(item, _context, _) if item.flow.records_in_per_sec < 1.0;"#
                 .to_string(),
         ),
     });
@@ -499,9 +497,9 @@ async fn test_decision_common() -> anyhow::Result<()> {
     let actual_vals: Vec<(f64, &'static str)> = actual
         .into_iter()
         .map(|a| match a {
-            DecisionResult::ScaleUp(item) => (item.flow.input_messages_per_sec, "up"),
-            DecisionResult::ScaleDown(item) => (item.flow.input_messages_per_sec, "down"),
-            DecisionResult::NoAction(item) => (item.flow.input_messages_per_sec, "no action"),
+            DecisionResult::ScaleUp(item) => (item.flow.records_in_per_sec, "up"),
+            DecisionResult::ScaleDown(item) => (item.flow.records_in_per_sec, "down"),
+            DecisionResult::NoAction(item) => (item.flow.records_in_per_sec, "no action"),
         })
         .collect();
 
