@@ -20,8 +20,8 @@ const MINIMAL_CLUSTER_SIZE: u16 = 1;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FlinkScalePlan {
-    target_nr_task_managers: u16,
-    current_nr_task_managers: u16,
+    pub target_nr_task_managers: u16,
+    pub current_nr_task_managers: u16,
 }
 
 impl FlinkScalePlan {

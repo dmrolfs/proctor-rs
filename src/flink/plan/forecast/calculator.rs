@@ -80,7 +80,7 @@ impl<F: WorkloadForecastBuilder> ForecastCalculator<F> {
         tracing::debug!(?forecast, "workload forecast model calculated.");
 
         let total_records = self.total_records_between(&forecast, trigger, recovery)? + buffered_records;
-        tracing::debug!(%total_records, "estimated total records to process before valid time");
+        tracing::debug!(total_records_at_valid_time=%total_records, "estimated total records to process before valid time");
 
         let recovery_rate = self.recovery_rate(total_records);
         let valid_workload_rate = forecast.workload_at(valid)?;

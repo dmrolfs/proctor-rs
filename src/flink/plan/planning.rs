@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use tokio::sync::{mpsc, oneshot};
 
 use crate::error::PlanError;
 use crate::flink::decision::result::DecisionResult;
@@ -13,6 +14,15 @@ use crate::flink::MetricCatalog;
 use crate::graph::Outlet;
 use crate::phases::plan::Planning;
 
+// todo: this needs to be worked into Plan stage...  Need to determine best design
+// todo: pub type FlinkPlanningApi = mpsc::UnboundedSender<FlinkPlanningCmd>;
+
+// todo: this needs to be worked into Plan stage...  Need to determine best design
+// todo: #[derive(Debug)]
+// todo: pub enum FlinkPlanningCmd {
+// todo:     GetHistory(oneshot::Sender<PerformanceHistory>),
+// todo: }
+
 #[derive(Debug)]
 pub struct FlinkPlanning<F: WorkloadForecastBuilder> {
     name: String,
@@ -21,32 +31,41 @@ pub struct FlinkPlanning<F: WorkloadForecastBuilder> {
     performance_history: PerformanceHistory,
     performance_repository: Box<dyn PerformanceRepository>,
     outlet: Option<Outlet<FlinkScalePlan>>,
+    /* todo: tx_api: mpsc::UnboundedSender<FlinkPlanningCmd>,
+     * todo: rx_api: mpsc::UnboundedReceiver<FlinkPlanningCmd>, */
 }
 
 impl<F: WorkloadForecastBuilder> FlinkPlanning<F> {
     pub async fn new(
-        planning_name: String, min_scaling_step: u16, restart: Duration, max_catch_up: Duration,
+        planning_name: impl AsRef<str>, min_scaling_step: u16, restart: Duration, max_catch_up: Duration,
         recovery_valid: Duration, forecast_builder: F, performance_repository: Box<dyn PerformanceRepository>,
     ) -> Result<Self, PlanError> {
         let forecast_calculator = ForecastCalculator::new(forecast_builder, restart, max_catch_up, recovery_valid)?;
 
         let performance_history = performance_repository
-            .load(planning_name.as_str())
+            .load(planning_name.as_ref())
             .await?
             .unwrap_or(PerformanceHistory::default());
 
+        // todo: this needs to be worked into Plan stage...  Need to determine best design
+        // todo: let (tx_api, rx_api) = mpsc::unbounded_channel();
+
         Ok(Self {
-            name: planning_name,
+            name: planning_name.as_ref().to_string(),
             min_scaling_step,
             forecast_calculator,
             performance_history,
             performance_repository,
             outlet: None,
+            /* todo: tx_api,
+             * todo: rx_api, */
         })
     }
 
     #[tracing::instrument(level = "info", skip(self, decision), fields(%decision))]
-    async fn update_performance_history(&mut self, decision: &DecisionResult<MetricCatalog>) -> Result<(), PlanError> {
+    pub async fn update_performance_history(
+        &mut self, decision: &DecisionResult<MetricCatalog>,
+    ) -> Result<(), PlanError> {
         use crate::flink::decision::result::DecisionResult as DR;
 
         let update_repository = match decision {
@@ -121,7 +140,7 @@ impl<F: WorkloadForecastBuilder> FlinkPlanning<F> {
 #[async_trait]
 impl<F: WorkloadForecastBuilder> Planning for FlinkPlanning<F> {
     type Decision = DecisionResult<MetricCatalog>;
-    type Observation = WorkloadMeasurement;
+    type Observation = MetricCatalog;
     type Out = FlinkScalePlan;
 
     fn set_outlet(&mut self, outlet: Outlet<Self::Out>) {
@@ -129,7 +148,7 @@ impl<F: WorkloadForecastBuilder> Planning for FlinkPlanning<F> {
     }
 
     fn add_observation(&mut self, observation: Self::Observation) {
-        self.forecast_calculator.add_observation(observation);
+        self.forecast_calculator.add_observation(observation.into());
     }
 
     #[tracing::instrument(level = "info", skip(self))]
@@ -401,7 +420,10 @@ mod tests {
     use crate::elements::telemetry;
     use crate::flink::plan::benchmark::BenchmarkRange;
     use crate::flink::plan::forecast::*;
-    use crate::flink::plan::{Benchmark, MINIMAL_CLUSTER_SIZE, PerformanceMemoryRepository, make_performance_repository, PerformanceRepositorySettings, PerformanceRepositoryType};
+    use crate::flink::plan::{
+        make_performance_repository, Benchmark, PerformanceMemoryRepository, PerformanceRepositorySettings,
+        PerformanceRepositoryType, MINIMAL_CLUSTER_SIZE,
+    };
     use crate::flink::{ClusterMetrics, FlowMetrics};
 
     type TestPlanning = FlinkPlanning<LeastSquaresWorkloadForecastBuilder>;
@@ -430,7 +452,9 @@ mod tests {
         Linear,
     }
 
-    async fn setup_planning( planning_name: &str, outlet: Outlet<FlinkScalePlan>, signal_type: SignalType, ) -> anyhow::Result<Arc<Mutex<TestPlanning>>> {
+    async fn setup_planning(
+        planning_name: &str, outlet: Outlet<FlinkScalePlan>, signal_type: SignalType,
+    ) -> anyhow::Result<Arc<Mutex<TestPlanning>>> {
         let mut calc = ForecastCalculator::new(
             LeastSquaresWorkloadForecastBuilder::new(20, SpikeSettings { influence: 0.25, ..SpikeSettings::default() }),
             Duration::from_secs(2 * 60),  // restart
@@ -477,7 +501,10 @@ mod tests {
             min_scaling_step: 2,
             forecast_calculator: calc,
             performance_history: PerformanceHistory::default(),
-            performance_repository: make_performance_repository(PerformanceRepositorySettings{storage: PerformanceRepositoryType::Memory, storage_path: None,})?,
+            performance_repository: make_performance_repository(PerformanceRepositorySettings {
+                storage: PerformanceRepositoryType::Memory,
+                storage_path: None,
+            })?,
             outlet: Some(outlet),
         };
 
@@ -489,7 +516,6 @@ mod tests {
         label: &str,
         decision: &DecisionResult<MetricCatalog>,
         planning: Arc<Mutex<TestPlanning>>,
-
 
         // calculator: Arc<Mutex<ForecastCalculator<LeastSquaresWorkloadForecastBuilder>>>,
         // history: PerformanceHistory,
@@ -535,7 +561,7 @@ mod tests {
         block_on(async move { outlet_2.attach("plan_outlet", probe_tx).await });
 
         let block: anyhow::Result<()> = block_on(async move {
-            let planning = setup_planning("planning_1", outlet, SignalType::Linear,).await?;
+            let planning = setup_planning("planning_1", outlet, SignalType::Linear).await?;
             let min_step = planning.lock().await.min_scaling_step;
 
             assert_ok!(

@@ -13,6 +13,7 @@ use crate::flink::plan::{RecordsPerSecond, MINIMAL_CLUSTER_SIZE};
 pub struct PerformanceHistory(BTreeMap<u16, BenchmarkRange>);
 
 impl PerformanceHistory {
+    #[tracing::instrument(level = "info")]
     pub fn add_lower_benchmark(&mut self, b: Benchmark) {
         if let Some(entry) = self.0.get_mut(&b.nr_task_managers) {
             entry.set_lo_rate(b.records_out_per_sec);
@@ -25,6 +26,7 @@ impl PerformanceHistory {
         // self.clear_inconsistencies_for_new_lo(&b);
     }
 
+    #[tracing::instrument(level = "info")]
     pub fn add_upper_benchmark(&mut self, b: Benchmark) {
         if let Some(entry) = self.0.get_mut(&b.nr_task_managers) {
             entry.set_hi_rate(b.records_out_per_sec);
@@ -85,6 +87,15 @@ impl PerformanceHistory {
     }
 }
 
+impl IntoIterator for PerformanceHistory {
+    type IntoIter = std::collections::btree_map::IntoIter<u16, BenchmarkRange>;
+    type Item = (u16, BenchmarkRange);
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 impl From<BTreeMap<u16, BenchmarkRange>> for PerformanceHistory {
     fn from(that: BTreeMap<u16, BenchmarkRange>) -> Self {
         Self(that)
@@ -127,11 +138,13 @@ impl BenchNeighbors {
         let hi_rate: f64 = hi.records_out_per_sec.into();
 
         let ratio: f64 = (hi.nr_task_managers as f64) / hi_rate;
-        let calculated = (ratio * workload_rate).ceil() as u16;
-        tracing::debug!(%ratio, %calculated, "calculations: {} ceil:{}", ratio * workload_rate, (ratio * workload_rate).ceil());
+        let calculated = ratio * workload_rate;
 
-        let size = cmp::max(hi.nr_task_managers, cmp::max(MINIMAL_CLUSTER_SIZE, calculated));
-        tracing::debug!(%size, %ratio, %calculated, "extrapolated cluster size above highest neighbor.");
+        let size = cmp::max(
+            hi.nr_task_managers,
+            cmp::max(MINIMAL_CLUSTER_SIZE, calculated.ceil() as u16),
+        );
+        tracing::debug!(%size, %ratio, extrapolated_size=%calculated, "extrapolated cluster size above highest neighbor.");
         size
     }
 
@@ -148,10 +161,10 @@ impl BenchNeighbors {
             Interpolation::Linear,
         );
         let spline = Spline::from_vec(vec![start, end]);
-        let sampled: Option<f64> = spline.clamped_sample(workload_rate.into());
+        let sampled: f64 = spline.clamped_sample(workload_rate.into()).unwrap();
 
-        let size = sampled.unwrap().ceil() as u16;
-        tracing::debug!(%size, "interpolated cluster size between neighbors.");
+        let size = sampled.ceil() as u16;
+        tracing::debug!(%size, interpolated_size=?sampled, "interpolated cluster size between neighbors.");
         size
     }
 }

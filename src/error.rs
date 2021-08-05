@@ -146,8 +146,8 @@ pub enum PlanError {
     #[error("zero duration for {0} not supported")]
     ZeroDuration(String),
 
-    #[error("failed to solve linear resolution regression for timestamp {0:?}")]
-    LinearResolutionFailed(DateTime<Utc>),
+    #[error("failed to solve regression for timestamp {0:?}")]
+    RegressionFailed(DateTime<Utc>),
 
     #[error("{0}")]
     StageError(#[from] anyhow::Error),

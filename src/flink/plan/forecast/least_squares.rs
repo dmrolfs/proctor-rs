@@ -126,7 +126,7 @@ impl WorkloadForecastBuilder for LeastSquaresWorkloadForecastBuilder {
 
         self.data.make_contiguous();
         let data = self.data_slice();
-        let model = Self::do_select_model(data)?;
+        let model = Self::do_select_model(data);
         Ok(model)
     }
 }
@@ -137,21 +137,27 @@ impl LeastSquaresWorkloadForecastBuilder {
     }
 
     #[tracing::instrument(level = "debug", skip(data))]
-    fn do_select_model(data: &[Point]) -> Result<Box<dyn WorkloadForecast>, PlanError> {
-        let linear = LinearRegression::from_data(&data)?;
+    fn do_select_model(data: &[Point]) -> Box<dyn WorkloadForecast> {
+        let linear = LinearRegression::from_data(&data);
         let linear_r = linear.correlation_coefficient;
-        let quadratic = QuadraticRegression::from_data(&data)?;
-        let quadratic_r = quadratic.correlation_coefficient;
+        if let Some(quadratic) = QuadraticRegression::from_data(&data) {
+            let quadratic_r = quadratic.correlation_coefficient;
 
-        let model: Box<dyn WorkloadForecast> = match (linear_r, quadratic_r) {
-            (_, q_r) if q_r.is_nan() => Box::new(linear),
-            (l_r, _) if l_r.is_nan() => Box::new(quadratic),
-            (l_r, q_r) if l_r < q_r => Box::new(quadratic),
-            _ => Box::new(linear),
-        };
+            let model: Box<dyn WorkloadForecast> = match (linear_r, quadratic_r) {
+                (_, q_r) if q_r.is_nan() => Box::new(linear),
+                (l_r, _) if l_r.is_nan() => Box::new(quadratic),
+                (l_r, q_r) if l_r < q_r => Box::new(quadratic),
+                _ => Box::new(linear),
+            };
 
-        tracing::debug!(%linear_r, %quadratic_r, "selected workload prediction model: {}", model.name());
-        Ok(model)
+            tracing::debug!(%linear_r, %quadratic_r, "selected workload prediction model: {}", model.name());
+            model
+        } else {
+            tracing::debug!(
+                "failed to calculate the quadratic model due to a matrix decomposition issue - using linear model."
+            );
+            Box::new(linear)
+        }
     }
 }
 
@@ -401,7 +407,7 @@ mod tests {
             (4., 11.97),
         ];
 
-        let model_1 = LeastSquaresWorkloadForecastBuilder::do_select_model(&data_1)?;
+        let model_1 = LeastSquaresWorkloadForecastBuilder::do_select_model(&data_1);
         assert_eq!(model_1.name(), "QuadraticRegression");
 
         let data_2 = vec![
@@ -417,7 +423,7 @@ mod tests {
             (10., 10.),
         ];
 
-        let model_2 = LeastSquaresWorkloadForecastBuilder::do_select_model(&data_2)?;
+        let model_2 = LeastSquaresWorkloadForecastBuilder::do_select_model(&data_2);
         assert_eq!(model_2.name(), "LinearRegression");
 
         let data_3 = vec![
@@ -433,7 +439,7 @@ mod tests {
             (10., 0.),
         ];
 
-        let model_3 = LeastSquaresWorkloadForecastBuilder::do_select_model(&data_3)?;
+        let model_3 = LeastSquaresWorkloadForecastBuilder::do_select_model(&data_3);
         assert_eq!(model_3.name(), "LinearRegression");
 
         let data_4 = vec![
@@ -449,7 +455,7 @@ mod tests {
             (10., 17.),
         ];
 
-        let model_4 = LeastSquaresWorkloadForecastBuilder::do_select_model(&data_4)?;
+        let model_4 = LeastSquaresWorkloadForecastBuilder::do_select_model(&data_4);
         assert_eq!(model_4.name(), "LinearRegression");
 
         Ok(())
