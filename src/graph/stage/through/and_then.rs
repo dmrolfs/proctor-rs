@@ -26,11 +26,9 @@ use crate::{AppData, ProctorResult};
 ///     let bar = "17".to_string();
 ///
 ///     let mut sq_plus = stage::AndThen::new("square values then add", move |x| {
-///         future::ok(x * x + bar.parse::<i32>().expect("failed to parse bar."))
+///         future::ready(x * x + bar.parse::<i32>().expect("failed to parse bar."))
 ///     });
-///     let mut fold = stage::Fold::<_, Result<i32, anyhow::Error>, i32>::new("sum values", 0, |acc, x| {
-///         acc + x.expect("error during calc")
-///     });
+///     let mut fold = stage::Fold::<_, i32, i32>::new("sum values", 0, |acc, x| acc + x);
 ///     let rx_sum_sq = fold.take_final_rx().unwrap();
 ///
 ///     (source.outlet(), sq_plus.inlet()).connect().await;
@@ -93,7 +91,6 @@ where
 {
     type Out = Out;
 
-    #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()
     }
@@ -106,7 +103,6 @@ where
 {
     type In = In;
 
-    #[inline]
     fn inlet(&self) -> Inlet<Self::In> {
         self.inlet.clone()
     }
@@ -121,7 +117,6 @@ where
     Fut: Future<Output = Out> + Send + 'static,
     Op: FnMut(In) -> Fut + Send + Sync + 'static,
 {
-    #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -138,7 +133,7 @@ where
         let outlet = &self.outlet;
 
         while let Some(input) = self.inlet.recv().await {
-            let value: Out = (self.operation)(input).await;
+            let value = (self.operation)(input).await;
             outlet.send(value).await?;
         }
 
@@ -169,11 +164,11 @@ mod tests {
     fn test_basic_usage() {
         let my_data = vec![1, 2, 3];
         let (tx_in, rx_in) = mpsc::channel::<i32>(8);
-        let (tx_out, mut rx_out) = mpsc::channel::<anyhow::Result<i32>>(8);
+        let (tx_out, mut rx_out) = mpsc::channel::<i32>(8);
 
         let bar = "17".to_string(); // important to type check closing over non-copy value
         let mut map = AndThen::new("square values", move |x| {
-            future::ok(x * x + bar.parse::<i32>().expect("failed to parse bar."))
+            future::ready(x * x + bar.parse::<i32>().expect("failed to parse bar."))
         });
 
         let mut actual = Vec::with_capacity(3);
@@ -195,11 +190,11 @@ mod tests {
             source_handle.await.unwrap();
             map_handle.await.unwrap();
             while let Some(x) = rx_out.recv().await {
-                actual.push(x.expect("error during and_then mapping"));
+                actual.push(x);
             }
         });
 
-        assert_eq!(vec![18, 21, 26], actual);
+        assert_eq!(actual, vec![18, 21, 26]);
     }
 
     #[test]
@@ -211,10 +206,10 @@ mod tests {
 
         let bar = "17".to_string(); // important to type check closing over non-copy value
         let mut calc = AndThen::new("square values", move |x| {
-            future::ok(x * x + bar.parse::<i32>().expect("failed to parse bar."))
+            future::ready(x * x + bar.parse::<i32>().expect("failed to parse bar."))
         });
 
-        let (tx_out, mut rx_out) = mpsc::channel::<anyhow::Result<i32>>(8);
+        let (tx_out, mut rx_out) = mpsc::channel(8);
 
         let mut actual = Vec::with_capacity(7);
 
@@ -228,7 +223,7 @@ mod tests {
             g.run().await.expect("failed to close graph.");
 
             while let Some(x) = rx_out.recv().await {
-                actual.push(x.expect("error during and_then mapping"));
+                actual.push(x);
             }
         });
 

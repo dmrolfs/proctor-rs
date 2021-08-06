@@ -9,12 +9,15 @@ use crate::graph::stage::{Stage, WithMonitor};
 use crate::graph::{Inlet, Outlet, Port, SinkShape, SourceShape};
 use crate::{AppData, ProctorResult};
 
-type PlanMonitor<P> = broadcast::Receiver<PlanEvent<<P as Planning>::Observation, <P as Planning>::Decision>>;
+type PlanMonitor<P> =
+    broadcast::Receiver<PlanEvent<<P as Planning>::Observation, <P as Planning>::Decision, <P as Planning>::Out>>;
+type Event<P> = PlanEvent<<P as Planning>::Observation, <P as Planning>::Decision, <P as Planning>::Out>;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum PlanEvent<Observation: Clone, Decision: Clone> {
+pub enum PlanEvent<Observation, Decision, Out> {
     ObservationAdded(Observation),
-    DecisionPlanned(Decision),
+    DecisionPlanned(Decision, Out),
+    DecisionIgnored(Decision),
 }
 
 
@@ -22,11 +25,11 @@ pub enum PlanEvent<Observation: Clone, Decision: Clone> {
 pub trait Planning: Debug + Send + Sync {
     type Observation: AppData + Clone;
     type Decision: AppData + Clone;
-    type Out: AppData;
+    type Out: AppData + Clone;
 
     fn set_outlet(&mut self, outlet: Outlet<Self::Out>);
     fn add_observation(&mut self, observation: Self::Observation);
-    async fn handle_decision(&mut self, decision: Self::Decision) -> Result<(), PlanError>;
+    async fn handle_decision(&mut self, decision: Self::Decision) -> Result<Option<Self::Out>, PlanError>;
     async fn close(mut self) -> Result<(), PlanError>;
 }
 
@@ -36,7 +39,8 @@ pub struct Plan<P: Planning> {
     inlet: Inlet<P::Observation>,
     decision_inlet: Inlet<P::Decision>,
     outlet: Outlet<P::Out>,
-    pub tx_monitor: broadcast::Sender<PlanEvent<P::Observation, P::Decision>>,
+    // pub tx_monitor: broadcast::Sender<PlanEvent<P::Observation, P::Decision, P::Out>>,
+    pub tx_monitor: broadcast::Sender<Event<P>>,
 }
 
 impl<P: Planning> Plan<P> {
@@ -150,8 +154,14 @@ impl<P: Planning> Plan<P> {
                 },
 
                 Some(decision) = rx_decision.recv() => {
-                    planning.handle_decision(decision.clone()).await?;
-                    Self::emit_event(tx_monitor, PlanEvent::DecisionPlanned(decision));
+                    let out = planning.handle_decision(decision.clone()).await?;
+                    let event = if let Some(out) = out {
+                        PlanEvent::DecisionPlanned(decision, out)
+                    } else {
+                        PlanEvent::DecisionIgnored(decision)
+                    };
+
+                    Self::emit_event(tx_monitor, event);
                 },
 
                 else => {
@@ -165,10 +175,7 @@ impl<P: Planning> Plan<P> {
     }
 
     #[tracing::instrument(level = "debug", skip(tx_monitor))]
-    fn emit_event(
-        tx_monitor: &broadcast::Sender<PlanEvent<P::Observation, P::Decision>>,
-        event: PlanEvent<P::Observation, P::Decision>,
-    ) {
+    fn emit_event(tx_monitor: &broadcast::Sender<Event<P>>, event: Event<P>) {
         match tx_monitor.send(event) {
             Ok(nr_subsribers) => tracing::debug!(%nr_subsribers, "published event to subscribers"),
             Err(err) => {

@@ -5,9 +5,8 @@ use claim::*;
 use fake::locales::EN;
 use fake::Fake;
 use lazy_static::lazy_static;
-use oso::PolarValue;
 use pretty_assertions::assert_eq;
-use proctor::elements::{telemetry, Telemetry};
+use proctor::elements::telemetry;
 use proctor::flink::decision::result::DecisionResult;
 use proctor::flink::plan::{
     make_performance_repository, FlinkPlanning, FlinkScalePlan, LeastSquaresWorkloadForecastBuilder,
@@ -16,7 +15,7 @@ use proctor::flink::plan::{
 use proctor::flink::{ClusterMetrics, FlowMetrics, MetricCatalog};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape};
-use proctor::phases::plan::{Plan, Planning};
+use proctor::phases::plan::Plan;
 use proctor::ProctorResult;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -25,6 +24,7 @@ use tokio::task::JoinHandle;
 type InData = MetricCatalog;
 type InDecision = DecisionResult<MetricCatalog>;
 type Out = FlinkScalePlan;
+#[allow(dead_code)]
 type ForecastBuilder = LeastSquaresWorkloadForecastBuilder;
 type TestPlanning = FlinkPlanning<LeastSquaresWorkloadForecastBuilder>;
 type TestStage = Plan<TestPlanning>;
@@ -200,6 +200,7 @@ fn make_test_data_series(
         .collect()
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 enum DecisionType {
     Up,
@@ -236,8 +237,6 @@ async fn test_flink_planning_linear() {
         storage: PerformanceRepositoryType::Memory,
         storage_path: None,
     }));
-
-    let min_scaling_step = 2;
 
     let mut planning = assert_ok!(
         TestPlanning::new(
@@ -280,7 +279,7 @@ async fn test_flink_planning_linear() {
     let stage = TestStage::new("planning_1", planning);
     let mut plan_monitor = stage.rx_monitor();
 
-    let mut flow = assert_ok!(TestFlow::new(stage).await);
+    let flow = assert_ok!(TestFlow::new(stage).await);
 
     tracing::info!("pushing test data into graph...");
     for d in data {
@@ -338,8 +337,6 @@ async fn test_flink_planning_sine() {
         storage_path: None,
     }));
 
-    let min_scaling_step = 2;
-
     let mut planning = assert_ok!(
         TestPlanning::new(
             "test_planning_2",
@@ -381,7 +378,7 @@ async fn test_flink_planning_sine() {
     let stage = TestStage::new("planning_1", planning);
     let mut plan_monitor = stage.rx_monitor();
 
-    let mut flow = assert_ok!(TestFlow::new(stage).await);
+    let flow = assert_ok!(TestFlow::new(stage).await);
 
     tracing::info!("pushing test data into graph...");
     for d in data {

@@ -122,9 +122,6 @@ impl<F: WorkloadForecastBuilder> ForecastCalculator<F> {
 mod tests {
     use approx::assert_relative_eq;
     use claim::*;
-    use mockall::predicate::*;
-    use mockall::*;
-    use pretty_assertions::assert_eq;
 
     use super::*;
     use crate::flink::plan::forecast::*;

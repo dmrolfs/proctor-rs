@@ -95,7 +95,6 @@ where
 {
     type Out = Out;
 
-    #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()
     }
@@ -107,7 +106,6 @@ where
 {
     type In = In;
 
-    #[inline]
     fn inlet(&self) -> Inlet<Self::In> {
         self.inlet.clone()
     }
@@ -121,7 +119,6 @@ where
     In: AppData,
     Out: AppData,
 {
-    #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
     }

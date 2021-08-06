@@ -14,7 +14,7 @@ use proctor::tracing::{get_subscriber, init_subscriber};
 use reqwest::Url;
 use serde::de;
 
-#[derive(Debug, Display, PartialEq)]
+#[derive(Debug, Display, Clone, PartialEq)]
 pub enum CurrencyCode {
     ETH,
     USD,
@@ -40,7 +40,7 @@ impl CurrencyCode {
 }
 
 // for anything beyond an example, I'd consider using a crate such as `rusty_money`.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Currency {
     pub code: CurrencyCode,
     pub name: String,
@@ -52,7 +52,7 @@ impl Currency {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExchangeRate {
     pub from_currency: Currency,
     pub to_currency: Currency,

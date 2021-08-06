@@ -33,16 +33,12 @@ use crate::{AppData, ProctorResult};
 ///
 ///     let bar = "17".to_string();
 ///     let mut sq_plus = stage::AndThen::new("II.a. AndThen-sq_plus", move |x| {
-///         future::ok(x * x + bar.parse::<i32>().expect("failed to parse bar."))
+///         future::ready(x * x + bar.parse::<i32>().expect("failed to parse bar."))
 ///     });
 ///
-///     let mut add_five = stage::AndThen::new("II.b AndThen-add_five", |x: Result<i32, StageError>| {
+///     let mut add_five = stage::AndThen::new("II.b AndThen-add_five", |x: i32| {
 ///         tracing::info!(?x, "adding 5 to x");
-///
-///         match x {
-///             Ok(x) => future::ok(x + 5),
-///             Err(err) => future::err(err),
-///         }
+///         future::ready(x + 5)
 ///     });
 ///     let cg_inlet = sq_plus.inlet().clone();
 ///     (sq_plus.outlet(), add_five.inlet()).connect().await;
@@ -59,9 +55,9 @@ use crate::{AppData, ProctorResult};
 ///     cg.push_back(Box::new(add_five)).await;
 ///     let mut composite = stage::CompositeThrough::new("II. CompositeThrough-middle", cg, cg_inlet.clone(), cg_outlet.clone()).await;
 ///
-///     let mut fold = stage::Fold::<_, Result<i32, StageError>, i32>::new("III. Fold-sum", 0, |acc, x| {
+///     let mut fold = stage::Fold::<_, i32, i32>::new("III. Fold-sum", 0, |acc, x| {
 ///         tracing::info!(%acc, ?x, "folding received value.");
-///         acc + x.expect("error during calc")
+///         acc + x
 ///     });
 ///     let rx_sum_sq = fold.take_final_rx().unwrap();
 ///
@@ -138,7 +134,6 @@ impl<In: AppData, Out: AppData> CompositeThrough<In, Out> {
 impl<In, Out> SourceShape for CompositeThrough<In, Out> {
     type Out = Out;
 
-    #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()
     }
@@ -147,7 +142,6 @@ impl<In, Out> SourceShape for CompositeThrough<In, Out> {
 impl<In, Out> SinkShape for CompositeThrough<In, Out> {
     type In = In;
 
-    #[inline]
     fn inlet(&self) -> Inlet<Self::In> {
         self.inlet.clone()
     }
@@ -156,7 +150,6 @@ impl<In, Out> SinkShape for CompositeThrough<In, Out> {
 #[dyn_upcast]
 #[async_trait]
 impl<In: AppData, Out: AppData> Stage for CompositeThrough<In, Out> {
-    #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
     }
