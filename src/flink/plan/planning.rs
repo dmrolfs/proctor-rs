@@ -434,7 +434,7 @@ mod tests {
 
     lazy_static! {
         static ref METRICS: MetricCatalog = MetricCatalog {
-            timestamp: Utc.timestamp(NOW, 0),
+            timestamp: Utc.timestamp(NOW, 0).into(),
             flow: FlowMetrics {
                 input_consumer_lag: 314.15926535897932384264,
                 ..FlowMetrics::default()

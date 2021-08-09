@@ -10,7 +10,7 @@ use proctor::elements::telemetry;
 use proctor::flink::decision::result::DecisionResult;
 use proctor::flink::plan::{
     make_performance_repository, FlinkPlanning, FlinkScalePlan, LeastSquaresWorkloadForecastBuilder,
-    PerformanceRepositorySettings, PerformanceRepositoryType, SpikeSettings,
+    PerformanceRepositorySettings, PerformanceRepositoryType, SpikeSettings, TimestampSeconds,
 };
 use proctor::flink::{ClusterMetrics, FlowMetrics, MetricCatalog};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
@@ -166,9 +166,9 @@ const STEP: i64 = 15;
 
 #[tracing::instrument(level = "info")]
 fn make_test_data(
-    start: DateTime<Utc>, tick: i64, nr_task_managers: u16, input_consumer_lag: f64, records_per_sec: f64,
+    start: TimestampSeconds, tick: i64, nr_task_managers: u16, input_consumer_lag: f64, records_per_sec: f64,
 ) -> InData {
-    let timestamp = Utc.timestamp(start.timestamp() + tick * STEP, 0);
+    let timestamp = Utc.timestamp(start.as_i64() + tick * STEP, 0).into();
 
     MetricCatalog {
         timestamp,
@@ -191,7 +191,7 @@ fn make_test_data(
 }
 
 fn make_test_data_series(
-    start: DateTime<Utc>, nr_task_managers: u16, input_consumer_lag: f64, mut gen: impl FnMut(i64) -> f64,
+    start: TimestampSeconds, nr_task_managers: u16, input_consumer_lag: f64, mut gen: impl FnMut(i64) -> f64,
 ) -> Vec<InData> {
     let total = 30;
     (0..total)
@@ -210,7 +210,7 @@ enum DecisionType {
 
 #[tracing::instrument(level = "info")]
 fn make_decision(
-    decision: DecisionType, start: DateTime<Utc>, tick: i64, nr_task_managers: u16, input_consumer_lag: f64,
+    decision: DecisionType, start: TimestampSeconds, tick: i64, nr_task_managers: u16, input_consumer_lag: f64,
     records_per_sec: f64,
 ) -> InDecision {
     let data = make_test_data(start, tick, nr_task_managers, input_consumer_lag, records_per_sec);
@@ -252,8 +252,8 @@ async fn test_flink_planning_linear() {
     );
 
 
-    let start = fake::faker::chrono::raw::DateTimeBefore(EN, Utc::now()).fake();
-    let data = make_test_data_series(start, 2, 1000., |tick| tick as f64);
+    let start: DateTime<Utc> = fake::faker::chrono::raw::DateTimeBefore(EN, Utc::now()).fake();
+    let data = make_test_data_series(start.into(), 2, 1000., |tick| tick as f64);
     let data_len = data.len();
     let last_data = assert_some!(data.last()).clone();
 
@@ -351,8 +351,8 @@ async fn test_flink_planning_sine() {
     );
 
 
-    let start = fake::faker::chrono::raw::DateTimeBefore(EN, Utc::now()).fake();
-    let data = make_test_data_series(start, 2, 1000., |tick| 75. * ((tick as f64) / 15.).sin());
+    let start: DateTime<Utc> = fake::faker::chrono::raw::DateTimeBefore(EN, Utc::now()).fake();
+    let data = make_test_data_series(start.into(), 2, 1000., |tick| 75. * ((tick as f64) / 15.).sin());
     let data_len = data.len();
     let last_data = assert_some!(data.last()).clone();
 

@@ -1,11 +1,13 @@
 pub use benchmark::Benchmark;
 pub use forecast::*;
+use oso::PolarClass;
 pub use performance_history::PerformanceHistory;
 pub use performance_repository::{
     make_performance_repository, PerformanceMemoryRepository, PerformanceRepository, PerformanceRepositorySettings,
     PerformanceRepositoryType,
 };
 pub use planning::FlinkPlanning;
+use serde::{Deserialize, Serialize};
 
 use crate::flink::decision::result::DecisionResult;
 use crate::flink::MetricCatalog;
@@ -18,9 +20,12 @@ mod planning;
 
 const MINIMAL_CLUSTER_SIZE: u16 = 1;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FlinkScalePlan {
+    #[polar(attribute)]
     pub target_nr_task_managers: u16,
+
+    #[polar(attribute)]
     pub current_nr_task_managers: u16,
 }
 

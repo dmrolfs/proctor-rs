@@ -1,4 +1,4 @@
-use crate::error::PlanError;
+use crate::error::{PlanError, TelemetryError, TypeExpectation};
 use crate::flink::MetricCatalog;
 
 mod calculator;
@@ -8,6 +8,7 @@ mod ridge_regression;
 mod signal;
 
 use std::cmp::Ordering;
+use std::convert::TryFrom;
 use std::fmt::{self, Debug};
 use std::time::Duration;
 
@@ -17,10 +18,10 @@ use chrono::{DateTime, TimeZone, Utc};
 pub use least_squares::{LeastSquaresWorkloadForecastBuilder, SpikeSettings};
 #[cfg(test)]
 use mockall::{automock, predicate::*};
+use oso::PolarClass;
 use serde::{Deserialize, Serialize};
 
-use crate::elements::TelemetryValue;
-
+use crate::elements::{FromTelemetry, TelemetryValue, ToTelemetry};
 
 #[cfg_attr(test, automock)]
 pub trait WorkloadForecastBuilder: Debug + Sync + Send {
@@ -38,7 +39,7 @@ pub trait WorkloadForecast: Debug {
     fn correlation_coefficient(&self) -> f64;
 }
 
-#[derive(Debug, Copy, Clone, Default, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[derive(PolarClass, Debug, Copy, Clone, Default, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct TimestampSeconds(f64);
 
 impl TimestampSeconds {
@@ -58,6 +59,14 @@ impl TimestampSeconds {
         Self(ts_secs)
     }
 
+    pub fn as_f64(&self) -> f64 {
+        self.0
+    }
+
+    pub fn as_i64(&self) -> i64 {
+        self.0 as i64
+    }
+
     pub fn as_utc(&self) -> DateTime<Utc> {
         let secs: i64 = self.0.trunc() as i64;
         let nanos: u32 = (self.0.fract() * 1_000_000_000.) as u32;
@@ -68,6 +77,21 @@ impl TimestampSeconds {
 impl fmt::Display for TimestampSeconds {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!("{}_s", self.0))
+    }
+}
+
+impl TryFrom<TelemetryValue> for TimestampSeconds {
+    type Error = TelemetryError;
+
+    fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
+        match telemetry {
+            TelemetryValue::Float(f64) => Ok(f64.into()),
+            TelemetryValue::Integer(i64) => Ok(i64.into()),
+            value => Err(TelemetryError::TypeError {
+                expected: format!("a telemetry {}", TypeExpectation::Float),
+                actual: Some(format!("{:?}", value)),
+            }),
+        }
     }
 }
 
@@ -320,7 +344,7 @@ impl PartialOrd for WorkloadMeasurement {
 impl From<MetricCatalog> for WorkloadMeasurement {
     fn from(metrics: MetricCatalog) -> Self {
         Self {
-            timestamp_secs: metrics.timestamp.timestamp(),
+            timestamp_secs: metrics.timestamp.into(),
             workload: metrics.flow.records_in_per_sec.into(),
         }
     }

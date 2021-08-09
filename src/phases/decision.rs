@@ -85,7 +85,6 @@ impl<In: AppData + ToPolar + Clone, Out: AppData, C: ProctorContext> Decision<In
         }
     }
 
-    #[inline]
     pub fn context_inlet(&self) -> Inlet<C> {
         self.context_inlet.clone()
     }
@@ -120,7 +119,6 @@ where
     type Context = C;
     type Item = T;
 
-    #[inline]
     fn load_policy_engine(&self, engine: &mut Oso) -> Result<(), PolicyError> {
         engine.load_str(
             r#"scale(item, context, direction) if scale_up(item, context, direction) and direction = "up";
@@ -129,17 +127,14 @@ where
         self.0.load_policy_engine(engine)
     }
 
-    #[inline]
     fn initialize_policy_engine(&mut self, engine: &mut Oso) -> Result<(), PolicyError> {
         self.0.initialize_policy_engine(engine)
     }
 
-    #[inline]
     fn make_query_args(&self, item: &Self::Item, context: &Self::Context) -> Self::Args {
         self.0.make_query_args(item, context)
     }
 
-    #[inline]
     fn query_policy(&self, engine: &Oso, args: Self::Args) -> Result<QueryResult, PolicyError> {
         self.0.query_policy(engine, args)
     }
@@ -160,7 +155,6 @@ impl<In, Out, C: Debug> Debug for Decision<In, Out, C> {
 impl<In, Out, C> SinkShape for Decision<In, Out, C> {
     type In = In;
 
-    #[inline]
     fn inlet(&self) -> Inlet<Self::In> {
         self.inlet.clone()
     }
@@ -169,7 +163,6 @@ impl<In, Out, C> SinkShape for Decision<In, Out, C> {
 impl<In, Out, C> SourceShape for Decision<In, Out, C> {
     type Out = Out;
 
-    #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()
     }
@@ -178,7 +171,6 @@ impl<In, Out, C> SourceShape for Decision<In, Out, C> {
 #[dyn_upcast]
 #[async_trait]
 impl<In: AppData, Out: AppData, C: ProctorContext> Stage for Decision<In, Out, C> {
-    #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -239,7 +231,6 @@ impl<In: AppData, Out: AppData, C: ProctorContext> Decision<In, Out, C> {
 impl<In, Out, C> WithApi for Decision<In, Out, C> {
     type Sender = PolicyFilterApi<C>;
 
-    #[inline]
     fn tx_api(&self) -> Self::Sender {
         self.tx_policy_api.clone()
     }
@@ -248,7 +239,6 @@ impl<In, Out, C> WithApi for Decision<In, Out, C> {
 impl<In, Out, C> WithMonitor for Decision<In, Out, C> {
     type Receiver = PolicyFilterMonitor<In, C>;
 
-    #[inline]
     fn rx_monitor(&self) -> Self::Receiver {
         self.tx_policy_monitor.subscribe()
     }

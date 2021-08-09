@@ -3,7 +3,7 @@ use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::ops::Add;
 
-use ::serde_with::{serde_as, TimestampSeconds};
+// use ::serde_with::{serde_as, TimestampSeconds};
 use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
 use oso::PolarClass;
@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::elements::{telemetry, TelemetryValue};
 use crate::error::TelemetryError;
+use crate::flink::plan::TimestampSeconds;
 
 // todo: replace this with reflection approach if one identified.
 // tried serde-reflection, which failed since serde identifiers (flatten) et.al., are not supported.
@@ -36,11 +37,11 @@ lazy_static! {
     };
 }
 
-#[serde_as]
+// #[serde_as]
 #[derive(PolarClass, Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct MetricCatalog {
-    #[serde_as(as = "TimestampSeconds")]
-    pub timestamp: DateTime<Utc>,
+    #[polar(attribute)]
+    pub timestamp: TimestampSeconds,
 
     #[polar(attribute)]
     #[serde(flatten)] // current subscription mechanism only supports flatten keys
@@ -98,13 +99,17 @@ pub struct ClusterMetrics {
 }
 
 impl MetricCatalog {
-    pub fn new(timestamp: DateTime<Utc>, custom: telemetry::Table) -> Self {
+    pub fn for_timestamp(timestamp: TimestampSeconds, custom: telemetry::Table) -> Self {
         Self {
             timestamp,
             flow: FlowMetrics::default(),
             cluster: ClusterMetrics::default(),
             custom,
         }
+    }
+
+    pub fn for_datetime(timestamp: DateTime<Utc>, custom: telemetry::Table) -> Self {
+        Self::for_timestamp(timestamp.into(), custom)
     }
 
     // todo limited usefulness by itself; keys? iter support for custom and for entire catalog?
@@ -186,7 +191,7 @@ mod tests {
             "otis".to_string() => "Otis".to_telemetry(),
             "bar".to_string() => "Neo".to_telemetry(),
         };
-        let data = MetricCatalog::new(Utc::now(), cdata);
+        let data = MetricCatalog::for_datetime(Utc::now(), cdata);
         assert_eq!(data.custom::<i64>("foo").unwrap().unwrap(), 17_i64);
         assert_eq!(data.custom::<f64>("foo").unwrap().unwrap(), 17.0_f64);
         assert_eq!(data.custom::<String>("otis").unwrap().unwrap(), "Otis".to_string());
@@ -198,12 +203,12 @@ mod tests {
     #[test]
     fn test_metric_add() {
         let ts = Utc::now();
-        let data = MetricCatalog::new(ts.clone(), std::collections::HashMap::default());
+        let data = MetricCatalog::for_datetime(ts.clone(), std::collections::HashMap::default());
         let am1 = maplit::hashmap! {
             "foo.1".to_string() => "f-1".to_telemetry(),
             "bar.1".to_string() => "b-1".to_telemetry(),
         };
-        let a1 = MetricCatalog::new(ts.clone(), am1.clone());
+        let a1 = MetricCatalog::for_datetime(ts.clone(), am1.clone());
         let d1 = data.clone() + a1.clone();
         assert_eq!(d1.custom, am1);
 
@@ -211,7 +216,7 @@ mod tests {
             "foo.2".to_string() => "f-2".to_telemetry(),
             "bar.2".to_string() => "b-2".to_telemetry(),
         };
-        let a2 = MetricCatalog::new(ts.clone(), am2.clone());
+        let a2 = MetricCatalog::for_datetime(ts.clone(), am2.clone());
         let d2 = d1.clone() + a2.clone();
         let mut exp2 = am1.clone();
         exp2.extend(am2.clone());
@@ -220,7 +225,7 @@ mod tests {
 
     #[test]
     fn test_metric_catalog_serde() {
-        let ts = Utc.ymd(1988, 5, 30).and_hms(9, 1, 17);
+        let ts = Utc.ymd(1988, 5, 30).and_hms(9, 1, 17).into();
         let metrics = MetricCatalog {
             timestamp: ts,
             flow: FlowMetrics {
@@ -247,7 +252,8 @@ mod tests {
             &vec![
                 Token::Map { len: None },
                 Token::Str("timestamp"),
-                Token::I64(ts.timestamp()),
+                Token::NewtypeStruct { name: "TimestampSeconds" },
+                Token::F64(ts.into()),
                 Token::Str("records_in_per_sec"),
                 Token::F64(17.),
                 Token::Str("records_out_per_sec"),
@@ -281,7 +287,7 @@ mod tests {
         let main_span = tracing::info_span!("test_telemetry_from_metric_catalog");
         let _main_span_guard = main_span.enter();
 
-        let ts = Utc.ymd(1988, 5, 30).and_hms(9, 1, 17);
+        let ts = Utc.ymd(1988, 5, 30).and_hms(9, 1, 17).into();
         let metrics = MetricCatalog {
             timestamp: ts,
             flow: FlowMetrics {
@@ -308,7 +314,7 @@ mod tests {
         assert_eq!(
             telemetry,
             TelemetryValue::Table(maplit::hashmap! {
-                "timestamp".to_string() => ts.timestamp().to_telemetry(),
+                "timestamp".to_string() => ts.to_telemetry(),
                 "records_in_per_sec".to_string() => (17.).to_telemetry(),
                 "records_out_per_sec".to_string() => (0.).to_telemetry(),
                 "input_consumer_lag".to_string() => 3.14.to_telemetry(),

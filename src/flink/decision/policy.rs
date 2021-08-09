@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use oso::{Oso, PolarClass, PolarValue};
+use serde::{Deserialize, Serialize};
 
 use super::context::FlinkDecisionContext;
 use crate::elements::{PolicySettings, PolicySource, PolicySubscription, QueryPolicy, QueryResult, Telemetry};
@@ -9,7 +10,7 @@ use crate::flink::MetricCatalog;
 use crate::phases::collection::TelemetrySubscription;
 use crate::ProctorContext;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DecisionPolicy {
     required_subscription_fields: HashSet<String>,
     optional_subscription_fields: HashSet<String>,
@@ -41,14 +42,14 @@ impl QueryPolicy for DecisionPolicy {
     type Context = FlinkDecisionContext;
     type Item = MetricCatalog;
 
-    fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
-        self.policy_source.load_into(oso)
+    fn load_policy_engine(&self, engine: &mut Oso) -> Result<(), PolicyError> {
+        self.policy_source.load_into(engine)
     }
 
-    fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
-        Telemetry::initialize_policy_engine(oso)?;
+    fn initialize_policy_engine(&mut self, engine: &mut Oso) -> Result<(), PolicyError> {
+        Telemetry::initialize_policy_engine(engine)?;
 
-        oso.register_class(
+        engine.register_class(
             FlinkDecisionContext::get_polar_class_builder()
                 .add_method("custom", ProctorContext::custom)
                 .build(),
