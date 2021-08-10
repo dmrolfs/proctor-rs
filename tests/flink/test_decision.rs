@@ -2,16 +2,12 @@ use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::time::Duration;
 
-use chrono::{DateTime, Utc};
-use lazy_static::lazy_static;
-use oso::{PolarValue, ToPolar};
+use oso::ToPolar;
 use pretty_assertions::assert_eq;
 use proctor::elements;
-use proctor::elements::{
-    Policy, PolicyOutcome, PolicySettings, PolicySource, PolicySubscription, Telemetry, TelemetryValue, ToTelemetry,
-};
+use proctor::elements::{PolicyOutcome, PolicySource, PolicySubscription, Telemetry, TelemetryValue, ToTelemetry};
 use proctor::flink::decision::context::FlinkDecisionContext;
-use proctor::flink::decision::policy::DecisionPolicy;
+use proctor::flink::decision::policy::FlinkDecisionPolicy;
 use proctor::flink::decision::result::{make_decision_transform, DecisionResult};
 use proctor::flink::MetricCatalog;
 use proctor::graph::stage::{self, ThroughStage, WithApi, WithMonitor};
@@ -24,42 +20,7 @@ use serde::de::DeserializeOwned;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
-type Args<T, C> = (T, C, PolarValue);
-
-lazy_static! {
-    static ref DT_1: DateTime<Utc> = DateTime::parse_from_str("2021-05-05T17:11:07.246310806Z", "%+")
-        .unwrap()
-        .with_timezone(&Utc);
-    static ref DT_1_STR: String = format!("{}", DT_1.format("%+"));
-    static ref DT_1_TS: i64 = DT_1.timestamp();
-}
-
-struct TestSettings {
-    pub required_subscription_fields: HashSet<String>,
-    pub optional_subscription_fields: HashSet<String>,
-    pub source: PolicySource,
-}
-
-impl PolicySettings for TestSettings {
-    fn required_subscription_fields(&self) -> HashSet<String> {
-        self.required_subscription_fields.clone()
-    }
-
-    fn optional_subscription_fields(&self) -> HashSet<String> {
-        self.optional_subscription_fields.clone()
-    }
-
-    fn source(&self) -> PolicySource {
-        self.source.clone()
-    }
-}
-
-fn make_test_policy(
-    settings: &impl PolicySettings,
-) -> impl Policy<MetricCatalog, FlinkDecisionContext, Args<MetricCatalog, FlinkDecisionContext>> {
-    DecisionPolicy::new(settings)
-}
-
+use super::fixtures::*;
 
 #[allow(dead_code)]
 struct TestFlow<In, Out, C> {
@@ -267,33 +228,6 @@ where
     }
 }
 
-fn make_test_item_padding() -> Telemetry {
-    let padding = maplit::hashmap! {
-            "records_out_per_sec".to_string() => (0.).into(),
-            "max_message_latency".to_string() => (0.).into(),
-            "net_in_utilization".to_string() => (0.).into(),
-            "net_out_utilization".to_string() => (0.).into(),
-            "sink_health_metrics".to_string() => (0.).into(),
-            "task_cpu_load".to_string() => (0.).into(),
-            "network_io_utilization".to_string() => (0.).into(),
-    }
-    .into_iter()
-    .collect();
-
-    padding
-}
-
-fn make_test_item(timestamp: DateTime<Utc>, records_in_per_sec: f64, inbox_lag: f64) -> Telemetry {
-    let item = maplit::hashmap! {
-        "timestamp".to_string() => timestamp.timestamp().into(),
-        "records_in_per_sec".to_string() => records_in_per_sec.into(),
-        "input_consumer_lag".to_string() => inbox_lag.into(),
-    }
-    .into_iter()
-    .collect();
-
-    item
-}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_decision_carry_policy_result() -> anyhow::Result<()> {
@@ -308,7 +242,7 @@ async fn test_decision_carry_policy_result() -> anyhow::Result<()> {
             "nr_task_managers",
         });
 
-    let policy = make_test_policy(&TestSettings {
+    let policy = FlinkDecisionPolicy::new(&TestSettings {
         required_subscription_fields: HashSet::new(),
         optional_subscription_fields: HashSet::new(),
         source: PolicySource::String(
@@ -418,7 +352,7 @@ async fn test_decision_common() -> anyhow::Result<()> {
             "all_sinks_healthy",
         });
 
-    let policy = make_test_policy(&TestSettings {
+    let policy = FlinkDecisionPolicy::new(&TestSettings {
         required_subscription_fields: HashSet::new(),
         optional_subscription_fields: HashSet::new(),
         source: PolicySource::String(

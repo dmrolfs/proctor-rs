@@ -18,6 +18,9 @@ pub enum ProctorError {
     DecisionError(#[from] DecisionError),
 
     #[error("{0}")]
+    GovernanceError(#[from] GovernanceError),
+
+    #[error("{0}")]
     PlanError(#[from] PlanError),
 
     #[error("{0}")]
@@ -113,6 +116,15 @@ pub enum DecisionError {
     #[error("{0}")]
     TelemetryError(#[from] TelemetryError),
 
+    #[error("{0}")]
+    PortError(#[from] PortError),
+
+    #[error("{0}")]
+    StageError(#[from] anyhow::Error),
+}
+
+#[derive(Debug, Error)]
+pub enum GovernanceError {
     #[error("{0}")]
     PortError(#[from] PortError),
 

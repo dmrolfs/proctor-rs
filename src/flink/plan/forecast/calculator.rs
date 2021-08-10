@@ -1,7 +1,5 @@
 use std::time::Duration;
 
-use chrono::{DateTime, Utc};
-
 use super::{RecordsPerSecond, TimestampSeconds, WorkloadForecast, WorkloadForecastBuilder, WorkloadMeasurement};
 use crate::error::PlanError;
 

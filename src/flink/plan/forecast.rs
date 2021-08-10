@@ -21,7 +21,7 @@ use mockall::{automock, predicate::*};
 use oso::PolarClass;
 use serde::{Deserialize, Serialize};
 
-use crate::elements::{FromTelemetry, TelemetryValue, ToTelemetry};
+use crate::elements::TelemetryValue;
 
 #[cfg_attr(test, automock)]
 pub trait WorkloadForecastBuilder: Debug + Sync + Send {
@@ -43,6 +43,10 @@ pub trait WorkloadForecast: Debug {
 pub struct TimestampSeconds(f64);
 
 impl TimestampSeconds {
+    pub fn now() -> Self {
+        Self::new_secs(Utc::now().timestamp())
+    }
+
     pub fn new_secs(ts_secs: i64) -> Self {
         if (f64::MAX as i64) < ts_secs {
             panic!(

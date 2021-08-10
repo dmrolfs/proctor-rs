@@ -23,6 +23,9 @@ const MINIMAL_CLUSTER_SIZE: u16 = 1;
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FlinkScalePlan {
     #[polar(attribute)]
+    pub timestamp: TimestampSeconds,
+
+    #[polar(attribute)]
     pub target_nr_task_managers: u16,
 
     #[polar(attribute)]
@@ -36,8 +39,14 @@ impl FlinkScalePlan {
         use DecisionResult as DR;
 
         let current_nr_task_managers = decision.item().cluster.nr_task_managers;
-        let scale_plan_for =
-            |target_nr_task_managers: u16| Some(FlinkScalePlan { target_nr_task_managers, current_nr_task_managers });
+        let timestamp = decision.item().timestamp;
+        let scale_plan_for = |target_nr_task_managers: u16| {
+            Some(FlinkScalePlan {
+                timestamp,
+                target_nr_task_managers,
+                current_nr_task_managers,
+            })
+        };
 
         match (decision, calculated_nr_task_managers) {
             (DR::ScaleUp(_), Some(calculated)) if current_nr_task_managers < calculated => scale_plan_for(calculated),

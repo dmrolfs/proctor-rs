@@ -299,6 +299,7 @@ async fn test_flink_planning_linear() {
 
     tracing::info!("pushing decision...");
     let decision = InDecision::ScaleUp(last_data);
+    let timestamp = decision.item().timestamp;
     assert_ok!(flow.push_decision(decision).await);
 
     tracing::info!("DMR-waiting for plan to reach sink...");
@@ -312,6 +313,7 @@ async fn test_flink_planning_linear() {
     assert_eq!(
         actual,
         vec![FlinkScalePlan {
+            timestamp,
             target_nr_task_managers: 6,
             current_nr_task_managers: 2,
         }]
@@ -398,6 +400,7 @@ async fn test_flink_planning_sine() {
 
     tracing::info!("pushing decision...");
     let decision = InDecision::ScaleUp(last_data);
+    let timestamp = decision.item().timestamp;
     assert_ok!(flow.push_decision(decision).await);
 
     tracing::info!("DMR-waiting for plan to reach sink...");
@@ -411,6 +414,7 @@ async fn test_flink_planning_sine() {
     assert_eq!(
         actual,
         vec![FlinkScalePlan {
+            timestamp,
             target_nr_task_managers: 8,
             current_nr_task_managers: 2,
         }]

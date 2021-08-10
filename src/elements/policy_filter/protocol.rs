@@ -7,6 +7,7 @@ use crate::error::PolicyError;
 use crate::Ack;
 
 pub type PolicyFilterApi<C> = mpsc::UnboundedSender<PolicyFilterCmd<C>>;
+pub type PolicyFilterApiReceiver<C> = mpsc::UnboundedReceiver<PolicyFilterCmd<C>>;
 pub type PolicyFilterMonitor<T, C> = broadcast::Receiver<PolicyFilterEvent<T, C>>;
 
 #[derive(Debug)]

@@ -2,17 +2,22 @@ use std::fmt::{self, Debug};
 
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
-use oso::{Oso, PolarValue, ToPolar};
+use oso::{PolarValue, ToPolar};
 use tokio::sync::broadcast;
 
 use crate::elements::{
-    PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, PolicyOutcome, QueryPolicy, QueryResult,
+    PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, PolicyOutcome, QueryPolicy,
 };
 use crate::error::DecisionError;
-use crate::error::PolicyError;
 use crate::graph::stage::{Stage, ThroughStage, WithApi, WithMonitor};
 use crate::graph::{stage, Connect, Graph, Inlet, Outlet, Port, SinkShape, SourceShape};
 use crate::{AppData, ProctorContext, ProctorResult};
+
+pub const DECISION_POLICY_PREAMBLE: &'static str = r#"
+    scale(item, context, direction) if scale_up(item, context, direction) and direction = "up";
+    scale(item, context, direction) if scale_down(item, context, direction) and direction = "down";
+    "#;
+
 
 pub struct Decision<In, Out, C> {
     name: String,
@@ -23,17 +28,6 @@ pub struct Decision<In, Out, C> {
     tx_policy_api: PolicyFilterApi<C>,
     tx_policy_monitor: broadcast::Sender<PolicyFilterEvent<In, C>>,
 }
-
-// impl<T: AppData + ToPolar + Clone, C: ProctorContext> Decision<T, T, C> {
-//     #[tracing::instrument(level = "info", skip(name))]
-//     pub async fn basic<S: Into<String>>(
-//         name: S, policy: impl QueryPolicy<Item = T, Context = C, Args = (T, C, PolarValue)> +
-// 'static,     ) -> Self {
-//         let strip_policy_result: stage::Map<_, PolicyResult<T>, T> =
-//             stage::Map::new("strip_policy_result", |res: PolicyResult<T>| res.item);
-//         Self::with_transform(name, policy, strip_policy_result).await
-//     }
-// }
 
 impl<T: AppData + ToPolar + Clone, C: ProctorContext> Decision<T, PolicyOutcome<T, C>, C> {
     #[tracing::instrument(level = "info", skip(name))]
@@ -54,8 +48,8 @@ impl<In: AppData + ToPolar + Clone, Out: AppData, C: ProctorContext> Decision<In
     ) -> Self {
         let name = name.into();
 
-        let decision_policy = Self::policy_with_prelude(policy);
-        let policy_filter = PolicyFilter::new(format!("{}_decision_policy", name), decision_policy);
+        // let decision_policy = Self::policy_with_prelude(policy);
+        let policy_filter = PolicyFilter::new(format!("{}_decision_policy", name), policy);
         let context_inlet = policy_filter.context_inlet();
         let tx_policy_api = policy_filter.tx_api();
         let tx_policy_monitor = policy_filter.tx_monitor.clone();
@@ -89,56 +83,13 @@ impl<In: AppData + ToPolar + Clone, Out: AppData, C: ProctorContext> Decision<In
         self.context_inlet.clone()
     }
 
-    fn policy_with_prelude(
-        policy: impl QueryPolicy<Item = In, Context = C, Args = (In, C, PolarValue)> + 'static,
-    ) -> impl QueryPolicy<Item = In, Context = C, Args = (In, C, PolarValue)> {
-        DecisionQueryPolicy(policy)
-    }
+    // fn policy_with_prelude(
+    //     policy: impl QueryPolicy<Item = In, Context = C, Args = (In, C, PolarValue)> + 'static,
+    // ) -> impl QueryPolicy<Item = In, Context = C, Args = (In, C, PolarValue)> {
+    //     DecisionQueryPolicy(policy)
+    // }
 }
 
-struct DecisionQueryPolicy<T, C, P>(P)
-where
-    P: QueryPolicy<Item = T, Context = C, Args = (T, C, PolarValue)>;
-
-impl<T, C, P> Debug for DecisionQueryPolicy<T, C, P>
-where
-    P: QueryPolicy<Item = T, Context = C, Args = (T, C, PolarValue)>,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("DecisionQueryPolicy").field("inner", &self.0).finish()
-    }
-}
-
-impl<T, C, P> QueryPolicy for DecisionQueryPolicy<T, C, P>
-where
-    T: ToPolar + Clone,
-    C: ToPolar + Clone,
-    P: QueryPolicy<Item = T, Context = C, Args = (T, C, PolarValue)>,
-{
-    type Args = (T, C, PolarValue);
-    type Context = C;
-    type Item = T;
-
-    fn load_policy_engine(&self, engine: &mut Oso) -> Result<(), PolicyError> {
-        engine.load_str(
-            r#"scale(item, context, direction) if scale_up(item, context, direction) and direction = "up";
-            scale(item, context, direction) if scale_down(item, context, direction) and direction = "down";"#,
-        )?;
-        self.0.load_policy_engine(engine)
-    }
-
-    fn initialize_policy_engine(&mut self, engine: &mut Oso) -> Result<(), PolicyError> {
-        self.0.initialize_policy_engine(engine)
-    }
-
-    fn make_query_args(&self, item: &Self::Item, context: &Self::Context) -> Self::Args {
-        self.0.make_query_args(item, context)
-    }
-
-    fn query_policy(&self, engine: &Oso, args: Self::Args) -> Result<QueryResult, PolicyError> {
-        self.0.query_policy(engine, args)
-    }
-}
 
 impl<In, Out, C: Debug> Debug for Decision<In, Out, C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
