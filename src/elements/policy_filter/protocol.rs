@@ -62,6 +62,7 @@ pub enum PolicyFilterEvent<T, C> {
 pub enum PolicySource {
     String(String),
     File(PathBuf),
+    NoPolicy,
 }
 
 impl PolicySource {
@@ -74,17 +75,20 @@ impl PolicySource {
     }
 
     pub fn load_into(&self, oso: &oso::Oso) -> Result<(), PolicyError> {
-        let result = match self {
-            PolicySource::String(policy) => oso.load_str(policy.as_str()),
-            PolicySource::File(policy) => oso.load_file(policy),
+        match self {
+            PolicySource::String(policy) => oso.load_str(policy.as_str())?,
+            PolicySource::File(policy) => oso.load_file(policy)?,
+            PolicySource::NoPolicy => (),
         };
-        result.map_err(|err| err.into())
+
+        Ok(())
     }
 
     pub fn validate(&self) -> Result<(), PolicyError> {
         let polar = polar_core::polar::Polar::new();
-        let result = match self {
-            Self::String(policy) => polar.load_str(policy.as_str()),
+
+        match self {
+            Self::String(policy) => polar.load_str(policy.as_str())?,
             Self::File(policy) => {
                 let file = policy.as_path();
                 if !file.extension().map(|ext| ext == "polar").unwrap_or(false) {
@@ -96,9 +100,11 @@ impl PolicySource {
                 let mut f = std::fs::File::open(file)?;
                 let mut p = String::new();
                 f.read_to_string(&mut p)?;
-                polar.load_str(p.as_str())
+                polar.load_str(p.as_str())?;
             },
+            Self::NoPolicy => (),
         };
-        result.map_err(|err| err.into())
+
+        Ok(())
     }
 }

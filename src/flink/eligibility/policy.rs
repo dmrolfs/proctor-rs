@@ -9,6 +9,8 @@ use crate::flink::MetricCatalog;
 use crate::phases::collection::TelemetrySubscription;
 use crate::ProctorContext;
 
+// todo draft policy preample and/or default policy
+
 #[derive(Debug)]
 pub struct EligibilityPolicy {
     required_subscription_fields: HashSet<String>,

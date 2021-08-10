@@ -396,7 +396,8 @@ where
                 match new_policy {
                     PolicySource::String(policy) => oso.load_str(policy.as_str())?,
                     PolicySource::File(path) => oso.load_file(path)?,
-                }
+                    PolicySource::NoPolicy => (),
+                };
 
                 let _ignore_failure = tx.send(());
                 Ok(true)
@@ -406,7 +407,9 @@ where
                 match policy_source {
                     PolicySource::String(p) => oso.load_str(p.as_str())?,
                     PolicySource::File(path) => oso.load_file(path)?,
-                }
+                    PolicySource::NoPolicy => (),
+                };
+
                 let _ignore_failure = tx.send(());
                 Ok(true)
             },
