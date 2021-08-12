@@ -1,5 +1,8 @@
+use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::fmt::{self, Debug};
+
+use itertools::Itertools;
 
 use crate::elements::{PolicyOutcome, TelemetryValue, ToTelemetry};
 use crate::error::{DecisionError, TelemetryError, TypeExpectation};
@@ -16,11 +19,57 @@ where
     T: AppData + Clone + PartialEq,
     C: ProctorContext,
 {
-    stage::Map::new(name, move |policy_result: PolicyOutcome<T, C>| {
-        if let Some(TelemetryValue::Text(direction)) = policy_result.bindings.get(DECISION_BINDING) {
-            DecisionResult::new(policy_result.item, direction)
+    stage::Map::new(name, move |outcome: PolicyOutcome<T, C>| {
+        let transform_span = tracing::info_span!(
+            "distill policy outcome into action",
+            item=?outcome.item, policy_results=?outcome.policy_results
+        );
+        let _transform_span_guard = transform_span.enter();
+
+        if outcome.passed() {
+            outcome
+                .policy_results
+                .binding(DECISION_BINDING)
+                .map(|directions: Vec<String>| {
+                    let mut grouped: Vec<(String, usize)> = vec![];
+                    for (direction, votes) in &directions.into_iter().group_by(|d| d.clone()) {
+                        grouped.push((direction, votes.count()));
+                    }
+                    grouped.sort_by(|lhs, rhs| {
+                        let cmp = lhs.1.cmp(&rhs.1);
+                        if cmp != Ordering::Equal {
+                            cmp
+                        } else {
+                            if lhs.0 == SCALE_UP {
+                                Ordering::Less
+                            } else {
+                                Ordering::Greater
+                            }
+                        }
+                    });
+
+                    grouped
+                        .first()
+                        .map(|(d, _)| match d.as_str() {
+                            SCALE_UP => DecisionResult::ScaleUp(outcome.item.clone()),
+                            SCALE_DOWN => DecisionResult::ScaleDown(outcome.item.clone()),
+                            direction => {
+                                tracing::warn!(%direction, "unknown direction determined by policy - NoAction");
+                                DecisionResult::NoAction(outcome.item.clone())
+                            },
+                        })
+                        .unwrap_or_else(|| {
+                            tracing::warn!("no direction determined by policy - NoAction");
+                            DecisionResult::NoAction(outcome.item.clone())
+                        })
+                })
+                .unwrap_or_else(|err| {
+                    tracing::error!(error=?err, "policy failed to assess direction - NoAction.");
+                    DecisionResult::NoAction(outcome.item)
+                })
         } else {
-            DecisionResult::NoAction(policy_result.item)
+            tracing::debug!("item did not pass context policy review.");
+            DecisionResult::NoAction(outcome.item)
         }
     })
 }

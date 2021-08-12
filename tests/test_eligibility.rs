@@ -694,12 +694,12 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
             PolicyOutcome::new(
                 MeasurementData { measurement: std::f64::consts::PI },
                 context.clone(),
-                HashMap::new()
+                QueryResult::default() // HashMap::new()
             ),
             PolicyOutcome::new(
                 MeasurementData { measurement: std::f64::consts::TAU },
                 context.clone(),
-                HashMap::new()
+                QueryResult::default() // HashMap::new()
             ),
         ]
     );
@@ -1130,10 +1130,18 @@ async fn test_eligibility_replace_policy() -> anyhow::Result<()> {
             PolicyOutcome::new(
                 TestItem::new(std::f64::consts::PI, 1, too_old_ts),
                 context.clone(),
-                HashMap::new()
+                QueryResult::default() // HashMap::new()
             ),
-            PolicyOutcome::new(TestItem::new(17.327, 2, good_ts), context.clone(), HashMap::new()),
-            PolicyOutcome::new(TestItem::new(17.327, 2, good_ts), context.clone(), HashMap::new()),
+            PolicyOutcome::new(
+                TestItem::new(17.327, 2, good_ts),
+                context.clone(),
+                QueryResult::default()
+            ),
+            PolicyOutcome::new(
+                TestItem::new(17.327, 2, good_ts),
+                context.clone(),
+                QueryResult::default()
+            ),
         ]
     );
     Ok(())

@@ -1,11 +1,12 @@
+pub use outcome::*;
 pub use policy::*;
 pub use protocol::*;
 
+mod outcome;
 mod policy;
 mod protocol;
 
 use std::collections::HashSet;
-use std::convert::TryFrom;
 use std::fmt::{self, Debug};
 use std::sync::Arc;
 
@@ -15,8 +16,7 @@ use oso::{Oso, ToPolar};
 use tokio::sync::Mutex;
 use tokio::sync::{broadcast, mpsc};
 
-use crate::elements::{telemetry, TelemetryValue, ToTelemetry};
-use crate::error::{GraphError, PolicyError, TelemetryError, TypeExpectation};
+use crate::error::{GraphError, PolicyError};
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Inlet, Outlet, Port};
 use crate::graph::{SinkShape, SourceShape};
@@ -26,76 +26,6 @@ pub trait PolicySettings {
     fn required_subscription_fields(&self) -> HashSet<String>;
     fn optional_subscription_fields(&self) -> HashSet<String>;
     fn source(&self) -> PolicySource;
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct PolicyOutcome<T, C> {
-    pub item: T,
-    pub context: C,
-    pub bindings: telemetry::Table,
-}
-
-impl<T, C> PolicyOutcome<T, C> {
-    pub fn new(item: T, context: C, bindings: telemetry::Table) -> Self {
-        Self { item, context, bindings }
-    }
-}
-
-const T_ITEM: &'static str = "item";
-const T_CONTEXT: &'static str = "context";
-const T_BINDINGS: &'static str = "bindings";
-
-impl<T, C> Into<TelemetryValue> for PolicyOutcome<T, C>
-where
-    T: Into<TelemetryValue>,
-    C: Into<TelemetryValue>,
-{
-    fn into(self) -> TelemetryValue {
-        TelemetryValue::Table(maplit::hashmap! {
-            T_ITEM.to_string() => self.item.to_telemetry(),
-            T_CONTEXT.to_string() => self.context.to_telemetry(),
-            T_BINDINGS.to_string() => self.bindings.to_telemetry(),
-        })
-    }
-}
-
-impl<T, C> TryFrom<TelemetryValue> for PolicyOutcome<T, C>
-where
-    T: TryFrom<TelemetryValue>,
-    <T as TryFrom<TelemetryValue>>::Error: Into<TelemetryError>,
-    C: TryFrom<TelemetryValue>,
-    <C as TryFrom<TelemetryValue>>::Error: Into<TelemetryError>,
-{
-    type Error = PolicyError;
-
-    fn try_from(value: TelemetryValue) -> Result<Self, Self::Error> {
-        if let TelemetryValue::Table(ref table) = value {
-            let item = if let Some(i) = table.get(T_ITEM) {
-                T::try_from(i.clone()).map_err(|err| PolicyError::TelemetryError(err.into()))
-            } else {
-                Err(PolicyError::DataNotFound(T_ITEM.to_string()))
-            }?;
-
-            let context = if let Some(c) = table.get(T_CONTEXT) {
-                C::try_from(c.clone()).map_err(|err| PolicyError::TelemetryError(err.into()))
-            } else {
-                Err(PolicyError::DataNotFound(T_CONTEXT.to_string()))
-            }?;
-
-            let bindings = if let Some(b) = table.get(T_BINDINGS) {
-                telemetry::Table::try_from(b.clone()).map_err(|err| err.into())
-            } else {
-                Err(PolicyError::DataNotFound(T_BINDINGS.to_string()))
-            }?;
-
-            Ok(PolicyOutcome { item, context, bindings })
-        } else {
-            Err(PolicyError::TelemetryError(TelemetryError::TypeError {
-                expected: format!("telemetry {}", TypeExpectation::Table),
-                actual: Some(format!("{:?}", value)),
-            }))
-        }
-    }
 }
 
 pub struct PolicyFilter<T, C, A, P>
@@ -312,7 +242,12 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "policy_filter handle item", skip(oso, outlet), fields())]
+    #[tracing::instrument(
+        level = "info",
+        name = "policy_filter handle item",
+        skip(oso, outlet, tx, policy),
+        fields()
+    )]
     async fn handle_item(
         item: T, context: &C, policy: &P, oso: &Oso, outlet: &Outlet<PolicyOutcome<T, C>>,
         tx: &broadcast::Sender<PolicyFilterEvent<T, C>>,
@@ -320,31 +255,25 @@ where
         // query lifetime cannot span across `.await` since it cannot `Send` between threads.
         let query_result = policy.query_policy(oso, policy.make_query_args(&item, context));
 
-        tracing::info!(?query_result, "knowledge base query results");
-
         match query_result {
-            // a successful query has Some bindings; otherwise the policy did not pass or errored.
-            Ok(QueryResult { bindings: Some(bindings) }) => {
+            Ok(result) if result.passed => {
                 tracing::info!(
-                    ?item,
-                    ?bindings,
-                    "item and context passed policy review - sending via outlet."
+                    ?policy,
+                    ?result,
+                    "item passed context policy review - sending via outlet."
                 );
-                outlet.send(PolicyOutcome::new(item, context.clone(), bindings)).await?;
+                outlet.send(PolicyOutcome::new(item, context.clone(), result)).await?;
                 Ok(())
             },
 
-            Ok(_) => {
-                tracing::info!(
-                    "item and context did not pass policy review (no passing result from knowledge base) - skipping \
-                     item."
-                );
+            Ok(result) => {
+                tracing::info!(?policy, ?result, "item failed context policy review - skipping.");
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
                 Ok(())
             },
 
             Err(err) => {
-                tracing::warn!(error=?err, ?item, ?context, "error in policy review - skipping item.");
+                tracing::warn!(error=?err, ?policy, "error in context policy review - skipping item.");
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
                 Err(err.into())
             },
@@ -468,8 +397,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use claim::assert_ok;
     use oso::PolarClass;
     use pretty_assertions::assert_eq;
@@ -600,7 +527,7 @@ mod tests {
                 PolicyOutcome::new(
                     User { username: "peter.pan@example.com".to_string() },
                     context,
-                    HashMap::default()
+                    QueryResult { passed: true, bindings: Bindings::default() }
                 )
             );
 

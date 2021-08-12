@@ -1,3 +1,4 @@
+use std::convert::Infallible;
 use std::fmt;
 use std::fmt::Debug;
 
@@ -220,6 +221,9 @@ pub enum TelemetryError {
 
     #[error("{0}")]
     ReaderError(#[from] flexbuffers::ReaderError),
+
+    #[error("{0}")]
+    ConvertInfallible(#[from] Infallible),
 
     #[error("{0}")]
     ValueParseError(#[source] anyhow::Error),

@@ -5,7 +5,7 @@ use std::num::{ParseFloatError, ParseIntError};
 use std::prelude::rust_2015::Result::Err;
 
 use config::Value as ConfigValue;
-use oso::{FromPolar, PolarValue, ToPolar};
+use oso::{FromPolar, PolarValue, ResultSet, ToPolar};
 use serde::de::{EnumAccess, Error};
 use serde::ser::{SerializeMap, SerializeSeq};
 use serde::{de, Deserializer, Serialize, Serializer};
@@ -141,6 +141,25 @@ impl Into<ConfigValue> for TelemetryValue {
             },
             Self::Unit => ConfigValue::new(None, Option::<String>::None),
         }
+    }
+}
+
+impl From<ResultSet> for TelemetryValue {
+    fn from(that: ResultSet) -> Self {
+        let mut table = Table::default();
+        for key in that.keys() {
+            let typed_value = that
+                .get_typed(key)
+                .expect("failed to convert polar value into telemetry value");
+            match typed_value {
+                TelemetryValue::Unit => (),
+                value => {
+                    let _ = table.insert(key.to_string(), value);
+                },
+            }
+        }
+
+        TelemetryValue::Table(table)
     }
 }
 

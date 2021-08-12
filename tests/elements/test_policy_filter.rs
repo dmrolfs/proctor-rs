@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::f64::consts;
 
 use ::serde::{Deserialize, Serialize};
@@ -333,7 +333,7 @@ async fn test_policy_filter_happy_context() -> anyhow::Result<()> {
         vec![PolicyOutcome::new(
             TestItem::new(consts::PI, ts, 1),
             TestContext::new(33),
-            HashMap::new()
+            QueryResult::passed_without_bindings()
         ),]
     );
 
@@ -351,8 +351,16 @@ async fn test_policy_filter_happy_context() -> anyhow::Result<()> {
     assert_eq!(
         actual,
         vec![
-            PolicyOutcome::new(TestItem::new(consts::PI, ts, 1), TestContext::new(33), HashMap::new()),
-            PolicyOutcome::new(TestItem::new(consts::TAU, ts, 2), TestContext::new(33), HashMap::new())
+            PolicyOutcome::new(
+                TestItem::new(consts::PI, ts, 1),
+                TestContext::new(33),
+                QueryResult::passed_without_bindings()
+            ),
+            PolicyOutcome::new(
+                TestItem::new(consts::TAU, ts, 2),
+                TestContext::new(33),
+                QueryResult::passed_without_bindings()
+            )
         ]
     );
     Ok(())
@@ -411,8 +419,16 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     assert_eq!(
         actual,
         vec![
-            PolicyOutcome::new(TestItem::new(consts::PI, ts, 1), TestContext::new(33), HashMap::new()),
-            PolicyOutcome::new(TestItem::new(consts::LN_2, ts, 5), TestContext::new(33), HashMap::new())
+            PolicyOutcome::new(
+                TestItem::new(consts::PI, ts, 1),
+                TestContext::new(33),
+                QueryResult::passed_without_bindings()
+            ),
+            PolicyOutcome::new(
+                TestItem::new(consts::LN_2, ts, 5),
+                TestContext::new(33),
+                QueryResult::passed_without_bindings()
+            )
         ]
     );
     Ok(())
@@ -453,19 +469,25 @@ async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
             PolicyOutcome::new(
                 TestItem::new(consts::PI, ts, 1),
                 TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
-                maplit::hashmap! {
-                    "custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
-                        "cat".to_string() => "Otis".to_telemetry(),
-                    }),
+                QueryResult {
+                    passed: true,
+                    bindings: maplit::hashmap! {
+                        "custom".to_string() => vec![TelemetryValue::Table(maplit::hashmap! {
+                            "cat".to_string() => "Otis".to_telemetry(),
+                        })],
+                    }
                 }
             ),
             PolicyOutcome::new(
                 TestItem::new(consts::TAU, ts, 2),
                 TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
-                maplit::hashmap! {
-                    "custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
-                        "cat".to_string() => "Otis".to_telemetry(),
-                    }),
+                QueryResult {
+                    passed: true,
+                    bindings: maplit::hashmap! {
+                        "custom".to_string() => vec![TelemetryValue::Table(maplit::hashmap! {
+                            "cat".to_string() => "Otis".to_telemetry(),
+                        })],
+                    }
                 }
             )
         ],
@@ -513,19 +535,27 @@ async fn test_policy_w_binding() -> anyhow::Result<()> {
             PolicyOutcome::new(
                 TestItem::new(consts::PI, ts, 1),
                 TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
-                maplit::hashmap! {
-                    "custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
-                        "cat".to_string() => "Otis".to_telemetry(),
-                    }),
+                QueryResult {
+                    passed: true,
+                    bindings: maplit::hashmap! {
+                        "custom".to_string() => vec![
+                            TelemetryValue::Integer(13),
+                            TelemetryValue::Table(maplit::hashmap! { "cat".to_string() => "Otis".to_telemetry(), })
+                        ],
+                    }
                 }
             ),
             PolicyOutcome::new(
                 TestItem::new(consts::TAU, ts, 2),
                 TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
-                maplit::hashmap! {
-                    "custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
-                        "cat".to_string() => "Otis".to_telemetry(),
-                    }),
+                QueryResult {
+                    passed: true,
+                    bindings: maplit::hashmap! {
+                        "custom".to_string() => vec![
+                            TelemetryValue::Integer(13),
+                            TelemetryValue::Table(maplit::hashmap! { "cat".to_string() => "Otis".to_telemetry(), })
+                        ],
+                    }
                 }
             ),
         ],
@@ -575,9 +605,12 @@ lag_2(_item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
         vec![PolicyOutcome::new(
             TestItem::new(consts::TAU, ts, 2),
             TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
-            maplit::hashmap! { "custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
-                "cat".to_string() => "Otis".to_telemetry(),
-            })}
+            QueryResult {
+                passed: true,
+                bindings: maplit::hashmap! { "custom".to_string() => vec![TelemetryValue::Table(maplit::hashmap! {
+                    "cat".to_string() => "Otis".to_telemetry(),
+                })]}
+            }
         ),]
     );
     Ok(())
@@ -613,7 +646,7 @@ and item.input_messages_per_sec(item.inbox_lag) < 36;"#,
         vec![PolicyOutcome::new(
             TestItem::new(17.327, ts, 2),
             TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
-            HashMap::new(),
+            QueryResult::passed_without_bindings()
         )]
     );
     Ok(())
@@ -659,21 +692,27 @@ async fn test_replace_policy() -> anyhow::Result<()> {
             PolicyOutcome::new(
                 TestItem::new(consts::PI, too_old_ts, 1),
                 TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
-                maplit::hashmap! {"custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
-                    "cat".to_string() => "Otis".to_telemetry(),
-                })}
+                QueryResult {
+                    passed: true,
+                    bindings: maplit::hashmap! {"custom".to_string() => vec![TelemetryValue::Table(maplit::hashmap! {
+                        "cat".to_string() => "Otis".to_telemetry(),
+                    })]}
+                }
             ),
             PolicyOutcome::new(
                 TestItem::new(17.327, good_ts, 2),
                 TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
-                maplit::hashmap! {"custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
-                    "cat".to_string() => "Otis".to_telemetry(),
-                })}
+                QueryResult {
+                    passed: true,
+                    bindings: maplit::hashmap! {"custom".to_string() => vec![TelemetryValue::Table(maplit::hashmap! {
+                        "cat".to_string() => "Otis".to_telemetry(),
+                    })]}
+                }
             ),
             PolicyOutcome::new(
                 TestItem::new(17.327, good_ts, 2),
                 TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
-                HashMap::new()
+                QueryResult::passed_without_bindings()
             ),
         ]
     );
@@ -705,10 +744,10 @@ async fn test_append_policy() -> anyhow::Result<()> {
     let cmd_rx = elements::PolicyFilterCmd::append_policy(elements::PolicySource::String(policy_2.to_string()));
     flow.tell_policy(cmd_rx).await?;
 
-    let item = TestItem::new(consts::PI, ts, 1);
+    let item = TestItem::new(consts::SQRT_2, ts, 1);
     flow.push_item(item).await?;
 
-    let item = TestItem::new(17.327, ts, 2);
+    let item = TestItem::new(34.18723, ts, 2);
     flow.push_item(item).await?;
 
     let actual = flow.close().await?;
@@ -719,21 +758,31 @@ async fn test_append_policy() -> anyhow::Result<()> {
             PolicyOutcome::new(
                 TestItem::new(17.327, ts, 2),
                 TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
-                HashMap::new()
+                QueryResult::passed_without_bindings()
             ),
             PolicyOutcome::new(
-                TestItem::new(consts::PI, ts, 1),
+                TestItem::new(consts::SQRT_2, ts, 1),
                 TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
-                maplit::hashmap! {"custom".to_string() => TelemetryValue::Table(maplit::hashmap!{
-                    "cat".to_string() => "Otis".to_telemetry(),
-                })}
+                QueryResult {
+                    passed: true,
+                    bindings: maplit::hashmap! {
+                        "custom".to_string() => vec![
+                            TelemetryValue::Table(maplit::hashmap!{ "cat".to_string() => "Otis".to_telemetry(), })
+                        ]
+                    }
+                }
             ),
             PolicyOutcome::new(
-                TestItem::new(17.327, ts, 2),
+                TestItem::new(34.18723, ts, 2),
                 TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
-                maplit::hashmap! {"custom".to_string() => TelemetryValue::Table(maplit::hashmap!{
-                    "cat".to_string() => "Otis".to_telemetry(),
-                })}
+                QueryResult {
+                    passed: true,
+                    bindings: maplit::hashmap! {
+                        "custom".to_string() => vec![
+                            TelemetryValue::Table(maplit::hashmap!{ "cat".to_string() => "Otis".to_telemetry(), })
+                        ]
+                    }
+                }
             ),
         ]
     );
@@ -789,26 +838,36 @@ async fn test_reset_policy() -> anyhow::Result<()> {
             PolicyOutcome::new(
                 TestItem::new(consts::E, ts, 2),
                 TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
-                HashMap::new()
+                QueryResult::passed_without_bindings(),
             ),
             PolicyOutcome::new(
                 TestItem::new(consts::TAU, ts, 1),
                 TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
-                maplit::hashmap! { "custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
-                    "cat".to_string() => "Otis".to_telemetry(),
-                })}
+                QueryResult {
+                    passed: true,
+                    bindings: maplit::hashmap! {
+                        "custom".to_string() => vec![
+                            TelemetryValue::Table(maplit::hashmap! { "cat".to_string() => "Otis".to_telemetry(), })
+                        ]
+                    }
+                }
             ),
             PolicyOutcome::new(
                 TestItem::new(consts::LN_2, ts, 2),
                 TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
-                maplit::hashmap! { "custom".to_string() => TelemetryValue::Table(maplit::hashmap! {
-                    "cat".to_string() => "Otis".to_telemetry(),
-                })}
+                QueryResult {
+                    passed: true,
+                    bindings: maplit::hashmap! {
+                        "custom".to_string() => vec![
+                            TelemetryValue::Table(maplit::hashmap! { "cat".to_string() => "Otis".to_telemetry(), })
+                        ]
+                    }
+                }
             ),
             PolicyOutcome::new(
                 TestItem::new(consts::SQRT_2, ts, 2),
                 TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
-                HashMap::new()
+                QueryResult::passed_without_bindings()
             ),
         ]
     );

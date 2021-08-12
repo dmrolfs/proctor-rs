@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::convert::TryFrom;
 use std::time::Duration;
 
 use oso::ToPolar;
@@ -8,7 +7,7 @@ use proctor::elements;
 use proctor::elements::{PolicyOutcome, PolicySource, PolicySubscription, Telemetry, TelemetryValue, ToTelemetry};
 use proctor::flink::decision::context::FlinkDecisionContext;
 use proctor::flink::decision::policy::FlinkDecisionPolicy;
-use proctor::flink::decision::result::{make_decision_transform, DecisionResult};
+use proctor::flink::decision::result::{make_decision_transform, DecisionResult, DECISION_BINDING};
 use proctor::flink::MetricCatalog;
 use proctor::graph::stage::{self, ThroughStage, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, Inlet, SinkShape, SourceShape, UniformFanInShape};
@@ -319,11 +318,11 @@ async fn test_decision_carry_policy_result() -> anyhow::Result<()> {
     let actual_vals: Vec<(f64, Option<String>)> = actual
         .into_iter()
         .map(|a| {
-            let direction = a
-                .bindings
-                .get("direction")
-                .cloned()
-                .map(|d| String::try_from(d).expect("failed to get string from telemetry value"));
+            let direction: Option<String> = a
+                .binding(DECISION_BINDING)
+                .expect("failed to pull string from direction binding.")
+                .first()
+                .cloned();
 
             (a.item.flow.records_in_per_sec, direction)
         })

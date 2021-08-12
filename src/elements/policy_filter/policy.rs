@@ -1,11 +1,10 @@
 use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::fmt::Debug;
 
-use oso::{Query, ResultSet, ToPolar, ToPolarList};
+use oso::{Query, ToPolar, ToPolarList};
 
 use super::ProctorContext;
-use crate::elements::telemetry;
+use crate::elements::FromTelemetry;
 use crate::elements::TelemetryValue;
 use crate::error::PolicyError;
 use crate::phases::collection::TelemetrySubscription;
@@ -40,82 +39,76 @@ pub trait PolicySubscription {
     }
 }
 
-#[derive(Debug, Clone)]
+pub type Bindings = HashMap<String, Vec<TelemetryValue>>;
+
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct QueryResult {
-    pub bindings: Option<telemetry::Table>,
+    pub passed: bool,
+    pub bindings: Bindings,
 }
 
 impl QueryResult {
-    pub fn from_query(mut query: Query) -> Result<Self, PolicyError> {
-        fn fill_results(
-            mut results: telemetry::Table, result_set: &ResultSet,
-        ) -> Result<telemetry::Table, PolicyError> {
+    pub fn passed_without_bindings() -> Self {
+        Self { passed: true, bindings: Bindings::default() }
+    }
+
+    #[tracing::instrument(level = "debug", skip(query))]
+    pub fn from_query(query: Query) -> Result<Self, PolicyError> {
+        let mut bindings = Bindings::default();
+        let mut passed = None;
+
+        for result_set in query {
+            let result_set = result_set?;
+
+            if passed.is_none() {
+                tracing::info!(?result_set, "DMR: item passes policy review!");
+                passed = Some(true);
+            }
+
             for key in result_set.keys() {
-                match result_set.get_typed(key)? {
-                    TelemetryValue::Unit => (),
-                    value => {
-                        let _ = results.insert(key.to_string(), value);
+                let value = result_set.get_typed(key);
+                tracing::info!(?result_set, "DMR: pulling binding: binding[{}]={:?}", key, value);
+                match value? {
+                    TelemetryValue::Unit => {
+                        tracing::debug!("Unit value bound to key[{}] - skipping.", key);
+                        ()
+                    },
+                    val => {
+                        if let Some(values) = bindings.get_mut(key) {
+                            values.push(val);
+                            tracing::info!("DMR: push binding[{}]: {:?}", key, values);
+                        } else {
+                            tracing::info!("DMR: started binding[{}]: [{:?}]", key, val);
+                            bindings.insert(key.to_string(), vec![val]);
+                        }
                     },
                 }
             }
-            Ok(results)
         }
 
-        let bindings = if let Some(rs) = query.next() {
-            let mut result_bindings = fill_results(HashMap::new(), &rs?)?;
-            for rs in query {
-                result_bindings = fill_results(result_bindings, &rs?)?;
+        Ok(Self { passed: passed.unwrap_or(false), bindings })
+    }
+
+    pub fn binding<T: FromTelemetry>(&self, var: impl AsRef<str>) -> Result<Vec<T>, PolicyError> {
+        if let Some(bindings) = self.bindings.get(var.as_ref()) {
+            let mut result = vec![];
+
+            for b in bindings {
+                result.push(T::from_telemetry(b.clone())?)
             }
-            Some(result_bindings)
+
+            Ok(result)
         } else {
-            None
-        };
-
-        Ok(Self { bindings })
-    }
-
-    pub fn take_bindings(&mut self) -> Option<telemetry::Table> {
-        self.bindings.take()
-    }
-
-    pub fn get_typed<T: TryFrom<TelemetryValue>>(&self, key: &str) -> Result<T, PolicyError>
-    where
-        T: TryFrom<TelemetryValue>,
-        <T as TryFrom<TelemetryValue>>::Error: Into<crate::error::TelemetryError>,
-    {
-        if let Some(ref inner) = self.bindings {
-            let value = inner.get(key).ok_or(PolicyError::DataNotFound(key.to_string()))?;
-            T::try_from(value.clone()).map_err(|err| PolicyError::TelemetryError(err.into()))
-        } else {
-            Err(PolicyError::DataNotFound("bindings".to_string()))
+            Ok(vec![])
         }
-    }
-
-    #[inline]
-    pub fn is_success(&self) -> bool {
-        self.is_some()
-    }
-
-    #[inline]
-    pub fn is_some(&self) -> bool {
-        self.bindings.is_some()
-    }
-
-    #[inline]
-    pub fn is_none(&self) -> bool {
-        self.bindings.is_none()
     }
 }
 
 impl std::ops::Deref for QueryResult {
-    type Target = telemetry::Table;
+    type Target = Bindings;
 
     fn deref(&self) -> &Self::Target {
-        if let Some(ref inner) = self.bindings {
-            &*inner
-        } else {
-            panic!("no bindings for empty result")
-        }
+        &self.bindings
     }
 }
 
