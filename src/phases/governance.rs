@@ -9,39 +9,66 @@ use crate::elements::{
     PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, PolicyOutcome, QueryPolicy,
 };
 use crate::error::GovernanceError;
-use crate::graph::stage::{Stage, ThroughStage, WithApi, WithMonitor};
-use crate::graph::{Inlet, Outlet, Port, SinkShape, SourceShape};
+use crate::graph::stage::{self, Stage, ThroughStage, WithApi, WithMonitor};
+use crate::graph::{Connect, Graph, Inlet, Outlet, Port, SinkShape, SourceShape};
 use crate::{AppData, ProctorContext, ProctorResult};
 
-pub struct Governance<T, C> {
+pub struct Governance<In, Out, C> {
     name: String,
-    policy_stage: Box<dyn ThroughStage<T, PolicyOutcome<T, C>>>,
+    inner_policy_transform: Box<dyn ThroughStage<In, Out>>,
     pub context_inlet: Inlet<C>,
-    inlet: Inlet<T>,
-    outlet: Outlet<PolicyOutcome<T, C>>,
+    inlet: Inlet<In>,
+    outlet: Outlet<Out>,
     tx_policy_api: PolicyFilterApi<C>,
-    tx_policy_monitor: broadcast::Sender<PolicyFilterEvent<T, C>>,
+    tx_policy_monitor: broadcast::Sender<PolicyFilterEvent<In, C>>,
 }
 
-impl<T: AppData + ToPolar, C: ProctorContext> Governance<T, C> {
-    #[tracing::instrument(level="info", skip(name), fields(stage_name=%name.as_ref()))]
-    pub async fn new<P>(name: impl AsRef<str>, policy: P) -> Self
+
+impl<T: AppData + ToPolar, C: ProctorContext> Governance<T, PolicyOutcome<T, C>, C> {
+    #[tracing::instrument(level = "info", skip(name))]
+    pub async fn carry_policy_result<P>(name: impl AsRef<str>, policy: P) -> Self
     where
         P: 'static + QueryPolicy<Item = T, Context = C, Args = (T, C, PolarValue)>,
     {
-        let policy_stage = Box::new(PolicyFilter::new(
-            format!("{}_governance_policy", name.as_ref()),
-            policy,
-        ));
-        let context_inlet = policy_stage.context_inlet();
-        let inlet = policy_stage.inlet();
-        let outlet = policy_stage.outlet();
-        let tx_policy_api = policy_stage.tx_api();
-        let tx_policy_monitor = policy_stage.tx_monitor.clone();
+        let name = format!("{}_carry_governance_policy_result", name.as_ref());
+        let inlet = Inlet::new(name.as_str());
+        let outlet = Outlet::new(name.as_str());
+        let identity = stage::Identity::new(name.as_str(), inlet, outlet);
+        Self::with_transform(name, policy, identity).await
+    }
+}
+
+impl<In: AppData + ToPolar, Out: AppData, C: ProctorContext> Governance<In, Out, C> {
+    #[tracing::instrument(level="info", skip(name), fields(stage_name=%name.as_ref()))]
+    pub async fn with_transform<P, T>(name: impl AsRef<str>, policy: P, transform: T) -> Self
+    where
+        P: 'static + QueryPolicy<Item = In, Context = C, Args = (In, C, PolarValue)>,
+        T: 'static + ThroughStage<PolicyOutcome<In, C>, Out>,
+    {
+        let policy_filter = PolicyFilter::new(format!("{}_governance_policy", name.as_ref()), policy);
+        let context_inlet = policy_filter.context_inlet();
+        let tx_policy_api = policy_filter.tx_api();
+        let tx_policy_monitor = policy_filter.tx_monitor.clone();
+
+        let graph_inlet = policy_filter.inlet();
+        (policy_filter.outlet(), transform.inlet()).connect().await;
+        let graph_outlet = transform.outlet();
+
+        let mut graph = Graph::default();
+        graph.push_back(Box::new(policy_filter)).await;
+        graph.push_back(Box::new(transform)).await;
+
+        let inner_policy_transform = Box::new(
+            stage::CompositeThrough::new(format!("{}_composite", name.as_ref()), graph, graph_inlet, graph_outlet)
+                .await,
+        );
+
+        let inlet = inner_policy_transform.inlet();
+        let outlet = inner_policy_transform.outlet();
 
         Self {
             name: name.as_ref().to_string(),
-            policy_stage,
+            inner_policy_transform,
             context_inlet,
             inlet,
             outlet,
@@ -55,11 +82,11 @@ impl<T: AppData + ToPolar, C: ProctorContext> Governance<T, C> {
     }
 }
 
-impl<T, C> Debug for Governance<T, C> {
+impl<In, Out, C> Debug for Governance<In, Out, C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Governance")
             .field("name", &self.name)
-            .field("policy_stage", &self.policy_stage)
+            .field("inner_policy_transform", &self.inner_policy_transform)
             .field("context_inlet", &self.context_inlet)
             .field("inlet", &self.inlet)
             .field("outlet", &self.outlet)
@@ -68,26 +95,26 @@ impl<T, C> Debug for Governance<T, C> {
 }
 
 
-impl<T, C> SinkShape for Governance<T, C> {
-    type In = T;
+impl<In, Out, C> SinkShape for Governance<In, Out, C> {
+    type In = In;
 
     fn inlet(&self) -> Inlet<Self::In> {
-        self.policy_stage.inlet()
+        self.inner_policy_transform.inlet()
     }
 }
 
-impl<T, C> SourceShape for Governance<T, C> {
-    type Out = PolicyOutcome<T, C>;
+impl<In, Out, C> SourceShape for Governance<In, Out, C> {
+    type Out = Out;
 
     fn outlet(&self) -> Outlet<Self::Out> {
-        self.policy_stage.outlet()
+        self.inner_policy_transform.outlet()
     }
 }
 
 
 #[dyn_upcast]
 #[async_trait]
-impl<T: AppData, C: ProctorContext> Stage for Governance<T, C> {
+impl<In: AppData, Out: AppData, C: ProctorContext> Stage for Governance<In, Out, C> {
     fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -111,18 +138,20 @@ impl<T: AppData, C: ProctorContext> Stage for Governance<T, C> {
     }
 }
 
-impl<T: AppData, C: ProctorContext> Governance<T, C> {
+impl<In: AppData, Out: AppData, C: ProctorContext> Governance<In, Out, C> {
     async fn do_check(&self) -> Result<(), GovernanceError> {
-        self.policy_stage
+        self.inlet.check_attachment().await?;
+        self.context_inlet.check_attachment().await?;
+        self.inner_policy_transform
             .check()
             .await
             .map_err(|err| GovernanceError::StageError(err.into()))?;
-        self.context_inlet.check_attachment().await?;
+        self.outlet.check_attachment().await?;
         Ok(())
     }
 
     async fn do_run(&mut self) -> Result<(), GovernanceError> {
-        self.policy_stage
+        self.inner_policy_transform
             .run()
             .await
             .map_err(|err| GovernanceError::StageError(err.into()))?;
@@ -131,16 +160,18 @@ impl<T: AppData, C: ProctorContext> Governance<T, C> {
 
     async fn do_close(mut self: Box<Self>) -> Result<(), GovernanceError> {
         tracing::trace!("closing governance ports.");
-        self.policy_stage
+        self.inlet.close().await;
+        self.context_inlet.close().await;
+        self.outlet.close().await;
+        self.inner_policy_transform
             .close()
             .await
             .map_err(|err| GovernanceError::StageError(err.into()))?;
-        self.context_inlet.close().await;
         Ok(())
     }
 }
 
-impl<T, C> WithApi for Governance<T, C> {
+impl<In, Out, C> WithApi for Governance<In, Out, C> {
     type Sender = PolicyFilterApi<C>;
 
     fn tx_api(&self) -> Self::Sender {
@@ -148,8 +179,8 @@ impl<T, C> WithApi for Governance<T, C> {
     }
 }
 
-impl<T, C> WithMonitor for Governance<T, C> {
-    type Receiver = PolicyFilterMonitor<T, C>;
+impl<In, Out, C> WithMonitor for Governance<In, Out, C> {
+    type Receiver = PolicyFilterMonitor<In, C>;
 
     fn rx_monitor(&self) -> Self::Receiver {
         self.tx_policy_monitor.subscribe()

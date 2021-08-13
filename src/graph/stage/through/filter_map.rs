@@ -71,12 +71,11 @@ impl<F, In, Out> FilterMap<F, In, Out>
 where
     F: FnMut(In) -> Option<Out>,
 {
-    pub fn new<S: Into<String>>(name: S, f: F) -> Self {
-        let name = name.into();
-        let inlet = Inlet::new(name.clone());
-        let outlet = Outlet::new(name.clone());
+    pub fn new(name: impl AsRef<str>, f: F) -> Self {
+        let inlet = Inlet::new(name.as_ref());
+        let outlet = Outlet::new(name.as_ref());
         Self {
-            name,
+            name: name.as_ref().to_string(),
             filter_map: f,
             inlet,
             outlet,
@@ -139,7 +138,7 @@ where
             if let Some(value) = (self.filter_map)(item) {
                 outlet.send(value).await?;
             } else if self.log_blocks {
-                tracing::error!("filter_map blocking item.");
+                tracing::warn!("{} blocking item.", self.name);
             }
         }
 
@@ -172,6 +171,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use pretty_assertions::assert_eq;
     use tokio::sync::mpsc;
     use tokio_test::block_on;
 

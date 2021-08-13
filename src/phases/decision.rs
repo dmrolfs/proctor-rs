@@ -29,27 +29,28 @@ pub struct Decision<In, Out, C> {
     tx_policy_monitor: broadcast::Sender<PolicyFilterEvent<In, C>>,
 }
 
-impl<T: AppData + ToPolar + Clone, C: ProctorContext> Decision<T, PolicyOutcome<T, C>, C> {
+impl<In: AppData + ToPolar, C: ProctorContext> Decision<In, PolicyOutcome<In, C>, C> {
     #[tracing::instrument(level = "info", skip(name))]
-    pub async fn carry_policy_result<S: AsRef<str>>(
-        name: S, policy: impl QueryPolicy<Item = T, Context = C, Args = (T, C, PolarValue)> + 'static,
-    ) -> Self {
+    pub async fn carry_policy_result<P>(name: impl AsRef<str>, policy: P) -> Self
+    where
+        P: 'static + QueryPolicy<Item = In, Context = C, Args = (In, C, PolarValue)>,
+    {
         let name = format!("{}_carry_policy_result", name.as_ref());
-        let identity = stage::Identity::new(&name, Inlet::new(&name), Outlet::new(&name));
-        Self::with_transform(name, policy, identity).await
+        let identity: stage::Identity<PolicyOutcome<In, C>> =
+            stage::Identity::new(name.as_str(), Inlet::new(name.as_str()), Outlet::new(name.as_str()));
+        Self::with_transform(name.as_str(), policy, identity).await
     }
 }
 
-impl<In: AppData + ToPolar + Clone, Out: AppData, C: ProctorContext> Decision<In, Out, C> {
+impl<In: AppData + ToPolar, Out: AppData, C: ProctorContext> Decision<In, Out, C> {
     #[tracing::instrument(level = "info", skip(name))]
-    pub async fn with_transform<S: Into<String>>(
-        name: S, policy: impl QueryPolicy<Item = In, Context = C, Args = (In, C, PolarValue)> + 'static,
-        transform: impl ThroughStage<PolicyOutcome<In, C>, Out> + 'static,
-    ) -> Self {
-        let name = name.into();
-
-        // let decision_policy = Self::policy_with_prelude(policy);
-        let policy_filter = PolicyFilter::new(format!("{}_decision_policy", name), policy);
+    pub async fn with_transform<S, P, T>(name: S, policy: P, transform: T) -> Self
+    where
+        S: AsRef<str>,
+        P: 'static + QueryPolicy<Item = In, Context = C, Args = (In, C, PolarValue)>,
+        T: 'static + ThroughStage<PolicyOutcome<In, C>, Out>,
+    {
+        let policy_filter = PolicyFilter::new(format!("{}_decision_policy", name.as_ref()), policy);
         let context_inlet = policy_filter.context_inlet();
         let tx_policy_api = policy_filter.tx_api();
         let tx_policy_monitor = policy_filter.tx_monitor.clone();
@@ -62,18 +63,20 @@ impl<In: AppData + ToPolar + Clone, Out: AppData, C: ProctorContext> Decision<In
         graph.push_back(Box::new(policy_filter)).await;
         graph.push_back(Box::new(transform)).await;
 
-        let inner_stage =
-            stage::CompositeThrough::new(format!("{}_inner", name), graph, graph_inlet, graph_outlet).await;
+        let inner_policy_transform = Box::new(
+            stage::CompositeThrough::new(format!("{}_composite", name.as_ref()), graph, graph_inlet, graph_outlet)
+                .await,
+        );
 
-        let inner_inlet = inner_stage.inlet();
-        let inner_outlet = inner_stage.outlet();
+        let inlet = inner_policy_transform.inlet();
+        let outlet = inner_policy_transform.outlet();
 
         Self {
-            name,
-            inner_policy_transform: Box::new(inner_stage),
+            name: name.as_ref().to_string(),
+            inner_policy_transform,
             context_inlet,
-            inlet: inner_inlet,
-            outlet: inner_outlet,
+            inlet,
+            outlet,
             tx_policy_api,
             tx_policy_monitor,
         }
@@ -82,12 +85,6 @@ impl<In: AppData + ToPolar + Clone, Out: AppData, C: ProctorContext> Decision<In
     pub fn context_inlet(&self) -> Inlet<C> {
         self.context_inlet.clone()
     }
-
-    // fn policy_with_prelude(
-    //     policy: impl QueryPolicy<Item = In, Context = C, Args = (In, C, PolarValue)> + 'static,
-    // ) -> impl QueryPolicy<Item = In, Context = C, Args = (In, C, PolarValue)> {
-    //     DecisionQueryPolicy(policy)
-    // }
 }
 
 

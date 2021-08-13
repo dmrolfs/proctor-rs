@@ -14,15 +14,14 @@ pub struct Identity<T> {
 }
 
 impl<T> Identity<T> {
-    pub fn new<S: Into<String>>(name: S, inlet: Inlet<T>, outlet: Outlet<T>) -> Self {
-        Self { name: name.into(), inlet, outlet }
+    pub fn new(name: impl AsRef<str>, inlet: Inlet<T>, outlet: Outlet<T>) -> Self {
+        Self { name: name.as_ref().to_string(), inlet, outlet }
     }
 }
 
 impl<T> SourceShape for Identity<T> {
     type Out = T;
 
-    #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()
     }
@@ -31,7 +30,6 @@ impl<T> SourceShape for Identity<T> {
 impl<T> SinkShape for Identity<T> {
     type In = T;
 
-    #[inline]
     fn inlet(&self) -> Inlet<Self::In> {
         self.inlet.clone()
     }
@@ -40,7 +38,6 @@ impl<T> SinkShape for Identity<T> {
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData> Stage for Identity<T> {
-    #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
     }

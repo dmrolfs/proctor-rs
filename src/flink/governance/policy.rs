@@ -10,33 +10,77 @@ use crate::flink::plan::FlinkScalePlan;
 use crate::phases::collection::TelemetrySubscription;
 use crate::ProctorContext;
 
+pub const ADJUSTED_TARGET: &'static str = "adjusted_target";
+
+pub const GOVERNANCE_POLICY_PREAMBLE: &'static str = r#"
+    accept(plan, context, adjusted_target)
+        if accept_scale_up(plan, context, adjusted_target)
+        or accept_scale_down(plan, context, adjusted_target);
+
+
+    accept_scale_up(plan, context, adjusted_target)
+        if check_scale_up(plan, context, adjusted_target)
+        and context.max_cluster_size < adjusted_target
+        and adjusted_target = context.max_cluster_size;
+
+    accept_scale_up(plan, context, adjusted_target)
+        if check_scale_up(plan, context, adjusted_target);
+
+    check_scale_up(plan, context, adjusted_target)
+        if not veto(plan, context)
+        and accept_step_up(plan, context, adjusted_target);
+
+
+    accept_scale_down(plan, context, adjusted_target)
+        if check_scale_down(plan, context, adjusted_target)
+        and adjusted_target < context.min_cluster_size
+        and adjusted_target = context.min_cluster_size;
+
+    accept_scale_down(plan, context, adjusted_target)
+        if check_scale_down(plan, context, adjusted_target);
+
+    check_scale_down(plan, context, adjusted_target)
+        if not veto(plan, context)
+        and accept_step_down(plan, context, adjusted_target);
+
+
+    accept_step_up(plan, context, adjusted_target)
+        if scale_up(plan)
+        and (plan.target_nr_task_managers - plan.current_nr_task_managers) <= context.max_scaling_step
+        and adjusted_target = plan.target_nr_task_managers;
+
+    accept_step_up(plan, context, adjusted_target)
+        if scale_up(plan)
+        and context.max_scaling_step < (plan.target_nr_task_managers - plan.current_nr_task_managers)
+        and adjusted_target = plan.current_nr_task_managers + context.max_scaling_step;
+
+
+    accept_step_down(plan, context, adjusted_target)
+        if scale_down(plan)
+        and (plan.current_nr_task_managers - plan.target_nr_task_managers) <= context.max_scaling_step
+        and adjusted_target = plan.target_nr_task_managers;
+
+    accept_step_down(plan, context, adjusted_target)
+        if scale_down(plan)
+        and context.max_scaling_step < (plan.current_nr_task_managers - plan.target_nr_task_managers)
+        and adjusted_target = plan.current_nr_task_managers - context.max_scaling_step;
+
+
+    scale_up(plan) if plan.current_nr_task_managers < plan.target_nr_task_managers;
+    scale_down(plan) if plan.target_nr_task_managers < plan.current_nr_task_managers;
+
+
+    veto(plan, _context) if not scale_up(plan) and not scale_down(plan);
+    "#;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct GovernancePolicy {
+pub struct FlinkGovernancePolicy {
     required_subscription_fields: HashSet<String>,
     optional_subscription_fields: HashSet<String>,
     policy_source: PolicySource,
 }
 
-impl GovernancePolicy {
-    pub const ADJUSTED_TARGET: &'static str = "adjusted_nr_task_managers";
-    pub const DEFAULT_POLICY: &'static str = r#"
-        accept(plan, context, adjusted_target) if acceot_step(plan, context, adjusted_target) and
-            adjusted_target < context.min_cluster_size and
-            adjusted_target = context.min_cluster_size;
-
-        accept(plan, context, adjusted_target) if acceot_step(plan, context, adjusted_target) and
-            context.max_cluster_size < adjusted_target and
-            adjusted_target = context.max_cluster_size;
-
-        accept_step(plan, context, adjusted_target)
-            if custom.max_scaling_step < (plan.target_nr_task_managers - plan.current_nr_task_managers) and
-            adjusted_target = plan.current_nr_task_managers + custom.max_scaling_step;
-
-        accept_step(plan, context, adjusted_target)
-            if custom.max_scaling_step < (plan.current_nr_task_managers - plan.target_nr_task_managers) and
-            adjusted_target = plan.current_nr_task_managers - custom.max_scaling_step;
-        "#;
-
+impl FlinkGovernancePolicy {
     pub fn new(settings: &impl PolicySettings) -> Self {
         Self {
             required_subscription_fields: settings.required_subscription_fields(),
@@ -46,7 +90,7 @@ impl GovernancePolicy {
     }
 }
 
-impl PolicySubscription for GovernancePolicy {
+impl PolicySubscription for FlinkGovernancePolicy {
     type Context = FlinkGovernanceContext;
 
     fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
@@ -56,13 +100,13 @@ impl PolicySubscription for GovernancePolicy {
     }
 }
 
-impl QueryPolicy for GovernancePolicy {
+impl QueryPolicy for FlinkGovernancePolicy {
     type Args = (Self::Item, Self::Context, PolarValue);
     type Context = FlinkGovernanceContext;
     type Item = FlinkScalePlan;
 
     fn load_policy_engine(&self, engine: &mut Oso) -> Result<(), PolicyError> {
-        engine.load_str(Self::DEFAULT_POLICY)?;
+        engine.load_str(GOVERNANCE_POLICY_PREAMBLE)?;
         self.policy_source.load_into(engine)
     }
 
@@ -82,7 +126,7 @@ impl QueryPolicy for GovernancePolicy {
         (
             item.clone(),
             context.clone(),
-            PolarValue::Variable("adjusted_nr_task_managers".to_string()),
+            PolarValue::Variable(ADJUSTED_TARGET.to_string()),
         )
     }
 

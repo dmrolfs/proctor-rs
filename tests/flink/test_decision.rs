@@ -5,9 +5,9 @@ use oso::ToPolar;
 use pretty_assertions::assert_eq;
 use proctor::elements;
 use proctor::elements::{PolicyOutcome, PolicySource, PolicySubscription, Telemetry, TelemetryValue, ToTelemetry};
-use proctor::flink::decision::context::FlinkDecisionContext;
-use proctor::flink::decision::policy::FlinkDecisionPolicy;
-use proctor::flink::decision::result::{make_decision_transform, DecisionResult, DECISION_BINDING};
+use proctor::flink::decision::{
+    make_decision_transform, DecisionResult, FlinkDecisionContext, FlinkDecisionPolicy, DECISION_BINDING,
+};
 use proctor::flink::MetricCatalog;
 use proctor::graph::stage::{self, ThroughStage, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, Inlet, SinkShape, SourceShape, UniformFanInShape};
