@@ -16,12 +16,18 @@ pub type FoldApi<Acc> = mpsc::UnboundedSender<FoldCmd<Acc>>;
 #[derive(Debug)]
 pub enum FoldCmd<Acc> {
     GetAcc(oneshot::Sender<Acc>),
+    GetAndReset(oneshot::Sender<Acc>),
 }
 
 impl<Acc> FoldCmd<Acc> {
     pub fn get_accumulation() -> (FoldCmd<Acc>, oneshot::Receiver<Acc>) {
         let (tx, rx) = oneshot::channel();
         (Self::GetAcc(tx), rx)
+    }
+
+    pub fn get_and_reset_accumulation() -> (FoldCmd<Acc>, oneshot::Receiver<Acc>) {
+        let (tx, rx) = oneshot::channel();
+        (Self::GetAndReset(tx), rx)
     }
 }
 
@@ -88,6 +94,7 @@ where
 {
     name: String,
     acc: Arc<Mutex<Acc>>,
+    initial: Acc,
     operation: F,
     inlet: Inlet<In>,
     tx_api: FoldApi<Acc>,
@@ -110,7 +117,8 @@ where
 
         Self {
             name,
-            acc: Arc::new(Mutex::new(initial)),
+            acc: Arc::new(Mutex::new(initial.clone())),
+            initial,
             operation,
             inlet,
             tx_api,
@@ -130,6 +138,7 @@ where
         let inlet = &mut self.inlet;
         let rx_api = &mut self.rx_api;
         let acc = Arc::clone(&self.acc);
+        let initial = &self.initial;
 
         loop {
             tracing::trace!("handling next item..");
@@ -148,23 +157,51 @@ where
                     }
                 },
 
-                Some(cmd) = rx_api.recv() => match cmd {
-                    FoldCmd::GetAcc(tx) => {
-                        tracing::info!("handling request for current accumulation...");
-                        let resp = acc.lock().await;
-                        tracing::info!(accumulation=?resp,"sending accumulation to sender...");
-                        match tx.send(resp.clone()) {
-                            Ok(_) => tracing::info!(accumulation=?resp, "sent accumulation"),
-                            Err(resp) => tracing::warn!(accumulation=?resp, "failed to send accumulation"),
-                        }
-                    },
-                },
+                Some(cmd) = rx_api.recv() => Self::handle_command(cmd, Arc::clone(&acc), initial).await,
+                // match cmd {
+                //     FoldCmd::GetAcc(tx) => {
+                //         tracing::info!("handling request for current accumulation...");
+                //         let resp = acc.lock().await;
+                //         tracing::info!(accumulation=?resp,"sending accumulation to sender...");
+                //         match tx.send(resp.clone()) {
+                //             Ok(_) => tracing::info!(accumulation=?resp, "sent accumulation"),
+                //             Err(resp) => tracing::warn!(accumulation=?resp, "failed to send accumulation"),
+                //         }
+                //     },
+                // },
 
                 else => {
                     tracing::trace!("fold done");
                     break;
                 }
             }
+        }
+    }
+
+    #[tracing::instrument(level = "info")]
+    async fn handle_command(cmd: FoldCmd<Acc>, acc: Arc<Mutex<Acc>>, initial: &Acc) {
+        match cmd {
+            FoldCmd::GetAcc(tx) => {
+                tracing::info!("handling request for current accumulation...");
+                let resp = acc.lock().await;
+                tracing::info!(accumulation=?resp,"sending accumulation to sender...");
+                match tx.send(resp.clone()) {
+                    Ok(_) => tracing::info!(accumulation=?resp, "sent accumulation"),
+                    Err(resp) => tracing::warn!(accumulation=?resp, "failed to send accumulation"),
+                }
+            },
+
+            FoldCmd::GetAndReset(tx) => {
+                tracing::info!("handling command to reset accumulation...");
+                let mut reset_accumulation = acc.lock().await;
+                let resp = reset_accumulation.clone();
+                *reset_accumulation = initial.clone();
+                tracing::info!(accumulation=?resp, ?reset_accumulation, "sending accumulation before clearing.");
+                match tx.send(resp.clone()) {
+                    Ok(_) => tracing::info!(accumulation=?resp, "sent prior accumulation"),
+                    Err(resp) => tracing::warn!(accumulation=?resp, "failed to send prior accumulation"),
+                }
+            },
         }
     }
 

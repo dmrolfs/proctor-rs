@@ -2,7 +2,8 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use claim::*;
-use proctor::elements::{self, PolicySource};
+use pretty_assertions::assert_eq;
+use proctor::elements::{self, PolicyFilterEvent, PolicySource};
 use proctor::flink::governance::{make_governance_transform, FlinkGovernanceContext, FlinkGovernancePolicy};
 use proctor::flink::plan::{FlinkScalePlan, TimestampSeconds};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
@@ -128,31 +129,98 @@ impl TestFlow {
             .map_err(|err| err.into())
     }
 
-    #[tracing::instrument(level = "info", skip(self, check_size))]
-    pub async fn check_sink_accumulation(
-        &self, _label: &str, timeout: Duration, mut check_size: impl FnMut(Vec<Data>) -> bool,
-    ) -> anyhow::Result<bool> {
+    #[tracing::instrument(level = "info", skip(self))]
+    pub async fn check_scenario(
+        &mut self, label: &str, data: FlinkScalePlan, expectation: Vec<FlinkScalePlan>,
+    ) -> anyhow::Result<()> {
+        let scenario_span = tracing::info_span!("DMR check scenario", %label, ?data, ?expectation, );
+        let _ = scenario_span.enter();
+
+        let timeout = Duration::from_millis(250);
+
+        assert_ok!(self.push_data(data).await);
+        claim::assert_matches!(
+            assert_ok!(self.rx_governance_monitor.recv().await),
+            PolicyFilterEvent::ItemPassed
+        );
+
+        let result = assert_ok!(
+            self.check_sink_accumulation(label, timeout, |acc| {
+                let check_span =
+                    tracing::info_span!("DMR check collection accumulation", %label, ?expectation, ?timeout);
+                let _ = check_span.enter();
+
+                tracing::warn!(
+                    ?acc,
+                    "checking accumulation against expected. lengths:[{}=={} - {}]",
+                    acc.len(),
+                    expectation.len(),
+                    acc.len() == expectation.len()
+                );
+
+                let result = std::panic::catch_unwind(|| {
+                    assert_eq!(acc.len(), expectation.len());
+                    assert_eq!(acc, expectation);
+                    true
+                });
+
+                match result {
+                    Ok(check) => check,
+                    Err(err) => {
+                        tracing::error!(error=?err, "check accumulation failed.");
+                        false
+                    },
+                }
+            })
+            .await
+        );
+
+        if !result {
+            anyhow::bail!("failed accumulation check.")
+        }
+
+        let (reset_cmd, reset_rx) = stage::FoldCmd::get_and_reset_accumulation();
+        assert_ok!(self.tx_sink_api.send(reset_cmd));
+        let ack = assert_ok!(reset_rx.await);
+        tracing::error!("sink reset ack = {:?}", ack);
+
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "info", skip(self, check_accumulation))]
+    pub async fn check_sink_accumulation<F>(
+        &self, label: &str, timeout: Duration, mut check_accumulation: F,
+    ) -> anyhow::Result<bool>
+    where
+        F: FnMut(Vec<Data>) -> bool,
+    {
         use std::time::Instant;
         let deadline = Instant::now() + timeout;
         let step = Duration::from_millis(50);
+
         let mut result = false;
 
         loop {
+            let check_span = tracing::info_span!("DMR check sink accumulation", %label);
+            let _ = check_span.enter();
+
             if Instant::now() < deadline {
                 let acc = self.inspect_sink().await;
                 if acc.is_ok() {
                     let acc = acc?;
                     tracing::info!(?acc, len=?acc.len(), "inspecting sink");
-                    result = check_size(acc);
+
+                    result = check_accumulation(acc);
+
                     if !result {
                         tracing::warn!(
                             ?result,
-                            "sink length failed check predicate - retrying after {:?}.",
+                            "sink accumulation check predicate - retrying after {:?}.",
                             step
                         );
                         tokio::time::sleep(step).await;
                     } else {
-                        tracing::info!(?result, "sink length passed check predicate.");
+                        tracing::info!(?result, "sink accumulation passed check predicate.");
                         break;
                     }
                 } else {
@@ -184,9 +252,9 @@ impl TestFlow {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn test_flink_governance_flow_only_policy_preamble() -> anyhow::Result<()> {
+async fn test_flink_governance_flow_simple_and_happy() -> anyhow::Result<()> {
     lazy_static::initialize(&proctor::tracing::TEST_TRACING);
-    let main_span = tracing::info_span!("test_flink_governance_flow");
+    let main_span = tracing::info_span!("test_flink_governance_flow_simple_and_happy");
     let _ = main_span.enter();
 
     let policy = FlinkGovernancePolicy::new(&TestSettings {
@@ -221,23 +289,375 @@ async fn test_flink_governance_flow_only_policy_preamble() -> anyhow::Result<()>
     claim::assert_matches!(event, elements::PolicyFilterEvent::ContextChanged(_));
 
     let timestamp = TimestampSeconds::new_secs(*super::fixtures::DT_1_TS);
-    let plan = FlinkScalePlan {
-        timestamp,
-        target_nr_task_managers: 8,
-        current_nr_task_managers: 4,
+    assert_ok!(
+        flow.check_scenario(
+            "happy_1",
+            FlinkScalePlan {
+                timestamp,
+                target_nr_task_managers: 8,
+                current_nr_task_managers: 4
+            },
+            vec![FlinkScalePlan {
+                timestamp,
+                target_nr_task_managers: 8,
+                current_nr_task_managers: 4
+            }]
+        )
+        .await
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_flink_governance_flow_simple_below_min_cluster_size() -> anyhow::Result<()> {
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
+    let main_span = tracing::info_span!("test_flink_governance_flow_simple_below_min_cluster_size");
+    let _ = main_span.enter();
+
+    let policy = FlinkGovernancePolicy::new(&TestSettings {
+        required_subscription_fields: HashSet::new(),
+        optional_subscription_fields: HashSet::new(),
+        source: PolicySource::NoPolicy,
+    });
+
+    let governance_stage = Governance::with_transform(
+        "test_governance",
+        policy,
+        make_governance_transform("common_governance_transform"),
+    )
+    .await;
+
+    let mut flow = TestFlow::new(governance_stage).await?;
+
+    let min_cluster_size = 2;
+    let max_cluster_size = 10;
+    let max_scaling_step = 5;
+    let context = FlinkGovernanceContext {
+        min_cluster_size,
+        max_cluster_size,
+        max_scaling_step,
+        custom: Default::default(),
     };
-    tracing::info!(?plan, "pushing happy plan...");
-    assert_ok!(flow.push_data(plan).await);
+    tracing::info!(?context, "pushing test context...");
+    assert_ok!(flow.push_context(context).await);
 
-    tracing::info!("waiting for plan to reach sink...");
-    assert!(assert_ok!(
-        flow.check_sink_accumulation("happy_1", Duration::from_millis(250), |acc| acc.len() == 1,)
-            .await
-    ));
+    let event = assert_ok!(flow.recv_policy_event().await);
+    tracing::info!(?event, "received policy event.");
+    claim::assert_matches!(event, elements::PolicyFilterEvent::ContextChanged(_));
 
-    // todo test target below min cluster size
-    // todo test target above max cluster size
-    // todo test too big a scale step
+    let timestamp = TimestampSeconds::new_secs(*super::fixtures::DT_1_TS);
+    assert_ok!(
+        flow.check_scenario(
+            "below min cluster size",
+            FlinkScalePlan {
+                timestamp,
+                target_nr_task_managers: 0,
+                current_nr_task_managers: 4
+            },
+            vec![FlinkScalePlan {
+                timestamp,
+                target_nr_task_managers: min_cluster_size,
+                current_nr_task_managers: 4
+            }]
+        )
+        .await
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_flink_governance_flow_simple_above_max_cluster_size() -> anyhow::Result<()> {
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
+    let main_span = tracing::info_span!("test_flink_governance_flow_simple_above_max_cluster_size");
+    let _ = main_span.enter();
+
+    let policy = FlinkGovernancePolicy::new(&TestSettings {
+        required_subscription_fields: HashSet::new(),
+        optional_subscription_fields: HashSet::new(),
+        source: PolicySource::NoPolicy,
+    });
+
+    let governance_stage = Governance::with_transform(
+        "test_governance",
+        policy,
+        make_governance_transform("common_governance_transform"),
+    )
+    .await;
+
+    let mut flow = TestFlow::new(governance_stage).await?;
+
+    let min_cluster_size = 2;
+    let max_cluster_size = 10;
+    let max_scaling_step = 5;
+    let context = FlinkGovernanceContext {
+        min_cluster_size,
+        max_cluster_size,
+        max_scaling_step,
+        custom: Default::default(),
+    };
+    tracing::info!(?context, "pushing test context...");
+    assert_ok!(flow.push_context(context).await);
+
+    let event = assert_ok!(flow.recv_policy_event().await);
+    tracing::info!(?event, "received policy event.");
+    claim::assert_matches!(event, elements::PolicyFilterEvent::ContextChanged(_));
+
+    let timestamp = TimestampSeconds::new_secs(*super::fixtures::DT_1_TS);
+    assert_ok!(
+        flow.check_scenario(
+            "above max cluster size",
+            FlinkScalePlan {
+                timestamp,
+                target_nr_task_managers: 999,
+                current_nr_task_managers: 6
+            },
+            vec![FlinkScalePlan {
+                timestamp,
+                target_nr_task_managers: max_cluster_size,
+                current_nr_task_managers: 6
+            }]
+        )
+        .await
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_flink_governance_flow_simple_step_up_too_big() -> anyhow::Result<()> {
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
+    let main_span = tracing::info_span!("test_flink_governance_flow_simple_step_up_too_big");
+    let _ = main_span.enter();
+
+    let policy = FlinkGovernancePolicy::new(&TestSettings {
+        required_subscription_fields: HashSet::new(),
+        optional_subscription_fields: HashSet::new(),
+        source: PolicySource::NoPolicy,
+    });
+
+    let governance_stage = Governance::with_transform(
+        "test_governance",
+        policy,
+        make_governance_transform("common_governance_transform"),
+    )
+    .await;
+
+    let mut flow = TestFlow::new(governance_stage).await?;
+
+    let min_cluster_size = 2;
+    let max_cluster_size = 10;
+    let max_scaling_step = 5;
+    let context = FlinkGovernanceContext {
+        min_cluster_size,
+        max_cluster_size,
+        max_scaling_step,
+        custom: Default::default(),
+    };
+    tracing::info!(?context, "pushing test context...");
+    assert_ok!(flow.push_context(context).await);
+
+    let event = assert_ok!(flow.recv_policy_event().await);
+    tracing::info!(?event, "received policy event.");
+    claim::assert_matches!(event, elements::PolicyFilterEvent::ContextChanged(_));
+
+    let timestamp = TimestampSeconds::new_secs(*super::fixtures::DT_1_TS);
+    assert_ok!(
+        flow.check_scenario(
+            "too big a scale up step",
+            FlinkScalePlan {
+                timestamp,
+                target_nr_task_managers: 9,
+                current_nr_task_managers: 0
+            },
+            vec![FlinkScalePlan {
+                timestamp,
+                target_nr_task_managers: max_scaling_step,
+                current_nr_task_managers: 0
+            }]
+        )
+        .await
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_flink_governance_flow_simple_step_down_too_big() -> anyhow::Result<()> {
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
+    let main_span = tracing::info_span!("test_flink_governance_flow_simple_step_down_too_big");
+    let _ = main_span.enter();
+
+    let policy = FlinkGovernancePolicy::new(&TestSettings {
+        required_subscription_fields: HashSet::new(),
+        optional_subscription_fields: HashSet::new(),
+        source: PolicySource::NoPolicy,
+    });
+
+    let governance_stage = Governance::with_transform(
+        "test_governance",
+        policy,
+        make_governance_transform("common_governance_transform"),
+    )
+    .await;
+
+    let mut flow = TestFlow::new(governance_stage).await?;
+
+    let min_cluster_size = 2;
+    let max_cluster_size = 10;
+    let max_scaling_step = 5;
+    let context = FlinkGovernanceContext {
+        min_cluster_size,
+        max_cluster_size,
+        max_scaling_step,
+        custom: Default::default(),
+    };
+    tracing::info!(?context, "pushing test context...");
+    assert_ok!(flow.push_context(context).await);
+
+    let event = assert_ok!(flow.recv_policy_event().await);
+    tracing::info!(?event, "received policy event.");
+    claim::assert_matches!(event, elements::PolicyFilterEvent::ContextChanged(_));
+
+    let timestamp = TimestampSeconds::new_secs(*super::fixtures::DT_1_TS);
+    assert_ok!(
+        flow.check_scenario(
+            "too big a scale down step",
+            FlinkScalePlan {
+                timestamp,
+                target_nr_task_managers: min_cluster_size,
+                current_nr_task_managers: max_cluster_size
+            },
+            vec![FlinkScalePlan {
+                timestamp,
+                target_nr_task_managers: max_cluster_size - max_scaling_step,
+                current_nr_task_managers: max_cluster_size
+            }]
+        )
+        .await
+    );
+
+    // todo step vs min/max precedent
+
+    // todo test veto in subsequent test
+
+    Ok(())
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_flink_governance_flow_simple_step_up_before_max() -> anyhow::Result<()> {
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
+    let main_span = tracing::info_span!("test_flink_governance_flow_simple_step_up_before_max");
+    let _ = main_span.enter();
+
+    let policy = FlinkGovernancePolicy::new(&TestSettings {
+        required_subscription_fields: HashSet::new(),
+        optional_subscription_fields: HashSet::new(),
+        source: PolicySource::NoPolicy,
+    });
+
+    let governance_stage = Governance::with_transform(
+        "test_governance",
+        policy,
+        make_governance_transform("common_governance_transform"),
+    )
+    .await;
+
+    let mut flow = TestFlow::new(governance_stage).await?;
+
+    let min_cluster_size = 2;
+    let max_cluster_size = 10;
+    let max_scaling_step = 5;
+    let context = FlinkGovernanceContext {
+        min_cluster_size,
+        max_cluster_size,
+        max_scaling_step,
+        custom: Default::default(),
+    };
+    tracing::info!(?context, "pushing test context...");
+    assert_ok!(flow.push_context(context).await);
+
+    let event = assert_ok!(flow.recv_policy_event().await);
+    tracing::info!(?event, "received policy event.");
+    claim::assert_matches!(event, elements::PolicyFilterEvent::ContextChanged(_));
+
+    let timestamp = TimestampSeconds::new_secs(*super::fixtures::DT_1_TS);
+    assert_ok!(
+        flow.check_scenario(
+            "too big a scale up step before max",
+            FlinkScalePlan {
+                timestamp,
+                target_nr_task_managers: 999,
+                current_nr_task_managers: 0
+            },
+            vec![FlinkScalePlan {
+                timestamp,
+                target_nr_task_managers: max_scaling_step,
+                current_nr_task_managers: 0
+            }]
+        )
+        .await
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_flink_governance_flow_simple_step_down_before_min() -> anyhow::Result<()> {
+    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
+    let main_span = tracing::info_span!("test_flink_governance_flow_simple_step_down_before_min");
+    let _ = main_span.enter();
+
+    let policy = FlinkGovernancePolicy::new(&TestSettings {
+        required_subscription_fields: HashSet::new(),
+        optional_subscription_fields: HashSet::new(),
+        source: PolicySource::NoPolicy,
+    });
+
+    let governance_stage = Governance::with_transform(
+        "test_governance",
+        policy,
+        make_governance_transform("common_governance_transform"),
+    )
+    .await;
+
+    let mut flow = TestFlow::new(governance_stage).await?;
+
+    let min_cluster_size = 2;
+    let max_cluster_size = 10;
+    let max_scaling_step = 5;
+    let context = FlinkGovernanceContext {
+        min_cluster_size,
+        max_cluster_size,
+        max_scaling_step,
+        custom: Default::default(),
+    };
+    tracing::info!(?context, "pushing test context...");
+    assert_ok!(flow.push_context(context).await);
+
+    let event = assert_ok!(flow.recv_policy_event().await);
+    tracing::info!(?event, "received policy event.");
+    claim::assert_matches!(event, elements::PolicyFilterEvent::ContextChanged(_));
+
+    let timestamp = TimestampSeconds::new_secs(*super::fixtures::DT_1_TS);
+    assert_ok!(
+        flow.check_scenario(
+            "too big a scale down step before min",
+            FlinkScalePlan {
+                timestamp,
+                target_nr_task_managers: 0,
+                current_nr_task_managers: max_cluster_size
+            },
+            vec![FlinkScalePlan {
+                timestamp,
+                target_nr_task_managers: max_cluster_size - max_scaling_step,
+                current_nr_task_managers: max_cluster_size
+            }]
+        )
+        .await
+    );
+
+    // todo step vs min/max precedent
 
     // todo test veto in subsequent test
 

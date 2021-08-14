@@ -19,12 +19,14 @@ pub const GOVERNANCE_POLICY_PREAMBLE: &'static str = r#"
 
 
     accept_scale_up(plan, context, adjusted_target)
-        if check_scale_up(plan, context, adjusted_target)
-        and context.max_cluster_size < adjusted_target
-        and adjusted_target = context.max_cluster_size;
+        if check_scale_up(plan, context, adjusted)
+        and context.max_cluster_size < adjusted
+        and adjusted_target = context.max_cluster_size
+        and cut;
 
     accept_scale_up(plan, context, adjusted_target)
-        if check_scale_up(plan, context, adjusted_target);
+        if check_scale_up(plan, context, adjusted_target)
+        and cut;
 
     check_scale_up(plan, context, adjusted_target)
         if not veto(plan, context)
@@ -32,12 +34,14 @@ pub const GOVERNANCE_POLICY_PREAMBLE: &'static str = r#"
 
 
     accept_scale_down(plan, context, adjusted_target)
-        if check_scale_down(plan, context, adjusted_target)
-        and adjusted_target < context.min_cluster_size
-        and adjusted_target = context.min_cluster_size;
+        if check_scale_down(plan, context, adjusted)
+        and adjusted < context.min_cluster_size
+        and adjusted_target = context.min_cluster_size
+        and cut;
 
     accept_scale_down(plan, context, adjusted_target)
-        if check_scale_down(plan, context, adjusted_target);
+        if check_scale_down(plan, context, adjusted_target)
+        and cut;
 
     check_scale_down(plan, context, adjusted_target)
         if not veto(plan, context)

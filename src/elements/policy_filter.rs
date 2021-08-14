@@ -263,6 +263,7 @@ where
                     "item passed context policy review - sending via outlet."
                 );
                 outlet.send(PolicyOutcome::new(item, context.clone(), result)).await?;
+                Self::publish_event(PolicyFilterEvent::ItemPassed, tx)?;
                 Ok(())
             },
 
