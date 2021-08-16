@@ -23,7 +23,6 @@ pub struct Governance<In, Out, C> {
     tx_policy_monitor: broadcast::Sender<PolicyFilterEvent<In, C>>,
 }
 
-
 impl<T: AppData + ToPolar, C: ProctorContext> Governance<T, PolicyOutcome<T, C>, C> {
     #[tracing::instrument(level = "info", skip(name))]
     pub async fn carry_policy_result<P>(name: impl AsRef<str>, policy: P) -> Self
@@ -94,7 +93,6 @@ impl<In, Out, C> Debug for Governance<In, Out, C> {
     }
 }
 
-
 impl<In, Out, C> SinkShape for Governance<In, Out, C> {
     type In = In;
 
@@ -110,7 +108,6 @@ impl<In, Out, C> SourceShape for Governance<In, Out, C> {
         self.inner_policy_transform.outlet()
     }
 }
-
 
 #[dyn_upcast]
 #[async_trait]

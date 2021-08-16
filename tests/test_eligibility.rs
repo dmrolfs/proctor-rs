@@ -569,10 +569,10 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
         PolicyFilterEvent::ItemBlocked(blocked) => {
             tracing::warn!("receive item blocked notification re: {:?}", blocked);
             assert_eq!(blocked, data);
-        },
+        }
         PolicyFilterEvent::ContextChanged(ctx) => {
             panic!("unexpected context change:{:?}", ctx);
-        },
+        }
         PolicyFilterEvent::ItemPassed => panic!("unexpected data passed policy"),
     }
 
@@ -649,7 +649,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
                     custom: HashMap::new(),
                 }
             );
-        },
+        }
         PolicyFilterEvent::ContextChanged(None) => panic!("did not expect to clear context"),
         PolicyFilterEvent::ItemBlocked(item) => panic!("unexpected item receipt - blocked: {:?}", item),
         PolicyFilterEvent::ItemPassed => panic!("unexpected data passed policy"),

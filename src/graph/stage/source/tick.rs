@@ -55,14 +55,14 @@ impl ContinueTicking for Constraint {
             Constraint::ByCount { count, limit } => {
                 *count += 1;
                 count <= limit
-            },
+            }
 
             Constraint::ByTime { stop, limit } => match stop {
                 None => {
                     *stop = Some(tokio::time::Instant::now() + *limit);
                     tracing::warn!(?stop, ?limit, "set tick time constraint");
                     true
-                },
+                }
 
                 Some(stop) => {
                     let now = tokio::time::Instant::now();
@@ -70,7 +70,7 @@ impl ContinueTicking for Constraint {
                     let diff = if do_next { Ok(*stop - now) } else { Err(now - *stop) };
                     tracing::warn!(?diff, %do_next, "eval tick time constraint.");
                     do_next
-                },
+                }
             },
         }
     }

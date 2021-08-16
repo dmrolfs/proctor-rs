@@ -265,19 +265,19 @@ where
                 outlet.send(PolicyOutcome::new(item, context.clone(), result)).await?;
                 Self::publish_event(PolicyFilterEvent::ItemPassed, tx)?;
                 Ok(())
-            },
+            }
 
             Ok(result) => {
                 tracing::info!(?policy, ?result, "item failed context policy review - skipping.");
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
                 Ok(())
-            },
+            }
 
             Err(err) => {
                 tracing::warn!(error=?err, ?policy, "error in context policy review - skipping item.");
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
                 Err(err.into())
-            },
+            }
         }
     }
 
@@ -319,10 +319,10 @@ where
                 };
                 let _ignore_failure = tx.send(detail);
                 Ok(true)
-            },
+            }
 
             PolicyFilterCmd::ReplacePolicy { new_policy, tx } => {
-                oso.clear_rules();
+                oso.clear_rules()?;
                 match new_policy {
                     PolicySource::String(policy) => oso.load_str(policy.as_str())?,
                     PolicySource::File(path) => oso.load_file(path)?,
@@ -331,7 +331,7 @@ where
 
                 let _ignore_failure = tx.send(());
                 Ok(true)
-            },
+            }
 
             PolicyFilterCmd::AppendPolicy { additional_policy: policy_source, tx } => {
                 match policy_source {
@@ -342,14 +342,14 @@ where
 
                 let _ignore_failure = tx.send(());
                 Ok(true)
-            },
+            }
 
             PolicyFilterCmd::ResetPolicy(tx) => {
-                oso.clear_rules();
+                oso.clear_rules()?;
                 policy.load_policy_engine(oso)?;
                 let _ignore_failrue = tx.send(());
                 Ok(true)
-            },
+            }
         }
     }
 }

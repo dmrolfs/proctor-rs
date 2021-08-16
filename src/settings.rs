@@ -21,14 +21,14 @@ pub fn get_settings() -> Result<Settings, SettingsError> {
         Some(config_path) => {
             let config_path = PathBuf::from(config_path);
             settings.merge(config::File::from(config_path).required(true))?;
-        },
+        }
 
         None => {
             let environment: Environment = std::env::var("APP_ENVIRONMENT")
                 .unwrap_or_else(|_| "local".into())
                 .try_into()?;
             settings.merge(config::File::from(configuration_directory.join(environment.as_ref())).required(true))?;
-        },
+        }
     };
 
     // Add in settings from environment variables (with a prefix of APP and '__' as separator)

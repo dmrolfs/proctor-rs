@@ -100,7 +100,7 @@ impl<T: AppData> SubscriptionChannel<T> {
             Some(inner) => {
                 inner.run().await.map_err(|err| CollectionError::StageError(err.into()))?;
                 Ok(())
-            },
+            }
 
             None => Err(CollectionError::ClosedSubscription(self.name.clone())),
         }

@@ -33,66 +33,69 @@ path = "examples/async_stream.rs"
 anyhow = "*"
 async-stream = "*"
 async-trait = "*"
+cast_trait_object = "*"
+thiserror = "*"
 chrono = "*"
 config = { version = "*", default-features = false, features = ["toml", "hjson"] }
-derive_more = "*"
+#derive_more = "*"
 futures = "*"
-futures-core = "*"
 futures-util = "*"
 lazy_static = "*"
 num_cpus = "*"
 reqwest = { version = "*", features = ["blocking", "json"] }
 serde = "*"
 serde_json = "*"
-serde-aux = "*"
-serde_repr = "*"
-serde_with = { version = "*", features = ["chrono", "json", "macros"] }
+#serde-aux = "*"
+#serde_repr = "*"
 flexbuffers = "*"
-thiserror = "*"
 tokio = { version = "*", features = ["full"] }
-tokio-stream = "*"
+#tokio-stream = "*"
 tracing = "*"
 tracing-bunyan-formatter = "*"
 tracing-futures = "*"
 tracing-log = "*"
 tracing-subscriber = "*"
 tracing-flame = "*"
-uuid = { version = "*", features = ["serde", "v4"] }
-pin-project = "*"
-pin-project-lite = "*"
+#uuid = { version = "*", features = ["serde", "v4"] }
+#pin-project = "*"
+#pin-project-lite = "*"
 enum-display-derive = "*"
-rand = "*"
 oso = "*"
 polar-core = "*"
 proctor_derive = { path = "proctor_derive" }
 clap = { version = "3.0.0-beta.2", features = ["yaml"] }
 csv = "*"
 toml = "*"
-cast_trait_object = "*"
-maplit = "*"
-regex = "*"
-itertools = "*"
+#regex = "*"
 #smartcore = { version = "*", features=["nalgebra-bindings"]}
-nalgebra = ">=0.27.1"
-statrs = "*"
-num-traits = "*"
-approx = "*"
-dashmap = "*"
-splines = "*"
+#nalgebra = ">=0.27.1"
+#statrs = "*"
+#num-traits = "*"
+#approx = "*"
+#dashmap = "*"
+#splines = "*"
 
 [dev-dependencies]
-serde_test = "*"
-tokio-test = "*"
-mockall = "*"
-criterion = { version = "*", features = ["async_tokio", "html_reports"] }
-pprof = {version = "*", features = ["flamegraph"]}
-static_assertions = "*"
 pretty_assertions = "*"
 claim = "*"
-proptest = "*"
-fake = { version = "*", features = ["chrono"] }
+tokio-test = "*"
+serde_test = "*"
+maplit = "*"
+itertools = "*"
+futures-core = "*"
+serde_with = { version = "*", features = ["chrono", "json", "macros"] }
+rand = "*"
+#fake = { version = "*", features = ["chrono"] }
+#mockall = "*"
+criterion = { version = "*", features = ["async_tokio", "html_reports"] }
+pprof = {version = "*", features = ["flamegraph"]}
+#static_assertions = "*"
+#proptest = "*"
 
 [[bench]]
 name = "bench_main"
 harness = false
+
+[package.metadata.cargo-udeps.ignore]
+normal = ["nalgebra"]
 

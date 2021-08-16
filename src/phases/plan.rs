@@ -20,7 +20,6 @@ pub enum PlanEvent<Observation, Decision, Out> {
     DecisionIgnored(Decision),
 }
 
-
 #[async_trait]
 pub trait Planning: Debug + Send + Sync {
     type Observation: AppData + Clone;
@@ -180,7 +179,7 @@ impl<P: Planning> Plan<P> {
             Ok(nr_subsribers) => tracing::debug!(%nr_subsribers, "published event to subscribers"),
             Err(err) => {
                 tracing::warn!(error=?err, "failed to publish event - can add subscribers to receive future events.")
-            },
+            }
         }
     }
 

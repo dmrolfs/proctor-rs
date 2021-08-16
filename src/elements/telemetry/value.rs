@@ -46,7 +46,7 @@ impl TelemetryValue {
             (Self::Unit, Self::Unit) => (),
             (Self::Boolean(ref mut lhs), Self::Boolean(rhs)) => {
                 *lhs = lhs.bitor(rhs);
-            },
+            }
             (Self::Integer(ref mut lhs), Self::Integer(rhs)) => *lhs = *lhs + *rhs,
             (Self::Float(ref mut lhs), Self::Float(rhs)) => *lhs = *lhs + *rhs,
             (Self::Text(ref mut lhs), Self::Text(rhs)) => lhs.extend(rhs.chars()),
@@ -105,11 +105,11 @@ impl ToPolar for TelemetryValue {
             Self::Seq(values) => {
                 let vs = values.into_iter().map(|v| v.to_polar()).collect();
                 PolarValue::List(vs)
-            },
+            }
             Self::Table(table) => {
                 let vs = table.into_iter().map(|(k, v)| (k, v.to_polar())).collect();
                 PolarValue::Map(vs)
-            },
+            }
             Self::Unit => PolarValue::Boolean(false),
         }
     }
@@ -133,12 +133,12 @@ impl Into<ConfigValue> for TelemetryValue {
             Self::Seq(values) => {
                 let vs: Vec<ConfigValue> = values.into_iter().map(|v| v.into()).collect();
                 ConfigValue::new(None, vs)
-            },
+            }
             Self::Table(table) => {
                 let tbl: HashMap<String, ConfigValue> =
                     table.into_iter().map(|(k, v)| (k, v.into())).collect::<HashMap<_, _>>();
                 ConfigValue::new(None, tbl)
-            },
+            }
             Self::Unit => ConfigValue::new(None, Option::<String>::None),
         }
     }
@@ -155,7 +155,7 @@ impl From<ResultSet> for TelemetryValue {
                 TelemetryValue::Unit => (),
                 value => {
                     let _ = table.insert(key.to_string(), value);
-                },
+                }
             }
         }
 
@@ -304,23 +304,23 @@ impl From<PolarValue> for TelemetryValue {
             PolarValue::List(values) => {
                 let vs = values.into_iter().map(|v| v.into()).collect();
                 Self::Seq(vs)
-            },
+            }
             PolarValue::Map(table) => {
                 let vs = table.into_iter().map(|(k, v)| (k, v.into())).collect();
                 Self::Table(vs)
-            },
+            }
             PolarValue::Instance(_) => {
                 Self::Unit
                 // maybe Unit?
                 // Err(StageError::TypeError("PolarValue::Instance is not a supported telemetry
                 // type.".to_string()))
-            },
+            }
             PolarValue::Variable(_) => {
                 Self::Unit
                 // maybe Unit?
                 // Err(StageError::TypeError("PolarValue::Variable is not a supported telemetry
                 // type.".to_string()))
-            },
+            }
         }
     }
 }
@@ -345,7 +345,7 @@ impl TryFrom<TelemetryValue> for bool {
                         actual: Some(rep.to_string()),
                     }),
                 }
-            },
+            }
 
             value => Err(TelemetryError::TypeError {
                 expected: format!("{} value", TypeExpectation::Boolean),
@@ -585,23 +585,23 @@ impl<'de> Serialize for TelemetryValue {
             Self::Unit => {
                 // serializer.serialize_unit()
                 serializer.serialize_unit_variant("TelemetryValue", 6, "Unit")
-            },
+            }
             Self::Boolean(b) => {
                 serializer.serialize_bool(*b)
                 // serializer.serialize_newtype_variant("TelemetryValue", 2, "Boolean", b)
-            },
+            }
             Self::Integer(i) => {
                 serializer.serialize_i64(*i)
                 // serializer.serialize_newtype_variant("TelemetryValue", 0, "Integer", i)
-            },
+            }
             Self::Float(f) => {
                 serializer.serialize_f64(*f)
                 // serializer.serialize_newtype_variant("TelemetryValue", 1, "Float", f)
-            },
+            }
             Self::Text(t) => {
                 serializer.serialize_str(t.as_str())
                 // serializer.serialize_newtype_variant("TelemetryValue", 3, "Text", t)
-            },
+            }
             Self::Seq(values) => {
                 let mut seq = serializer.serialize_seq(Some(values.len()))?;
                 for element in values {
@@ -609,7 +609,7 @@ impl<'de> Serialize for TelemetryValue {
                 }
                 seq.end()
                 // serializer.serialize_newtype_variant("TelemetryValue",4, "Seq", values)
-            },
+            }
             Self::Table(table) => {
                 let mut map = serializer.serialize_map(Some(table.len()))?;
                 for (k, v) in table {
@@ -617,7 +617,7 @@ impl<'de> Serialize for TelemetryValue {
                 }
                 map.end()
                 // serializer.serialize_newtype_variant("TelemetryValue",5, "Table", table)
-            },
+            }
         }
     }
 }
@@ -847,7 +847,7 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
                         val => {
                             tracing::info!(?key, value=?val, "adding deserialized entry.");
                             table.insert(key, val);
-                        },
+                        }
                     }
                 }
 

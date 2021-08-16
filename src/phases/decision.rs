@@ -18,7 +18,6 @@ pub const DECISION_POLICY_PREAMBLE: &'static str = r#"
     scale(item, context, direction) if scale_down(item, context, direction) and direction = "down";
     "#;
 
-
 pub struct Decision<In, Out, C> {
     name: String,
     inner_policy_transform: Box<dyn ThroughStage<In, Out>>,
@@ -86,7 +85,6 @@ impl<In: AppData + ToPolar, Out: AppData, C: ProctorContext> Decision<In, Out, C
         self.context_inlet.clone()
     }
 }
-
 
 impl<In, Out, C: Debug> Debug for Decision<In, Out, C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

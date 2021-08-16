@@ -181,10 +181,10 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
             assert_eq!(count, 3);
 
             Ok(())
-        },
+        }
         Err(err) => {
             tracing::error!(error=?err, "failed to receive final folded result.");
             Err(err.into())
-        },
+        }
     }
 }

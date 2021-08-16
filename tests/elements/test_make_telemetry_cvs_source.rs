@@ -127,10 +127,10 @@ async fn test_make_telemetry_cvs_source() -> Result<()> {
 
             assert_eq!(actual, expected);
             Ok(())
-        },
+        }
         Err(err) => {
             tracing::error!(error=?err, "failed to receive final folded result.");
             Err(err.into())
-        },
+        }
     }
 }

@@ -116,7 +116,7 @@ impl TelemetrySubscription {
                     optional_fields,
                     outlet_to_subscription,
                 }
-            },
+            }
         }
     }
 
@@ -142,7 +142,7 @@ impl TelemetrySubscription {
                     optional_fields: my_optional_fields,
                     outlet_to_subscription,
                 }
-            },
+            }
         }
     }
 
@@ -193,7 +193,7 @@ impl TelemetrySubscription {
                     }
                 }
                 interested
-            },
+            }
         }
     }
 
@@ -228,7 +228,7 @@ impl TelemetrySubscription {
                 }
 
                 Ok((db, missing))
-            },
+            }
         }
     }
 
@@ -274,7 +274,7 @@ impl TelemetrySubscription {
                     let ready = ready.into_iter().map(|(k, v)| (k, v.clone())).collect();
                     Some(ready)
                 }
-            },
+            }
         }
     }
 
@@ -304,7 +304,7 @@ impl PartialEq for TelemetrySubscription {
         match (self, other) {
             (All { name: lhs_name, outlet_to_subscription: _ }, All { name: rhs_name, outlet_to_subscription: _ }) => {
                 lhs_name == rhs_name
-            },
+            }
             (
                 Explicit {
                     name: lhs_name,
@@ -371,14 +371,14 @@ impl Clearinghouse {
                 database.extend(d);
                 Self::push_to_subscribers(database, interested).await?;
                 Ok(true)
-            },
+            }
 
             None => {
                 tracing::info!(
                     "telemetry sources dried up - stopping since subscribers have data they're going to get."
                 );
                 Ok(false)
-            },
+            }
         }
     }
 
@@ -474,7 +474,7 @@ impl Clearinghouse {
                             missing: HashSet::default(),
                             subscriptions: subscriptions.clone(),
                         }
-                    },
+                    }
 
                     Some(name) => match subscriptions.iter().find(|s| s.name() == name.as_str()) {
                         Some(sub) => {
@@ -492,7 +492,7 @@ impl Clearinghouse {
                                 missing,
                                 subscriptions: vec![sub.clone()],
                             }
-                        },
+                        }
 
                         None => {
                             tracing::info!(requested_subscription=%name, "subscription not found - returning clearinghouse snapshot.");
@@ -501,13 +501,13 @@ impl Clearinghouse {
                                 missing: HashSet::default(),
                                 subscriptions: subscriptions.clone(),
                             }
-                        },
+                        }
                     },
                 };
 
                 let _ = tx.send(snapshot);
                 Ok(true)
-            },
+            }
 
             ClearinghouseCmd::Subscribe { subscription, receiver, tx } => {
                 tracing::info!(?subscription, "adding telemetry subscriber.");
@@ -515,7 +515,7 @@ impl Clearinghouse {
                 subscriptions.push(subscription);
                 let _ = tx.send(());
                 Ok(true)
-            },
+            }
 
             ClearinghouseCmd::Unsubscribe { name, tx } => {
                 // let mut subs = subscriptions.lock().await;
@@ -527,7 +527,7 @@ impl Clearinghouse {
                 tracing::info!(?dropped, "subscription dropped");
                 let _ = tx.send(());
                 Ok(true)
-            },
+            }
         }
     }
 }

@@ -96,11 +96,11 @@ impl<T: Send> Port for Inlet<T> {
             Some(r) => {
                 tracing::trace!(inlet=%self.0, "closing Inlet");
                 r.1.close()
-            },
+            }
             None => {
                 tracing::trace!(inlet=%self.0, "Inlet close ignored - not attached");
                 ()
-            },
+            }
         }
     }
 }

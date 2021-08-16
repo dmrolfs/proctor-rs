@@ -75,7 +75,7 @@ impl PolicySource {
         Self::File(policy_path)
     }
 
-    pub fn load_into(&self, oso: &oso::Oso) -> Result<(), PolicyError> {
+    pub fn load_into(&self, oso: &mut oso::Oso) -> Result<(), PolicyError> {
         match self {
             PolicySource::String(policy) => oso.load_str(policy.as_str())?,
             PolicySource::File(policy) => oso.load_file(policy)?,
@@ -102,7 +102,7 @@ impl PolicySource {
                 let mut p = String::new();
                 f.read_to_string(&mut p)?;
                 polar.load_str(p.as_str())?;
-            },
+            }
             Self::NoPolicy => (),
         };
 

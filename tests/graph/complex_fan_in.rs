@@ -95,7 +95,7 @@ async fn test_complex_multi_stage_merge_5() -> Result<()> {
             let e13 = 13 * 13;
             assert_eq!(actual, e1 + e10 + e100 + e7 + e13);
             Ok(())
-        },
+        }
         Err(_err) => panic!("failed to receive final sum"),
     }
 }

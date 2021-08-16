@@ -82,20 +82,20 @@ impl<T: AppData> Stage for ActorSource<T> {
                         Ok(()) => {
                             let _ignore_failure = tx.send(());
                             ()
-                        },
+                        }
 
                         Err(err) => {
                             tracing::error!(error=?err, "failed to send item - completing actor source.");
                             break;
-                        },
+                        }
                     }
-                },
+                }
 
                 ActorSourceCmd::Stop(tx) => {
                     tracing::info!("stopping actor source.");
                     let _ignore_failure = tx.send(());
                     break;
-                },
+                }
             }
         }
 

@@ -132,13 +132,13 @@ fn load_configuration(mut c: Config, dir: &PathBuf, opts: &CliOptions) -> anyhow
         Some(config_path) => {
             let config_path = PathBuf::from(dir.join(config_path));
             c.merge(config::File::from(config_path).required(true))?;
-        },
+        }
         None => {
             let environment: Environment = std::env::var("APP_ENVIRONMENT")
                 .unwrap_or_else(|_| "local".into())
                 .try_into()?;
             c.merge(config::File::from(dir.join(environment.as_ref())).required(true))?;
-        },
+        }
     };
 
     Ok(c)
