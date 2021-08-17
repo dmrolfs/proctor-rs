@@ -9,10 +9,6 @@ edition = "2018"
 [lib]
 path = "src/lib.rs"
 
-[[bin]]
-name = "proctor"
-path = "src/main.rs"
-
 [[example]]
 name = "sandbox"
 path = "examples/sandbox.rs"
@@ -31,71 +27,50 @@ path = "examples/async_stream.rs"
 
 [dependencies]
 anyhow = "*"
+approx = "*"
 async-stream = "*"
 async-trait = "*"
 cast_trait_object = "*"
-thiserror = "*"
 chrono = "*"
+clap = { version = "3.0.0-beta.2", features = ["yaml"] }
 config = { version = "*", default-features = false, features = ["toml", "hjson"] }
-#derive_more = "*"
+csv = "*"
+enum-display-derive = "*"
+flexbuffers = "*"
 futures = "*"
 futures-util = "*"
 lazy_static = "*"
 num_cpus = "*"
-reqwest = { version = "*", features = ["blocking", "json"] }
-serde = "*"
-serde_json = "*"
-#serde-aux = "*"
-#serde_repr = "*"
-flexbuffers = "*"
-tokio = { version = "*", features = ["full"] }
-#tokio-stream = "*"
-tracing = "*"
-tracing-bunyan-formatter = "*"
-tracing-futures = "*"
-tracing-log = "*"
-tracing-subscriber = "*"
-tracing-flame = "*"
-#uuid = { version = "*", features = ["serde", "v4"] }
-#pin-project = "*"
-#pin-project-lite = "*"
-enum-display-derive = "*"
 oso = "*"
 polar-core = "*"
 proctor_derive = { path = "proctor_derive" }
-clap = { version = "3.0.0-beta.2", features = ["yaml"] }
-csv = "*"
+reqwest = { version = "*", features = ["blocking", "json"] }
+serde = "*"
+serde_json = "*"
+statrs = "*"
+thiserror = "*"
+tokio = { version = "*", features = ["full"] }
 toml = "*"
-#regex = "*"
-#smartcore = { version = "*", features=["nalgebra-bindings"]}
-#nalgebra = ">=0.27.1"
-#statrs = "*"
-#num-traits = "*"
-#approx = "*"
-#dashmap = "*"
-#splines = "*"
+tracing = "*"
+tracing-bunyan-formatter = "*"
+tracing-flame = "*"
+tracing-futures = "*"
+tracing-log = "*"
+tracing-subscriber = "*"
 
 [dev-dependencies]
-pretty_assertions = "*"
 claim = "*"
-tokio-test = "*"
-serde_test = "*"
-maplit = "*"
-itertools = "*"
-futures-core = "*"
-serde_with = { version = "*", features = ["chrono", "json", "macros"] }
-rand = "*"
-#fake = { version = "*", features = ["chrono"] }
-#mockall = "*"
 criterion = { version = "*", features = ["async_tokio", "html_reports"] }
+futures-core = "*"
+itertools = "*"
+maplit = "*"
 pprof = {version = "*", features = ["flamegraph"]}
-#static_assertions = "*"
-#proptest = "*"
+pretty_assertions = "*"
+rand = "*"
+serde_test = "*"
+serde_with = { version = "*", features = ["chrono", "json", "macros"] }
+tokio-test = "*"
 
 [[bench]]
 name = "bench_main"
 harness = false
-
-[package.metadata.cargo-udeps.ignore]
-normal = ["nalgebra"]
-
