@@ -10,8 +10,7 @@ use proctor::graph::stage;
 use proctor::graph::SinkShape;
 use proctor::graph::{Connect, Graph};
 use proctor::phases::collection;
-use proctor::phases::collection::TelemetrySubscription;
-use proctor::settings::SourceSetting;
+use proctor::phases::collection::{SourceSetting, TelemetrySubscription};
 use proctor::tracing::{get_subscriber, init_subscriber};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

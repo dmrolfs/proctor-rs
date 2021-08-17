@@ -8,8 +8,7 @@ use ::std::path::PathBuf;
 use pretty_assertions::assert_eq;
 use proctor::elements::Telemetry;
 use proctor::graph::{stage, Connect, Graph, SinkShape};
-use proctor::phases::collection::make_telemetry_cvs_source;
-use proctor::settings::SourceSetting;
+use proctor::phases::collection::{make_telemetry_cvs_source, SourceSetting};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Data {

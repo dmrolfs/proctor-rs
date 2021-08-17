@@ -5,11 +5,11 @@ use futures::future::FutureExt;
 use serde::{de::DeserializeOwned, Serialize};
 use tokio::sync::mpsc;
 
+use super::SourceSetting;
 use crate::elements::Telemetry;
 use crate::error::{CollectionError, SettingsError};
 use crate::graph::stage::{tick, CompositeSource, Stage, WithApi};
 use crate::graph::{stage, Connect, Graph, SinkShape, SourceShape};
-use crate::settings::SourceSetting;
 
 // todo api access should follow new convention rt via returned tuple
 pub type TelemetrySource = Box<dyn TelemetrySourceStage>;

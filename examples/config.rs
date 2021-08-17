@@ -5,7 +5,8 @@ use anyhow::Result;
 use clap::Clap;
 use config::Config;
 use proctor::error::SettingsError;
-use proctor::settings::{HttpQuery, Settings, SourceSetting};
+use proctor::phases::collection::{HttpQuery, SourceSetting};
+use proctor::settings::Settings;
 use proctor::tracing::{get_subscriber, init_subscriber};
 use reqwest::Url;
 

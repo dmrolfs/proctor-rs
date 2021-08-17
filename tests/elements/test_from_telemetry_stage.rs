@@ -6,8 +6,7 @@ use chrono::{DateTime, TimeZone, Utc};
 use lazy_static::lazy_static;
 use proctor::elements::make_from_telemetry;
 use proctor::graph::{stage, Connect, Graph, SinkShape};
-use proctor::phases::collection::make_telemetry_cvs_source;
-use proctor::settings::SourceSetting;
+use proctor::phases::collection::{make_telemetry_cvs_source, SourceSetting};
 use serde::{Deserialize, Serialize};
 use serde_test::{assert_tokens, Token};
 

@@ -6,8 +6,7 @@ use pretty_assertions::assert_eq;
 use proctor::elements::Telemetry;
 use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use proctor::phases::collection;
-use proctor::phases::collection::TelemetrySubscription;
-use proctor::settings::SourceSetting;
+use proctor::phases::collection::{SourceSetting, TelemetrySubscription};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

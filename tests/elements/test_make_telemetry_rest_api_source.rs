@@ -9,8 +9,7 @@ use proctor::elements::Telemetry;
 // use proctor::elements::telemetry::ToTelemetry;
 use proctor::graph::stage::{self, tick};
 use proctor::graph::{Connect, Graph, SinkShape};
-use proctor::phases::collection::make_telemetry_rest_api_source;
-use proctor::settings::{HttpQuery, SourceSetting};
+use proctor::phases::collection::{make_telemetry_rest_api_source, HttpQuery, SourceSetting};
 use serde::Deserialize;
 use tokio::sync::oneshot;
 
