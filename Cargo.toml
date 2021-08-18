@@ -14,10 +14,6 @@ name = "sandbox"
 path = "examples/sandbox.rs"
 
 [[example]]
-name = "config"
-path = "examples/config.rs"
-
-[[example]]
 name = "eth-scan"
 path = "examples/eth_scan.rs"
 
@@ -32,7 +28,7 @@ async-stream = "*"
 async-trait = "*"
 cast_trait_object = "*"
 chrono = "*"
-clap = { version = "3.0.0-beta.2", features = ["yaml"] }
+clap = { version = "3.0.0-beta.4", features = ["yaml"] }
 config = { version = "*", default-features = false, features = ["toml", "hjson"] }
 csv = "*"
 enum-display-derive = "*"
