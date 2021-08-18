@@ -302,9 +302,9 @@ impl<T: 'static + Debug + Send + Sync> From<tokio::sync::mpsc::error::SendError<
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum SettingsError {
-    /// Error understanding execution environment.
+    /// Error working with environment variable
     #[error("{0}")]
-    Environment(String),
+    Environment(#[from] std::env::VarError),
 
     /// Error in configuration settings.
     #[error(transparent)]
