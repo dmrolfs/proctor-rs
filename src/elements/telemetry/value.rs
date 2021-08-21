@@ -2,7 +2,6 @@ use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedL
 use std::convert::TryFrom;
 use std::fmt;
 use std::num::{ParseFloatError, ParseIntError};
-use std::prelude::rust_2015::Result::Err;
 
 use config::Value as ConfigValue;
 use oso::{FromPolar, PolarValue, ResultSet, ToPolar};
@@ -11,6 +10,7 @@ use serde::ser::{SerializeMap, SerializeSeq};
 use serde::{de, Deserializer, Serialize, Serializer};
 
 use crate::error::{TelemetryError, TypeExpectation};
+use chrono::{DateTime, TimeZone, Utc};
 
 #[derive(Debug, Clone)]
 pub enum TelemetryValue {
@@ -217,6 +217,16 @@ impl<'a> From<&'a str> for TelemetryValue {
         Self::Text(rep.to_string())
     }
 }
+
+// impl From<DateTime<Utc>> for TelemetryValue {
+//     fn from(value: DateTime<Utc>) -> Self {
+//         TelemetryValue::Table(maplit::hashmap! {
+//             SECS.to_string() => value.timestamp().into(),
+//             NSECS.to_string() => value.timestamp_subsec_nanos().into(),
+//         })
+//         // TelemetryValue::Integer(value.timestamp_millis())
+//     }
+// }
 
 impl<T: Into<TelemetryValue>> From<Vec<T>> for TelemetryValue {
     fn from(values: Vec<T>) -> Self {
@@ -457,6 +467,32 @@ impl TryFrom<TelemetryValue> for String {
         }
     }
 }
+
+// const SECS: &'static str = crate::serde::date::SECS_KEY;
+// const NSECS: &'static str = crate::serde::date::NSECS_KEY;
+//
+// impl TryFrom<TelemetryValue> for DateTime<Utc> {
+//     type Error = TelemetryError;
+//
+//     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
+//         match telemetry {
+//             TelemetryValue::Table(table) => {
+//                 let secs = table.get(SECS).cloned().map(|secs| i64::try_from(secs)).transpose()?;
+//                 let nsecs = table.get(NSECS).cloned().map(|nsecs| u32::try_from(nsecs)).transpose()?;
+//                 Ok(Utc.timestamp(secs.unwrap_or(0), nsecs.unwrap_or(0)))
+//             }
+//             TelemetryValue::Integer(ts_millis) => Ok(Utc.timestamp_millis(ts_millis)),
+//             TelemetryValue::Float(ts_millis) => Ok(Utc.timestamp_millis(ts_millis as i64)),
+//             TelemetryValue::Text(rep) => Utc
+//                 .datetime_from_str(rep.as_str(), "%+")
+//                 .map_err(|err| TelemetryError::ValueParseError(err.into())),
+//             value => Err(TelemetryError::TypeError {
+//                 expected: format!("a telemetry {}", TypeExpectation::Integer),
+//                 actual: Some(format!("{:?}", value)),
+//             }),
+//         }
+//     }
+// }
 
 impl<T: From<TelemetryValue>> TryFrom<TelemetryValue> for HashMap<String, T> {
     type Error = TelemetryError;

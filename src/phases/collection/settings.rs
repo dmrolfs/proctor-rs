@@ -1,7 +1,8 @@
-use crate::error::SettingsError;
+use crate::elements::Telemetry;
+use crate::error::{CollectionError, SettingsError};
 use crate::serde::{deserialize_duration_secs, deserialize_from_str, serialize_duration_secs, serialize_to_str};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use reqwest::{Method, Url};
+use reqwest::{Method, Response, Url};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::str::FromStr;

@@ -36,7 +36,7 @@ impl Telemetry {
     }
 
     /// Attempt to deserialize the entire telemetry into the requested type.
-    #[tracing::instrument(level = "trace", skip())]
+    #[tracing::instrument(level = "debug", name = "try into telemetry", skip())]
     pub fn try_into<T: serde_de::DeserializeOwned>(self) -> Result<T, TelemetryError> {
         let mut serializer = flexbuffers::FlexbufferSerializer::new();
         self.0.serialize(&mut serializer)?;
@@ -48,7 +48,7 @@ impl Telemetry {
     // todo: DMR - I can't get this to work wrt Enum Unit Variants - see commented out try_form portion
     // of test_telemetry_simple_enum()
     /// Attempt to serialize the entire telemetry from the given type.
-    #[tracing::instrument(level = "trace", skip())]
+    #[tracing::instrument(level = "debug", name = "try from telemetry", skip())]
     pub fn try_from<T: Serialize + Debug>(from: &T) -> Result<Self, TelemetryError> {
         // todo: mimic technique in config-rs more closely
         let mut serializer = flexbuffers::FlexbufferSerializer::new();
@@ -84,6 +84,12 @@ impl From<TelemetryValue> for Telemetry {
             inner @ TelemetryValue::Table(_) => Self(inner),
             tv => unreachable!("can only convert Tables into Telemetry, not {:?}", tv),
         }
+    }
+}
+
+impl Into<TelemetryValue> for Telemetry {
+    fn into(self) -> TelemetryValue {
+        self.0
     }
 }
 
@@ -197,10 +203,10 @@ impl IntoIterator for Telemetry {
 //
 #[cfg(test)]
 mod tests {
+    use ::serde::{Deserialize, Serialize};
     use chrono::{DateTime, Utc};
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
-    use serde::{Deserialize, Serialize};
 
     use super::*;
 
@@ -209,8 +215,8 @@ mod tests {
         #[serde(default)]
         #[serde(
             rename = "task.last_failure",
-            serialize_with = "crate::serde::serialize_optional_datetime",
-            deserialize_with = "crate::serde::deserialize_optional_datetime"
+            serialize_with = "crate::serde::date::serialize_optional_datetime_map",
+            deserialize_with = "crate::serde::date::deserialize_optional_datetime"
         )]
         pub last_failure: Option<DateTime<Utc>>,
         #[serde(rename = "cluster.is_deploying")]

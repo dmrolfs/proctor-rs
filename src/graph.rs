@@ -100,12 +100,14 @@ impl Graph {
             .await
             .map_err(|err| GraphError::JoinError(err))?;
 
-        let bad_apple = results.into_iter().find(|result| result.is_err());
-
-        match bad_apple {
-            None => (),
-            Some(bad) => bad?,
-        };
+        let results: ProctorResult<Vec<()>> = results.into_iter().collect();
+        let _ = results?;
+        // let bad_apple = results.into_iter().find(|result| result.is_err());
+        //
+        // match bad_apple {
+        //     None => (),
+        //     Some(bad) => bad?,
+        // };
 
         Ok(())
     }

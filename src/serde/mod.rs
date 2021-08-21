@@ -2,10 +2,10 @@ use std::fmt;
 use std::str::FromStr;
 use std::time::Duration;
 
-pub use date_serde::*;
 use serde::{de, Deserialize, Deserializer, Serializer};
 
-mod date_serde;
+pub mod date;
+pub use date::*;
 
 pub fn serialize_to_str<T, S>(that: T, serializer: S) -> Result<S::Ok, S::Error>
 where

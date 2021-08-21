@@ -5,15 +5,18 @@ use std::time::Duration;
 use anyhow::Result;
 use cast_trait_object::DynCastExt;
 use chrono::{DateTime, TimeZone, Utc};
-use proctor::elements::Telemetry;
+use proctor::elements::{Telemetry, TelemetryValue};
 // use proctor::elements::telemetry::ToTelemetry;
+use claim::*;
+use pretty_assertions::assert_eq;
+use proctor::error::TelemetryError;
 use proctor::graph::stage::{self, tick};
 use proctor::graph::{Connect, Graph, SinkShape};
 use proctor::phases::collection::{make_telemetry_rest_api_source, HttpQuery, SourceSetting};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HttpBinResponse {
     pub args: HashMap<String, String>,
     pub headers: HashMap<String, String>,
@@ -21,34 +24,34 @@ pub struct HttpBinResponse {
     pub url: String,
 }
 
-impl Into<Telemetry> for HttpBinResponse {
-    fn into(self) -> Telemetry {
-        let mut data = Telemetry::default();
-        if let Some(last_failure) = self.args.get("last_failure") {
-            let _ = data.insert("last_failure".to_string(), last_failure.clone().into());
-        }
-
-        data.insert(
-            "is_deploying".to_string(),
-            self.args
-                .get("is_deploying")
-                .map(|rep| rep.parse::<bool>().unwrap_or(false))
-                .unwrap_or(false)
-                .into(),
-        );
-
-        data.insert(
-            "last_deployment".to_string(),
-            self.args
-                .get("last_deployment")
-                .unwrap_or(&"1970-08-30 11:32:09".to_string())
-                .clone()
-                .into(),
-        );
-
-        data
-    }
-}
+// impl Into<Telemetry> for HttpBinResponse {
+//     fn into(self) -> Telemetry {
+//         let mut data = Telemetry::default();
+//         if let Some(last_failure) = self.args.get("last_failure") {
+//             let _ = data.insert("last_failure".to_string(), last_failure.clone().into());
+//         }
+//
+//         data.insert(
+//             "is_deploying".to_string(),
+//             self.args
+//                 .get("is_deploying")
+//                 .map(|rep| rep.parse::<bool>().unwrap_or(false))
+//                 .unwrap_or(false)
+//                 .into(),
+//         );
+//
+//         data.insert(
+//             "last_deployment".to_string(),
+//             self.args
+//                 .get("last_deployment")
+//                 .unwrap_or(&"1970-08-30 11:32:09".to_string())
+//                 .clone()
+//                 .into(),
+//         );
+//
+//         data
+//     }
+// }
 
 #[derive(Debug, Clone, PartialEq)]
 struct Data {
@@ -78,7 +81,7 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
         interval: Duration::from_millis(25),
         method: reqwest::Method::GET,
         url: reqwest::Url::parse(
-            "https://httpbin.org/get?is_redeploying=false&last_deployment=1979-05-27T07%3A32%3A00Z",
+            "https://httpbin.org/get?is_deploying=false&last_deployment=1979-05-27T07%3A32%3A00Z",
         )?,
         headers: vec![
             ("authorization".to_string(), "Basic Zm9vOmJhcg==".to_string()),
@@ -86,17 +89,20 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
         ],
     });
 
-    let (source, tx_tick) = make_telemetry_rest_api_source::<HttpBinResponse, _>("httpbin", &setting).await?;
+    let mut source = assert_ok!(make_telemetry_rest_api_source::<HttpBinResponse, _>("httpbin", &setting).await);
 
     let mut sink = stage::Fold::<_, Telemetry, (Data, usize)>::new(
         "sink",
         (Data::default(), 0),
         |(acc, count), rec: Telemetry| {
+            let args: Telemetry = assert_some!(rec.get("args").cloned()).into();
             tracing::info!(record=?rec, ?acc, ?count, "folding latest record into acc...");
             let dt_format = "%+";
-            let rec_last_failure = rec
+            let rec_last_failure = args
                 .get("last_failure")
-                .map(|r| String::try_from(r.clone()).unwrap())
+                .map(|r| String::try_from(r.clone()))
+                .transpose()
+                .unwrap()
                 .and_then(|r| {
                     if r.is_empty() {
                         None
@@ -109,16 +115,14 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
                 });
             tracing::info!(?rec_last_failure, "parsed first record field.");
 
-            let is_deploying = bool::try_from(rec.get("is_deploying").unwrap().clone()).unwrap();
+            tracing::warn!(record=?rec, "DMR: record.is_deploying={:?}", args.get("is_deploying"));
+            let is_deploying = assert_ok!(bool::try_from(assert_some!(args.get("is_deploying").cloned())));
             tracing::info!(%is_deploying, "parsed second record field.");
 
-            let rec_latest_deployment = DateTime::parse_from_str(
-                String::try_from(rec.get("last_deployment").unwrap().clone())
-                    .unwrap()
-                    .as_str(),
+            let rec_latest_deployment = assert_ok!(DateTime::parse_from_str(
+                assert_ok!(String::try_from(assert_some!(args.get("last_deployment")).clone())).as_str(),
                 dt_format,
-            )
-            .unwrap()
+            ))
             .with_timezone(&Utc);
             tracing::info!(?rec_latest_deployment, "parsed third record field.");
 
@@ -140,50 +144,40 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
         },
     );
 
-    let rx_acc = sink.take_final_rx().unwrap();
+    let rx_acc = assert_some!(sink.take_final_rx());
 
-    (source.outlet(), sink.inlet()).connect().await;
+    let source_stage = source.stage.take().unwrap();
+    (source_stage.outlet(), sink.inlet()).connect().await;
 
     let mut g = Graph::default();
-    g.push_back(source.dyn_upcast()).await;
+    g.push_back(source_stage.dyn_upcast()).await;
     g.push_back(Box::new(sink)).await;
 
-    let (tx_stop, rx_stop) = oneshot::channel();
     let stop_handle = tokio::spawn(async move {
         let run_duration = Duration::from_millis(60);
         tracing::info!("tick-stop: waiting {:?} to stop...", run_duration);
         tokio::time::sleep(run_duration).await;
 
         tracing::info!("tick-stop: stopping tick source...");
-        tx_tick
-            .send(tick::TickMsg::Stop { tx: tx_stop })
-            .expect("failed to send tick stop cmd.");
+        assert_ok!(source.stop().await);
+        // tx_tick
+        //     .send(tick::TickMsg::Stop { tx: tx_stop })
+        //     .expect("failed to send tick stop cmd.");
     });
 
-    g.run().await?;
+    assert_ok!(g.run().await);
 
-    let _ = stop_handle.await?;
-    let _ = rx_stop.await??;
+    assert_ok!(stop_handle.await);
     tracing::info!("tick-stop: tick source stop acknowledged");
 
-    // g.complete().await?;
+    let (actual, count) = assert_ok!(rx_acc.await);
+    let expected = Data {
+        last_failure: None,
+        is_deploying: false,
+        latest_deployment: DateTime::parse_from_str("1979-05-27T07:32:00Z", "%+")?.with_timezone(&Utc),
+    };
+    assert_eq!(actual, expected);
+    assert_eq!(count, 3);
 
-    match rx_acc.await {
-        Ok((actual, count)) => {
-            let expected = Data {
-                last_failure: None,
-                is_deploying: false,
-                latest_deployment: DateTime::parse_from_str("1979-05-27T07:32:00Z", "%+")?.with_timezone(&Utc),
-            };
-
-            assert_eq!(actual, expected);
-            assert_eq!(count, 3);
-
-            Ok(())
-        }
-        Err(err) => {
-            tracing::error!(error=?err, "failed to receive final folded result.");
-            Err(err.into())
-        }
-    }
+    Ok(())
 }

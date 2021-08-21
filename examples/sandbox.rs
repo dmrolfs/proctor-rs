@@ -6,6 +6,8 @@ use ::serde::{Deserialize, Serialize};
 use anyhow::Result;
 use cast_trait_object::DynCastExt;
 use proctor::elements;
+use proctor::elements::Telemetry;
+use proctor::error::TelemetryError;
 use proctor::graph::stage;
 use proctor::graph::SinkShape;
 use proctor::graph::{Connect, Graph};
@@ -26,6 +28,34 @@ impl Default for Data {
     }
 }
 
+impl Into<Telemetry> for Data {
+    fn into(self) -> Telemetry {
+        let mut telemetry = Telemetry::default();
+        telemetry.insert("pos".to_string(), self.pos.into());
+        telemetry.insert("value".to_string(), self.value.into());
+        telemetry.insert("cat".to_string(), self.cat.into());
+        telemetry
+    }
+}
+
+impl TryFrom<Telemetry> for Data {
+    type Error = TelemetryError;
+
+    fn try_from(telemetry: Telemetry) -> Result<Self, Self::Error> {
+        let pos = telemetry.get("pos").map(|val| usize::try_from(val.clone())).transpose()?;
+
+        let value = telemetry.get("value").map(|val| f64::try_from(val.clone())).transpose()?;
+
+        let cat = telemetry
+            .get("cat")
+            .map(|val| String::try_from(val.clone()))
+            .transpose()?
+            .unwrap_or(String::default());
+
+        Ok(Self { pos, value, cat })
+    }
+}
+
 const POS_FIELD: &str = "pos";
 const _VALUE_FIELD: &str = "value";
 const _CAT_FIELD: &str = "cat";
@@ -41,7 +71,7 @@ async fn main() -> Result<()> {
     let base_path = std::env::current_dir()?;
     let cvs_path = base_path.join(PathBuf::from("tests/data/cats.csv"));
     let cvs_setting = SourceSetting::Csv { path: cvs_path };
-    let cvs = collection::make_telemetry_cvs_source::<Data, _>("cvs", &cvs_setting)?;
+    let mut cvs_source = collection::make_telemetry_cvs_source::<Data, _>("cvs", &cvs_setting)?;
 
     let mut clearinghouse = collection::Clearinghouse::new("clearinghouse");
 
@@ -111,10 +141,11 @@ async fn main() -> Result<()> {
     //         )
     //     });
 
-    (cvs.outlet(), clearinghouse.inlet()).connect().await;
+    let cvs_stage = cvs_source.stage.take().unwrap();
+    (cvs_stage.outlet(), clearinghouse.inlet()).connect().await;
 
     let mut g = Graph::default();
-    g.push_back(cvs.dyn_upcast()).await;
+    g.push_back(cvs_stage.dyn_upcast()).await;
     g.push_back(Box::new(clearinghouse)).await;
     g.push_back(Box::new(pos_stats)).await;
 
