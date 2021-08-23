@@ -5,7 +5,7 @@ use super::SourceSetting;
 use crate::elements::Telemetry;
 use crate::error::{CollectionError, SettingsError};
 use crate::graph::stage::tick::TickMsg;
-use crate::graph::stage::{CompositeSource, Stage, WithApi};
+use crate::graph::stage::{CompositeSource, SourceStage, WithApi};
 use crate::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use futures::future::FutureExt;
 use serde::de::DeserializeOwned;
@@ -13,19 +13,15 @@ use serde::Serialize;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 
-// todo api access should follow new convention rt via returned tuple
-pub trait TelemetrySourceStage: Stage + SourceShape<Out = Telemetry> + 'static {}
-impl<T: 'static + Stage + SourceShape<Out = Telemetry>> TelemetrySourceStage for T {}
-
 pub struct TelemetrySource {
     pub name: String,
-    pub stage: Option<Box<dyn TelemetrySourceStage>>,
+    pub stage: Option<Box<dyn SourceStage<Telemetry>>>,
     tx_stop: Option<mpsc::UnboundedSender<TickMsg>>,
 }
 
 impl TelemetrySource {
     pub fn new(
-        name: impl AsRef<str>, stage: Box<dyn TelemetrySourceStage>, tx_stop: Option<mpsc::UnboundedSender<TickMsg>>,
+        name: impl AsRef<str>, stage: Box<dyn SourceStage<Telemetry>>, tx_stop: Option<mpsc::UnboundedSender<TickMsg>>,
     ) -> Self {
         Self {
             name: name.as_ref().to_string(),
@@ -194,7 +190,7 @@ where
         cg.push_back(Box::new(collect_telemetry)).await;
         let composite: CompositeSource<Telemetry> =
             stage::CompositeSource::new(format!("telemetry_{}", name.as_ref()), cg, composite_outlet).await;
-        let composite: Box<dyn TelemetrySourceStage> = Box::new(composite);
+        let composite: Box<dyn SourceStage<Telemetry>> = Box::new(composite);
 
         Ok(TelemetrySource::new(name, composite, Some(tx_tick_api)))
     } else {
