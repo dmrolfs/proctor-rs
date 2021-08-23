@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use super::SourceSetting;
 use crate::elements::Telemetry;
-use crate::error::{CollectionError, SettingsError, StageError};
+use crate::error::{CollectionError, SettingsError};
 use crate::graph::stage::tick::TickMsg;
 use crate::graph::stage::{CompositeSource, Stage, WithApi};
 use crate::graph::{stage, Connect, Graph, SinkShape, SourceShape};
@@ -46,7 +46,7 @@ impl TelemetrySource {
         let mut sources = Vec::with_capacity(settings.len());
         for (name, source_setting) in settings {
             let src = match source_setting {
-                SourceSetting::RestApi(query) => make_telemetry_rest_api_source::<T, _>(name, source_setting).await?,
+                SourceSetting::RestApi(_query) => make_telemetry_rest_api_source::<T, _>(name, source_setting).await?,
                 SourceSetting::Csv { path: _ } => {
                     let foo = make_telemetry_cvs_source::<T, _>(name, source_setting)?;
                     foo

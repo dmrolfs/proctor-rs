@@ -10,7 +10,6 @@ use serde::ser::{SerializeMap, SerializeSeq};
 use serde::{de, Deserializer, Serialize, Serializer};
 
 use crate::error::{TelemetryError, TypeExpectation};
-use chrono::{DateTime, TimeZone, Utc};
 
 #[derive(Debug, Clone)]
 pub enum TelemetryValue {

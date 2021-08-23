@@ -5,16 +5,13 @@ use std::time::Duration;
 use anyhow::Result;
 use cast_trait_object::DynCastExt;
 use chrono::{DateTime, TimeZone, Utc};
-use proctor::elements::{Telemetry, TelemetryValue};
-// use proctor::elements::telemetry::ToTelemetry;
 use claim::*;
 use pretty_assertions::assert_eq;
-use proctor::error::TelemetryError;
-use proctor::graph::stage::{self, tick};
+use proctor::elements::Telemetry;
+use proctor::graph::stage;
 use proctor::graph::{Connect, Graph, SinkShape};
 use proctor::phases::collection::{make_telemetry_rest_api_source, HttpQuery, SourceSetting};
 use serde::{Deserialize, Serialize};
-use tokio::sync::oneshot;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HttpBinResponse {

@@ -1,6 +1,3 @@
-use std::convert::TryFrom;
-
-use super::DEFAULT_LAST_DEPLOYMENT;
 use ::anyhow::Result;
 use ::cast_trait_object::DynCastExt;
 use ::chrono::{DateTime, TimeZone, Utc};
@@ -8,8 +5,7 @@ use ::serde::{Deserialize, Serialize};
 use ::std::path::PathBuf;
 use claim::*;
 use pretty_assertions::assert_eq;
-use proctor::elements::{Telemetry, TelemetryValue};
-use proctor::error::TelemetryError;
+use proctor::elements::Telemetry;
 use proctor::graph::{stage, Connect, Graph, SinkShape};
 use proctor::phases::collection::{make_telemetry_cvs_source, SourceSetting};
 

@@ -3,17 +3,15 @@ use std::path::PathBuf;
 use super::DEFAULT_LAST_DEPLOYMENT;
 use anyhow::Result;
 use cast_trait_object::DynCastExt;
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
 use claim::*;
 use lazy_static::lazy_static;
 use pretty_assertions::assert_eq;
-use proctor::elements::{make_from_telemetry, Telemetry, TelemetryValue};
-use proctor::error::TelemetryError;
+use proctor::elements::make_from_telemetry;
 use proctor::graph::{stage, Connect, Graph, SinkShape};
 use proctor::phases::collection::{make_telemetry_cvs_source, SourceSetting};
 use serde::{Deserialize, Serialize};
 use serde_test::{assert_tokens, Token};
-use std::convert::TryFrom;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Data {

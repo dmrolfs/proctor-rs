@@ -1,7 +1,7 @@
 use std::fmt;
 
 use chrono::{DateTime, TimeZone, Utc};
-use serde::de::{Error, MapAccess};
+use serde::de::MapAccess;
 use serde::{self, de, ser::SerializeMap, Serializer};
 use std::collections::HashMap;
 

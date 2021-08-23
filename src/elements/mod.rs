@@ -8,7 +8,7 @@ pub use records_per_second::*;
 use serde::{de::DeserializeOwned, Serialize};
 pub use signal::*;
 pub use telemetry::{FromTelemetry, Telemetry, TelemetryValue, ToTelemetry};
-pub use timestamp_seconds::*;
+pub use timestamp::*;
 
 use crate::AppData;
 
@@ -18,7 +18,7 @@ mod policy_filter;
 pub mod records_per_second;
 pub mod signal;
 pub mod telemetry;
-pub mod timestamp_seconds;
+pub mod timestamp;
 
 pub type Point = (f64, f64);
 
