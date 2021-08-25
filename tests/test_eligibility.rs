@@ -214,33 +214,13 @@ fn test_context_serde() {
     assert_ok!(result);
 }
 
-struct TestSettings {
-    pub required_subscription_fields: HashSet<String>,
-    pub optional_subscription_fields: HashSet<String>,
-    pub source: PolicySource,
-}
-
-impl PolicySettings for TestSettings {
-    fn required_subscription_fields(&self) -> HashSet<String> {
-        self.required_subscription_fields.clone()
-    }
-
-    fn optional_subscription_fields(&self) -> HashSet<String> {
-        self.optional_subscription_fields.clone()
-    }
-
-    fn source(&self) -> PolicySource {
-        self.source.clone()
-    }
-}
-
 fn make_test_policy<D>(
-    settings: &impl PolicySettings,
+    settings: &PolicySettings,
 ) -> impl Policy<D, TestEligibilityContext, (D, TestEligibilityContext)>
 where
     D: AppData + ToPolar + Clone,
 {
-    TestEligibilityPolicy::new(settings.source())
+    TestEligibilityPolicy::new(&settings.source)
     //     let init = |oso: &mut Oso| {
     //         oso.register_class(
     //             TestEligibilityContext::get_polar_class_builder()
@@ -273,11 +253,11 @@ struct TestEligibilityPolicy<D> {
 }
 
 impl<D> TestEligibilityPolicy<D> {
-    pub fn new(policy: PolicySource) -> Self {
+    pub fn new(policy: &PolicySource) -> Self {
         policy.validate().expect("failed to parse policy");
         Self {
             custom_fields: None,
-            policy,
+            policy: policy.clone(),
             data_marker: PhantomData,
         }
     }
@@ -570,7 +550,7 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
     // let policy = TestEligibilityPolicy::new(PolicySource::String(
     //     r#"eligible(item, environment) if environment.location_code == 33;"#.to_string(),
     // ));
-    let policy = make_test_policy(&TestSettings {
+    let policy = make_test_policy(&PolicySettings {
         required_subscription_fields: HashSet::default(),
         optional_subscription_fields: HashSet::default(),
         source: PolicySource::String(r#"eligible(_item, environment) if environment.location_code == 33;"#.to_string()),
@@ -630,7 +610,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     // let policy = TestEligibilityPolicy::new(PolicySource::String(
     //     r#"eligible(_, context) if context.cluster_status.is_deploying == false;"#.to_string(),
     // ));
-    let policy = make_test_policy(&TestSettings {
+    let policy = make_test_policy(&PolicySettings {
         required_subscription_fields: HashSet::default(),
         optional_subscription_fields: HashSet::default(),
         source: PolicySource::String(

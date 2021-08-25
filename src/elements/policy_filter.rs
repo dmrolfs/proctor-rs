@@ -21,11 +21,13 @@ use crate::graph::stage::{self, Stage};
 use crate::graph::{Inlet, Outlet, Port};
 use crate::graph::{SinkShape, SourceShape};
 use crate::{AppData, ProctorContext, ProctorResult};
+use serde::{Deserialize, Serialize};
 
-pub trait PolicySettings {
-    fn required_subscription_fields(&self) -> HashSet<String>;
-    fn optional_subscription_fields(&self) -> HashSet<String>;
-    fn source(&self) -> PolicySource;
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PolicySettings {
+    pub required_subscription_fields: HashSet<String>,
+    pub optional_subscription_fields: HashSet<String>,
+    pub source: PolicySource,
 }
 
 pub struct PolicyFilter<T, C, A, P>

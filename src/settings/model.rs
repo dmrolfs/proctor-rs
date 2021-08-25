@@ -1,37 +1,12 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::elements::PolicySource;
 use crate::phases::collection::SourceSetting;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
     pub sources: BTreeMap<String, SourceSetting>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SimplePolicySettings {
-    pub required_subscription_fields: HashSet<String>,
-    pub optional_subscription_fields: HashSet<String>,
-    pub policy_source: PolicySource,
-}
-
-impl crate::elements::PolicySettings for SimplePolicySettings {
-    #[inline]
-    fn required_subscription_fields(&self) -> HashSet<String> {
-        self.required_subscription_fields.clone()
-    }
-
-    #[inline]
-    fn optional_subscription_fields(&self) -> HashSet<String> {
-        self.optional_subscription_fields.clone()
-    }
-
-    #[inline]
-    fn source(&self) -> PolicySource {
-        self.policy_source.clone()
-    }
 }
 
 // #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -240,19 +215,19 @@ impl crate::elements::PolicySettings for SimplePolicySettings {
 mod tests {
     use serde_test::{assert_tokens, Token};
 
-    use super::*;
     use std::path::PathBuf;
+    use crate::elements::{PolicySettings, PolicySource};
 
     #[test]
     fn test_serde_eligibility_settings() {
-        let settings = SimplePolicySettings {
+        let settings = PolicySettings {
             required_subscription_fields: maplit::hashset! { "foo".to_string(), "bar".to_string() },
             optional_subscription_fields: maplit::hashset! { "Otis".to_string(), "Stella".to_string() },
-            policy_source: PolicySource::File(PathBuf::from("./tests/policies/eligibility.polar")),
+            source: PolicySource::File(PathBuf::from("./tests/policies/eligibility.polar")),
         };
 
         let mut expected = vec![
-            Token::Struct { name: "SimplePolicySettings", len: 3 },
+            Token::Struct { name: "PolicySettings", len: 3 },
             Token::Str("required_subscription_fields"),
             Token::Seq { len: Some(2) },
             Token::Str("foo"),
@@ -263,7 +238,7 @@ mod tests {
             Token::Str("Otis"),
             Token::Str("Stella"),
             Token::SeqEnd,
-            Token::Str("policy_source"),
+            Token::Str("source"),
             Token::NewtypeVariant { name: "PolicySource", variant: "File" },
             Token::Str("./tests/policies/eligibility.polar"),
             Token::StructEnd,
