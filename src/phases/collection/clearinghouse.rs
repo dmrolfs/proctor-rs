@@ -97,11 +97,15 @@ pub enum TelemetrySubscription {
 impl TelemetrySubscription {
     pub fn new(name: impl AsRef<str>) -> Self {
         let outlet_to_subscription = Outlet::new(format!("outlet_for_subscription_{}", name.as_ref()));
-        Self::All { name: name.as_ref().to_string(), outlet_to_subscription }
+        Self::All {
+            name: name.as_ref().to_string(),
+            outlet_to_subscription,
+        }
     }
 
     pub fn with_requirements<T: SubscriptionRequirements>(self) -> Self {
-        self.with_required_fields(T::required_fields()).with_optional_fields(T::optional_fields())
+        self.with_required_fields(T::required_fields())
+            .with_optional_fields(T::optional_fields())
     }
 
     pub fn with_required_fields<S: Into<String>>(self, required_fields: HashSet<S>) -> Self {

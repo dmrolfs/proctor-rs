@@ -6,12 +6,12 @@ use oso::{Query, ToPolar, ToPolarList};
 use crate::elements::FromTelemetry;
 use crate::elements::TelemetryValue;
 use crate::error::PolicyError;
-use crate::phases::collection::{TelemetrySubscription, SubscriptionRequirements};
+use crate::phases::collection::{SubscriptionRequirements, TelemetrySubscription};
 
-pub trait Policy<T, C, A>: PolicySubscription<Requirements= C> + QueryPolicy<Item = T, Context = C, Args = A> {}
+pub trait Policy<T, C, A>: PolicySubscription<Requirements = C> + QueryPolicy<Item = T, Context = C, Args = A> {}
 
 impl<P, T, C, A> Policy<T, C, A> for P where
-    P: PolicySubscription<Requirements= C> + QueryPolicy<Item = T, Context = C, Args = A>
+    P: PolicySubscription<Requirements = C> + QueryPolicy<Item = T, Context = C, Args = A>
 {
 }
 

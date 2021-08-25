@@ -11,10 +11,10 @@ use proctor::elements::{self, telemetry, PolicyOutcome, PolicySubscription, Quer
 use proctor::error::PolicyError;
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape};
+use proctor::phases::collection::SubscriptionRequirements;
 use proctor::ProctorContext;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
-use proctor::phases::collection::SubscriptionRequirements;
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct TestItem {

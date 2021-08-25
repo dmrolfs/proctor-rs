@@ -20,14 +20,13 @@ pub struct SubscriptionChannel<T> {
 }
 
 impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
-    pub async fn new<S: Into<String>>(name: S) -> Result<Self, CollectionError> {
-        let name = name.into();
-        let inner_stage = make_from_telemetry(name.as_str(), true).await;
+    pub async fn new(name: impl AsRef<str>) -> Result<Self, CollectionError> {
+        let inner_stage = make_from_telemetry(name.as_ref(), true).await;
         let subscription_receiver = inner_stage.inlet();
         let outlet = inner_stage.outlet();
 
         Ok(Self {
-            name,
+            name: format!("{}_subscription", name.as_ref()),
             subscription_receiver,
             inner_stage: Some(inner_stage),
             outlet,

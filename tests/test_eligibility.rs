@@ -20,7 +20,7 @@ use proctor::error::PolicyError;
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape, UniformFanInShape};
 use proctor::phases::collection;
-use proctor::phases::collection::{TelemetrySubscription, SubscriptionRequirements};
+use proctor::phases::collection::{SubscriptionRequirements, TelemetrySubscription};
 use proctor::phases::eligibility::Eligibility;
 use proctor::AppData;
 use proctor::ProctorContext;
@@ -69,8 +69,6 @@ impl SubscriptionRequirements for TestEligibilityContext {
     fn optional_fields() -> HashSet<&'static str> {
         maplit::hashset! { "task.last_failure", }
     }
-
-
 }
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]

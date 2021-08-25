@@ -407,7 +407,7 @@ mod tests {
 
     use super::*;
     use crate::elements::telemetry;
-    use crate::phases::collection::{TelemetrySubscription, SubscriptionRequirements};
+    use crate::phases::collection::{SubscriptionRequirements, TelemetrySubscription};
 
     // Make sure the `PolicyFilter` object is threadsafe
     // #[test]
