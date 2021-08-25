@@ -214,9 +214,7 @@ fn test_context_serde() {
     assert_ok!(result);
 }
 
-fn make_test_policy<D>(
-    settings: &PolicySettings,
-) -> impl Policy<D, TestEligibilityContext, (D, TestEligibilityContext)>
+fn make_test_policy<D>(settings: &PolicySettings) -> impl Policy<D, TestEligibilityContext, (D, TestEligibilityContext)>
 where
     D: AppData + ToPolar + Clone,
 {

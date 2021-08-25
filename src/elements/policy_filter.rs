@@ -50,15 +50,14 @@ where
     C: Clone,
     P: QueryPolicy<Item = T, Context = C, Args = A>,
 {
-    pub fn new<S: Into<String>>(name: S, policy: P) -> Self {
-        let name = name.into();
-        let context_inlet = Inlet::new(format!("{}_policy_context_inlet", name.clone()));
-        let inlet = Inlet::new(name.clone());
-        let outlet = Outlet::new(name.clone());
+    pub fn new<S: AsRef<str>>(name: S, policy: P) -> Self {
+        let context_inlet = Inlet::new(format!("{}_policy_filter_inlet", name.as_ref()));
+        let inlet = Inlet::new(name.as_ref());
+        let outlet = Outlet::new(name.as_ref());
         let (tx_api, rx_api) = mpsc::unbounded_channel();
         let (tx_monitor, _) = broadcast::channel(num_cpus::get() * 2);
         Self {
-            name,
+            name: format!("{}_policy_filter_stage", name.as_ref()),
             policy,
             context_inlet,
             inlet,

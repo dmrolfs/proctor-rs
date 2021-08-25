@@ -25,11 +25,12 @@ pub struct Eligibility<T, C> {
 
 impl<T: AppData + ToPolar + Clone, C: ProctorContext> Eligibility<T, C> {
     #[tracing::instrument(level = "info", skip(name))]
-    pub fn new<S: Into<String>>(
-        name: S, policy: impl QueryPolicy<Item = T, Context = C, Args = (T, C)> + 'static,
-    ) -> Self {
-        let name = name.into();
-        let policy_filter = PolicyFilter::new(format!("{}_eligibility_policy", name), policy);
+    pub fn new<S, P>(name: S, policy: P) -> Self
+    where
+        S: AsRef<str>,
+        P: QueryPolicy<Item = T, Context = C, Args = (T, C)> + 'static,
+    {
+        let policy_filter = PolicyFilter::new(format!("{}_eligibility_policy", name.as_ref()), policy);
         let context_inlet = policy_filter.context_inlet();
         let inlet = policy_filter.inlet();
         let outlet = policy_filter.outlet();
@@ -37,7 +38,7 @@ impl<T: AppData + ToPolar + Clone, C: ProctorContext> Eligibility<T, C> {
         let tx_policy_monitor = policy_filter.tx_monitor.clone();
 
         Self {
-            name,
+            name: name.as_ref().to_string(),
             policy_filter: Box::new(policy_filter),
             context_inlet,
             inlet,

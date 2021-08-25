@@ -215,8 +215,8 @@ pub struct Settings {
 mod tests {
     use serde_test::{assert_tokens, Token};
 
-    use std::path::PathBuf;
     use crate::elements::{PolicySettings, PolicySource};
+    use std::path::PathBuf;
 
     #[test]
     fn test_serde_eligibility_settings() {
