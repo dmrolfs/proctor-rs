@@ -84,6 +84,7 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
             ("authorization".to_string(), "Basic Zm9vOmJhcg==".to_string()),
             ("host".to_string(), "httpbin.org".to_string()),
         ],
+        max_retries: 3,
     });
 
     let mut source = assert_ok!(make_telemetry_rest_api_source::<HttpBinResponse, _>("httpbin", &setting).await);

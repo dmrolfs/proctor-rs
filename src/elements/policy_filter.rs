@@ -407,7 +407,7 @@ mod tests {
 
     use super::*;
     use crate::elements::telemetry;
-    use crate::phases::collection::TelemetrySubscription;
+    use crate::phases::collection::{TelemetrySubscription, SubscriptionRequirements};
 
     // Make sure the `PolicyFilter` object is threadsafe
     // #[test]
@@ -429,12 +429,14 @@ mod tests {
     }
 
     impl ProctorContext for TestContext {
-        fn required_context_fields() -> HashSet<&'static str> {
-            maplit::hashset! {"location_code", }
-        }
-
         fn custom(&self) -> telemetry::Table {
             self.qualities.clone()
+        }
+    }
+
+    impl SubscriptionRequirements for TestContext {
+        fn required_fields() -> HashSet<&'static str> {
+            maplit::hashset! {"location_code", }
         }
     }
 
@@ -450,7 +452,7 @@ mod tests {
     }
 
     impl PolicySubscription for TestPolicy {
-        type Context = TestContext;
+        type Requirements = TestContext;
 
         fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
             subscription.with_optional_fields(maplit::hashset! {"foo".to_string(), "score".to_string()})

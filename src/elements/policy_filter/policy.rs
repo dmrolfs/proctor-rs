@@ -3,32 +3,29 @@ use std::fmt::Debug;
 
 use oso::{Query, ToPolar, ToPolarList};
 
-use super::ProctorContext;
 use crate::elements::FromTelemetry;
 use crate::elements::TelemetryValue;
 use crate::error::PolicyError;
-use crate::phases::collection::TelemetrySubscription;
+use crate::phases::collection::{TelemetrySubscription, SubscriptionRequirements};
 
-pub trait Policy<T, C, A>: PolicySubscription<Context = C> + QueryPolicy<Item = T, Context = C, Args = A> {}
+pub trait Policy<T, C, A>: PolicySubscription<Requirements= C> + QueryPolicy<Item = T, Context = C, Args = A> {}
 
 impl<P, T, C, A> Policy<T, C, A> for P where
-    P: PolicySubscription<Context = C> + QueryPolicy<Item = T, Context = C, Args = A>
+    P: PolicySubscription<Requirements= C> + QueryPolicy<Item = T, Context = C, Args = A>
 {
 }
 
 pub trait PolicySubscription {
-    type Context: ProctorContext;
+    type Requirements: SubscriptionRequirements;
 
     fn subscription(&self, name: &str) -> TelemetrySubscription {
         tracing::trace!(
-            "context required_fields:{:?}, optional_fields:{:?}",
-            Self::Context::required_context_fields(),
-            Self::Context::optional_context_fields(),
+            "policy required_fields:{:?}, optional_fields:{:?}",
+            Self::Requirements::required_fields(),
+            Self::Requirements::optional_fields(),
         );
 
-        let subscription = TelemetrySubscription::new(name)
-            .with_required_fields(Self::Context::required_context_fields())
-            .with_optional_fields(Self::Context::optional_context_fields());
+        let subscription = TelemetrySubscription::new(name).with_requirements::<Self::Requirements>();
         let subscription = self.do_extend_subscription(subscription);
         tracing::trace!("subscription after extension: {:?}", subscription);
         subscription

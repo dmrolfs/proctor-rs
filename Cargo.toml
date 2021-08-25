@@ -42,6 +42,8 @@ oso = "*"
 polar-core = "*"
 proctor_derive = { path = "proctor_derive" }
 reqwest = { version = "*", features = ["blocking", "json"] }
+reqwest-middleware = "*"
+reqwest-retry = "*"
 serde = "*"
 serde_json = "*"
 statrs = "*"

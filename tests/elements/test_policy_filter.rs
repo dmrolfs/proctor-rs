@@ -14,6 +14,7 @@ use proctor::graph::{Connect, Graph, SinkShape, SourceShape};
 use proctor::ProctorContext;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
+use proctor::phases::collection::SubscriptionRequirements;
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct TestItem {
@@ -71,12 +72,14 @@ impl TestContext {
 }
 
 impl proctor::ProctorContext for TestContext {
-    fn required_context_fields() -> HashSet<&'static str> {
-        maplit::hashset! { "location_code", "input_messages_per_sec", }
-    }
-
     fn custom(&self) -> telemetry::Table {
         self.custom.clone()
+    }
+}
+
+impl SubscriptionRequirements for TestContext {
+    fn required_fields() -> HashSet<&'static str> {
+        maplit::hashset! { "location_code", "input_messages_per_sec", }
     }
 }
 
@@ -98,7 +101,7 @@ impl TestPolicy {
 }
 
 impl PolicySubscription for TestPolicy {
-    type Context = TestContext;
+    type Requirements = TestContext;
 
     // todo test optional fields
     // fn subscription_fields(&self) -> HashSet<String> {

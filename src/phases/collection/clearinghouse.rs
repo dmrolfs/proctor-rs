@@ -12,6 +12,14 @@ use crate::graph::stage::Stage;
 use crate::graph::{stage, Connect, Inlet, Outlet, OutletsShape, Port, SinkShape, UniformFanOutShape};
 use crate::{Ack, ProctorResult};
 
+//todo: refactor to based on something like Json Schema
+pub trait SubscriptionRequirements {
+    fn required_fields() -> HashSet<&'static str>;
+    fn optional_fields() -> HashSet<&'static str> {
+        HashSet::default()
+    }
+}
+
 pub type ClearinghouseApi = mpsc::UnboundedSender<ClearinghouseCmd>;
 
 #[derive(Debug)]
@@ -87,10 +95,13 @@ pub enum TelemetrySubscription {
 }
 
 impl TelemetrySubscription {
-    pub fn new<S: Into<String>>(name: S) -> Self {
-        let name = name.into();
-        let outlet_to_subscription = Outlet::new(format!("outlet_for_subscription_{}", name));
-        Self::All { name, outlet_to_subscription }
+    pub fn new(name: impl AsRef<str>) -> Self {
+        let outlet_to_subscription = Outlet::new(format!("outlet_for_subscription_{}", name.as_ref()));
+        Self::All { name: name.as_ref().to_string(), outlet_to_subscription }
+    }
+
+    pub fn with_requirements<T: SubscriptionRequirements>(self) -> Self {
+        self.with_required_fields(T::required_fields()).with_optional_fields(T::optional_fields())
     }
 
     pub fn with_required_fields<S: Into<String>>(self, required_fields: HashSet<S>) -> Self {

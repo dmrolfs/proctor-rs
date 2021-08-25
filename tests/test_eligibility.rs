@@ -20,7 +20,7 @@ use proctor::error::PolicyError;
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape, UniformFanInShape};
 use proctor::phases::collection;
-use proctor::phases::collection::TelemetrySubscription;
+use proctor::phases::collection::{TelemetrySubscription, SubscriptionRequirements};
 use proctor::phases::eligibility::Eligibility;
 use proctor::AppData;
 use proctor::ProctorContext;
@@ -51,7 +51,13 @@ pub struct TestEligibilityContext {
 }
 
 impl ProctorContext for TestEligibilityContext {
-    fn required_context_fields() -> HashSet<&'static str> {
+    fn custom(&self) -> telemetry::Table {
+        self.custom.clone()
+    }
+}
+
+impl SubscriptionRequirements for TestEligibilityContext {
+    fn required_fields() -> HashSet<&'static str> {
         // todo: DMR SERDE_REFLECTION
         maplit::hashset! {
             "cluster.location_code",
@@ -60,13 +66,11 @@ impl ProctorContext for TestEligibilityContext {
         }
     }
 
-    fn optional_context_fields() -> HashSet<&'static str> {
+    fn optional_fields() -> HashSet<&'static str> {
         maplit::hashset! { "task.last_failure", }
     }
 
-    fn custom(&self) -> telemetry::Table {
-        self.custom.clone()
-    }
+
 }
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -287,7 +291,7 @@ impl<D> TestEligibilityPolicy<D> {
 }
 
 impl<D: AppData> PolicySubscription for TestEligibilityPolicy<D> {
-    type Context = TestEligibilityContext;
+    type Requirements = TestEligibilityContext;
 
     fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
         tracing::warn!(
@@ -818,7 +822,7 @@ impl TestPolicy {
 }
 
 impl PolicySubscription for TestPolicy {
-    type Context = TestEligibilityContext;
+    type Requirements = TestEligibilityContext;
 
     fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
         subscription.with_optional_fields(self.subscription_extension.clone())

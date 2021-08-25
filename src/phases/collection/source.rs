@@ -8,6 +8,8 @@ use crate::graph::stage::tick::TickMsg;
 use crate::graph::stage::{CompositeSource, SourceStage, WithApi};
 use crate::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use futures::future::FutureExt;
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -151,7 +153,11 @@ where
 
         // generator via rest api
         let headers = query.header_map()?;
-        let client = reqwest::Client::builder().default_headers(headers).build()?;
+        // let client = reqwest::Client::builder().default_headers(headers).build()?;
+        let retry_policy = ExponentialBackoff::builder().build_with_max_retries(query.max_retries);
+        let client = ClientBuilder::new(reqwest::Client::new())
+            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+            .build();
 
         let method = query.method.clone();
         let url = query.url.clone();

@@ -66,6 +66,10 @@ pub enum CollectionError {
     #[error("{0}")]
     HttpError(#[from] reqwest::Error),
 
+    /// An error related to collection via an HTTP middleware.
+    #[error("{0}")]
+    HttpMiddlewareError(#[from] reqwest_middleware::Error),
+
     #[error("{0}")]
     SettingsError(#[from] SettingsError),
 

@@ -31,9 +31,16 @@ pub struct HttpQuery {
 
     #[serde(default)]
     pub headers: Vec<(String, String)>,
+
+    #[serde(default = "HttpQuery::default_max_retries")]
+    pub max_retries: u32,
 }
 
 impl HttpQuery {
+    pub fn default_max_retries() -> u32 {
+        3
+    }
+
     pub fn header_map(&self) -> Result<HeaderMap, SettingsError> {
         let mut map = HeaderMap::with_capacity(self.headers.len());
         for (k, v) in self.headers.iter() {
@@ -70,12 +77,13 @@ mod tests {
             )
             .unwrap(),
             headers: header_vec,
+            max_retries: 3,
         };
 
         assert_tokens(
             &endpoint,
             &[
-                Token::Struct { name: "HttpQuery", len: 4 },
+                Token::Struct { name: "HttpQuery", len: 5 },
                 Token::Str("interval_secs"),
                 Token::U64(33),
                 Token::Str("method"),
@@ -93,6 +101,8 @@ mod tests {
                 Token::Str("example.com"),
                 Token::TupleEnd,
                 Token::SeqEnd,
+                Token::Str("max_retries"),
+                Token::U32(3),
                 Token::StructEnd,
             ],
         );
@@ -128,12 +138,13 @@ mod tests {
             )
             .unwrap(),
             headers: vec![],
+            max_retries: 3,
         });
 
         assert_tokens(
             &cluster,
             &[
-                Token::Struct { name: "HttpQuery", len: 5 },
+                Token::Struct { name: "HttpQuery", len: 6 },
                 Token::Str("type"),
                 Token::Str("RestApi"),
                 Token::Str("interval_secs"),
@@ -147,6 +158,8 @@ mod tests {
                 Token::Str("headers"),
                 Token::Seq { len: Some(0) },
                 Token::SeqEnd,
+                Token::Str("max_retries"),
+                Token::U32(3),
                 Token::StructEnd,
             ],
         );
@@ -172,6 +185,7 @@ mod tests {
                         ("authorization".to_string(), "Basic Zm9vOmJhcg==".to_string()),
                         ("host".to_string(), "example.com".to_string()),
                     ],
+                    max_retries: 3,
                 }),
                 "local".to_string() => SourceSetting::Csv{path: PathBuf::from("examples/data/eligibility.csv")},
             },
@@ -185,7 +199,7 @@ mod tests {
                 Token::Map { len: Some(2) },
                 // "httpbin" => RestApi
                 Token::Str("httpbin"),
-                Token::Struct { name: "HttpQuery", len: 5 },
+                Token::Struct { name: "HttpQuery", len: 6 },
                 Token::Str("type"),
                 Token::Str("RestApi"),
                 Token::Str("interval_secs"),
@@ -207,6 +221,8 @@ mod tests {
                 Token::Str("example.com"),
                 Token::TupleEnd,
                 Token::SeqEnd,
+                Token::Str("max_retries"),
+                Token::U32(3),
                 Token::StructEnd,
                 // "local" => Csv
                 Token::Str("local"),

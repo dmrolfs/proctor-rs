@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 pub use collection::Collect;
 pub use from_telemetry::*;
 use oso::PolarClass;
@@ -11,6 +9,7 @@ pub use telemetry::{FromTelemetry, Telemetry, TelemetryValue, ToTelemetry};
 pub use timestamp::*;
 
 use crate::AppData;
+use crate::phases::collection::SubscriptionRequirements;
 
 mod collection;
 mod from_telemetry;
@@ -22,10 +21,6 @@ pub mod timestamp;
 
 pub type Point = (f64, f64);
 
-pub trait ProctorContext: AppData + Clone + PolarClass + Serialize + DeserializeOwned {
-    fn required_context_fields() -> HashSet<&'static str>;
-    fn optional_context_fields() -> HashSet<&'static str> {
-        HashSet::default()
-    }
+pub trait ProctorContext: AppData + SubscriptionRequirements + Clone + PolarClass + Serialize + DeserializeOwned {
     fn custom(&self) -> telemetry::Table;
 }
