@@ -54,6 +54,10 @@ impl Timestamp {
     pub fn as_utc(&self) -> DateTime<Utc> {
         Utc.timestamp(self.0, self.1)
     }
+
+    pub fn as_pair(&self) -> (i64, u32) {
+        (self.0, self.1)
+    }
 }
 
 impl fmt::Display for Timestamp {
@@ -71,18 +75,21 @@ impl TryFrom<TelemetryValue> for Timestamp {
 
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         match telemetry {
+            TelemetryValue::Seq(mut seq) if seq.len() == 2 => {
+                let nsecs = seq.pop().map(|v| u32::try_from(v)).transpose()?.unwrap();
+                let secs = seq.pop().map(|v| i64::try_from(v)).transpose()?.unwrap();
+                Ok(Self::new(secs, nsecs))
+            }
             TelemetryValue::Float(f64) => Ok(f64.into()),
             TelemetryValue::Integer(i64) => Ok(i64.into()),
-            TelemetryValue::Table(table) => {
+            TelemetryValue::Table(mut table) => {
                 let secs = table
-                    .get(SECS_KEY)
-                    .cloned()
+                    .remove(SECS_KEY)
                     .map(|val| i64::try_from(val))
                     .transpose()?
                     .unwrap_or(0);
                 let nsecs = table
-                    .get(NSECS_KEY)
-                    .cloned()
+                    .remove(NSECS_KEY)
                     .map(|val| u32::try_from(val))
                     .transpose()?
                     .unwrap_or(0);
