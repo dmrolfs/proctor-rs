@@ -5,9 +5,9 @@ use serde::de::MapAccess;
 use serde::{self, de, ser::SerializeMap, Serializer};
 use std::collections::HashMap;
 
-const FORMAT: &'static str = "%+";
-pub const SECS_KEY: &'static str = "secs";
-pub const NSECS_KEY: &'static str = "nsecs";
+pub const FORMAT: &'static str = "%+";
+pub const SECS_KEY: &'static str = crate::elements::SECS_KEY;
+pub const NSECS_KEY: &'static str = crate::elements::NSECS_KEY;
 
 #[tracing::instrument(level = "debug")]
 fn table_from_datetime(datetime: &DateTime<Utc>) -> HashMap<String, i64> {
