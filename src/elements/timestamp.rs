@@ -13,8 +13,11 @@ pub struct Timestamp(i64, u32);
 
 impl Timestamp {
     pub fn now() -> Self {
-        let now = Utc::now();
-        Self::new(now.timestamp(), now.timestamp_subsec_nanos())
+        Self::from_datetime(Utc::now())
+    }
+
+    pub fn from_datetime(datetime: DateTime<Utc>) -> Self {
+        Self::new(datetime.timestamp(), datetime.timestamp_subsec_nanos())
     }
 
     pub fn new_secs(secs: i64) -> Self {
