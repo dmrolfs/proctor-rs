@@ -30,7 +30,7 @@ use async_trait::async_trait;
 pub trait ProctorContext:
     AppData + SubscriptionRequirements + Clone + PolarClass + Serialize + DeserializeOwned
 {
-    type Error;
+    type Error: From<CollectionError>;
 
     fn custom(&self) -> telemetry::Table;
 

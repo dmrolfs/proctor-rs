@@ -431,6 +431,8 @@ mod tests {
 
     #[async_trait]
     impl ProctorContext for TestContext {
+        type Error = PolicyError;
+
         fn custom(&self) -> telemetry::Table {
             self.qualities.clone()
         }

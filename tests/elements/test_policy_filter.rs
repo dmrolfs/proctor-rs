@@ -74,6 +74,8 @@ impl TestContext {
 
 #[async_trait]
 impl proctor::ProctorContext for TestContext {
+    type Error = PolicyError;
+
     fn custom(&self) -> telemetry::Table {
         self.custom.clone()
     }

@@ -106,6 +106,9 @@ pub enum EligibilityError {
     #[error("{0}")]
     PortError(#[from] PortError),
 
+    #[error("collection error during eligibility phase: {0}")]
+    CollectionError(#[from] CollectionError),
+
     #[error("{0}")]
     StageError(#[from] anyhow::Error),
 }
@@ -196,6 +199,9 @@ pub enum PolicyError {
 
     #[error("policy data, {0}, not found")]
     DataNotFound(String),
+
+    #[error("policy error during collection: {0}")]
+    CollectionError(#[from] CollectionError),
 
     #[error("failed to publish policy event: {0}")]
     PublishError(#[source] anyhow::Error), // todo: if only PortError then specialize via #[from]
