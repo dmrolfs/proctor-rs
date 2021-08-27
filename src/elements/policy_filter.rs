@@ -429,6 +429,7 @@ mod tests {
         pub qualities: telemetry::Table,
     }
 
+    #[async_trait]
     impl ProctorContext for TestContext {
         fn custom(&self) -> telemetry::Table {
             self.qualities.clone()

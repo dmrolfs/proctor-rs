@@ -8,7 +8,10 @@ pub use signal::*;
 pub use telemetry::{FromTelemetry, Telemetry, TelemetryValue, ToTelemetry};
 pub use timestamp::*;
 
-use crate::phases::collection::SubscriptionRequirements;
+use crate::error::CollectionError;
+use crate::phases::collection::{
+    ClearinghouseApi, ClearinghouseCmd, SubscriptionChannel, SubscriptionRequirements, TelemetrySubscription,
+};
 use crate::AppData;
 
 mod collection;
@@ -21,8 +24,26 @@ pub mod timestamp;
 
 pub type Point = (f64, f64);
 
+use async_trait::async_trait;
+
+#[async_trait]
 pub trait ProctorContext:
     AppData + SubscriptionRequirements + Clone + PolarClass + Serialize + DeserializeOwned
 {
+    type Error;
+
     fn custom(&self) -> telemetry::Table;
+
+    #[tracing::instrument(level = "info", skip(tx_clearinghouse_api))]
+    async fn connect_context(
+        subscription: TelemetrySubscription, tx_clearinghouse_api: &ClearinghouseApi,
+    ) -> Result<SubscriptionChannel<Self>, Self::Error> {
+        let channel = SubscriptionChannel::new(subscription.name()).await?;
+        let (cmd, rx_ack) = ClearinghouseCmd::subscribe(subscription, channel.subscription_receiver.clone());
+        tx_clearinghouse_api
+            .send(cmd)
+            .map_err(|err| CollectionError::StageError(err.into()))?;
+        rx_ack.await.map_err(|err| CollectionError::StageError(err.into()))?;
+        Ok(channel)
+    }
 }

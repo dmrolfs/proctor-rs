@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -50,6 +51,7 @@ pub struct TestEligibilityContext {
     pub custom: telemetry::Table,
 }
 
+#[async_trait]
 impl ProctorContext for TestEligibilityContext {
     fn custom(&self) -> telemetry::Table {
         self.custom.clone()
