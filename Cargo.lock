@@ -1760,6 +1760,7 @@ dependencies = [
  "itertools",
  "lazy_static",
  "maplit",
+ "num-traits 0.2.14",
  "num_cpus",
  "oso",
  "polar-core",

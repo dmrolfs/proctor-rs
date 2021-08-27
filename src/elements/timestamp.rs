@@ -2,21 +2,24 @@ use super::{TelemetryValue, ToTelemetry};
 use crate::error::{TelemetryError, TypeExpectation};
 use approx::{AbsDiffEq, RelativeEq};
 use chrono::{DateTime, TimeZone, Utc};
+use num_traits::cast::FromPrimitive;
 use oso::PolarClass;
-use serde::{Deserialize, Serialize};
+use serde::de::Unexpected;
+use serde::{de, Deserialize, Deserializer, Serialize};
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::{self, Debug};
 use std::time::Duration;
 
-#[derive(PolarClass, Debug, Copy, Clone, Default, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[derive(PolarClass, Debug, Copy, Clone, Default, PartialEq, PartialOrd, Serialize)]
 pub struct Timestamp(i64, u32);
 
 impl Timestamp {
     pub fn now() -> Self {
-        Self::from_datetime(Utc::now())
+        Self::from_datetime(&Utc::now())
     }
 
-    pub fn from_datetime(datetime: DateTime<Utc>) -> Self {
+    pub fn from_datetime(datetime: &DateTime<Utc>) -> Self {
         Self::new(datetime.timestamp(), datetime.timestamp_subsec_nanos())
     }
 
@@ -279,6 +282,171 @@ impl RelativeEq for Timestamp {
 
     fn relative_eq(&self, other: &Self, epsilon: Self::Epsilon, max_relative: Self::Epsilon) -> bool {
         f64::relative_eq(&self.as_f64(), &other.as_f64(), epsilon, max_relative)
+    }
+}
+
+impl<'de> Deserialize<'de> for Timestamp {
+    #[tracing::instrument(level = "debug", skip(deserializer))]
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(TimestampVisitor)
+    }
+}
+
+struct TimestampVisitor;
+
+impl<'de> de::Visitor<'de> for TimestampVisitor {
+    type Value = Timestamp;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a timestamp value in integer, float, sequence, map or string form")
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    fn visit_i8<E>(self, v: i8) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        self.visit_i64(v as i64)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    fn visit_i16<E>(self, v: i16) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        self.visit_i64(v as i64)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    fn visit_i32<E>(self, v: i32) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        self.visit_i64(v as i64)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(v.into())
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    fn visit_u8<E>(self, v: u8) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        self.visit_i64(v as i64)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    fn visit_u16<E>(self, v: u16) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        self.visit_i64(v as i64)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        self.visit_i64(v as i64)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        match i64::from_u64(v) {
+            Some(val) => self.visit_i64(val),
+            None => Err(de::Error::invalid_value(Unexpected::Unsigned(v), &self)),
+        }
+        // match i64::from_u64(v) {
+        //
+        // }
+        // i64::from_u64(v)
+        //     .map(|val| self.visit_i64(val))
+        //     .unwrap_or(Err(de::Error::invalid_value(Unexpected::Unsigned(v), &self)))
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    fn visit_f32<E>(self, v: f32) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        self.visit_f64(v as f64)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(v.into())
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        let dt = DateTime::parse_from_str(v, FORMAT)
+            .map_err(|err| {
+                tracing::error!(error=?err, "failed to parse string {} for format {}", v, FORMAT);
+                de::Error::invalid_value(Unexpected::Str(v), &self)
+            })?
+            .with_timezone(&Utc);
+
+        Ok(Timestamp::from_datetime(&dt))
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        self.visit_str(v)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        self.visit_str(v.as_str())
+    }
+
+    #[tracing::instrument(level = "debug", skip(self, access))]
+    fn visit_seq<S>(self, mut access: S) -> Result<Self::Value, S::Error>
+    where
+        S: de::SeqAccess<'de>,
+    {
+        let secs = access.next_element()?.unwrap_or(0);
+        let nsecs = access.next_element()?.unwrap_or(0);
+        Ok(Timestamp::new(secs, nsecs))
+    }
+
+    #[tracing::instrument(level = "debug", skip(self, access))]
+    fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+    where
+        M: de::MapAccess<'de>,
+    {
+        let mut map: HashMap<String, i64> = HashMap::with_capacity(access.size_hint().unwrap_or(0));
+        while let Some((key, value)) = access.next_entry()? {
+            map.insert(key, value);
+        }
+
+        let secs = map.get(SECS_KEY).copied().unwrap_or(0);
+        let nsecs = map.get(NSECS_KEY).copied().unwrap_or(0) as u32;
+        Ok(Timestamp::new(secs, nsecs))
     }
 }
 

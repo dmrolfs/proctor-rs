@@ -38,6 +38,7 @@ futures-util = "*"
 lazy_static = "*"
 maplit = "*"
 num_cpus = "*"
+num-traits = "*"
 oso = "*"
 polar-core = "*"
 proctor_derive = { path = "proctor_derive" }
