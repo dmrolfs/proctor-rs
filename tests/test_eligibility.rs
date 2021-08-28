@@ -222,44 +222,22 @@ fn make_test_policy<D>(settings: &PolicySettings) -> impl Policy<D, TestEligibil
 where
     D: AppData + ToPolar + Clone,
 {
-    TestEligibilityPolicy::new(&settings.source)
-    //     let init = |oso: &mut Oso| {
-    //         oso.register_class(
-    //             TestEligibilityContext::get_polar_class_builder()
-    //                 .name("TestEnvironment")
-    //                 .add_method("custom", ProctorContext::custom)
-    //                 .build(),
-    //         )?;
-    //
-    //         oso.register_class(
-    //             TestTaskStatus::get_polar_class_builder()
-    //                 .name("TestTaskStatus")
-    //                 .add_method(
-    //                     "last_failure_within_seconds",
-    //                     TestTaskStatus::last_failure_within_seconds,
-    //                 )
-    //                 .build(),
-    //         )?;
-    //
-    //         Ok(())
-    //     };
-    //
-    //     AssembledPolicy::new("eligible", settings, init)
+    TestEligibilityPolicy::new(&settings.sources)
 }
 
 #[derive(Debug)]
 struct TestEligibilityPolicy<D> {
     custom_fields: Option<HashSet<String>>,
-    policy: PolicySource,
+    policies: Vec<PolicySource>,
     data_marker: PhantomData<D>,
 }
 
 impl<D> TestEligibilityPolicy<D> {
-    pub fn new(policy: &PolicySource) -> Self {
-        policy.validate().expect("failed to parse policy");
+    pub fn new(policies: &Vec<PolicySource>) -> Self {
+        policies.iter().for_each(|p| p.validate().expect("failed to parse policy"));
         Self {
             custom_fields: None,
-            policy: policy.clone(),
+            policies: policies.clone(),
             data_marker: PhantomData,
         }
     }
@@ -298,12 +276,15 @@ impl<D: AppData> PolicySubscription for TestEligibilityPolicy<D> {
 }
 
 impl<D: AppData + ToPolar + Clone> QueryPolicy for TestEligibilityPolicy<D> {
-    type Args = (Self::Item, Self::Context);
-    type Context = TestEligibilityContext;
     type Item = D;
+    type Context = TestEligibilityContext;
+    type Args = (Self::Item, Self::Context);
 
     fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
-        self.policy.load_into(oso)
+        for p in self.policies.iter() {
+            p.load_into(oso)?
+        }
+        Ok(())
     }
 
     fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
@@ -555,7 +536,9 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
     let policy = make_test_policy(&PolicySettings {
         required_subscription_fields: HashSet::default(),
         optional_subscription_fields: HashSet::default(),
-        source: PolicySource::String(r#"eligible(_item, environment) if environment.location_code == 33;"#.to_string()),
+        sources: vec![PolicySource::String(
+            r#"eligible(_item, environment) if environment.location_code == 33;"#.to_string(),
+        )],
     });
     let mut flow: TestFlow<Data, TestEligibilityContext> =
         TestFlow::new(TelemetrySubscription::new("all_data"), policy).await?;
@@ -615,9 +598,9 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     let policy = make_test_policy(&PolicySettings {
         required_subscription_fields: HashSet::default(),
         optional_subscription_fields: HashSet::default(),
-        source: PolicySource::String(
+        sources: vec![PolicySource::String(
             r#"eligible(_, context) if context.cluster_status.is_deploying == false;"#.to_string(),
-        ),
+        )],
     });
 
     let mut flow: TestFlow<MeasurementData, TestEligibilityContext> = TestFlow::new(

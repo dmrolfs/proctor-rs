@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 pub struct PolicySettings {
     pub required_subscription_fields: HashSet<String>,
     pub optional_subscription_fields: HashSet<String>,
-    pub source: PolicySource,
+    pub sources: Vec<PolicySource>,
 }
 
 pub struct PolicyFilter<T, C, A, P>

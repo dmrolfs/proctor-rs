@@ -10,7 +10,6 @@ pub mod error;
 pub mod graph;
 pub mod phases;
 pub mod serde;
-pub mod settings;
 pub mod tracing;
 
 pub use app_data::AppData;

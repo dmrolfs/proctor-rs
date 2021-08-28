@@ -55,7 +55,6 @@ impl HttpQuery {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::settings::Settings;
     use reqwest::header;
     use serde_test::{assert_tokens, Token};
 
@@ -175,27 +174,25 @@ mod tests {
             .map(|(k, v)| (k.to_string(), v.to_str().unwrap().to_string()))
             .collect();
 
-        let settings = Settings {
-            sources: maplit::btreemap! {
-                "httpbin".to_string() => SourceSetting::RestApi(HttpQuery {
-                    interval: Duration::from_secs(10),
-                    method: Method::HEAD,
-                    url: Url::parse("https://httpbin.org/head?is_redeploying=false?last_deployment%3D1979-05-27%2007%3A32%3A00Z").unwrap(),
-                    headers: vec![
-                        ("authorization".to_string(), "Basic Zm9vOmJhcg==".to_string()),
-                        ("host".to_string(), "example.com".to_string()),
-                    ],
-                    max_retries: 3,
-                }),
-                "local".to_string() => SourceSetting::Csv{path: PathBuf::from("examples/data/eligibility.csv")},
-            },
+        let settings = maplit::btreemap! {
+            "httpbin".to_string() => SourceSetting::RestApi(HttpQuery {
+                interval: Duration::from_secs(10),
+                method: Method::HEAD,
+                url: Url::parse("https://httpbin.org/head?is_redeploying=false?last_deployment%3D1979-05-27%2007%3A32%3A00Z").unwrap(),
+                headers: vec![
+                    ("authorization".to_string(), "Basic Zm9vOmJhcg==".to_string()),
+                    ("host".to_string(), "example.com".to_string()),
+                ],
+                max_retries: 3,
+            }),
+            "local".to_string() => SourceSetting::Csv{path: PathBuf::from("examples/data/eligibility.csv")},
         };
 
         assert_tokens(
             &settings,
             &[
-                Token::Struct { name: "Settings", len: 1 },
-                Token::Str("sources"),
+                // Token::Struct { name: "Settings", len: 1 },
+                // Token::Str("sources"),
                 Token::Map { len: Some(2) },
                 // "httpbin" => RestApi
                 Token::Str("httpbin"),
@@ -233,7 +230,7 @@ mod tests {
                 Token::Str("examples/data/eligibility.csv"),
                 Token::StructEnd,
                 Token::MapEnd,
-                Token::StructEnd,
+                // Token::StructEnd,
                 /* Token::Enum { name: "SourceSetting" },
                  * Token::Str("RestApi"),
                  * Token::Struct { name: "HttpQuery", len: 4 },
