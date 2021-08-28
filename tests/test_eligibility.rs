@@ -17,7 +17,7 @@ use proctor::elements::{
     self, telemetry, Policy, PolicyFilterEvent, PolicyOutcome, PolicySettings, PolicySource, PolicySubscription,
     QueryPolicy, QueryResult, Telemetry, TelemetryValue,
 };
-use proctor::error::{EligibilityError, PolicyErro};
+use proctor::error::{EligibilityError, PolicyError};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape, UniformFanInShape};
 use proctor::phases::collection;
