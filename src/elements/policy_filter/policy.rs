@@ -3,8 +3,8 @@ use std::fmt::Debug;
 
 use oso::{Query, ToPolar, ToPolarList};
 
-use crate::elements::FromTelemetry;
 use crate::elements::TelemetryValue;
+use crate::elements::{FromTelemetry, PolicySource};
 use crate::error::PolicyError;
 use crate::phases::collection::{SubscriptionRequirements, TelemetrySubscription};
 
@@ -114,7 +114,14 @@ pub trait QueryPolicy: Debug + Send + Sync {
     type Context: ToPolar + Clone;
     type Args: ToPolarList;
 
-    fn load_policy_engine(&self, engine: &mut oso::Oso) -> Result<(), PolicyError>;
+    fn load_policy_engine(&self, engine: &mut oso::Oso) -> Result<(), PolicyError> {
+        for source in self.policy_sources() {
+            source.load_into(engine)?;
+        }
+        Ok(())
+    }
+
+    fn policy_sources(&self) -> Vec<PolicySource>;
     fn initialize_policy_engine(&mut self, engine: &mut oso::Oso) -> Result<(), PolicyError>;
     fn make_query_args(&self, item: &Self::Item, context: &Self::Context) -> Self::Args;
     fn query_policy(&self, engine: &oso::Oso, args: Self::Args) -> Result<QueryResult, PolicyError>;

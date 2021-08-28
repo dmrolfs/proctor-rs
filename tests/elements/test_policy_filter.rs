@@ -8,6 +8,7 @@ use claim::*;
 use oso::{Oso, PolarClass, PolarValue};
 use pretty_assertions::assert_eq;
 use proctor::elements::telemetry::ToTelemetry;
+use proctor::elements::PolicySource;
 use proctor::elements::{self, telemetry, PolicyOutcome, PolicySubscription, QueryPolicy, QueryResult, TelemetryValue};
 use proctor::error::PolicyError;
 use proctor::graph::stage::{self, WithApi, WithMonitor};
@@ -118,10 +119,6 @@ impl QueryPolicy for TestPolicy {
     type Context = TestContext;
     type Item = TestItem;
 
-    fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
-        oso.load_str(self.policy.as_str()).map_err(|err| err.into())
-    }
-
     fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
         oso.register_class(
             TestItem::get_polar_class_builder()
@@ -155,6 +152,10 @@ impl QueryPolicy for TestPolicy {
         let result = QueryResult::from_query(q)?;
         tracing::info!(?result, "DMR: query policy results!");
         Ok(result)
+    }
+
+    fn policy_sources(&self) -> Vec<PolicySource> {
+        vec![PolicySource::String(self.policy.clone())]
     }
 }
 

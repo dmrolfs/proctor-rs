@@ -17,7 +17,7 @@ use proctor::elements::{
     self, telemetry, Policy, PolicyFilterEvent, PolicyOutcome, PolicySettings, PolicySource, PolicySubscription,
     QueryPolicy, QueryResult, Telemetry, TelemetryValue,
 };
-use proctor::error::{EligibilityError, PolicyError};
+use proctor::error::{PolicyError, ProctorError};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape, UniformFanInShape};
 use proctor::phases::collection;
@@ -38,7 +38,7 @@ pub struct Data {
 }
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TestEligibilityContext {
+pub struct TestPolicyPhaseContext {
     #[polar(attribute)]
     #[serde(flatten)]
     pub task_status: TestTaskStatus,
@@ -52,15 +52,15 @@ pub struct TestEligibilityContext {
 }
 
 #[async_trait]
-impl ProctorContext for TestEligibilityContext {
-    type Error = EligibilityError;
+impl ProctorContext for TestPolicyPhaseContext {
+    type Error = ProctorError;
 
     fn custom(&self) -> telemetry::Table {
         self.custom.clone()
     }
 }
 
-impl SubscriptionRequirements for TestEligibilityContext {
+impl SubscriptionRequirements for TestPolicyPhaseContext {
     fn required_fields() -> HashSet<&'static str> {
         // todo: DMR SERDE_REFLECTION
         maplit::hashset! {
@@ -166,7 +166,7 @@ fn test_context_serde() {
     let main_span = tracing::info_span!("test_context_serde");
     let _ = main_span.enter();
 
-    let context = TestEligibilityContext {
+    let context = TestPolicyPhaseContext {
         task_status: TestTaskStatus { last_failure: None },
         cluster_status: TestClusterStatus {
             location_code: 3,
@@ -218,21 +218,21 @@ fn test_context_serde() {
     assert_ok!(result);
 }
 
-fn make_test_policy<D>(settings: &PolicySettings) -> impl Policy<D, TestEligibilityContext, (D, TestEligibilityContext)>
+fn make_test_policy<D>(settings: &PolicySettings) -> impl Policy<D, TestPolicyPhaseContext, (D, TestPolicyPhaseContext)>
 where
     D: AppData + ToPolar + Clone,
 {
-    TestEligibilityPolicy::new(&settings.sources)
+    TestPolicyA::new(&settings.sources)
 }
 
 #[derive(Debug)]
-struct TestEligibilityPolicy<D> {
+struct TestPolicyA<D> {
     custom_fields: Option<HashSet<String>>,
     policies: Vec<PolicySource>,
     data_marker: PhantomData<D>,
 }
 
-impl<D> TestEligibilityPolicy<D> {
+impl<D> TestPolicyA<D> {
     pub fn new(policies: &Vec<PolicySource>) -> Self {
         policies.iter().for_each(|p| p.validate().expect("failed to parse policy"));
         Self {
@@ -248,48 +248,39 @@ impl<D> TestEligibilityPolicy<D> {
     }
 }
 
-impl<D: AppData> PolicySubscription for TestEligibilityPolicy<D> {
-    type Requirements = TestEligibilityContext;
+impl<D: AppData> PolicySubscription for TestPolicyA<D> {
+    type Requirements = TestPolicyPhaseContext;
 
     fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
         tracing::warn!(
-            "DMR: TestEligibilityPolicy::subscription: before custom subscription:{:?}",
+            "DMR: TestPolicy::subscription: before custom subscription:{:?}",
             subscription
         );
 
         let result = if let Some(ref custom_fields) = self.custom_fields {
-            tracing::error!(
-                "DMR: TestEligibilityPolicy::subscription: custom_fields:{:?}",
-                custom_fields
-            );
+            tracing::error!("DMR: TestPolicy::subscription: custom_fields:{:?}", custom_fields);
             subscription.with_optional_fields(custom_fields.clone())
         } else {
             subscription
         };
 
-        tracing::warn!(
-            "DMR: TestEligibilityPolicy::subscription: after custom subscription:{:?}",
-            result
-        );
+        tracing::warn!("DMR: TestPolicy::subscription: after custom subscription:{:?}", result);
         result
     }
 }
 
-impl<D: AppData + ToPolar + Clone> QueryPolicy for TestEligibilityPolicy<D> {
+impl<D: AppData + ToPolar + Clone> QueryPolicy for TestPolicyA<D> {
     type Item = D;
-    type Context = TestEligibilityContext;
+    type Context = TestPolicyPhaseContext;
     type Args = (Self::Item, Self::Context);
 
-    fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
-        for p in self.policies.iter() {
-            p.load_into(oso)?
-        }
-        Ok(())
+    fn policy_sources(&self) -> Vec<PolicySource> {
+        self.policies.clone()
     }
 
     fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
         oso.register_class(
-            TestEligibilityContext::get_polar_class_builder()
+            TestPolicyPhaseContext::get_polar_class_builder()
                 .name("TestEnvironment")
                 .add_method("custom", ProctorContext::custom)
                 .build(),
@@ -530,7 +521,7 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
     let _ = main_span.enter();
 
     tracing::warn!("test_eligibility_before_context_baseline_A");
-    // let policy = TestEligibilityPolicy::new(PolicySource::String(
+    // let policy = TestPolicy::new(PolicySource::String(
     //     r#"eligible(item, environment) if environment.location_code == 33;"#.to_string(),
     // ));
     let policy = make_test_policy(&PolicySettings {
@@ -540,7 +531,7 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
             r#"eligible(_item, environment) if environment.location_code == 33;"#.to_string(),
         )],
     });
-    let mut flow: TestFlow<Data, TestEligibilityContext> =
+    let mut flow: TestFlow<Data, TestPolicyPhaseContext> =
         TestFlow::new(TelemetrySubscription::new("all_data"), policy).await?;
     tracing::warn!("test_eligibility_before_context_baseline_B");
     let now_utc = Utc::now();
@@ -592,7 +583,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
         measurement: f64,
     }
 
-    // let policy = TestEligibilityPolicy::new(PolicySource::String(
+    // let policy = TestPolicy::new(PolicySource::String(
     //     r#"eligible(_, context) if context.cluster_status.is_deploying == false;"#.to_string(),
     // ));
     let policy = make_test_policy(&PolicySettings {
@@ -603,7 +594,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
         )],
     });
 
-    let mut flow: TestFlow<MeasurementData, TestEligibilityContext> = TestFlow::new(
+    let mut flow: TestFlow<MeasurementData, TestPolicyPhaseContext> = TestFlow::new(
         TelemetrySubscription::new("measurements").with_required_fields(maplit::hashset! {"measurement"}),
         policy,
     )
@@ -626,7 +617,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
         "cluster.last_deployment" => t1_rep.to_telemetry(),
     };
     let context_telemetry: Telemetry = context_data.clone().into_iter().collect();
-    let context: TestEligibilityContext = context_telemetry.try_into()?;
+    let context: TestPolicyPhaseContext = context_telemetry.try_into()?;
     flow.push_context(context_data).await?;
 
     tracing::warn!("DMR: 03. Verify environment set...");
@@ -636,7 +627,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
             tracing::warn!("notified of eligibility context change: {:?}", ctx);
             assert_eq!(
                 ctx,
-                TestEligibilityContext {
+                TestPolicyPhaseContext {
                     task_status: TestTaskStatus { last_failure: None },
                     cluster_status: TestClusterStatus {
                         location_code: 3,
@@ -759,12 +750,12 @@ struct TestFlowMetrics {
 }
 
 #[derive(Debug)]
-struct TestPolicy {
+struct TestPolicyB {
     policy: String,
     subscription_extension: HashSet<String>,
 }
 
-impl TestPolicy {
+impl TestPolicyB {
     pub fn new<S: AsRef<str>>(policy: S) -> Self {
         Self::new_with_extension(policy, HashSet::<String>::new())
     }
@@ -784,22 +775,18 @@ impl TestPolicy {
     }
 }
 
-impl PolicySubscription for TestPolicy {
-    type Requirements = TestEligibilityContext;
+impl PolicySubscription for TestPolicyB {
+    type Requirements = TestPolicyPhaseContext;
 
     fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
         subscription.with_optional_fields(self.subscription_extension.clone())
     }
 }
 
-impl QueryPolicy for TestPolicy {
+impl QueryPolicy for TestPolicyB {
     type Args = (Self::Item, Self::Context);
-    type Context = TestEligibilityContext;
+    type Context = TestPolicyPhaseContext;
     type Item = TestItem;
-
-    fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
-        oso.load_str(self.policy.as_str()).map_err(|err| err.into())
-    }
 
     fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
         oso.register_class(
@@ -811,10 +798,10 @@ impl QueryPolicy for TestPolicy {
         )?;
 
         oso.register_class(
-            TestEligibilityContext::get_polar_class_builder()
-                .name("EligibilityContext")
+            TestPolicyPhaseContext::get_polar_class_builder()
+                .name("PhaseContext")
                 .add_method("custom", ProctorContext::custom)
-                // .add_method("custom", |ctx: &TestEligibilityContext| ctx.custom())
+                // .add_method("custom", |ctx: &TestPhaseContext| ctx.custom())
                 .build(),
         )?;
 
@@ -827,6 +814,10 @@ impl QueryPolicy for TestPolicy {
 
     fn query_policy(&self, oso: &Oso, args: Self::Args) -> Result<QueryResult, PolicyError> {
         QueryResult::from_query(oso.query_rule("eligible", args)?)
+    }
+
+    fn policy_sources(&self) -> Vec<PolicySource> {
+        vec![PolicySource::String(self.policy.clone())]
     }
 }
 
@@ -842,7 +833,7 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
         "timestamp",
     });
 
-    let policy = TestPolicy::new(r#"eligible(_item, environment) if environment.cluster_status.location_code == 33;"#);
+    let policy = TestPolicyB::new(r#"eligible(_item, environment) if environment.cluster_status.location_code == 33;"#);
 
     let mut flow = TestFlow::new(subscription, policy).await?;
 
@@ -912,7 +903,7 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
     tracing::info!(?event, "DMR-E.1: policy event received.");
     assert_eq!(
         event,
-        elements::PolicyFilterEvent::ContextChanged(Some(TestEligibilityContext {
+        elements::PolicyFilterEvent::ContextChanged(Some(TestPolicyPhaseContext {
             task_status: TestTaskStatus { last_failure: None },
             cluster_status: TestClusterStatus {
                 location_code: 33,
@@ -935,7 +926,7 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
             .await?
     );
 
-    let actual: Vec<PolicyOutcome<TestItem, TestEligibilityContext>> = flow.close().await?;
+    let actual: Vec<PolicyOutcome<TestItem, TestPolicyPhaseContext>> = flow.close().await?;
 
     tracing::warn!(?actual, "DMR: 08. Verify final accumulation...");
     let actual_vals: Vec<(f64, i32)> = actual
@@ -963,7 +954,7 @@ async fn test_eligibility_w_custom_fields() -> anyhow::Result<()> {
         "timestamp",
     });
 
-    let policy = TestPolicy::new_with_extension(
+    let policy = TestPolicyB::new_with_extension(
         r#"eligible(_item, environment) if
             c = environment.custom() and
             c.cat = "Otis";"#,
@@ -1024,7 +1015,7 @@ async fn test_eligibility_w_item_n_env() -> anyhow::Result<()> {
         "timestamp",
     });
 
-    let policy = TestPolicy::new_with_extension(
+    let policy = TestPolicyB::new_with_extension(
         r#"eligible(item, env) if proper_cat(item, env) and lag_2(item, env);
 proper_cat(_, env) if env.custom.cat = "Otis";
 lag_2(_item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
@@ -1086,11 +1077,11 @@ async fn test_eligibility_replace_policy() -> anyhow::Result<()> {
         "timestamp",
     });
 
-    let policy_1 = r#"eligible(_, env: EligibilityContext) if env.custom.cat = "Otis";"#;
+    let policy_1 = r#"eligible(_, env: PhaseContext) if env.custom.cat = "Otis";"#;
     let policy_2 = format!("eligible(metrics, _) if metrics.within_seconds({});", boundary_age_secs);
     tracing::info!(?policy_2, "DMR: policy with timestamp");
 
-    let policy = TestPolicy::new_with_extension(policy_1, maplit::hashset! {"cat"});
+    let policy = TestPolicyB::new_with_extension(policy_1, maplit::hashset! {"cat"});
 
     let mut flow = TestFlow::new(data_subscription, policy).await?;
 
@@ -1101,7 +1092,7 @@ async fn test_eligibility_replace_policy() -> anyhow::Result<()> {
         "cat" => "Otis".to_telemetry(),
     };
     let context_telemetry: Telemetry = context_data.clone().into_iter().collect();
-    let context: TestEligibilityContext = context_telemetry.try_into()?;
+    let context: TestPolicyPhaseContext = context_telemetry.try_into()?;
     flow.push_context(context_data).await?;
 
     let event = flow.recv_policy_event().await?;

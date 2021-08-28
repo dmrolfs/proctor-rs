@@ -469,11 +469,6 @@ mod tests {
         type Item = User;
 
         #[tracing::instrument(level = "info", skip(oso))]
-        fn load_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
-            oso.load_str(self.policy.as_str()).map_err(|err| err.into())
-        }
-
-        #[tracing::instrument(level = "info", skip(oso))]
         fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
             oso.register_class(User::get_polar_class())?;
             oso.register_class(TestContext::get_polar_class())?;
@@ -488,6 +483,10 @@ mod tests {
         #[tracing::instrument(level = "info", skip(engine))]
         fn query_policy(&self, engine: &Oso, args: Self::Args) -> Result<QueryResult, PolicyError> {
             QueryResult::from_query(engine.query_rule("allow", args)?)
+        }
+
+        fn policy_sources(&self) -> Vec<PolicySource> {
+            vec![PolicySource::String(self.policy.clone())]
         }
     }
 
