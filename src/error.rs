@@ -25,6 +25,9 @@ pub enum ProctorError {
     PlanError(#[from] PlanError),
 
     #[error("{0}")]
+    PhaseError(#[from] anyhow::Error),
+
+    #[error("{0}")]
     GraphError(#[from] GraphError),
 }
 
@@ -200,11 +203,11 @@ pub enum PolicyError {
     #[error("policy data, {0}, not found")]
     DataNotFound(String),
 
-    #[error("policy error during collection: {0}")]
-    CollectionError(#[from] CollectionError),
-
     #[error("failed to publish policy event: {0}")]
-    PublishError(#[source] anyhow::Error), // todo: if only PortError then specialize via #[from]
+    PublishError(#[source] anyhow::Error),
+
+    #[error("policy error : {0}")]
+    AnyError(#[from] anyhow::Error),
 }
 
 impl From<PortError> for PolicyError {

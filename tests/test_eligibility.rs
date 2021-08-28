@@ -17,12 +17,12 @@ use proctor::elements::{
     self, telemetry, Policy, PolicyFilterEvent, PolicyOutcome, PolicySettings, PolicySource, PolicySubscription,
     QueryPolicy, QueryResult, Telemetry, TelemetryValue,
 };
-use proctor::error::{EligibilityError, PolicyError};
+use proctor::error::{EligibilityError, PolicyErro};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape, UniformFanInShape};
 use proctor::phases::collection;
 use proctor::phases::collection::{SubscriptionRequirements, TelemetrySubscription};
-use proctor::phases::eligibility::Eligibility;
+use proctor::phases::policy_phase::PolicyPhase;
 use proctor::AppData;
 use proctor::ProctorContext;
 use serde_test::{assert_tokens, Token};
@@ -372,7 +372,7 @@ where
         let context_channel = collection::SubscriptionChannel::<C>::new("eligibility_context").await?;
 
         let telemetry_channel = collection::SubscriptionChannel::<D>::new("data_channel").await?;
-        let eligibility = Eligibility::<D, C>::new("test_flink_eligibility", policy);
+        let eligibility = PolicyPhase::carry_policy_outcome("test_eligibility", policy).await;
 
         let tx_eligibility_api = eligibility.tx_api();
         let rx_eligibility_monitor = eligibility.rx_monitor();

@@ -2,13 +2,13 @@ use std::fmt::{self, Debug};
 
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
-use oso::{PolarValue, ToPolar};
+use oso::ToPolar;
 use tokio::sync::broadcast;
 
 use crate::elements::{
     PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, PolicyOutcome, QueryPolicy,
 };
-use crate::error::{PortError, ProctorError};
+use crate::error::ProctorError;
 use crate::graph::stage::{Stage, ThroughStage, WithApi, WithMonitor};
 use crate::graph::{stage, Connect, Graph, Inlet, Outlet, Port, SinkShape, SourceShape};
 use crate::{AppData, ProctorContext, ProctorResult};
@@ -25,14 +25,26 @@ pub struct PolicyPhase<In, Out, C> {
 
 impl<In: AppData + ToPolar, C: ProctorContext> PolicyPhase<In, PolicyOutcome<In, C>, C> {
     #[tracing::instrument(level = "info", skip(name))]
-    pub async fn carry_policy_result<P>(name: impl AsRef<str>, policy: P) -> Self
+    pub async fn carry_policy_outcome<P>(name: impl AsRef<str>, policy: P) -> Self
     where
-        P: 'static + QueryPolicy<Item = In, Context = C, Args = (In, C, PolarValue)>,
+        P: 'static + QueryPolicy<Item = In, Context = C>,
     {
-        let name = format!("{}_carry_policy_result", name.as_ref());
+        let name = format!("{}_carry_policy_outcome", name.as_ref());
         let identity: stage::Identity<PolicyOutcome<In, C>> =
             stage::Identity::new(name.as_str(), Inlet::new(name.as_str()), Outlet::new(name.as_str()));
         Self::with_transform(name.as_str(), policy, identity).await
+    }
+}
+
+impl<T: AppData + ToPolar, C: ProctorContext> PolicyPhase<T, T, C> {
+    #[tracing::instrument(level = "info", skip(name))]
+    pub async fn strip_policy_outcome<P>(name: impl AsRef<str>, policy: P) -> Self
+    where
+        P: 'static + QueryPolicy<Item = T, Context = C>,
+    {
+        let name = format!("{}_strip_policy_outcome", name.as_ref());
+        let strip = stage::Map::new(name.as_str(), |outcome: PolicyOutcome<T, C>| outcome.item);
+        Self::with_transform(name.as_str(), policy, strip).await
     }
 }
 
@@ -41,7 +53,7 @@ impl<In: AppData + ToPolar, Out: AppData, C: ProctorContext> PolicyPhase<In, Out
     pub async fn with_transform<S, P, T>(name: S, policy: P, transform: T) -> Self
     where
         S: AsRef<str>,
-        P: 'static + QueryPolicy<Item = In, Context = C, Args = (In, C, PolarValue)>,
+        P: 'static + QueryPolicy<Item = In, Context = C>,
         T: 'static + ThroughStage<PolicyOutcome<In, C>, Out>,
     {
         let policy_filter = PolicyFilter::new(format!("{}_phase", name.as_ref()), policy);
@@ -115,8 +127,6 @@ where
     In: AppData,
     Out: AppData,
     C: ProctorContext,
-    C::Error: From<ProctorError> + From<PortError>,
-    ProctorError: From<<C as ProctorContext>::Error>,
 {
     fn name(&self) -> &str {
         self.name.as_str()
@@ -124,19 +134,19 @@ where
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
-        self.do_check().await?;
+        self.do_check().await.map_err(|err| ProctorError::PhaseError(err.into()))?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run policy phase", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
-        self.do_run().await?;
+        self.do_run().await.map_err(|err| ProctorError::PhaseError(err.into()))?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn close(mut self: Box<Self>) -> ProctorResult<()> {
-        self.do_close().await?;
+        self.do_close().await.map_err(|err| ProctorError::PhaseError(err.into()))?;
         Ok(())
     }
 }
@@ -147,18 +157,18 @@ where
     In: AppData,
     Out: AppData,
     C: ProctorContext,
-    C::Error: From<ProctorError> + From<PortError>,
+    C::Error: From<anyhow::Error>,
 {
     async fn do_check(&self) -> Result<(), C::Error> {
-        self.inlet.check_attachment().await?;
-        self.context_inlet.check_attachment().await?;
-        self.policy_transform.check().await?;
-        self.outlet.check_attachment().await?;
+        self.inlet.check_attachment().await.map_err(|err| err.into())?;
+        self.context_inlet.check_attachment().await.map_err(|err| err.into())?;
+        self.policy_transform.check().await.map_err(|err| err.into())?;
+        self.outlet.check_attachment().await.map_err(|err| err.into())?;
         Ok(())
     }
 
     async fn do_run(&mut self) -> Result<(), C::Error> {
-        self.policy_transform.run().await?;
+        self.policy_transform.run().await.map_err(|err| err.into())?;
         Ok(())
     }
 
@@ -167,7 +177,7 @@ where
         self.inlet.close().await;
         self.context_inlet.close().await;
         self.outlet.close().await;
-        self.policy_transform.close().await?;
+        self.policy_transform.close().await.map_err(|err| err.into())?;
         Ok(())
     }
 }
