@@ -23,7 +23,7 @@ use crate::graph::{SinkShape, SourceShape};
 use crate::{AppData, ProctorContext, ProctorResult};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PolicySettings {
     pub required_subscription_fields: HashSet<String>,
     pub optional_subscription_fields: HashSet<String>,
