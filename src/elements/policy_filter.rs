@@ -30,6 +30,21 @@ pub struct PolicySettings {
     pub sources: Vec<PolicySource>,
 }
 
+impl PolicySettings {
+    pub fn new(required_fields: HashSet<String>, optional_fields: HashSet<String>) -> Self {
+        Self {
+            required_subscription_fields: required_fields,
+            optional_subscription_fields: optional_fields,
+            sources: vec![],
+        }
+    }
+
+    pub fn with_source(mut self, source: PolicySource) -> Self {
+        self.sources.push(source);
+        self
+    }
+}
+
 pub struct PolicyFilter<T, C, A, P>
 where
     P: QueryPolicy<Item = T, Context = C, Args = A>,

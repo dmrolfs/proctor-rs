@@ -38,7 +38,6 @@ pub struct Plan<P: Planning> {
     inlet: Inlet<P::Observation>,
     decision_inlet: Inlet<P::Decision>,
     outlet: Outlet<P::Out>,
-    // pub tx_monitor: broadcast::Sender<PlanEvent<P::Observation, P::Decision, P::Out>>,
     pub tx_monitor: broadcast::Sender<Event<P>>,
 }
 
