@@ -74,7 +74,7 @@ impl fmt::Display for Timestamp {
 
 pub const FORMAT: &'static str = "%+";
 pub const SECS_KEY: &'static str = "secs";
-pub const NSECS_KEY: &'static str = "nsecs";
+pub const NANOS_KEY: &'static str = "nanos";
 
 impl TryFrom<TelemetryValue> for Timestamp {
     type Error = TelemetryError;
@@ -82,9 +82,9 @@ impl TryFrom<TelemetryValue> for Timestamp {
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         match telemetry {
             TelemetryValue::Seq(mut seq) if seq.len() == 2 => {
-                let nsecs = seq.pop().map(|v| u32::try_from(v)).transpose()?.unwrap();
+                let nanos = seq.pop().map(|v| u32::try_from(v)).transpose()?.unwrap();
                 let secs = seq.pop().map(|v| i64::try_from(v)).transpose()?.unwrap();
-                Ok(Self::new(secs, nsecs))
+                Ok(Self::new(secs, nanos))
             }
             TelemetryValue::Float(f64) => Ok(f64.into()),
             TelemetryValue::Integer(i64) => Ok(i64.into()),
@@ -94,12 +94,12 @@ impl TryFrom<TelemetryValue> for Timestamp {
                     .map(|val| i64::try_from(val))
                     .transpose()?
                     .unwrap_or(0);
-                let nsecs = table
-                    .remove(NSECS_KEY)
+                let nanos = table
+                    .remove(NANOS_KEY)
                     .map(|val| u32::try_from(val))
                     .transpose()?
                     .unwrap_or(0);
-                Ok(Self(secs, nsecs))
+                Ok(Self(secs, nanos))
             }
             TelemetryValue::Text(rep) => {
                 let dt = DateTime::parse_from_str(rep.as_str(), FORMAT)
@@ -130,8 +130,8 @@ impl From<DateTime<Utc>> for Timestamp {
 impl From<f64> for Timestamp {
     fn from(timestamp_secs: f64) -> Self {
         let secs = timestamp_secs.floor() as i64;
-        let nsecs = (timestamp_secs.fract() * 10_f64.powi(9)) as u32;
-        Self(secs, nsecs)
+        let nanos = (timestamp_secs.fract() * 10_f64.powi(9)) as u32;
+        Self(secs, nanos)
     }
 }
 
@@ -169,7 +169,7 @@ impl From<Timestamp> for TelemetryValue {
     fn from(that: Timestamp) -> Self {
         Self::Table(maplit::hashmap! {
             SECS_KEY.to_string() => that.0.to_telemetry(),
-            NSECS_KEY.to_string() => that.1.to_telemetry(),
+            NANOS_KEY.to_string() => that.1.to_telemetry(),
         })
     }
 }
@@ -430,8 +430,8 @@ impl<'de> de::Visitor<'de> for TimestampVisitor {
         S: de::SeqAccess<'de>,
     {
         let secs = access.next_element()?.unwrap_or(0);
-        let nsecs = access.next_element()?.unwrap_or(0);
-        Ok(Timestamp::new(secs, nsecs))
+        let nanos = access.next_element()?.unwrap_or(0);
+        Ok(Timestamp::new(secs, nanos))
     }
 
     #[tracing::instrument(level = "debug", skip(self, access))]
@@ -445,8 +445,8 @@ impl<'de> de::Visitor<'de> for TimestampVisitor {
         }
 
         let secs = map.get(SECS_KEY).copied().unwrap_or(0);
-        let nsecs = map.get(NSECS_KEY).copied().unwrap_or(0) as u32;
-        Ok(Timestamp::new(secs, nsecs))
+        let nanos = map.get(NANOS_KEY).copied().unwrap_or(0) as u32;
+        Ok(Timestamp::new(secs, nanos))
     }
 }
 

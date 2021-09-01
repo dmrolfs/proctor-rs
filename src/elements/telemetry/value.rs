@@ -221,7 +221,7 @@ impl<'a> From<&'a str> for TelemetryValue {
 //     fn from(value: DateTime<Utc>) -> Self {
 //         TelemetryValue::Table(maplit::hashmap! {
 //             SECS.to_string() => value.timestamp().into(),
-//             NSECS.to_string() => value.timestamp_subsec_nanos().into(),
+//             NANOS.to_string() => value.timestamp_subsec_nanos().into(),
 //         })
 //         // TelemetryValue::Integer(value.timestamp_millis())
 //     }
@@ -468,7 +468,7 @@ impl TryFrom<TelemetryValue> for String {
 }
 
 // const SECS: &'static str = crate::serde::date::SECS_KEY;
-// const NSECS: &'static str = crate::serde::date::NSECS_KEY;
+// const NANOS: &'static str = crate::serde::date::NANOS_KEY;
 //
 // impl TryFrom<TelemetryValue> for DateTime<Utc> {
 //     type Error = TelemetryError;
@@ -477,8 +477,8 @@ impl TryFrom<TelemetryValue> for String {
 //         match telemetry {
 //             TelemetryValue::Table(table) => {
 //                 let secs = table.get(SECS).cloned().map(|secs| i64::try_from(secs)).transpose()?;
-//                 let nsecs = table.get(NSECS).cloned().map(|nsecs| u32::try_from(nsecs)).transpose()?;
-//                 Ok(Utc.timestamp(secs.unwrap_or(0), nsecs.unwrap_or(0)))
+//                 let nanos = table.get(NANOS).cloned().map(|ns| u32::try_from(ns)).transpose()?;
+//                 Ok(Utc.timestamp(secs.unwrap_or(0), nanos.unwrap_or(0)))
 //             }
 //             TelemetryValue::Integer(ts_millis) => Ok(Utc.timestamp_millis(ts_millis)),
 //             TelemetryValue::Float(ts_millis) => Ok(Utc.timestamp_millis(ts_millis as i64)),

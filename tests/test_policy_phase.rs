@@ -189,7 +189,7 @@ fn test_context_serde() {
         Token::Map { len: Some(2) },
         Token::Str("secs"),
         Token::I64(1620234667),
-        Token::Str("nsecs"),
+        Token::Str("nanos"),
         Token::I64(246310806),
         Token::MapEnd,
         Token::MapEnd,

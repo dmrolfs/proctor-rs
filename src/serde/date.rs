@@ -7,13 +7,13 @@ use std::collections::HashMap;
 
 pub const FORMAT: &'static str = "%+";
 pub const SECS_KEY: &'static str = crate::elements::SECS_KEY;
-pub const NSECS_KEY: &'static str = crate::elements::NSECS_KEY;
+pub const NANOS_KEY: &'static str = crate::elements::NANOS_KEY;
 
 #[tracing::instrument(level = "debug")]
 fn table_from_datetime(datetime: &DateTime<Utc>) -> HashMap<String, i64> {
     maplit::hashmap! {
         SECS_KEY.to_string() => datetime.timestamp(),
-        NSECS_KEY.to_string() => datetime.timestamp_subsec_nanos() as i64,
+        NANOS_KEY.to_string() => datetime.timestamp_subsec_nanos() as i64,
     }
 }
 
@@ -21,7 +21,7 @@ fn table_from_datetime(datetime: &DateTime<Utc>) -> HashMap<String, i64> {
 fn datetime_from_table(datetime: HashMap<String, i64>) -> DateTime<Utc> {
     Utc.timestamp(
         datetime.get(SECS_KEY).copied().unwrap_or(0),
-        datetime.get(NSECS_KEY).copied().unwrap_or(0) as u32,
+        datetime.get(NANOS_KEY).copied().unwrap_or(0) as u32,
     )
 }
 
