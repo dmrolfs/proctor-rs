@@ -46,11 +46,11 @@ reqwest = { version = "*", features = ["blocking", "json"] }
 reqwest-middleware = "*"
 reqwest-retry = "*"
 serde = "*"
+ron = "*"
 serde_json = "*"
 statrs = "*"
 thiserror = "*"
 tokio = { version = "*", features = ["full"] }
-toml = "*"
 tracing = "*"
 tracing-bunyan-formatter = "*"
 tracing-flame = "*"
@@ -68,6 +68,7 @@ pretty_assertions = "*"
 rand = "*"
 serde_test = "*"
 serde_with = { version = "*", features = ["chrono", "json", "macros"] }
+static_assertions = "*"
 tokio-test = "*"
 
 [[bench]]

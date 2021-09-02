@@ -349,11 +349,17 @@ impl From<reqwest::header::InvalidHeaderValue> for SettingsError {
     }
 }
 
-impl From<toml::de::Error> for SettingsError {
-    fn from(that: toml::de::Error) -> Self {
-        SettingsError::SourceError(that.into())
-    }
-}
+// impl From<toml::de::Error> for SettingsError {
+//     fn from(that: toml::de::Error) -> Self {
+//         SettingsError::SourceError(that.into())
+//     }
+// }
+
+// impl From<serde_hjson::Error> for SettingsError {
+//     fn from(that: serde_hjson::Error) -> Self {
+//         SettingsError::SourceError(that.into())
+//     }
+// }
 
 #[derive(Debug)]
 pub enum UnexpectedType {

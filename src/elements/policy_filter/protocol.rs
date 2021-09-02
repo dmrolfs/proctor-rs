@@ -66,6 +66,9 @@ pub enum PolicySource {
     NoPolicy,
 }
 
+#[cfg(test)]
+assert_impl_all!(PolicySource: serde::ser::Serialize);
+
 impl PolicySource {
     pub fn from_string<S: Into<String>>(policy: S) -> Self {
         Self::String(policy.into())
@@ -107,5 +110,47 @@ impl PolicySource {
         };
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use claim::assert_ok;
+    use pretty_assertions::assert_eq;
+    use serde_test::{assert_tokens, Token};
+
+    #[test]
+    fn test_serde_policy_source() {
+        let ps = PolicySource::String("foo".to_string());
+        assert_tokens(
+            &ps,
+            &vec![
+                Token::NewtypeVariant { name: "PolicySource", variant: "String" },
+                Token::Str("foo"),
+            ],
+        );
+
+        let ps = PolicySource::File(PathBuf::from("./resources/policy.polar"));
+        assert_tokens(
+            &ps,
+            &vec![
+                Token::NewtypeVariant { name: "PolicySource", variant: "File" },
+                Token::Str("./resources/policy.polar"),
+            ],
+        );
+
+        let ps = PolicySource::NoPolicy;
+        assert_tokens(
+            &ps,
+            &vec![Token::UnitVariant { name: "PolicySource", variant: "NoPolicy" }],
+        );
+    }
+
+    #[test]
+    fn test_serde_ron_policy_source() {
+        let ps = PolicySource::String("foobar".to_string());
+        let rep = assert_ok!(ron::to_string(&ps));
+        assert_eq!(rep, r#"String("foobar")"#);
     }
 }
