@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use thiserror::Error;
 
 use crate::elements::TelemetryValue;
+use crate::phases::collection::SourceSetting;
 
 #[derive(Debug, Error)]
 pub enum ProctorError {
@@ -58,9 +59,74 @@ pub enum GraphError {
     PortError(#[from] PortError),
 }
 
+#[derive(Debug, Error)]
+pub enum IncompatibleSourceSettingsError {
+    #[error("expected {expected} source settings but got: {settings:?}")]
+    ExpectedTypeError { expected: String, settings: SourceSetting },
+
+    #[error("{0}")]
+    InvalidDetailError(#[source] anyhow::Error),
+
+    #[error("{0}")]
+    ConfigurationParseError(#[source] anyhow::Error),
+}
+
+impl From<reqwest::header::InvalidHeaderName> for IncompatibleSourceSettingsError {
+    fn from(that: reqwest::header::InvalidHeaderName) -> Self {
+        IncompatibleSourceSettingsError::InvalidDetailError(that.into())
+    }
+}
+
+impl From<reqwest::header::InvalidHeaderValue> for IncompatibleSourceSettingsError {
+    fn from(that: reqwest::header::InvalidHeaderValue) -> Self {
+        IncompatibleSourceSettingsError::InvalidDetailError(that.into())
+    }
+}
+
+// /// Error variants related to configuration.
+// #[derive(Debug, Error)]
+// #[non_exhaustive]
+// pub enum SettingsError {
+//     /// Error working with environment variable
+//     #[error("{0}")]
+//     Environment(#[from] std::env::VarError),
+//
+//     /// Error in configuration settings.
+//     #[error(transparent)]
+//     Configuration(#[from] config::ConfigError),
+//
+//     /// Error in bootstrapping execution from configuration.
+//     #[error("error during system bootstrap: {message}: {setting}")]
+//     Bootstrap { message: String, setting: String },
+//
+//     #[error("{0}")]
+//     HttpRequestError(#[source] anyhow::Error),
+//
+//     #[error("{0}")]
+//     SourceError(#[source] anyhow::Error),
+//
+//     #[error("{0}")]
+//     IOError(#[from] std::io::Error),
+// }
+//
+// // impl From<toml::de::Error> for SettingsError {
+// //     fn from(that: toml::de::Error) -> Self {
+// //         SettingsError::SourceError(that.into())
+// //     }
+// // }
+//
+// // impl From<serde_hjson::Error> for SettingsError {
+// //     fn from(that: serde_hjson::Error) -> Self {
+// //         SettingsError::SourceError(that.into())
+// //     }
+// // }
+
 /// Set of errors occurring during telemetry collection
 #[derive(Debug, Error)]
 pub enum CollectionError {
+    #[error("{0}")]
+    IncompatibleSettings(#[from] IncompatibleSourceSettingsError),
+
     /// An error related to collecting from a CVS file.
     #[error("{0}")]
     CsvError(#[from] csv::Error),
@@ -72,9 +138,6 @@ pub enum CollectionError {
     /// An error related to collection via an HTTP middleware.
     #[error("{0}")]
     HttpMiddlewareError(#[from] reqwest_middleware::Error),
-
-    #[error("{0}")]
-    SettingsError(#[from] SettingsError),
 
     #[error("Attempt to send via a closed subscription channel: {0}")]
     ClosedSubscription(String),
@@ -310,56 +373,6 @@ impl<T: 'static + Debug + Send + Sync> From<tokio::sync::mpsc::error::SendError<
         PortError::ChannelError(that.into())
     }
 }
-
-/// Error variants related to configuration.
-#[derive(Debug, Error)]
-#[non_exhaustive]
-pub enum SettingsError {
-    /// Error working with environment variable
-    #[error("{0}")]
-    Environment(#[from] std::env::VarError),
-
-    /// Error in configuration settings.
-    #[error(transparent)]
-    Configuration(#[from] config::ConfigError),
-
-    /// Error in bootstrapping execution from configuration.
-    #[error("error during system bootstrap: {message}: {setting}")]
-    Bootstrap { message: String, setting: String },
-
-    #[error("{0}")]
-    HttpRequestError(#[source] anyhow::Error),
-
-    #[error("{0}")]
-    SourceError(#[source] anyhow::Error),
-
-    #[error("{0}")]
-    IOError(#[from] std::io::Error),
-}
-
-impl From<reqwest::header::InvalidHeaderName> for SettingsError {
-    fn from(that: reqwest::header::InvalidHeaderName) -> Self {
-        SettingsError::HttpRequestError(that.into())
-    }
-}
-
-impl From<reqwest::header::InvalidHeaderValue> for SettingsError {
-    fn from(that: reqwest::header::InvalidHeaderValue) -> Self {
-        SettingsError::HttpRequestError(that.into())
-    }
-}
-
-// impl From<toml::de::Error> for SettingsError {
-//     fn from(that: toml::de::Error) -> Self {
-//         SettingsError::SourceError(that.into())
-//     }
-// }
-
-// impl From<serde_hjson::Error> for SettingsError {
-//     fn from(that: serde_hjson::Error) -> Self {
-//         SettingsError::SourceError(that.into())
-//     }
-// }
 
 #[derive(Debug)]
 pub enum UnexpectedType {

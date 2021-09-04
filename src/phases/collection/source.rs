@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use super::SourceSetting;
 use crate::elements::Telemetry;
-use crate::error::{CollectionError, SettingsError};
+use crate::error::{CollectionError, IncompatibleSourceSettingsError};
 use crate::graph::stage::tick::TickMsg;
 use crate::graph::stage::{CompositeSource, SourceStage, WithApi};
 use crate::graph::{stage, Connect, Graph, SinkShape, SourceShape};
@@ -119,9 +119,9 @@ where
 
         Ok(TelemetrySource::new(name, Box::new(source), None))
     } else {
-        Err(SettingsError::Bootstrap {
-            message: "incompatible setting for local cvs source".to_string(),
-            setting: format!("{:?}", setting),
+        Err(IncompatibleSourceSettingsError::ExpectedTypeError {
+            expected: "cvs".to_string(),
+            settings: setting.clone(),
         }
         .into())
     }
@@ -200,9 +200,9 @@ where
 
         Ok(TelemetrySource::new(name, composite, Some(tx_tick_api)))
     } else {
-        Err(SettingsError::Bootstrap {
-            message: "incompatible setting for rest api source".to_string(),
-            setting: format!("{:?}", setting),
+        Err(IncompatibleSourceSettingsError::ExpectedTypeError {
+            expected: "HTTP query".to_string(),
+            settings: setting.clone(),
         }
         .into())
     }

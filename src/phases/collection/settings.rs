@@ -1,4 +1,4 @@
-use crate::error::SettingsError;
+use crate::error::IncompatibleSourceSettingsError;
 use crate::serde::{deserialize_duration_secs, deserialize_from_str, serialize_duration_secs, serialize_to_str};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::{Method, Url};
@@ -8,7 +8,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum SourceSetting {
     RestApi(HttpQuery),
     Csv { path: PathBuf },
@@ -41,11 +41,11 @@ impl HttpQuery {
         3
     }
 
-    pub fn header_map(&self) -> Result<HeaderMap, SettingsError> {
+    pub fn header_map(&self) -> Result<HeaderMap, IncompatibleSourceSettingsError> {
         let mut map = HeaderMap::with_capacity(self.headers.len());
         for (k, v) in self.headers.iter() {
-            let name = HeaderName::from_str(k.as_str()).map_err::<SettingsError, _>(|err| err.into());
-            let value = HeaderValue::from_str(v.as_str()).map_err::<SettingsError, _>(|err| err.into());
+            let name = HeaderName::from_str(k.as_str()); //.map_err::<IncompatibleSourceSettingsError, _>(|err| err.into());
+            let value = HeaderValue::from_str(v.as_str()); //.map_err::<SettingsError, _>(|err| err.into());
             map.insert(name?, value?);
         }
         Ok(map)
@@ -119,7 +119,7 @@ mod tests {
             &[
                 Token::Struct { name: "SourceSetting", len: 2 },
                 Token::Str("type"),
-                Token::Str("Csv"),
+                Token::Str("csv"),
                 Token::Str("path"),
                 Token::Str("tests/resources/base.csv"),
                 Token::StructEnd,
@@ -145,7 +145,7 @@ mod tests {
             &[
                 Token::Struct { name: "HttpQuery", len: 6 },
                 Token::Str("type"),
-                Token::Str("RestApi"),
+                Token::Str("rest_api"),
                 Token::Str("interval_secs"),
                 Token::U64(37),
                 Token::Str("method"),
@@ -191,14 +191,11 @@ mod tests {
         assert_tokens(
             &settings,
             &[
-                // Token::Struct { name: "Settings", len: 1 },
-                // Token::Str("sources"),
                 Token::Map { len: Some(2) },
-                // "httpbin" => RestApi
                 Token::Str("httpbin"),
                 Token::Struct { name: "HttpQuery", len: 6 },
                 Token::Str("type"),
-                Token::Str("RestApi"),
+                Token::Str("rest_api"),
                 Token::Str("interval_secs"),
                 Token::U64(10),
                 Token::Str("method"),
@@ -225,90 +222,11 @@ mod tests {
                 Token::Str("local"),
                 Token::Struct { name: "SourceSetting", len: 2 },
                 Token::Str("type"),
-                Token::Str("Csv"),
+                Token::Str("csv"),
                 Token::Str("path"),
                 Token::Str("examples/data/eligibility.csv"),
                 Token::StructEnd,
                 Token::MapEnd,
-                // Token::StructEnd,
-                /* Token::Enum { name: "SourceSetting" },
-                 * Token::Str("RestApi"),
-                 * Token::Struct { name: "HttpQuery", len: 4 },
-                 * Token::Str("interval_secs"),
-                 * Token::U64(37),
-                 * Token::Str("method"),
-                 * Token::Str("HEAD"),
-                 * Token::Str("url"),
-                 * Token::Str("https://httpbin.org/get?is_redeploying=false?last_deployment%3D1979-05-27%2007%3A32%3A00Z"),
-                 * Token::Str("headers"),
-                 * Token::Seq { len: Some(2) },
-                 * Token::Tuple { len: 2 },
-                 * Token::Str("authorization"),
-                 * Token::Str("Basic Zm9vOmJhcg=="),
-                 * Token::TupleEnd,
-                 * Token::Tuple { len: 2 },
-                 * Token::Str("host"),
-                 * Token::Str("example.com"),
-                 * Token::TupleEnd,
-                 * Token::SeqEnd,
-                 * Token::StructEnd, */
-
-                /* Token::Enum { name: "SourceSetting" },
-                 * Token::Str("Local"),
-                 * Token::Str("examples/data/eligibility.csv"),
-                 * Token::MapEnd,
-                 * Token::StructEnd,
-                 * Token::Struct {
-                 *     name: "EligibilitySettings",
-                 *     len: 2,
-                 * },
-                 * Token::Str("task_status"),
-                 * Token::Struct {
-                 *     name: "GatherSettings",
-                 *     len: 1,
-                 * },
-                 * Token::Str("strategy"),
-                 * Token::Enum { name: "GatherStrategy" },
-                 * Token::Str("Local"),
-                 * Token::Map { len: Some(2) },
-                 * Token::Str("path"),
-                 * Token::Str("foo/bar.csv"),
-                 * Token::Str("keys"),
-                 * Token::Seq { len: Some(0) },
-                 * Token::SeqEnd,
-                 * Token::MapEnd,
-                 * Token::StructEnd,
-                 * Token::Str("cluster_status"),
-                 * Token::Struct {
-                 *     name: "GatherSettings",
-                 *     len: 1,
-                 * },
-                 * Token::Str("strategy"),
-                 * Token::Enum { name: "GatherStrategy" },
-                 * Token::Str("Distributed"),
-                 * Token::Struct {
-                 *     name: "HttpEndpoint",
-                 *     len: 3,
-                 * },
-                 * Token::Str("method"),
-                 * Token::Str("HEAD"),
-                 * Token::Str("url"),
-                 * Token::Str("https://httpbin.org/head"),
-                 * Token::Str("headers"),
-                 * Token::Seq { len: Some(2) },
-                 * Token::Tuple { len: 2 },
-                 * Token::Str("authorization"),
-                 * Token::Str("Basic Zm9vOmJhcg=="),
-                 * Token::TupleEnd,
-                 * Token::Tuple { len: 2 },
-                 * Token::Str("host"),
-                 * Token::Str("example.com"),
-                 * Token::TupleEnd,
-                 * Token::SeqEnd,
-                 * Token::StructEnd,
-                 * Token::StructEnd,
-                 * Token::StructEnd,
-                 * Token::StructEnd, */
             ],
         )
     }
