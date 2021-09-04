@@ -222,7 +222,7 @@ fn make_test_policy<D>(settings: &PolicySettings) -> impl Policy<D, TestPolicyPh
 where
     D: AppData + ToPolar + Clone,
 {
-    TestPolicyA::new(&settings.sources)
+    TestPolicyA::new(&settings.policies)
 }
 
 #[derive(Debug)]
@@ -527,7 +527,7 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
     let policy = make_test_policy(&PolicySettings {
         required_subscription_fields: HashSet::default(),
         optional_subscription_fields: HashSet::default(),
-        sources: vec![PolicySource::String(
+        policies: vec![PolicySource::String(
             r#"eligible(_item, environment) if environment.location_code == 33;"#.to_string(),
         )],
     });
@@ -589,7 +589,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     let policy = make_test_policy(&PolicySettings {
         required_subscription_fields: HashSet::default(),
         optional_subscription_fields: HashSet::default(),
-        sources: vec![PolicySource::String(
+        policies: vec![PolicySource::String(
             r#"eligible(_, context) if context.cluster_status.is_deploying == false;"#.to_string(),
         )],
     });

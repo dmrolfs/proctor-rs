@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 pub struct PolicySettings {
     pub required_subscription_fields: HashSet<String>,
     pub optional_subscription_fields: HashSet<String>,
-    pub sources: Vec<PolicySource>,
+    pub policies: Vec<PolicySource>,
 }
 
 impl PolicySettings {
@@ -35,12 +35,12 @@ impl PolicySettings {
         Self {
             required_subscription_fields: required_fields,
             optional_subscription_fields: optional_fields,
-            sources: vec![],
+            policies: vec![],
         }
     }
 
     pub fn with_source(mut self, source: PolicySource) -> Self {
-        self.sources.push(source);
+        self.policies.push(source);
         self
     }
 }
