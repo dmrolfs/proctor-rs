@@ -60,7 +60,7 @@ pub enum PolicyFilterEvent<T, C> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(tag="source", content = "policy", rename_all = "snake_case")]
 pub enum PolicySource {
     String(String),
     File(PathBuf),
@@ -127,8 +127,12 @@ mod tests {
         assert_tokens(
             &ps,
             &vec![
-                Token::NewtypeVariant { name: "PolicySource", variant: "string" },
+                Token::Struct { name: "PolicySource", len: 2, },
+                Token::Str("source"),
+                Token::Str("string"),
+                Token::Str("policy"),
                 Token::Str("foo"),
+                Token::StructEnd,
             ],
         );
 
@@ -136,15 +140,24 @@ mod tests {
         assert_tokens(
             &ps,
             &vec![
-                Token::NewtypeVariant { name: "PolicySource", variant: "file" },
+                Token::Struct { name: "PolicySource", len: 2, },
+                Token::Str("source"),
+                Token::Str("file"),
+                Token::Str("policy"),
                 Token::Str("./resources/policy.polar"),
+                Token::StructEnd,
             ],
         );
 
         let ps = PolicySource::NoPolicy;
         assert_tokens(
             &ps,
-            &vec![Token::UnitVariant { name: "PolicySource", variant: "no_policy" }],
+            &vec![
+                Token::Struct { name: "PolicySource", len: 1, },
+                Token::Str("source"),
+                Token::Str("no_policy"),
+                Token::StructEnd,
+            ],
         );
     }
 
@@ -157,6 +170,6 @@ mod tests {
         ];
 
         let rep = assert_ok!(ron::to_string(&ps));
-        assert_eq!(rep, r#"[string("foobar"),file("./resources/policy.polar"),no_policy]"#);
+        assert_eq!(rep, r#"[(source:"string",policy:"foobar"),(source:"file",policy:"./resources/policy.polar"),(source:"no_policy")]"#);
     }
 }
