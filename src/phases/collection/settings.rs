@@ -29,7 +29,7 @@ pub struct HttpQuery {
     #[serde(serialize_with = "serialize_to_str", deserialize_with = "deserialize_from_str")]
     pub url: Url,
 
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub headers: Vec<(String, String)>,
 
     #[serde(default = "HttpQuery::default_max_retries")]
@@ -143,7 +143,7 @@ mod tests {
         assert_tokens(
             &cluster,
             &[
-                Token::Struct { name: "HttpQuery", len: 6 },
+                Token::Struct { name: "HttpQuery", len: 5 },
                 Token::Str("type"),
                 Token::Str("rest_api"),
                 Token::Str("interval_secs"),
@@ -154,9 +154,6 @@ mod tests {
                 Token::Str(
                     "https://httpbin.org/post?is_redeploying=false?last_deployment%3D1979-05-27%2007%3A32%3A00Z",
                 ),
-                Token::Str("headers"),
-                Token::Seq { len: Some(0) },
-                Token::SeqEnd,
                 Token::Str("max_retries"),
                 Token::U32(3),
                 Token::StructEnd,

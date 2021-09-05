@@ -24,9 +24,13 @@ use crate::{AppData, ProctorContext, ProctorResult};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PolicySettings {
+    #[serde(skip_serializing_if = "HashSet::is_empty")]
     pub required_subscription_fields: HashSet<String>,
+    #[serde(skip_serializing_if = "HashSet::is_empty")]
     pub optional_subscription_fields: HashSet<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub policies: Vec<PolicySource>,
 }
 
