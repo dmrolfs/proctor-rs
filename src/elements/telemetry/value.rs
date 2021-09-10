@@ -659,7 +659,7 @@ impl<'de> Serialize for TelemetryValue {
 
 impl<'de> de::Deserialize<'de> for TelemetryValue {
     #[inline]
-    #[tracing::instrument(level = "info", skip(deserializer))]
+    #[tracing::instrument(level = "debug", skip(deserializer))]
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<TelemetryValue, D::Error>
     where
         D: de::Deserializer<'de>,
@@ -675,51 +675,44 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
             }
 
             #[inline]
-            #[tracing::instrument(level = "info")]
+            #[tracing::instrument(level = "debug")]
             fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E> {
-                tracing::info!(?value, "deserializing bool value");
                 Ok(TelemetryValue::Boolean(value))
             }
 
             #[inline]
-            #[tracing::instrument(level = "info")]
+            #[tracing::instrument(level = "debug")]
             fn visit_i8<E>(self, value: i8) -> Result<Self::Value, E> {
-                tracing::info!(?value, "deserializing i8 value");
                 Ok(TelemetryValue::Integer(value as i64))
             }
 
             #[inline]
-            #[tracing::instrument(level = "info")]
+            #[tracing::instrument(level = "debug")]
             fn visit_i16<E>(self, value: i16) -> Result<Self::Value, E> {
-                tracing::info!(?value, "deserializing i16 value");
                 Ok(TelemetryValue::Integer(value as i64))
             }
 
             #[inline]
-            #[tracing::instrument(level = "info")]
+            #[tracing::instrument(level = "debug")]
             fn visit_i32<E>(self, value: i32) -> Result<Self::Value, E> {
-                tracing::info!(?value, "deserializing i32 value");
                 Ok(TelemetryValue::Integer(value as i64))
             }
 
             #[inline]
-            #[tracing::instrument(level = "info")]
+            #[tracing::instrument(level = "debug")]
             fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E> {
-                tracing::info!(?value, "deserializing i64 value");
                 Ok(TelemetryValue::Integer(value))
             }
 
             #[inline]
-            #[tracing::instrument(level = "info")]
+            #[tracing::instrument(level = "debug")]
             fn visit_u8<E>(self, value: u8) -> Result<Self::Value, E> {
-                tracing::info!(?value, "deserializing u8 value");
                 Ok(TelemetryValue::Integer(value as i64))
             }
 
             #[inline]
-            #[tracing::instrument(level = "info")]
+            #[tracing::instrument(level = "debug")]
             fn visit_u16<E>(self, value: u16) -> Result<Self::Value, E> {
-                tracing::info!(?value, "deserializing u16 value");
                 Ok(TelemetryValue::Integer(value as i64))
             }
 
@@ -747,49 +740,47 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
             }
 
             #[inline]
-            #[tracing::instrument(level = "info")]
+            #[tracing::instrument(level = "debug")]
             fn visit_f32<E>(self, value: f32) -> Result<Self::Value, E> {
-                tracing::info!(?value, "deserializing f32 value");
                 Ok(TelemetryValue::Float(value as f64))
             }
 
             #[inline]
-            #[tracing::instrument(level = "info")]
+            #[tracing::instrument(level = "debug")]
             fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E> {
-                tracing::info!(?value, "deserializing f64 value");
                 Ok(TelemetryValue::Float(value))
             }
 
+            #[inline]
+            #[tracing::instrument(level = "debug")]
             fn visit_char<E>(self, value: char) -> Result<Self::Value, E>
             where
                 E: Error,
             {
-                tracing::info!(?value, "deserializing char value");
                 Ok(TelemetryValue::Text(String::from(value)))
             }
 
             #[inline]
-            #[tracing::instrument(level = "info")]
+            #[tracing::instrument(level = "debug")]
             fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
-                tracing::info!(?value, "deserializing &str value");
-                self.visit_string(String::from(value))
-            }
-
-            fn visit_borrowed_str<E>(self, value: &str) -> Result<Self::Value, E>
-            where
-                E: Error,
-            {
-                tracing::info!(?value, "deserializing &str value");
                 self.visit_string(String::from(value))
             }
 
             #[inline]
-            #[tracing::instrument(level = "info")]
+            #[tracing::instrument(level = "debug")]
+            fn visit_borrowed_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                self.visit_string(String::from(value))
+            }
+
+            #[inline]
+            #[tracing::instrument(level = "debug")]
             fn visit_string<E>(self, value: String) -> Result<Self::Value, E> {
-                tracing::info!(?value, "deserializing string value");
                 Ok(TelemetryValue::Text(value))
             }
 
@@ -820,29 +811,28 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
             }
 
             #[inline]
-            #[tracing::instrument(level = "info")]
+            #[tracing::instrument(level = "debug")]
             fn visit_none<E>(self) -> ::std::result::Result<TelemetryValue, E> {
-                tracing::info!("deserializing None value");
                 Ok(TelemetryValue::Unit)
             }
 
             #[inline]
-            #[tracing::instrument(level = "info", skip(deserializer))]
+            #[tracing::instrument(level = "debug", skip(deserializer))]
             fn visit_some<D>(self, deserializer: D) -> ::std::result::Result<TelemetryValue, D::Error>
             where
                 D: de::Deserializer<'de>,
             {
-                tracing::info!("deserializing Some value");
                 de::Deserialize::deserialize(deserializer)
             }
 
             #[inline]
-            #[tracing::instrument(level = "info")]
+            #[tracing::instrument(level = "debug")]
             fn visit_unit<E>(self) -> ::std::result::Result<TelemetryValue, E> {
-                tracing::info!("deserializing unit value");
                 Ok(TelemetryValue::Unit)
             }
 
+            #[inline]
+            #[tracing::instrument(level = "debug", skip(_deserializer))]
             fn visit_newtype_struct<D>(self, _deserializer: D) -> Result<Self::Value, D::Error>
             where
                 D: Deserializer<'de>,
@@ -854,7 +844,7 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
             }
 
             #[inline]
-            #[tracing::instrument(level = "info", skip(visitor))]
+            #[tracing::instrument(level = "debug", skip(visitor))]
             fn visit_seq<V>(self, mut visitor: V) -> ::std::result::Result<TelemetryValue, V::Error>
             where
                 V: de::SeqAccess<'de>,
@@ -862,25 +852,25 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
                 let mut vec = Seq::new();
 
                 while let Some(elem) = visitor.next_element()? {
-                    tracing::info!(value=?elem, "adding deserialized seq item");
+                    tracing::debug!(value=?elem, "adding deserialized seq item");
                     vec.push(elem);
                 }
 
                 Ok(TelemetryValue::Seq(vec))
             }
 
-            #[tracing::instrument(level = "info", skip(visitor))]
+            #[tracing::instrument(level = "debug", skip(visitor))]
             fn visit_map<V>(self, mut visitor: V) -> ::std::result::Result<TelemetryValue, V::Error>
             where
                 V: de::MapAccess<'de>,
             {
                 let mut table = Table::new();
                 while let Some((key, value)) = visitor.next_entry()? {
-                    tracing::info!(?key, ?value, "visiting next entry");
+                    tracing::debug!(?key, ?value, "visiting next entry");
                     match value {
                         TelemetryValue::Unit => (),
                         val => {
-                            tracing::info!(?key, value=?val, "adding deserialized entry.");
+                            tracing::debug!(?key, value=?val, "adding deserialized entry.");
                             table.insert(key, val);
                         }
                     }
