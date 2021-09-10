@@ -233,7 +233,7 @@ where
                     },
 
                     None => {
-                        tracing::info!("ticking stopped -- breaking...");
+                        tracing::warn!("ticking stopped -- breaking...");
                         break;
                     }
                 },

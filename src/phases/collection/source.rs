@@ -14,81 +14,21 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
-
-pub struct TelemetrySource {
-    pub name: String,
-    pub stage: Option<Box<dyn SourceStage<Telemetry>>>,
-    tx_stop: Option<mpsc::UnboundedSender<TickMsg>>,
-}
-
-impl TelemetrySource {
-    pub fn new(
-        name: impl AsRef<str>, stage: Box<dyn SourceStage<Telemetry>>, tx_stop: Option<mpsc::UnboundedSender<TickMsg>>,
-    ) -> Self {
-        Self {
-            name: name.as_ref().to_string(),
-            stage: Some(stage),
-            tx_stop,
-        }
-    }
-
-    #[tracing::instrument(level = "info")]
-    pub async fn collect_from_settings<T>(
-        settings: &HashMap<String, SourceSetting>,
-    ) -> Result<Vec<Self>, CollectionError>
-    where
-        //todo: for a source, which is better? config-style conversion via serde (active here) or Into<Telemetry>?
-        T: Serialize + DeserializeOwned + Debug,
-        // T: Into<Telemetry> + DeserializeOwned + Debug,
-    {
-        let mut sources = Vec::with_capacity(settings.len());
-        for (name, source_setting) in settings {
-            let src = match source_setting {
-                SourceSetting::RestApi(_query) => make_telemetry_rest_api_source::<T, _>(name, source_setting).await?,
-                SourceSetting::Csv { path: _ } => {
-                    let foo = make_telemetry_cvs_source::<T, _>(name, source_setting)?;
-                    foo
-                }
-            };
-            sources.push(src);
-        }
-
-        Ok(sources)
-    }
-
-    #[tracing::instrument(level="info", skip(self), fields(source_name=%self.name))]
-    pub async fn stop(&self) -> Result<(), CollectionError> {
-        if let Some(ref tx) = self.tx_stop {
-            let (stop, rx_ack) = TickMsg::stop();
-            tx.send(stop).map_err(|err| CollectionError::StageError(err.into()))?;
-            rx_ack
-                .await
-                .map_err(|err| CollectionError::StageError(err.into()))?
-                .map_err(|err| CollectionError::StageError(err.into()))?;
-        }
-
-        Ok(())
-    }
-}
+use tokio::sync::mpsc::UnboundedSender;
 
 /// Naive CVS source, which loads a `.cvs` file, then publishes via its outlet.
 ///
 /// An improvement to consider is to behave lazily and iterate through the source file(s)
 /// upon downstream demand.
-#[tracing::instrument(
-    level="info",
-    skip(name, setting),
-    fields(stage=%name.as_ref(), ?setting),
-)]
+#[tracing::instrument(level = "info", skip(name))]
 pub fn make_telemetry_cvs_source<T, S>(name: S, setting: &SourceSetting) -> Result<TelemetrySource, CollectionError>
 where
-    //todo: for a source, which is better? config-style conversion via serde (active here) or Into<Telemetry>?
     T: Serialize + DeserializeOwned + Debug,
-    // T: Into<Telemetry> + DeserializeOwned + Debug,
-    S: AsRef<str>,
+    S: Into<String>,
 {
     if let SourceSetting::Csv { path } = setting {
-        let mut telemetry_name = format!("telemetry_{}", name.as_ref());
+        let name = name.into();
+        let mut telemetry_name = format!("telemetry_{}", name.as_str());
 
         if let Some(file_name) = path.file_name() {
             match file_name.to_str() {
@@ -109,15 +49,15 @@ where
 
             //todo: for a source, which is better? config-style conversion via serde (active here) or Into<Telemetry>?
             let telemetry_record = Telemetry::try_from(&record)?;
-            // let telemetry_record = record.into();
 
             records.push(telemetry_record);
         }
         tracing::info!("deserialized {} records from CSV.", records.len());
 
         let source = stage::Sequence::new(telemetry_name, records);
+        let stage: Option<Box<dyn SourceStage<Telemetry>>> = Some(Box::new(source));
 
-        Ok(TelemetrySource::new(name, Box::new(source), None))
+        Ok(TelemetrySource { name, stage, tx_stop: None })
     } else {
         Err(IncompatibleSourceSettingsError::ExpectedTypeError {
             expected: "cvs".to_string(),
@@ -127,24 +67,20 @@ where
     }
 }
 
-#[tracing::instrument(
-    level="info",
-    skip(name, setting),
-    fields(stage=%name.as_ref(), ?setting),
-)]
+#[tracing::instrument(level = "info", skip(name))]
 pub async fn make_telemetry_rest_api_source<T, S>(
     name: S, setting: &SourceSetting,
 ) -> Result<TelemetrySource, CollectionError>
 where
-    //todo: for a source, which is better? config-style conversion via serde (active here) or Into<Telemetry>?
     T: Serialize + DeserializeOwned + Debug,
-    // T: Into<Telemetry> + DeserializeOwned + Debug,
-    S: AsRef<str>,
+    S: Into<String>,
 {
     if let SourceSetting::RestApi(query) = setting {
+        let name = name.into();
+
         // scheduler
         let tick = stage::Tick::new(
-            format!("telemetry_{}_tick", name.as_ref()),
+            format!("telemetry_{}_tick", name),
             Duration::from_nanos(0),
             query.interval,
             (),
@@ -175,17 +111,14 @@ where
                     .json::<T>()
                     .await?;
 
-                //todo: for a source, which is better? config-style conversion via serde (active here) or Into<Telemetry>?
                 let telemetry_record = Telemetry::try_from(&record)?;
-                // let telemetry_record: Telemetry = record.into();
-
                 std::result::Result::<Telemetry, CollectionError>::Ok(telemetry_record)
             }
             .map(|d| d.unwrap())
         };
 
         let collect_telemetry =
-            stage::TriggeredGenerator::<_, _, Telemetry>::new(format!("telemetry_{}_gen", name.as_ref()), gen);
+            stage::TriggeredGenerator::<_, _, Telemetry>::new(format!("telemetry_{}_gen", name), gen);
 
         // compose tick & generator into a source shape
         let composite_outlet = collect_telemetry.outlet().clone();
@@ -195,15 +128,46 @@ where
         cg.push_back(Box::new(tick)).await;
         cg.push_back(Box::new(collect_telemetry)).await;
         let composite: CompositeSource<Telemetry> =
-            stage::CompositeSource::new(format!("telemetry_{}", name.as_ref()), cg, composite_outlet).await;
-        let composite: Box<dyn SourceStage<Telemetry>> = Box::new(composite);
+            stage::CompositeSource::new(format!("telemetry_{}", name), cg, composite_outlet).await;
+        let stage: Option<Box<dyn SourceStage<Telemetry>>> = Some(Box::new(composite));
 
-        Ok(TelemetrySource::new(name, composite, Some(tx_tick_api)))
+        Ok(TelemetrySource { name, stage, tx_stop: Some(tx_tick_api) })
     } else {
         Err(IncompatibleSourceSettingsError::ExpectedTypeError {
             expected: "HTTP query".to_string(),
             settings: setting.clone(),
         }
         .into())
+    }
+}
+
+pub struct TelemetrySource {
+    pub name: String,
+    stage: Option<Box<dyn SourceStage<Telemetry>>>,
+    tx_stop: Option<mpsc::UnboundedSender<TickMsg>>,
+}
+
+impl TelemetrySource {
+    #[tracing::instrument(level = "info")]
+    pub async fn collect_from_settings<T>(
+        settings: &HashMap<String, SourceSetting>,
+    ) -> Result<Vec<Self>, CollectionError>
+    where
+        T: Serialize + DeserializeOwned + Debug,
+    {
+        let mut sources = Vec::with_capacity(settings.len());
+        for (name, source_setting) in settings {
+            let src = match source_setting {
+                SourceSetting::RestApi(_query) => make_telemetry_rest_api_source::<T, _>(name, source_setting).await?,
+                SourceSetting::Csv { path: _ } => make_telemetry_cvs_source::<T, _>(name, source_setting)?,
+            };
+            sources.push(src);
+        }
+
+        Ok(sources)
+    }
+
+    pub fn take(&mut self) -> Option<(Box<dyn SourceStage<Telemetry>>, Option<UnboundedSender<TickMsg>>)> {
+        self.stage.take().map(|s| (s, self.tx_stop.take()))
     }
 }

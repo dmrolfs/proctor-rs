@@ -8,7 +8,9 @@ use chrono::{DateTime, TimeZone, Utc};
 use claim::*;
 use pretty_assertions::assert_eq;
 use proctor::elements::Telemetry;
+use proctor::error::CollectionError;
 use proctor::graph::stage;
+use proctor::graph::stage::tick::TickMsg;
 use proctor::graph::{Connect, Graph, SinkShape};
 use proctor::phases::collection::{make_telemetry_rest_api_source, HttpQuery, SourceSetting};
 use serde::{Deserialize, Serialize};
@@ -20,35 +22,6 @@ pub struct HttpBinResponse {
     pub origin: String,
     pub url: String,
 }
-
-// impl Into<Telemetry> for HttpBinResponse {
-//     fn into(self) -> Telemetry {
-//         let mut data = Telemetry::default();
-//         if let Some(last_failure) = self.args.get("last_failure") {
-//             let _ = data.insert("last_failure".to_string(), last_failure.clone().into());
-//         }
-//
-//         data.insert(
-//             "is_deploying".to_string(),
-//             self.args
-//                 .get("is_deploying")
-//                 .map(|rep| rep.parse::<bool>().unwrap_or(false))
-//                 .unwrap_or(false)
-//                 .into(),
-//         );
-//
-//         data.insert(
-//             "last_deployment".to_string(),
-//             self.args
-//                 .get("last_deployment")
-//                 .unwrap_or(&"1970-08-30 11:32:09".to_string())
-//                 .clone()
-//                 .into(),
-//         );
-//
-//         data
-//     }
-// }
 
 #[derive(Debug, Clone, PartialEq)]
 struct Data {
@@ -144,7 +117,7 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
 
     let rx_acc = assert_some!(sink.take_final_rx());
 
-    let source_stage = source.stage.take().unwrap();
+    let (source_stage, tx_source_api) = assert_some!(source.take());
     (source_stage.outlet(), sink.inlet()).connect().await;
 
     let mut g = Graph::default();
@@ -157,15 +130,22 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
         tokio::time::sleep(run_duration).await;
 
         tracing::info!("tick-stop: stopping tick source...");
-        assert_ok!(source.stop().await);
-        // tx_tick
-        //     .send(tick::TickMsg::Stop { tx: tx_stop })
-        //     .expect("failed to send tick stop cmd.");
+        let (stop, rx_stop_ack) = TickMsg::stop();
+        tx_source_api
+            .unwrap()
+            .send(stop)
+            .map_err(|err| CollectionError::StageError(err.into()))?;
+        rx_stop_ack
+            .await
+            .map_err(|err| CollectionError::StageError(err.into()))?
+            .map_err(|err| CollectionError::StageError(err.into()))?;
+
+        Result::<(), CollectionError>::Ok(())
     });
 
     assert_ok!(g.run().await);
 
-    assert_ok!(stop_handle.await);
+    assert_ok!(assert_ok!(stop_handle.await));
     tracing::info!("tick-stop: tick source stop acknowledged");
 
     let (actual, count) = assert_ok!(rx_acc.await);

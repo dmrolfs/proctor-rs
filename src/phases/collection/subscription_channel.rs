@@ -8,7 +8,9 @@ use crate::elements::{make_from_telemetry, FromTelemetryShape, Telemetry};
 use crate::error::CollectionError;
 use crate::graph::stage::Stage;
 use crate::graph::{Inlet, Outlet, Port, SourceShape};
+use crate::phases::collection::{ClearinghouseSubscriptionMagnet, SubscriptionRequirements, TelemetrySubscription};
 use crate::{AppData, ProctorResult};
+use std::collections::HashSet;
 
 /// Subscription Source stage that can be used to adapt subscribed telemetry data into a
 /// typed inlet.
@@ -19,14 +21,86 @@ pub struct SubscriptionChannel<T> {
     outlet: Outlet<T>,
 }
 
+impl<T: SubscriptionRequirements + AppData + DeserializeOwned> SubscriptionChannel<T> {
+    #[tracing::instrument(level = "info")]
+    pub async fn connect_channel<'c>(
+        channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'c>,
+    ) -> Result<SubscriptionChannel<T>, CollectionError> {
+        Self::connect_channel_with_requirements(
+            channel_name,
+            magnet,
+            <T as SubscriptionRequirements>::required_fields(),
+            <T as SubscriptionRequirements>::optional_fields(),
+        )
+        .await
+    }
+}
+
 impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
+    #[tracing::instrument(level = "info", skip(required_fields, optional_fields))]
+    pub async fn connect_channel_with_requirements<'c>(
+        channel_name: &str, mut magnet: ClearinghouseSubscriptionMagnet<'c>,
+        required_fields: HashSet<impl Into<String>>, optional_fields: HashSet<impl Into<String>>,
+    ) -> Result<SubscriptionChannel<T>, CollectionError> {
+        let channel = Self::new(format!("{}_channel", channel_name)).await?;
+        let subscription = TelemetrySubscription::new(channel_name)
+            .with_required_fields(required_fields)
+            .with_optional_fields(optional_fields);
+
+        magnet
+            .subscribe(subscription, channel.subscription_receiver.clone())
+            .await?;
+
+        Ok(channel)
+    }
+}
+
+impl SubscriptionChannel<Telemetry> {
+    #[tracing::instrument(level = "info", skip(required_fields, optional_fields))]
+    pub async fn connect_telemetry_channel<'c>(
+        channel_name: &str, mut magnet: ClearinghouseSubscriptionMagnet<'c>,
+        required_fields: HashSet<impl Into<String>>, optional_fields: HashSet<impl Into<String>>,
+    ) -> Result<SubscriptionChannel<Telemetry>, CollectionError> {
+        let channel = Self::telemetry(format!("{}_channel", channel_name)).await?;
+        let subscription = TelemetrySubscription::new(channel_name)
+            .with_required_fields(required_fields)
+            .with_optional_fields(optional_fields);
+
+        magnet
+            .subscribe(subscription, channel.subscription_receiver.clone())
+            .await?;
+
+        Ok(channel)
+    }
+}
+
+impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
+    #[tracing::instrument(level="info", name="subscription_channel_new", skip(name), fields(channel_name=%name.as_ref()))]
     pub async fn new(name: impl AsRef<str>) -> Result<Self, CollectionError> {
         let inner_stage = make_from_telemetry(name.as_ref(), true).await;
         let subscription_receiver = inner_stage.inlet();
         let outlet = inner_stage.outlet();
 
         Ok(Self {
-            name: format!("{}_subscription", name.as_ref()),
+            name: format!("{}_typed_subscription", name.as_ref()),
+            subscription_receiver,
+            inner_stage: Some(inner_stage),
+            outlet,
+        })
+    }
+}
+
+impl SubscriptionChannel<Telemetry> {
+    #[tracing::instrument(level="info", name="subscription_channel_telemetry", skip(name), fields(channel_name=%name.as_ref()))]
+    pub async fn telemetry(name: impl AsRef<str>) -> Result<Self, CollectionError> {
+        let identity =
+            crate::graph::stage::Identity::new(name.as_ref(), Inlet::new(name.as_ref()), Outlet::new(name.as_ref()));
+        let inner_stage: FromTelemetryShape<Telemetry> = Box::new(identity);
+        let subscription_receiver = inner_stage.inlet();
+        let outlet = inner_stage.outlet();
+
+        Ok(Self {
+            name: format!("{}_telemetry_subscription", name.as_ref()),
             subscription_receiver,
             inner_stage: Some(inner_stage),
             outlet,
@@ -47,8 +121,6 @@ impl<T: Debug> Debug for SubscriptionChannel<T> {
 
 impl<T> SourceShape for SubscriptionChannel<T> {
     type Out = T;
-
-    #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()
     }
@@ -57,7 +129,6 @@ impl<T> SourceShape for SubscriptionChannel<T> {
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData> Stage for SubscriptionChannel<T> {
-    #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -68,11 +139,13 @@ impl<T: AppData> Stage for SubscriptionChannel<T> {
         Ok(())
     }
 
+    #[tracing::instrument(level = "info", name = "run subscription channel", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         self.do_run().await?;
         Ok(())
     }
 
+    #[tracing::instrument(level = "info", skip(self))]
     async fn close(mut self: Box<Self>) -> ProctorResult<()> {
         self.do_close().await?;
         Ok(())
@@ -80,7 +153,6 @@ impl<T: AppData> Stage for SubscriptionChannel<T> {
 }
 
 impl<T: AppData> SubscriptionChannel<T> {
-    #[inline]
     async fn do_check(&self) -> Result<(), CollectionError> {
         self.subscription_receiver.check_attachment().await?;
         self.outlet.check_attachment().await?;
@@ -93,7 +165,6 @@ impl<T: AppData> SubscriptionChannel<T> {
         Ok(())
     }
 
-    #[inline]
     async fn do_run(&mut self) -> Result<(), CollectionError> {
         match self.inner_stage.as_mut() {
             Some(inner) => {
@@ -105,7 +176,6 @@ impl<T: AppData> SubscriptionChannel<T> {
         }
     }
 
-    #[inline]
     async fn do_close(mut self: Box<Self>) -> Result<(), CollectionError> {
         tracing::info!("closing subscription_channel.");
         self.subscription_receiver.close().await;

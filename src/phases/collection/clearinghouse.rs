@@ -1,343 +1,27 @@
+pub mod magnet;
+pub mod protocol;
+pub mod subscription;
+
+pub use magnet::*;
+pub use protocol::*;
+pub use subscription::*;
+
 use std::collections::HashSet;
 use std::fmt::{self, Debug};
 
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use futures::future::FutureExt;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 
 use crate::elements::Telemetry;
 use crate::error::CollectionError;
 use crate::graph::stage::Stage;
-use crate::graph::{stage, Connect, Inlet, Outlet, OutletsShape, Port, SinkShape, UniformFanOutShape};
-use crate::{Ack, ProctorResult};
+use crate::graph::{stage, Inlet, OutletsShape, Port, SinkShape, UniformFanOutShape};
+use crate::ProctorResult;
+use std::borrow::Cow;
 
-//todo: refactor to based on something like Json Schema
-pub trait SubscriptionRequirements {
-    fn required_fields() -> HashSet<&'static str>;
-    fn optional_fields() -> HashSet<&'static str> {
-        HashSet::default()
-    }
-}
-
-pub type ClearinghouseApi = mpsc::UnboundedSender<ClearinghouseCmd>;
-
-#[derive(Debug)]
-pub enum ClearinghouseCmd {
-    Subscribe {
-        subscription: TelemetrySubscription,
-        receiver: Inlet<Telemetry>,
-        tx: oneshot::Sender<Ack>,
-    },
-    Unsubscribe {
-        name: String,
-        tx: oneshot::Sender<Ack>,
-    },
-    GetSnapshot {
-        name: Option<String>,
-        tx: oneshot::Sender<ClearinghouseResp>,
-    },
-}
-
-impl ClearinghouseCmd {
-    #[inline]
-    pub fn subscribe(
-        subscription: TelemetrySubscription, receiver: Inlet<Telemetry>,
-    ) -> (Self, oneshot::Receiver<Ack>) {
-        let (tx, rx) = oneshot::channel();
-        (Self::Subscribe { subscription, receiver, tx }, rx)
-    }
-
-    #[inline]
-    pub fn unsubscribe<S: Into<String>>(name: S) -> (Self, oneshot::Receiver<Ack>) {
-        let (tx, rx) = oneshot::channel();
-        (Self::Unsubscribe { name: name.into(), tx }, rx)
-    }
-
-    #[inline]
-    pub fn get_clearinghouse_snapshot() -> (Self, oneshot::Receiver<ClearinghouseResp>) {
-        let (tx, rx) = oneshot::channel();
-        (Self::GetSnapshot { name: None, tx }, rx)
-    }
-
-    #[inline]
-    pub fn get_subscription_snapshot<S: Into<String>>(name: S) -> (Self, oneshot::Receiver<ClearinghouseResp>) {
-        let (tx, rx) = oneshot::channel();
-        (Self::GetSnapshot { name: Some(name.into()), tx }, rx)
-    }
-}
-
-#[derive(Debug)]
-pub enum ClearinghouseResp {
-    Snapshot {
-        database: Telemetry,
-        missing: HashSet<String>,
-        subscriptions: Vec<TelemetrySubscription>,
-    },
-}
-
-#[derive(Debug, Clone)]
-pub enum TelemetrySubscription {
-    All {
-        name: String,
-        outlet_to_subscription: Outlet<Telemetry>,
-    },
-    Explicit {
-        name: String,
-        required_fields: HashSet<String>,
-        optional_fields: HashSet<String>,
-        outlet_to_subscription: Outlet<Telemetry>,
-    },
-    /* Remainder {
-     *     name: String,
-     *     outlet_to_subscription: Outlet<TelemetryData>,
-     * } */
-}
-
-impl TelemetrySubscription {
-    pub fn new(name: impl AsRef<str>) -> Self {
-        let outlet_to_subscription = Outlet::new(format!("outlet_for_subscription_{}", name.as_ref()));
-        Self::All {
-            name: name.as_ref().to_string(),
-            outlet_to_subscription,
-        }
-    }
-
-    pub fn with_requirements<T: SubscriptionRequirements>(self) -> Self {
-        self.with_required_fields(T::required_fields())
-            .with_optional_fields(T::optional_fields())
-    }
-
-    pub fn with_required_fields<S: Into<String>>(self, required_fields: HashSet<S>) -> Self {
-        let required_fields = required_fields.into_iter().map(|s| s.into()).collect();
-
-        match self {
-            Self::All { name, outlet_to_subscription } => Self::Explicit {
-                name,
-                required_fields,
-                optional_fields: HashSet::default(),
-                outlet_to_subscription,
-            },
-            Self::Explicit {
-                name,
-                required_fields: mut my_required_fields,
-                optional_fields,
-                outlet_to_subscription,
-            } => {
-                my_required_fields.extend(required_fields);
-                Self::Explicit {
-                    name,
-                    required_fields: my_required_fields,
-                    optional_fields,
-                    outlet_to_subscription,
-                }
-            }
-        }
-    }
-
-    pub fn with_optional_fields<S: Into<String>>(self, optional_fields: HashSet<S>) -> Self {
-        let optional_fields = optional_fields.into_iter().map(|s| s.into()).collect();
-        match self {
-            Self::All { name, outlet_to_subscription } => Self::Explicit {
-                name,
-                required_fields: HashSet::default(),
-                optional_fields,
-                outlet_to_subscription,
-            },
-            Self::Explicit {
-                name,
-                required_fields,
-                optional_fields: mut my_optional_fields,
-                outlet_to_subscription,
-            } => {
-                my_optional_fields.extend(optional_fields);
-                Self::Explicit {
-                    name,
-                    required_fields,
-                    optional_fields: my_optional_fields,
-                    outlet_to_subscription,
-                }
-            }
-        }
-    }
-
-    // pub fn remainder<S: Into<String>>(name: S) -> Self {
-    //     let name = name.into();
-    //     let outlet_to_subscription = Outlet::new(format!("outlet_for_subscription_{}", name));
-    //     Self::Remainder { name, outlet_to_subscription }
-    // }
-
-    pub fn name(&self) -> &str {
-        match self {
-            Self::All { name, outlet_to_subscription: _ } => name.as_str(),
-            Self::Explicit {
-                name,
-                required_fields: _,
-                optional_fields: _,
-                outlet_to_subscription: _,
-            } => name.as_str(),
-        }
-    }
-
-    pub fn outlet_to_subscription(&self) -> Outlet<Telemetry> {
-        match self {
-            Self::All { name: _, outlet_to_subscription } => outlet_to_subscription.clone(),
-            Self::Explicit {
-                name: _,
-                required_fields: _,
-                optional_fields: _,
-                outlet_to_subscription,
-            } => outlet_to_subscription.clone(),
-        }
-    }
-
-    pub fn any_interest(&self, _available_fields: &HashSet<&String>, changed_fields: &HashSet<String>) -> bool {
-        match self {
-            Self::All { .. } => true,
-            Self::Explicit {
-                name: _,
-                required_fields,
-                optional_fields,
-                outlet_to_subscription: _,
-            } => {
-                let mut interested = false;
-                for changed in changed_fields {
-                    if required_fields.contains(changed) || optional_fields.contains(changed) {
-                        interested = true;
-                        break;
-                    }
-                }
-                interested
-            }
-        }
-    }
-
-    pub fn trim_to_subscription(&self, database: &Telemetry) -> Result<(Telemetry, HashSet<String>), CollectionError> {
-        let mut db = database.clone();
-
-        match self {
-            Self::All { .. } => Ok((db, HashSet::default())),
-            Self::Explicit {
-                name: _,
-                required_fields,
-                optional_fields,
-                outlet_to_subscription: _,
-            } => {
-                let mut missing = HashSet::default();
-                for (key, _value) in database.iter() {
-                    if !required_fields.contains(key) && !optional_fields.contains(key) {
-                        let _ = db.remove(key);
-                    }
-                }
-
-                for req in required_fields {
-                    if !db.contains_key(req) {
-                        missing.insert(req.clone());
-                    }
-                }
-
-                for opt in optional_fields {
-                    if !db.contains_key(opt) {
-                        missing.insert(opt.clone());
-                    }
-                }
-
-                Ok((db, missing))
-            }
-        }
-    }
-
-    #[tracing::instrument(level = "info")]
-    pub fn fulfill(&self, database: &Telemetry) -> Option<Telemetry> {
-        match self {
-            Self::All { .. } => Some(database.clone()),
-            Self::Explicit {
-                name: _,
-                required_fields,
-                optional_fields,
-                outlet_to_subscription: _,
-            } => {
-                let mut ready = Vec::new();
-                let mut unfilled = Vec::new();
-
-                for required in required_fields.iter() {
-                    match database.get(required) {
-                        Some(value) => ready.push((required.clone(), value)),
-                        None => unfilled.push(required),
-                    }
-                }
-
-                if unfilled.is_empty() {
-                    for optional in optional_fields.iter() {
-                        tracing::trace!(?optional, "looking for optional.");
-                        if let Some(value) = database.get(optional) {
-                            ready.push((optional.clone(), value))
-                        }
-                    }
-                }
-
-                tracing::trace!(?ready, ?unfilled, subscription=?self, "fulfilling required and optional fields.");
-                if ready.is_empty() || !unfilled.is_empty() {
-                    tracing::info!(
-                        subscription=?self,
-                        unfilled_fields=?unfilled,
-                        "unsatisfided subscription - not publishing."
-                    );
-
-                    None
-                } else {
-                    let ready = ready.into_iter().map(|(k, v)| (k, v.clone())).collect();
-                    Some(ready)
-                }
-            }
-        }
-    }
-
-    #[tracing::instrument(level = "trace", skip(self))]
-    pub async fn connect_to_receiver(&self, receiver: &Inlet<Telemetry>) {
-        let outlet = self.outlet_to_subscription();
-        (&outlet, receiver).connect().await;
-    }
-
-    pub async fn send(&self, telemetry: Telemetry) -> Result<(), CollectionError> {
-        self.outlet_to_subscription().send(telemetry).await?;
-        Ok(())
-    }
-}
-
-impl TelemetrySubscription {
-    #[tracing::instrument()]
-    pub async fn close(self) {
-        self.outlet_to_subscription().close().await;
-    }
-}
-
-impl PartialEq for TelemetrySubscription {
-    fn eq(&self, other: &Self) -> bool {
-        use TelemetrySubscription::*;
-
-        match (self, other) {
-            (All { name: lhs_name, outlet_to_subscription: _ }, All { name: rhs_name, outlet_to_subscription: _ }) => {
-                lhs_name == rhs_name
-            }
-            (
-                Explicit {
-                    name: lhs_name,
-                    required_fields: lhs_required,
-                    optional_fields: lhs_optional,
-                    outlet_to_subscription: _,
-                },
-                Explicit {
-                    name: rhs_name,
-                    required_fields: rhs_required,
-                    optional_fields: rhs_optional,
-                    outlet_to_subscription: _,
-                },
-            ) => (lhs_name == rhs_name) && (lhs_required == rhs_required) && (lhs_optional == rhs_optional),
-            _ => false,
-        }
-    }
-}
+pub type Str = Cow<'static, str>;
 
 /// Clearinghouse is a sink for collected telemetry data and a subscription-based source for
 /// groups of telemetry fields.
@@ -351,9 +35,9 @@ pub struct Clearinghouse {
 }
 
 impl Clearinghouse {
-    pub fn new<S: Into<String>>(name: S) -> Self {
-        let (tx_api, rx_api) = mpsc::unbounded_channel();
+    pub fn new(name: impl Into<String>) -> Self {
         let name = name.into();
+        let (tx_api, rx_api) = mpsc::unbounded_channel();
         let inlet = Inlet::new(name.clone());
 
         Self {
@@ -367,7 +51,7 @@ impl Clearinghouse {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
-    pub async fn add_subscription(&mut self, subscription: TelemetrySubscription, receiver: &Inlet<Telemetry>) {
+    pub async fn subscribe(&mut self, subscription: TelemetrySubscription, receiver: &Inlet<Telemetry>) {
         tracing::info!(stage=%self.name, ?subscription, "adding clearinghouse subscription.");
         subscription.connect_to_receiver(receiver).await;
         self.subscriptions.push(subscription);
@@ -560,7 +244,6 @@ impl Debug for Clearinghouse {
 impl SinkShape for Clearinghouse {
     type In = Telemetry;
 
-    #[inline]
     fn inlet(&self) -> Inlet<Self::In> {
         self.inlet.clone()
     }
@@ -569,7 +252,6 @@ impl SinkShape for Clearinghouse {
 impl UniformFanOutShape for Clearinghouse {
     type Out = Telemetry;
 
-    #[inline]
     fn outlets(&self) -> OutletsShape<Self::Out> {
         self.subscriptions.iter().map(|s| s.outlet_to_subscription()).collect()
     }
@@ -578,7 +260,6 @@ impl UniformFanOutShape for Clearinghouse {
 #[dyn_upcast]
 #[async_trait]
 impl Stage for Clearinghouse {
-    #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -602,7 +283,6 @@ impl Stage for Clearinghouse {
 }
 
 impl Clearinghouse {
-    #[inline]
     async fn do_check(&self) -> Result<(), CollectionError> {
         self.inlet.check_attachment().await?;
 
@@ -613,7 +293,6 @@ impl Clearinghouse {
         Ok(())
     }
 
-    #[inline]
     async fn do_run(&mut self) -> Result<(), CollectionError> {
         let mut inlet = self.inlet.clone();
         let rx_api = &mut self.rx_api;
@@ -660,7 +339,6 @@ impl Clearinghouse {
         Ok(())
     }
 
-    #[inline]
     async fn do_close(mut self: Box<Self>) -> Result<(), CollectionError> {
         tracing::warn!("DMR: closing clearinghouse.");
         self.inlet.close().await;
@@ -675,7 +353,6 @@ impl Clearinghouse {
 impl stage::WithApi for Clearinghouse {
     type Sender = ClearinghouseApi;
 
-    #[inline]
     fn tx_api(&self) -> Self::Sender {
         self.tx_api.clone()
     }
@@ -698,7 +375,7 @@ mod tests {
     use super::*;
     use crate::elements::telemetry::ToTelemetry;
     use crate::graph::stage::{self, Stage, WithApi};
-    use crate::graph::{Connect, SinkShape, SourceShape};
+    use crate::graph::{Connect, SinkShape, SourceShape, Outlet};
 
     lazy_static! {
         static ref SUBSCRIPTIONS: Vec<TelemetrySubscription> = vec![
@@ -765,9 +442,9 @@ mod tests {
             assert!(!clearinghouse.inlet.is_attached().await);
 
             clearinghouse
-                .add_subscription(
+                .subscribe(
                     TelemetrySubscription::new("sub1")
-                        .with_required_fields(maplit::hashset! {"aaa".to_string(), "bbb".to_string()})
+                        .with_required_fields(maplit::hashset! {"aaa", "bbb"})
                         .with_optional_fields(HashSet::<&str>::default()),
                     &sub1_inlet,
                 )
@@ -877,8 +554,8 @@ mod tests {
             let inlet_1 = Inlet::new("inlet_1");
             let (add, rx_add) = ClearinghouseCmd::subscribe(
                 TelemetrySubscription::new("sub1")
-                    .with_required_fields(maplit::hashset! { "dr".to_string() })
-                    .with_optional_fields(HashSet::<&str>::default()),
+                    .with_required_fields(maplit::hashset! { "dr" })
+                    .with_optional_fields(HashSet::<String>::default()),
                 inlet_1.clone(),
             );
             tx_api.send(add)?;

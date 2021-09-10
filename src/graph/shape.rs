@@ -55,6 +55,10 @@ impl<T: Send> InletsShape<T> {
         Self(Arc::new(Mutex::new(inlets)))
     }
 
+    pub async fn len(&self) -> usize {
+        self.0.lock().await.len()
+    }
+
     pub async fn get(&self, index: usize) -> Option<Inlet<T>> {
         self.0.lock().await.get(index).map(|i| i.clone())
     }

@@ -4,15 +4,14 @@ use std::path::PathBuf;
 
 use ::serde::{Deserialize, Serialize};
 use anyhow::Result;
-use cast_trait_object::DynCastExt;
 use proctor::elements;
 use proctor::elements::Telemetry;
 use proctor::error::TelemetryError;
-use proctor::graph::stage;
 use proctor::graph::SinkShape;
+use proctor::graph::{stage, SourceShape};
 use proctor::graph::{Connect, Graph};
 use proctor::phases::collection;
-use proctor::phases::collection::{SourceSetting, TelemetrySubscription};
+use proctor::phases::collection::{Collect, SourceSetting};
 use proctor::tracing::{get_subscriber, init_subscriber};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -72,10 +71,18 @@ async fn main() -> Result<()> {
     let cvs_path = base_path.join(PathBuf::from("tests/data/cats.csv"));
     let cvs_setting = SourceSetting::Csv { path: cvs_path };
     let mut cvs_source = collection::make_telemetry_cvs_source::<Data, _>("cvs", &cvs_setting)?;
-
-    let mut clearinghouse = collection::Clearinghouse::new("clearinghouse");
+    let cvs_stage = cvs_source.take().unwrap().0;
 
     let pos_stats_fields = maplit::hashset! { POS_FIELD.to_string() };
+    let collect = Collect::telemetry(
+        "collect",
+        vec![cvs_stage],
+        pos_stats_fields.clone(),
+        HashSet::<String>::default(),
+    )
+    .await?;
+    // let mut clearinghouse = collection::Clearinghouse::new("clearinghouse");
+
     let mut pos_stats =
         stage::Fold::<_, elements::Telemetry, (usize, usize)>::new("pos_stats", (0, 0), move |(count, sum), data| {
             let delivered = data.keys().cloned().collect::<HashSet<_>>();
@@ -92,12 +99,12 @@ async fn main() -> Result<()> {
         });
     let rx_pos_stats = pos_stats.take_final_rx().unwrap();
 
-    clearinghouse
-        .add_subscription(
-            TelemetrySubscription::new("pos").with_required_fields(maplit::hashset! { POS_FIELD.to_string() }),
-            &pos_stats.inlet(),
-        )
-        .await;
+    // clearinghouse
+    //     .add_subscription(
+    //         TelemetrySubscription::new("pos").with_required_fields(maplit::hashset! { POS_FIELD.to_string() }),
+    //         &pos_stats.inlet(),
+    //     )
+    //     .await;
 
     // let (mut sink, _, rx_acc) =
     //     stage::Fold::<_, collection::TelemetryData, (Data, usize)>::new("sink", (Data::default(), 0),
@@ -141,12 +148,14 @@ async fn main() -> Result<()> {
     //         )
     //     });
 
-    let cvs_stage = cvs_source.stage.take().unwrap();
-    (cvs_stage.outlet(), clearinghouse.inlet()).connect().await;
+    // let cvs_stage = cvs_source.stage.take().unwrap();
+    // (cvs_stage.outlet(), clearinghouse.inlet()).connect().await;
+    (collect.outlet(), pos_stats.inlet()).connect().await;
 
     let mut g = Graph::default();
-    g.push_back(cvs_stage.dyn_upcast()).await;
-    g.push_back(Box::new(clearinghouse)).await;
+    // g.push_back(cvs_stage.dyn_upcast()).await;
+    // g.push_back(Box::new(clearinghouse)).await;
+    g.push_back(Box::new(collect)).await;
     g.push_back(Box::new(pos_stats)).await;
 
     // let (tx_stop, rx_stop) = oneshot::channel();
