@@ -39,7 +39,7 @@ pub struct ActorSource<T> {
 }
 
 impl<T> ActorSource<T> {
-    pub fn new<S: Into<String>>(name: S) -> Self {
+    pub fn new(name: impl Into<String>) -> Self {
         let name = name.into();
         let outlet = Outlet::new(name.clone());
         let (tx_api, rx_api) = mpsc::unbounded_channel();
@@ -50,7 +50,6 @@ impl<T> ActorSource<T> {
 impl<T> SourceShape for ActorSource<T> {
     type Out = T;
 
-    #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()
     }
@@ -59,7 +58,6 @@ impl<T> SourceShape for ActorSource<T> {
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData> Stage for ActorSource<T> {
-    #[inline]
     fn name(&self) -> &str {
         self.name.as_ref()
     }
@@ -112,7 +110,6 @@ impl<T: AppData> Stage for ActorSource<T> {
 impl<T> stage::WithApi for ActorSource<T> {
     type Sender = ActorSourceApi<T>;
 
-    #[inline]
     fn tx_api(&self) -> Self::Sender {
         self.tx_api.clone()
     }

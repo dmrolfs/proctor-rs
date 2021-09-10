@@ -14,8 +14,8 @@ pub struct Identity<T> {
 }
 
 impl<T> Identity<T> {
-    pub fn new(name: impl AsRef<str>, inlet: Inlet<T>, outlet: Outlet<T>) -> Self {
-        Self { name: name.as_ref().to_string(), inlet, outlet }
+    pub fn new(name: impl Into<String>, inlet: Inlet<T>, outlet: Outlet<T>) -> Self {
+        Self { name: name.into(), inlet, outlet }
     }
 }
 

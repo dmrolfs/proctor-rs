@@ -92,14 +92,10 @@ pub struct CompositeThrough<In, Out> {
 }
 
 impl<In: AppData, Out: AppData> CompositeThrough<In, Out> {
-    pub async fn new(name: impl AsRef<str>, graph: Graph, graph_inlet: Inlet<In>, graph_outlet: Outlet<Out>) -> Self {
+    pub async fn new(name: impl Into<String>, graph: Graph, graph_inlet: Inlet<In>, graph_outlet: Outlet<Out>) -> Self {
+        let name = name.into();
         let (graph, inlet, outlet) = Self::extend_graph(name.as_ref(), graph, graph_inlet, graph_outlet).await;
-        Self {
-            name: name.as_ref().to_string(),
-            graph: Some(graph),
-            inlet,
-            outlet,
-        }
+        Self { name, graph: Some(graph), inlet, outlet }
     }
 
     async fn extend_graph(

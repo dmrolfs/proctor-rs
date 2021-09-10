@@ -47,8 +47,8 @@ pub struct Currency {
 }
 
 impl Currency {
-    pub fn new(code: CurrencyCode, name: impl AsRef<str>) -> Self {
-        Self { code, name: name.as_ref().to_string() }
+    pub fn new(code: CurrencyCode, name: impl Into<String>) -> Self {
+        Self { code, name: name.into() }
     }
 }
 

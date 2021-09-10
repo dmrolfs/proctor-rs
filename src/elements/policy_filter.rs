@@ -427,7 +427,7 @@ mod tests {
 
     use super::*;
     use crate::elements::telemetry;
-    use crate::phases::collection::{SubscriptionRequirements, TelemetrySubscription};
+    use crate::phases::collection::{self, SubscriptionRequirements, TelemetrySubscription};
 
     // Make sure the `PolicyFilter` object is threadsafe
     // #[test]
@@ -458,8 +458,8 @@ mod tests {
     }
 
     impl SubscriptionRequirements for TestContext {
-        fn required_fields() -> HashSet<&'static str> {
-            maplit::hashset! {"location_code", }
+        fn required_fields() -> HashSet<collection::Str> {
+            maplit::hashset! { "location_code".into(), }
         }
     }
 

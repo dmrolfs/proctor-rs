@@ -72,15 +72,12 @@ pub async fn connect_out_to_in<T: AppData>(mut lhs: Outlet<T>, mut rhs: Inlet<T>
 pub struct Inlet<T>(String, Arc<Mutex<Option<(String, mpsc::Receiver<T>)>>>);
 
 impl<T> Inlet<T> {
-    pub fn new(name: impl AsRef<str>) -> Self {
-        Self(name.as_ref().to_string(), Arc::new(Mutex::new(None)))
+    pub fn new(name: impl Into<String>) -> Self {
+        Self(name.into(), Arc::new(Mutex::new(None)))
     }
 
-    pub fn with_receiver(name: impl AsRef<str>, receiver_name: impl AsRef<str>, rx: mpsc::Receiver<T>) -> Self {
-        Self(
-            name.as_ref().to_string(),
-            Arc::new(Mutex::new(Some((receiver_name.as_ref().to_string(), rx)))),
-        )
+    pub fn with_receiver(name: impl Into<String>, receiver_name: impl Into<String>, rx: mpsc::Receiver<T>) -> Self {
+        Self(name.into(), Arc::new(Mutex::new(Some((receiver_name.into(), rx)))))
     }
 }
 
@@ -127,7 +124,7 @@ impl<T: Debug> Inlet<T> {
             tracing::trace!("inlet connected: {} -> {}", sender, self.0);
             return Ok(());
         } else {
-            return Err(PortError::Detached(self.0.clone()));
+            return Err(PortError::Detached(format!("{}[{}]", self.0.clone(), std::any::type_name::<Self>())));
         }
     }
 
@@ -210,15 +207,12 @@ impl<T> fmt::Debug for Inlet<T> {
 pub struct Outlet<T>(String, Arc<Mutex<Option<(String, mpsc::Sender<T>)>>>);
 
 impl<T> Outlet<T> {
-    pub fn new(name: impl AsRef<str>) -> Self {
-        Self(name.as_ref().to_string(), Arc::new(Mutex::new(None)))
+    pub fn new(name: impl Into<String>) -> Self {
+        Self(name.into(), Arc::new(Mutex::new(None)))
     }
 
-    pub fn with_sender(name: impl AsRef<str>, sender_name: impl AsRef<str>, tx: mpsc::Sender<T>) -> Outlet<T> {
-        Self(
-            name.as_ref().to_string(),
-            Arc::new(Mutex::new(Some((sender_name.as_ref().to_string(), tx)))),
-        )
+    pub fn with_sender(name: impl Into<String>, sender_name: impl Into<String>, tx: mpsc::Sender<T>) -> Outlet<T> {
+        Self(name.into(), Arc::new(Mutex::new(Some((sender_name.into(), tx)))))
     }
 }
 
@@ -256,7 +250,7 @@ impl<T: AppData> Outlet<T> {
             tracing::info!("outlet connected: {} -> {}", self.0, receiver);
             return Ok(());
         } else {
-            return Err(PortError::Detached(self.0.clone()));
+            return Err(PortError::Detached(format!("{}[{}]", self.0.clone(), std::any::type_name::<Self>())));
         }
     }
 

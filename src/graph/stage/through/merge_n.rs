@@ -140,13 +140,13 @@ pub struct MergeN<T> {
 }
 
 impl<T: Send> MergeN<T> {
-    pub fn new<S: Into<String>>(name: S, input_ports: usize) -> Self {
+    pub fn new(name: impl Into<String>, input_ports: usize) -> Self {
         let name = name.into();
         let outlet = Outlet::new(name.clone());
         let (tx_api, rx_api) = mpsc::unbounded_channel();
         let inlets = InletsShape::new(
             (0..input_ports)
-                .map(|pos| Inlet::new(format!("{}_{}", name, pos)))
+                .map(|pos| Inlet::new(format!("{}_{}", name.as_str(), pos)))
                 .collect(),
         );
 
@@ -157,7 +157,6 @@ impl<T: Send> MergeN<T> {
 impl<T> UniformFanInShape for MergeN<T> {
     type In = T;
 
-    #[inline]
     fn inlets(&self) -> InletsShape<T> {
         self.inlets.clone()
     }
@@ -166,7 +165,6 @@ impl<T> UniformFanInShape for MergeN<T> {
 impl<T> SourceShape for MergeN<T> {
     type Out = T;
 
-    #[inline]
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()
     }
@@ -175,7 +173,6 @@ impl<T> SourceShape for MergeN<T> {
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData> Stage for MergeN<T> {
-    #[inline]
     fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -303,7 +300,6 @@ impl<'a, T: AppData> MergeN<T> {
 impl<T> stage::WithApi for MergeN<T> {
     type Sender = MergeApi;
 
-    #[inline]
     fn tx_api(&self) -> Self::Sender {
         self.tx_api.clone()
     }
@@ -318,17 +314,3 @@ impl<T> Debug for MergeN<T> {
             .finish()
     }
 }
-
-// /////////////////////////////////////////////////////
-// // Unit Tests ///////////////////////////////////////
-//
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::graph::stage::tick;
-//     use crate::graph::{stage, Stage};
-//     use crate::graph::{Connect, Graph, SinkShape, SourceShape, ThroughShape, UniformFanInShape};
-//     use crate::telemetry::{get_subscriber, init_subscriber};
-//     use std::time::Duration;
-//     use tokio_test::block_on;
-// }

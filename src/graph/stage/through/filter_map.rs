@@ -71,11 +71,12 @@ impl<F, In, Out> FilterMap<F, In, Out>
 where
     F: FnMut(In) -> Option<Out>,
 {
-    pub fn new(name: impl AsRef<str>, f: F) -> Self {
-        let inlet = Inlet::new(name.as_ref());
-        let outlet = Outlet::new(name.as_ref());
+    pub fn new(name: impl Into<String>, f: F) -> Self {
+        let name = name.into();
+        let inlet = Inlet::new(name.clone());
+        let outlet = Outlet::new(name.clone());
         Self {
-            name: name.as_ref().to_string(),
+            name,
             filter_map: f,
             inlet,
             outlet,

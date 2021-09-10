@@ -13,7 +13,7 @@ use proctor::elements::{self, telemetry, PolicyOutcome, PolicySubscription, Quer
 use proctor::error::PolicyError;
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape};
-use proctor::phases::collection::SubscriptionRequirements;
+use proctor::phases::collection::{self, SubscriptionRequirements};
 use proctor::ProctorContext;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -83,8 +83,8 @@ impl proctor::ProctorContext for TestContext {
 }
 
 impl SubscriptionRequirements for TestContext {
-    fn required_fields() -> HashSet<&'static str> {
-        maplit::hashset! { "location_code", "input_messages_per_sec", }
+    fn required_fields() -> HashSet<collection::Str> {
+        maplit::hashset! { "location_code".into(), "input_messages_per_sec".into(), }
     }
 }
 
@@ -95,13 +95,11 @@ struct TestPolicy {
 }
 
 impl TestPolicy {
-    pub fn with_query(policy: impl AsRef<str>, query: impl AsRef<str>) -> Self {
+    pub fn with_query(policy: impl Into<String>, query: impl Into<String>) -> Self {
+        let policy = policy.into();
         let polar = polar_core::polar::Polar::new();
-        polar.load_str(policy.as_ref()).expect("failed to parse policy");
-        Self {
-            policy: policy.as_ref().to_string(),
-            query: query.as_ref().to_string(),
-        }
+        polar.load_str(policy.as_str()).expect("failed to parse policy");
+        Self { policy, query: query.into() }
     }
 }
 
@@ -170,11 +168,11 @@ struct TestFlow {
 }
 
 impl TestFlow {
-    pub async fn new(policy: impl AsRef<str>) -> Self {
+    pub async fn new(policy: impl Into<String>) -> Self {
         Self::with_query(policy, "eligible").await
     }
 
-    pub async fn with_query(policy: impl AsRef<str>, query: impl AsRef<str>) -> Self {
+    pub async fn with_query(policy: impl Into<String>, query: impl Into<String>) -> Self {
         let item_source = stage::ActorSource::<TestItem>::new("item_source");
         let tx_item_source_api = item_source.tx_api();
 

@@ -25,9 +25,10 @@ pub struct PolicyPhase<In, Out, C> {
 
 impl<In: AppData + ToPolar, C: ProctorContext> PolicyPhase<In, PolicyOutcome<In, C>, C> {
     #[tracing::instrument(level = "info", skip(name))]
-    pub async fn carry_policy_outcome<P>(name: impl AsRef<str>, policy: P) -> Self
+    pub async fn carry_policy_outcome<P, S>(name: S, policy: P) -> Self
     where
         P: 'static + QueryPolicy<Item = In, Context = C>,
+        S: AsRef<str>,
     {
         let name = format!("{}_carry_policy_outcome", name.as_ref());
         let identity: stage::Identity<PolicyOutcome<In, C>> =
@@ -38,9 +39,10 @@ impl<In: AppData + ToPolar, C: ProctorContext> PolicyPhase<In, PolicyOutcome<In,
 
 impl<T: AppData + ToPolar, C: ProctorContext> PolicyPhase<T, T, C> {
     #[tracing::instrument(level = "info", skip(name))]
-    pub async fn strip_policy_outcome<P>(name: impl AsRef<str>, policy: P) -> Self
+    pub async fn strip_policy_outcome<P, S>(name: S, policy: P) -> Self
     where
         P: 'static + QueryPolicy<Item = T, Context = C>,
+        S: AsRef<str>,
     {
         let name = format!("{}_strip_policy_outcome", name.as_ref());
         let strip = stage::Map::new(name.as_str(), |outcome: PolicyOutcome<T, C>| outcome.item);
@@ -50,13 +52,14 @@ impl<T: AppData + ToPolar, C: ProctorContext> PolicyPhase<T, T, C> {
 
 impl<In: AppData + ToPolar, Out: AppData, C: ProctorContext> PolicyPhase<In, Out, C> {
     #[tracing::instrument(level = "info", skip(name))]
-    pub async fn with_transform<S, P, T>(name: S, policy: P, transform: T) -> Self
+    pub async fn with_transform<P, T, S>(name: S, policy: P, transform: T) -> Self
     where
-        S: AsRef<str>,
         P: 'static + QueryPolicy<Item = In, Context = C>,
         T: 'static + ThroughStage<PolicyOutcome<In, C>, Out>,
+        S: Into<String>,
     {
-        let policy_filter = PolicyFilter::new(format!("{}_phase", name.as_ref()), policy);
+        let name = name.into();
+        let policy_filter = PolicyFilter::new(format!("{}_phase", name), policy);
         let context_inlet = policy_filter.context_inlet();
         let tx_policy_api = policy_filter.tx_api();
         let tx_policy_monitor = policy_filter.tx_monitor.clone();
@@ -70,15 +73,14 @@ impl<In: AppData + ToPolar, Out: AppData, C: ProctorContext> PolicyPhase<In, Out
         graph.push_back(Box::new(transform)).await;
 
         let policy_transform = Box::new(
-            stage::CompositeThrough::new(format!("{}_composite", name.as_ref()), graph, graph_inlet, graph_outlet)
-                .await,
+            stage::CompositeThrough::new(format!("{}_composite", name), graph, graph_inlet, graph_outlet).await,
         );
 
         let inlet = policy_transform.inlet();
         let outlet = policy_transform.outlet();
 
         Self {
-            name: name.as_ref().to_string(),
+            name,
             policy_transform,
             context_inlet,
             inlet,

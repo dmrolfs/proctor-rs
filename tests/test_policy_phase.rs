@@ -20,8 +20,7 @@ use proctor::elements::{
 use proctor::error::{PolicyError, ProctorError};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape, UniformFanInShape};
-use proctor::phases::collection;
-use proctor::phases::collection::{SubscriptionRequirements, TelemetrySubscription};
+use proctor::phases::collection::{self, SubscriptionRequirements, TelemetrySubscription};
 use proctor::phases::policy_phase::PolicyPhase;
 use proctor::AppData;
 use proctor::ProctorContext;
@@ -61,17 +60,16 @@ impl ProctorContext for TestPolicyPhaseContext {
 }
 
 impl SubscriptionRequirements for TestPolicyPhaseContext {
-    fn required_fields() -> HashSet<&'static str> {
-        // todo: DMR SERDE_REFLECTION
+    fn required_fields() -> HashSet<collection::Str> {
         maplit::hashset! {
-            "cluster.location_code",
-            "cluster.is_deploying",
-            "cluster.last_deployment",
+            "cluster.location_code".into(),
+            "cluster.is_deploying".into(),
+            "cluster.last_deployment".into(),
         }
     }
 
-    fn optional_fields() -> HashSet<&'static str> {
-        maplit::hashset! { "task.last_failure", }
+    fn optional_fields() -> HashSet<collection::Str> {
+        maplit::hashset! { "task.last_failure".into(), }
     }
 }
 
@@ -364,10 +362,10 @@ where
             .await;
         (merge.outlet(), clearinghouse.inlet()).connect().await;
         clearinghouse
-            .add_subscription(telemetry_subscription, &telemetry_channel.subscription_receiver)
+            .subscribe(telemetry_subscription, &telemetry_channel.subscription_receiver)
             .await;
         clearinghouse
-            .add_subscription(context_subscription, &context_channel.subscription_receiver)
+            .subscribe(context_subscription, &context_channel.subscription_receiver)
             .await;
         (context_channel.outlet(), eligibility.context_inlet()).connect().await;
         (telemetry_channel.outlet(), eligibility.inlet()).connect().await;
@@ -756,22 +754,21 @@ struct TestPolicyB {
 }
 
 impl TestPolicyB {
-    pub fn new<S: AsRef<str>>(policy: S) -> Self {
+    pub fn new<S: Into<String>>(policy: S) -> Self {
         Self::new_with_extension(policy, HashSet::<String>::new())
     }
 
-    pub fn new_with_extension<S>(policy: impl AsRef<str>, subscription_extension: HashSet<S>) -> Self
+    pub fn new_with_extension<S0, S1>(policy: S0, subscription_extension: HashSet<S1>) -> Self
     where
-        S: Into<String>,
+        S0: Into<String>,
+        S1: Into<String>,
     {
+        let policy = policy.into();
         let subscription_extension = subscription_extension.into_iter().map(|s| s.into()).collect();
 
         let polar = polar_core::polar::Polar::new();
-        polar.load_str(policy.as_ref()).expect("failed to parse policy text");
-        Self {
-            policy: policy.as_ref().to_string(),
-            subscription_extension,
-        }
+        polar.load_str(policy.as_str()).expect("failed to parse policy text");
+        Self { policy, subscription_extension }
     }
 }
 

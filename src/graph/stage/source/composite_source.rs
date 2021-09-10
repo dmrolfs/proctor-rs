@@ -147,13 +147,10 @@ pub struct CompositeSource<Out> {
 }
 
 impl<Out: AppData> CompositeSource<Out> {
-    pub async fn new(name: impl AsRef<str>, graph: Graph, graph_outlet: Outlet<Out>) -> Self {
+    pub async fn new(name: impl Into<String>, graph: Graph, graph_outlet: Outlet<Out>) -> Self {
+        let name = name.into();
         let (graph, outlet) = Self::extend_graph(name.as_ref(), graph, graph_outlet).await;
-        Self {
-            name: name.as_ref().to_string(),
-            graph: Some(graph),
-            outlet,
-        }
+        Self { name, graph: Some(graph), outlet }
     }
 
     async fn extend_graph(name: &str, mut graph: Graph, graph_outlet: Outlet<Out>) -> (Graph, Outlet<Out>) {

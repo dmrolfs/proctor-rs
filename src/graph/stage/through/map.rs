@@ -66,15 +66,11 @@ impl<F, In, Out> Map<F, In, Out>
 where
     F: FnMut(In) -> Out,
 {
-    pub fn new(name: impl AsRef<str>, operation: F) -> Self {
-        let inlet = Inlet::new(name.as_ref());
-        let outlet = Outlet::new(name.as_ref());
-        Self {
-            name: name.as_ref().to_string(),
-            operation,
-            inlet,
-            outlet,
-        }
+    pub fn new(name: impl Into<String>, operation: F) -> Self {
+        let name = name.into();
+        let inlet = Inlet::new(name.clone());
+        let outlet = Outlet::new(name.clone());
+        Self { name, operation, inlet, outlet }
     }
 }
 
