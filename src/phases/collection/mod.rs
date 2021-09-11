@@ -204,6 +204,14 @@ impl<Out> SourceShape for Collect<Out> {
     }
 }
 
+impl<Out> WithApi for Collect<Out> {
+    type Sender = ClearinghouseApi;
+
+    fn tx_api(&self) -> Self::Sender {
+        self.tx_clearinghouse_api.clone()
+    }
+}
+
 #[dyn_upcast]
 #[async_trait]
 impl<Out: AppData> Stage for Collect<Out> {
