@@ -375,7 +375,7 @@ mod tests {
     use super::*;
     use crate::elements::telemetry::ToTelemetry;
     use crate::graph::stage::{self, Stage, WithApi};
-    use crate::graph::{Connect, SinkShape, SourceShape, Outlet};
+    use crate::graph::{Connect, Outlet, SinkShape, SourceShape};
 
     lazy_static! {
         static ref SUBSCRIPTIONS: Vec<TelemetrySubscription> = vec![

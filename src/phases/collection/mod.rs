@@ -1,22 +1,23 @@
 use crate::elements::Telemetry;
 use crate::error::CollectionError;
 use crate::graph::stage::{self, SourceStage, Stage, WithApi};
-use crate::graph::{Connect, Graph, Outlet, Port, SourceShape, UniformFanInShape, SinkShape};
+use crate::graph::{Connect, Graph, Outlet, Port, SinkShape, SourceShape, UniformFanInShape};
 use crate::{AppData, ProctorResult};
 use async_trait::async_trait;
 use cast_trait_object::{dyn_upcast, DynCastExt};
-pub use clearinghouse::*;
 use serde::de::DeserializeOwned;
-pub use settings::*;
-pub use source::{make_telemetry_cvs_source, make_telemetry_rest_api_source};
 use std::collections::HashSet;
 use std::fmt::{self, Debug};
-pub use subscription_channel::SubscriptionChannel;
 
-mod clearinghouse;
-mod settings;
-mod source;
-mod subscription_channel;
+pub use clearinghouse::*;
+pub use settings::*;
+pub use source::*;
+pub use subscription_channel::*;
+
+pub mod clearinghouse;
+pub mod settings;
+pub mod source;
+pub mod subscription_channel;
 
 //todo: implement
 // pub type CollectApi = mpsc::UnboundedSender<CollectCmd>;
@@ -50,11 +51,94 @@ pub struct Collect<Out> {
     //todo: tx_monitor: CollectMonitor,
 }
 
-impl Collect<Telemetry> {
+impl<Out: AppData + SubscriptionRequirements + DeserializeOwned> Collect<Out> {
+    #[tracing::instrument(level="info", skip(name, sources), fields(nr_sources = %sources.len()))]
+    pub async fn new(
+        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
+    ) -> Result<Self, CollectionError> {
+        Self::for_requirements(
+            name,
+            sources,
+            <Out as SubscriptionRequirements>::required_fields(),
+            <Out as SubscriptionRequirements>::optional_fields(),
+        )
+        .await
+    }
+}
+
+impl<Out: AppData + DeserializeOwned> Collect<Out> {
     #[tracing::instrument(
         level="info",
         skip(name, sources, required_fields, optional_fields),
-        fields(nr_sources=%sources.len(),)
+        fields(nr_sources = %sources.len())
+    )]
+    pub async fn for_requirements(
+        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
+        required_fields: HashSet<impl Into<String>>, optional_fields: HashSet<impl Into<String>>,
+    ) -> Result<Self, CollectionError> {
+        let name = name.into();
+        let num_sources = sources.len();
+        let merge = stage::MergeN::new(format!("{}_source_merge_{}", name, num_sources), num_sources);
+        let mut clearinghouse = Clearinghouse::new(format!("{}_clearinghouse", name));
+        let tx_clearinghouse_api = clearinghouse.tx_api();
+        (merge.outlet(), clearinghouse.inlet()).connect().await;
+
+        let out_channel: SubscriptionChannel<Out> = SubscriptionChannel::connect_channel_with_requirements(
+            name.as_str(),
+            (&mut clearinghouse).into(),
+            required_fields,
+            optional_fields,
+        )
+        .await?;
+
+        clearinghouse
+            .check()
+            .await
+            .map_err(|err| crate::error::PortError::ChannelError(err.into()))?;
+        out_channel.subscription_receiver.check_attachment().await?;
+        tracing::info!(?clearinghouse, channel_name=%name, "connected subscription channel");
+
+        let outlet = out_channel.outlet();
+
+        let mut g = Graph::default();
+        let merge_inlets = merge.inlets();
+        let num_merge_inlets = merge_inlets.len().await;
+        if num_merge_inlets != num_sources {
+            return Err(CollectionError::PortError(crate::error::PortError::Detached(format!(
+                "merge inlets({}) does not match number of sources({})",
+                num_merge_inlets, num_sources
+            ))));
+        }
+
+        for (idx, s) in sources.into_iter().enumerate() {
+            match merge_inlets.get(idx).await {
+                Some(merge_inlet) => {
+                    tracing::info!(source=%s.name(), ?merge_inlet, "connecting collection source to clearinghouse.");
+                    (s.outlet(), merge_inlet).connect().await;
+                    g.push_back(s.dyn_upcast()).await;
+                }
+
+                None => {
+                    tracing::warn!(source=%s.name(), "no available clearinghouse port for source - skipping source");
+                }
+            }
+        }
+        g.push_back(Box::new(merge)).await;
+        g.push_back(Box::new(clearinghouse)).await;
+        g.push_back(Box::new(out_channel)).await;
+        let composite = stage::CompositeSource::new(format!("{}_composite_source", name), g, outlet).await;
+
+        let inner: Box<dyn SourceStage<Out>> = Box::new(composite);
+        let outlet = inner.outlet();
+        Ok(Self { name, inner, outlet, tx_clearinghouse_api })
+    }
+}
+
+impl Collect<Telemetry> {
+    #[tracing::instrument(
+    level="info",
+    skip(name, sources, required_fields, optional_fields),
+    fields(nr_sources=%sources.len(),)
     )]
     pub async fn telemetry(
         name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
@@ -100,85 +184,6 @@ impl Collect<Telemetry> {
         let inner: Box<dyn SourceStage<Telemetry>> = Box::new(composite);
         let outlet = inner.outlet();
         Ok(Self { name, inner, outlet, tx_clearinghouse_api })
-    }
-}
-
-impl<Out: AppData + DeserializeOwned> Collect<Out> {
-    #[tracing::instrument(
-        level="info",
-        skip(name, sources, required_fields, optional_fields),
-        fields(nr_sources = %sources.len())
-    )]
-    pub async fn for_requirements(
-        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
-        required_fields: HashSet<impl Into<String>>, optional_fields: HashSet<impl Into<String>>,
-    ) -> Result<Self, CollectionError> {
-        let name = name.into();
-        let num_sources = sources.len();
-        let merge = stage::MergeN::new(format!("{}_source_merge_{}", name, num_sources), num_sources);
-        let mut clearinghouse = Clearinghouse::new(format!("{}_clearinghouse", name));
-        let tx_clearinghouse_api = clearinghouse.tx_api();
-        (merge.outlet(), clearinghouse.inlet()).connect().await;
-
-        let out_channel: SubscriptionChannel<Out> = SubscriptionChannel::connect_channel_with_requirements(
-            name.as_str(),
-            (&mut clearinghouse).into(),
-            required_fields,
-            optional_fields,
-        )
-        .await?;
-
-        clearinghouse.check().await.map_err(|err| crate::error::PortError::ChannelError(err.into()))?;
-        out_channel.subscription_receiver.check_attachment().await?;
-        tracing::info!(?clearinghouse, channel_name=%name, "connected subscription channel");
-
-        let outlet = out_channel.outlet();
-
-        let mut g = Graph::default();
-        let merge_inlets = merge.inlets();
-        let num_merge_inlets = merge_inlets.len().await;
-        if num_merge_inlets != num_sources {
-            return Err(CollectionError::PortError(crate::error::PortError::Detached(
-                format!("merge inlets({}) does not match number of sources({})", num_merge_inlets, num_sources)
-            )));
-        }
-
-        for (idx, s) in sources.into_iter().enumerate() {
-            match merge_inlets.get(idx).await {
-                Some(merge_inlet) => {
-                    tracing::info!(source=%s.name(), ?merge_inlet, "connecting collection source to clearinghouse.");
-                    (s.outlet(), merge_inlet).connect().await;
-                    g.push_back(s.dyn_upcast()).await;
-                }
-
-                None => {
-                    tracing::warn!(source=%s.name(), "no available clearinghouse port for source - skipping source");
-                }
-            }
-        }
-        g.push_back(Box::new(merge)).await;
-        g.push_back(Box::new(clearinghouse)).await;
-        g.push_back(Box::new(out_channel)).await;
-        let composite = stage::CompositeSource::new(format!("{}_composite_source", name), g, outlet).await;
-
-        let inner: Box<dyn SourceStage<Out>> = Box::new(composite);
-        let outlet = inner.outlet();
-        Ok(Self { name, inner, outlet, tx_clearinghouse_api })
-    }
-}
-
-impl<Out: AppData + SubscriptionRequirements + DeserializeOwned> Collect<Out> {
-    #[tracing::instrument(level="info", skip(name, sources), fields(nr_sources = %sources.len()))]
-    pub async fn new(
-        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
-    ) -> Result<Self, CollectionError> {
-        Self::for_requirements(
-            name,
-            sources,
-            <Out as SubscriptionRequirements>::required_fields(),
-            <Out as SubscriptionRequirements>::optional_fields(),
-        )
-        .await
     }
 }
 

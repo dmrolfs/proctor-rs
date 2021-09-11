@@ -124,7 +124,11 @@ impl<T: Debug> Inlet<T> {
             tracing::trace!("inlet connected: {} -> {}", sender, self.0);
             return Ok(());
         } else {
-            return Err(PortError::Detached(format!("{}[{}]", self.0.clone(), std::any::type_name::<Self>())));
+            return Err(PortError::Detached(format!(
+                "{}[{}]",
+                self.0.clone(),
+                std::any::type_name::<Self>()
+            )));
         }
     }
 
@@ -250,7 +254,11 @@ impl<T: AppData> Outlet<T> {
             tracing::info!("outlet connected: {} -> {}", self.0, receiver);
             return Ok(());
         } else {
-            return Err(PortError::Detached(format!("{}[{}]", self.0.clone(), std::any::type_name::<Self>())));
+            return Err(PortError::Detached(format!(
+                "{}[{}]",
+                self.0.clone(),
+                std::any::type_name::<Self>()
+            )));
         }
     }
 
