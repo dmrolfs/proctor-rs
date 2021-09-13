@@ -13,7 +13,7 @@ pub use settings::*;
 pub use source::*;
 pub use subscription_channel::*;
 
-mod builder;
+pub mod builder;
 pub mod clearinghouse;
 pub mod settings;
 pub mod source;
