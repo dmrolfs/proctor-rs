@@ -1,14 +1,13 @@
 use std::collections::HashSet;
+use std::convert::TryFrom;
 use std::path::PathBuf;
 
 use pretty_assertions::assert_eq;
 use proctor::elements::Telemetry;
 use proctor::error::TelemetryError;
 use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
-use proctor::phases::collection;
-use proctor::phases::collection::{Collect, SourceSetting};
+use proctor::phases::collection::{self, Collect, SourceSetting};
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Data {
@@ -19,12 +18,6 @@ struct Data {
     #[serde(default)]
     pub cat: String,
 }
-
-// impl SubscriptionRequirements for Data {
-//     fn required_fields() -> HashSet<Str> {
-//         maplit::hashset! { POS_FIELD, CAT_FIELD, }
-//     }
-// }
 
 impl Into<Telemetry> for Data {
     fn into(self) -> Telemetry {
@@ -113,10 +106,9 @@ async fn test_scenario(focus: HashSet<String>) -> anyhow::Result<(i64, i64)> {
     let mut cvs_source = collection::make_telemetry_cvs_source::<Data, _>("cvs", &cvs_setting)?;
     let cvs_stage = cvs_source.take().unwrap().0;
 
-    let collect = Collect::for_requirements("collect", vec![cvs_stage], focus, HashSet::<String>::default()).await?;
-
-    // let mut clearinghouse = collection::Clearinghouse::new("clearinghouse");
-    // let pos_channel = collection::SubscriptionChannel::<Data>::new("pos_channel").await?;
+    let collect = Collect::builder("collect", vec![cvs_stage])
+        .build_for_requirements(focus, HashSet::<String>::default())
+        .await?;
 
     let mut pos_stats = stage::Fold::<_, Data, (i64, i64)>::new("pos_stats", (0, 0), move |(count, sum), data| {
         let pos = data.pos.unwrap_or(0);
@@ -124,21 +116,9 @@ async fn test_scenario(focus: HashSet<String>) -> anyhow::Result<(i64, i64)> {
     });
     let rx_pos_stats = pos_stats.take_final_rx().unwrap();
 
-    // let cvs_stage = cvs_source.stage.take().unwrap();
-    // (cvs_stage.outlet(), clearinghouse.inlet()).connect().await;
-    // clearinghouse
-    //     .add_subscription(
-    //         TelemetrySubscription::new("pos").with_required_fields(focus),
-    //         &pos_channel.subscription_receiver,
-    //     )
-    //     .await;
-
     (collect.outlet(), pos_stats.inlet()).connect().await;
 
     let mut g = Graph::default();
-    // g.push_back(cvs_stage.dyn_upcast()).await;
-    // g.push_back(Box::new(clearinghouse)).await;
-    // g.push_back(Box::new(pos_channel)).await;
     g.push_back(Box::new(collect)).await;
     g.push_back(Box::new(pos_stats)).await;
     g.run().await?;

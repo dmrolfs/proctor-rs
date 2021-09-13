@@ -4,14 +4,10 @@ use std::path::PathBuf;
 
 use ::serde::{Deserialize, Serialize};
 use anyhow::Result;
-use proctor::elements;
-use proctor::elements::Telemetry;
+use proctor::elements::{self, Telemetry};
 use proctor::error::TelemetryError;
-use proctor::graph::SinkShape;
-use proctor::graph::{stage, SourceShape};
-use proctor::graph::{Connect, Graph};
-use proctor::phases::collection;
-use proctor::phases::collection::{Collect, SourceSetting};
+use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
+use proctor::phases::collection::{self, Collect, SourceSetting};
 use proctor::tracing::{get_subscriber, init_subscriber};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -74,14 +70,9 @@ async fn main() -> Result<()> {
     let cvs_stage = cvs_source.take().unwrap().0;
 
     let pos_stats_fields = maplit::hashset! { POS_FIELD.to_string() };
-    let collect = Collect::telemetry(
-        "collect",
-        vec![cvs_stage],
-        pos_stats_fields.clone(),
-        HashSet::<String>::default(),
-    )
-    .await?;
-    // let mut clearinghouse = collection::Clearinghouse::new("clearinghouse");
+    let collect = Collect::builder("collect", vec![cvs_stage])
+        .build_for_telemetry(pos_stats_fields.clone(), HashSet::<String>::default())
+        .await?;
 
     let mut pos_stats =
         stage::Fold::<_, elements::Telemetry, (usize, usize)>::new("pos_stats", (0, 0), move |(count, sum), data| {
@@ -93,87 +84,16 @@ async fn main() -> Result<()> {
                 panic!("fields fields beyond allowed: {:?}", unexpected);
             }
             let pos = usize::try_from(data.get(POS_FIELD).unwrap().clone()).unwrap();
-            // .parse::<usize>()
-            // .expect("failed to parse pos field");
             (count + 1, sum + pos)
         });
     let rx_pos_stats = pos_stats.take_final_rx().unwrap();
-
-    // clearinghouse
-    //     .add_subscription(
-    //         TelemetrySubscription::new("pos").with_required_fields(maplit::hashset! { POS_FIELD.to_string() }),
-    //         &pos_stats.inlet(),
-    //     )
-    //     .await;
-
-    // let (mut sink, _, rx_acc) =
-    //     stage::Fold::<_, collection::TelemetryData, (Data, usize)>::new("sink", (Data::default(), 0),
-    // |(acc, count), rec: TelemetryData| {         let dt_format = "%+";
-    //         let rec_last_failure = rec.get("last_failure").and_then(|r| {
-    //             if r.is_empty() {
-    //                 None
-    //             } else {
-    //                 let lf = DateTime::parse_from_str(r.as_str(),
-    // dt_format).unwrap().with_timezone(&Utc);                 Some(lf)
-    //             }
-    //         });
-    //
-    //         let is_deploying = rec.get("is_deploying").unwrap().as_str().parse::<bool>().unwrap();
-    //
-    //         let rec_latest_deployment =
-    // DateTime::parse_from_str(rec.get("last_deployment").unwrap().as_str(), dt_format)
-    // .unwrap()             .with_timezone(&Utc);
-    //
-    //         let last_failure = match (acc.last_failure, rec_last_failure) {
-    //             (None, None) => None,
-    //             (Some(a), None) => Some(a),
-    //             (None, Some(r)) => Some(r),
-    //             (Some(a), Some(r)) if a < r => Some(r),
-    //             (Some(a), _) => Some(a),
-    //         };
-    //
-    //         let latest_deployment = if acc.latest_deployment < rec_latest_deployment {
-    //             rec_latest_deployment
-    //         } else {
-    //             acc.latest_deployment
-    //         };
-    //
-    //         (
-    //             Data {
-    //                 last_failure,
-    //                 is_deploying,
-    //                 latest_deployment,
-    //             },
-    //             count + 1,
-    //         )
-    //     });
-
-    // let cvs_stage = cvs_source.stage.take().unwrap();
-    // (cvs_stage.outlet(), clearinghouse.inlet()).connect().await;
     (collect.outlet(), pos_stats.inlet()).connect().await;
 
     let mut g = Graph::default();
-    // g.push_back(cvs_stage.dyn_upcast()).await;
-    // g.push_back(Box::new(clearinghouse)).await;
     g.push_back(Box::new(collect)).await;
     g.push_back(Box::new(pos_stats)).await;
 
-    // let (tx_stop, rx_stop) = oneshot::channel();
-    // let stop_handle = tokio::spawn(async move {
-    //     tracing::warn!("waiting 51ms to stop...");
-    //     tokio::time::sleep(Duration::from_millis(51)).await;
-    //
-    //     tracing::warn!("stopping tick source...");
-    //     tx_tick.send(tick::TickMsg::Stop { tx: tx_stop }).expect("failed to send tick stop");
-    // });
-
     g.run().await?;
-
-    // stop_handle.await?;
-    // let _ = rx_stop.await??;
-    // tracing::warn!("tick source stop acknowledged");
-
-    // g.complete().await?;
 
     let (actual_count, actual_sum) = rx_pos_stats.await?;
     assert_eq!(actual_count, 3);

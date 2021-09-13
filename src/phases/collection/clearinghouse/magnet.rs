@@ -4,6 +4,7 @@ use super::Clearinghouse;
 use crate::elements::Telemetry;
 use crate::error::CollectionError;
 use crate::graph::Inlet;
+use crate::phases::collection::CollectBuilder;
 
 #[derive(Debug)]
 pub enum ClearinghouseSubscriptionMagnet<'c> {
@@ -57,5 +58,11 @@ where
 {
     fn from(that: &'a ClearinghouseApi) -> Self {
         ClearinghouseSubscriptionMagnet::Api(that)
+    }
+}
+
+impl<'c, Out> From<&'c mut CollectBuilder<Out>> for ClearinghouseSubscriptionMagnet<'c> {
+    fn from(that: &'c mut CollectBuilder<Out>) -> Self {
+        ClearinghouseSubscriptionMagnet::Direct(&mut that.clearinghouse)
     }
 }
