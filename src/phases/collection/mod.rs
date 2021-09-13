@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use std::fmt::{self, Debug};
 
-use crate::phases::collection::builder::CollectBuilder;
+pub use builder::*;
 pub use clearinghouse::*;
 pub use settings::*;
 pub use source::*;
