@@ -114,9 +114,12 @@ pub trait QueryPolicy: Debug + Send + Sync {
     type Context: ToPolar + Clone;
     type Args: ToPolarList;
 
+    #[tracing::instrument(level="info", skip(engine))]
     fn load_policy_engine(&self, engine: &mut oso::Oso) -> Result<(), PolicyError> {
         for source in self.policy_sources() {
-            source.load_into(engine)?;
+            let status = source.load_into(engine);
+            tracing::info!(policy_source=?source, "policy source loaded[{:?}]", status);
+            let _ = status?;
         }
         Ok(())
     }
