@@ -12,6 +12,8 @@ use crate::phases::collection::{ClearinghouseSubscriptionMagnet, SubscriptionReq
 use crate::{AppData, ProctorResult};
 use std::collections::HashSet;
 
+//todo: consider refactor all of these builder functions into a typed subscription channel builder.
+
 /// Subscription Source stage that can be used to adapt subscribed telemetry data into a
 /// typed inlet.
 pub struct SubscriptionChannel<T> {
@@ -23,8 +25,8 @@ pub struct SubscriptionChannel<T> {
 
 impl<T: SubscriptionRequirements + AppData + DeserializeOwned> SubscriptionChannel<T> {
     #[tracing::instrument(level = "info")]
-    pub async fn connect_channel<'c>(
-        channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'c>,
+    pub async fn connect_channel(
+        channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'_>,
     ) -> Result<SubscriptionChannel<T>, CollectionError> {
         Self::connect_channel_with_requirements(
             channel_name,
@@ -37,40 +39,50 @@ impl<T: SubscriptionRequirements + AppData + DeserializeOwned> SubscriptionChann
 }
 
 impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
-    #[tracing::instrument(level = "info", skip(required_fields, optional_fields))]
-    pub async fn connect_channel_with_requirements<'c>(
-        channel_name: &str, mut magnet: ClearinghouseSubscriptionMagnet<'c>,
-        required_fields: HashSet<impl Into<String>>, optional_fields: HashSet<impl Into<String>>,
+    #[tracing::instrument(level = "info")]
+    pub async fn connect_subscription(
+        subscription: TelemetrySubscription, mut magnet: ClearinghouseSubscriptionMagnet<'_>,
     ) -> Result<SubscriptionChannel<T>, CollectionError> {
-        let channel = Self::new(format!("{}_channel", channel_name)).await?;
-        let subscription = TelemetrySubscription::new(channel_name)
-            .with_required_fields(required_fields)
-            .with_optional_fields(optional_fields);
-
+        let channel = Self::new(format!("{}_channel", subscription.name())).await?;
         magnet
             .subscribe(subscription, channel.subscription_receiver.clone())
             .await?;
-
         Ok(channel)
+    }
+
+    #[tracing::instrument(level = "info", skip(required_fields, optional_fields))]
+    pub async fn connect_channel_with_requirements(
+        channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'_>,
+        required_fields: HashSet<impl Into<String>>, optional_fields: HashSet<impl Into<String>>,
+    ) -> Result<SubscriptionChannel<T>, CollectionError> {
+        let subscription = TelemetrySubscription::new(channel_name)
+            .with_required_fields(required_fields)
+            .with_optional_fields(optional_fields);
+        Self::connect_subscription(subscription, magnet).await
     }
 }
 
 impl SubscriptionChannel<Telemetry> {
-    #[tracing::instrument(level = "info", skip(required_fields, optional_fields))]
-    pub async fn connect_telemetry_channel<'c>(
-        channel_name: &str, mut magnet: ClearinghouseSubscriptionMagnet<'c>,
-        required_fields: HashSet<impl Into<String>>, optional_fields: HashSet<impl Into<String>>,
+    #[tracing::instrument(level = "info")]
+    pub async fn connect_telemetry_subscription(
+        subscription: TelemetrySubscription, mut magnet: ClearinghouseSubscriptionMagnet<'_>,
     ) -> Result<SubscriptionChannel<Telemetry>, CollectionError> {
-        let channel = Self::telemetry(format!("{}_channel", channel_name)).await?;
-        let subscription = TelemetrySubscription::new(channel_name)
-            .with_required_fields(required_fields)
-            .with_optional_fields(optional_fields);
-
+        let channel = Self::telemetry(format!("{}_telemetry_channel", subscription.name())).await?;
         magnet
             .subscribe(subscription, channel.subscription_receiver.clone())
             .await?;
-
         Ok(channel)
+    }
+
+    #[tracing::instrument(level = "info", skip(required_fields, optional_fields))]
+    pub async fn connect_telemetry_channel(
+        channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'_>,
+        required_fields: HashSet<impl Into<String>>, optional_fields: HashSet<impl Into<String>>,
+    ) -> Result<SubscriptionChannel<Telemetry>, CollectionError> {
+        let subscription = TelemetrySubscription::new(channel_name)
+            .with_required_fields(required_fields)
+            .with_optional_fields(optional_fields);
+        Self::connect_telemetry_subscription(subscription, magnet).await
     }
 }
 
