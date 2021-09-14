@@ -52,8 +52,8 @@ impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
 
     #[tracing::instrument(level = "info", skip(required_fields, optional_fields))]
     pub async fn connect_channel_with_requirements(
-        channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'_>,
-        required_fields: HashSet<impl Into<String>>, optional_fields: HashSet<impl Into<String>>,
+        channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'_>, required_fields: HashSet<impl Into<String>>,
+        optional_fields: HashSet<impl Into<String>>,
     ) -> Result<SubscriptionChannel<T>, CollectionError> {
         let subscription = TelemetrySubscription::new(channel_name)
             .with_required_fields(required_fields)
@@ -76,8 +76,8 @@ impl SubscriptionChannel<Telemetry> {
 
     #[tracing::instrument(level = "info", skip(required_fields, optional_fields))]
     pub async fn connect_telemetry_channel(
-        channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'_>,
-        required_fields: HashSet<impl Into<String>>, optional_fields: HashSet<impl Into<String>>,
+        channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'_>, required_fields: HashSet<impl Into<String>>,
+        optional_fields: HashSet<impl Into<String>>,
     ) -> Result<SubscriptionChannel<Telemetry>, CollectionError> {
         let subscription = TelemetrySubscription::new(channel_name)
             .with_required_fields(required_fields)

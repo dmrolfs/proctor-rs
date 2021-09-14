@@ -40,9 +40,8 @@ where
     Out: AppData + SubscriptionRequirements + DeserializeOwned,
 {
     #[tracing::instrument(level = "info", skip(), fields(nr_sources = % self.sources.len()))]
-    pub async fn build(self) -> Result<Collect<Out>, CollectionError> {
-        Self::build_for_requirements(
-            self,
+    pub async fn build_for_out(self) -> Result<Collect<Out>, CollectionError> {
+        self.build_for_out_requirements(
             <Out as SubscriptionRequirements>::required_fields(),
             <Out as SubscriptionRequirements>::optional_fields(),
         )
@@ -51,19 +50,23 @@ where
 }
 
 impl CollectBuilder<Telemetry> {
-    #[tracing::instrument(level = "info", skip(required_fields, optional_fields, ), fields(nr_sources = %self.sources.len()))]
-    pub async fn build_for_telemetry(
-        mut self, required_fields: HashSet<impl Into<String>>, optional_fields: HashSet<impl Into<String>>,
+    #[tracing::instrument(
+        level = "info",
+        skip(out_required_fields, out_optional_fields,),
+        fields(nr_sources = %self.sources.len())
+    )]
+    pub async fn build_for_telemetry_out(
+        mut self, out_required_fields: HashSet<impl Into<String>>, out_optional_fields: HashSet<impl Into<String>>,
     ) -> Result<Collect<Telemetry>, CollectionError> {
         let out_channel = SubscriptionChannel::connect_telemetry_channel(
             self.name.clone().as_str(),
             (&mut self).into(),
-            required_fields,
-            optional_fields,
+            out_required_fields,
+            out_optional_fields,
         )
         .await?;
 
-        Self::finish(self, out_channel).await
+        self.finish(out_channel).await
     }
 }
 
@@ -72,7 +75,7 @@ where
     Out: AppData + DeserializeOwned,
 {
     #[tracing::instrument(level = "info", skip(main_out_required_fields, main_out_optional_fields, ), fields(nr_sources = % self.sources.len()))]
-    pub async fn build_for_requirements(
+    pub async fn build_for_out_requirements(
         mut self, main_out_required_fields: HashSet<impl Into<String>>,
         main_out_optional_fields: HashSet<impl Into<String>>,
     ) -> Result<Collect<Out>, CollectionError> {
@@ -84,7 +87,7 @@ where
         )
         .await?;
 
-        Self::finish(self, out_channel).await
+        self.finish(out_channel).await
     }
 }
 

@@ -71,7 +71,7 @@ async fn main() -> Result<()> {
 
     let pos_stats_fields = maplit::hashset! { POS_FIELD.to_string() };
     let collect = Collect::builder("collect", vec![cvs_stage])
-        .build_for_telemetry(pos_stats_fields.clone(), HashSet::<String>::default())
+        .build_for_telemetry_out(pos_stats_fields.clone(), HashSet::<String>::default())
         .await?;
 
     let mut pos_stats =

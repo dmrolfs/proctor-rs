@@ -107,7 +107,7 @@ async fn test_scenario(focus: HashSet<String>) -> anyhow::Result<(i64, i64)> {
     let cvs_stage = cvs_source.take().unwrap().0;
 
     let collect = Collect::builder("collect", vec![cvs_stage])
-        .build_for_requirements(focus, HashSet::<String>::default())
+        .build_for_out_requirements(focus, HashSet::<String>::default())
         .await?;
 
     let mut pos_stats = stage::Fold::<_, Data, (i64, i64)>::new("pos_stats", (0, 0), move |(count, sum), data| {
