@@ -3,6 +3,7 @@ use crate::elements::Telemetry;
 use crate::error::{CollectionError, PortError};
 use crate::graph::stage::{self, SourceStage, Stage, WithApi};
 use crate::graph::{Connect, Graph, SinkShape, SourceShape, UniformFanInShape};
+use crate::phases::collection::TelemetrySubscription;
 use crate::AppData;
 use cast_trait_object::DynCastExt;
 use serde::de::DeserializeOwned;
@@ -50,6 +51,15 @@ where
 }
 
 impl CollectBuilder<Telemetry> {
+    #[tracing::instrument(level="info", fields(nr_sources = %self.sources.len()))]
+    pub async fn build_for_telemetry_out_subscription(
+        mut self, out_subscription: TelemetrySubscription,
+    ) -> Result<Collect<Telemetry>, CollectionError> {
+        let out_channel =
+            SubscriptionChannel::connect_telemetry_subscription(out_subscription, (&mut self).into()).await?;
+        self.finish(out_channel).await
+    }
+
     #[tracing::instrument(
         level = "info",
         skip(out_required_fields, out_optional_fields,),
@@ -74,16 +84,23 @@ impl<Out> CollectBuilder<Out>
 where
     Out: AppData + DeserializeOwned,
 {
-    #[tracing::instrument(level = "info", skip(main_out_required_fields, main_out_optional_fields, ), fields(nr_sources = % self.sources.len()))]
+    #[tracing::instrument(level="info", fields(nr_sources=%self.sources.len()))]
+    pub async fn build_for_out_subscription(
+        mut self, out_subscription: TelemetrySubscription,
+    ) -> Result<Collect<Out>, CollectionError> {
+        let out_channel = SubscriptionChannel::connect_subscription(out_subscription, (&mut self).into()).await?;
+        self.finish(out_channel).await
+    }
+
+    #[tracing::instrument(level = "info", skip(out_required_fields, out_optional_fields, ), fields(nr_sources = % self.sources.len()))]
     pub async fn build_for_out_requirements(
-        mut self, main_out_required_fields: HashSet<impl Into<String>>,
-        main_out_optional_fields: HashSet<impl Into<String>>,
+        mut self, out_required_fields: HashSet<impl Into<String>>, out_optional_fields: HashSet<impl Into<String>>,
     ) -> Result<Collect<Out>, CollectionError> {
         let out_channel: SubscriptionChannel<Out> = SubscriptionChannel::connect_channel_with_requirements(
             self.name.clone().as_str(),
             (&mut self).into(),
-            main_out_required_fields,
-            main_out_optional_fields,
+            out_required_fields,
+            out_optional_fields,
         )
         .await?;
 
