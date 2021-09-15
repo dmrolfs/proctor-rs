@@ -276,6 +276,10 @@ impl<D: AppData + ToPolar + Clone> QueryPolicy for TestPolicyA<D> {
         self.policies.clone()
     }
 
+    fn replace_sources(&mut self, sources: Vec<PolicySource>) {
+        self.policies = sources;
+    }
+
     fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
         oso.register_class(
             TestPolicyPhaseContext::get_polar_class_builder()
@@ -814,7 +818,16 @@ impl QueryPolicy for TestPolicyB {
     }
 
     fn policy_sources(&self) -> Vec<PolicySource> {
-        vec![PolicySource::String(self.policy.clone())]
+        vec![PolicySource::from_string(self.policy.clone())]
+    }
+
+    fn replace_sources(&mut self, sources: Vec<PolicySource>) {
+        let mut new_policy = String::new();
+        for s in sources {
+            let source_policy: String = s.into();
+            new_policy.push_str(source_policy.as_str());
+        }
+        self.policy = new_policy;
     }
 }
 

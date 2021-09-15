@@ -1,12 +1,17 @@
 pub use outcome::*;
 pub use policy::*;
 pub use protocol::*;
+pub use result::*;
+pub use settings::*;
+pub use source::*;
 
 mod outcome;
 mod policy;
 mod protocol;
+mod result;
+mod settings;
+mod source;
 
-use std::collections::HashSet;
 use std::fmt::{self, Debug};
 use std::sync::Arc;
 
@@ -21,33 +26,6 @@ use crate::graph::stage::{self, Stage};
 use crate::graph::{Inlet, Outlet, Port};
 use crate::graph::{SinkShape, SourceShape};
 use crate::{AppData, ProctorContext, ProctorResult};
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct PolicySettings {
-    #[serde(skip_serializing_if = "HashSet::is_empty")]
-    pub required_subscription_fields: HashSet<String>,
-    #[serde(skip_serializing_if = "HashSet::is_empty")]
-    pub optional_subscription_fields: HashSet<String>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub policies: Vec<PolicySource>,
-}
-
-impl PolicySettings {
-    pub fn new(required_fields: HashSet<String>, optional_fields: HashSet<String>) -> Self {
-        Self {
-            required_subscription_fields: required_fields,
-            optional_subscription_fields: optional_fields,
-            policies: vec![],
-        }
-    }
-
-    pub fn with_source(mut self, source: PolicySource) -> Self {
-        self.policies.push(source);
-        self
-    }
-}
 
 pub struct PolicyFilter<T, C, A, P>
 where
@@ -170,7 +148,7 @@ where
         let outlet = &self.outlet;
         let item_inlet = &mut self.inlet;
         let context_inlet = &mut self.context_inlet;
-        let policy = &self.policy;
+        let policy = &mut self.policy;
         let context: Arc<Mutex<Option<C>>> = Arc::new(Mutex::new(None));
         let rx_api = &mut self.rx_api;
         let tx_monitor = &self.tx_monitor;
@@ -327,7 +305,7 @@ where
 
     #[tracing::instrument(level = "info", name = "policy_filter handle command", skip(oso, policy,), fields())]
     async fn handle_command(
-        command: PolicyFilterCmd<C>, oso: &mut Oso, name: &str, policy: &P, context: Arc<Mutex<Option<C>>>,
+        command: PolicyFilterCmd<C>, oso: &mut Oso, name: &str, policy: &mut P, context: Arc<Mutex<Option<C>>>,
     ) -> Result<bool, PolicyError> {
         tracing::trace!(?command, ?context, "handling policy filter command...");
 
@@ -345,8 +323,7 @@ where
                 oso.clear_rules()?;
                 match new_policy {
                     PolicySource::String(policy) => oso.load_str(policy.as_str())?,
-                    PolicySource::File(path) => oso.load_file(path)?,
-                    PolicySource::NoPolicy => (),
+                    PolicySource::File(path) => oso.load_files(vec![path])?,
                 };
 
                 let _ignore_failure = tx.send(());
@@ -354,20 +331,11 @@ where
             }
 
             PolicyFilterCmd::AppendPolicy { additional_policy: policy_source, tx } => {
-                match policy_source {
-                    PolicySource::String(p) => oso.load_str(p.as_str())?,
-                    PolicySource::File(path) => oso.load_file(path)?,
-                    PolicySource::NoPolicy => (),
-                };
-
-                let _ignore_failure = tx.send(());
-                Ok(true)
-            }
-
-            PolicyFilterCmd::ResetPolicy(tx) => {
-                oso.clear_rules()?;
+                let mut sources = policy.policy_sources();
+                sources.push(policy_source);
+                policy.replace_sources(sources);
                 policy.load_policy_engine(oso)?;
-                let _ignore_failrue = tx.send(());
+                let _ignore_failure = tx.send(());
                 Ok(true)
             }
         }
@@ -428,6 +396,7 @@ mod tests {
     use super::*;
     use crate::elements::telemetry;
     use crate::phases::collection::{self, SubscriptionRequirements, TelemetrySubscription};
+    use std::collections::HashSet;
 
     // Make sure the `PolicyFilter` object is threadsafe
     // #[test]
@@ -505,7 +474,16 @@ mod tests {
         }
 
         fn policy_sources(&self) -> Vec<PolicySource> {
-            vec![PolicySource::String(self.policy.clone())]
+            vec![PolicySource::from_string(self.policy.as_str())]
+        }
+
+        fn replace_sources(&mut self, sources: Vec<PolicySource>) {
+            let mut new_policy = String::new();
+            for s in sources {
+                let source_policy: String = s.into();
+                new_policy.push_str(source_policy.as_str());
+            }
+            self.policy = new_policy;
         }
     }
 

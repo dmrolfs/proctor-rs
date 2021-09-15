@@ -46,10 +46,11 @@ proctor_derive = { path = "proctor_derive" }
 reqwest = { version = "*", features = ["blocking", "json"] }
 reqwest-middleware = "*"
 reqwest-retry = "*"
-serde = "*"
 ron = "*"
+serde = "*"
 serde_json = "*"
 statrs = "*"
+tempfile = "*"
 thiserror = "*"
 tokio = { version = "*", features = ["full"] }
 tracing = "*"

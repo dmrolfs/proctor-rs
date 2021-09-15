@@ -1,12 +1,9 @@
-use std::collections::HashMap;
-use std::fmt::Debug;
-
-use oso::{Query, ToPolar, ToPolarList};
-
-use crate::elements::TelemetryValue;
-use crate::elements::{FromTelemetry, PolicySource};
+use super::QueryResult;
+use crate::elements::PolicySource;
 use crate::error::PolicyError;
 use crate::phases::collection::{SubscriptionRequirements, TelemetrySubscription};
+use oso::{ToPolar, ToPolarList};
+use std::fmt::Debug;
 
 pub trait Policy<T, C, A>: PolicySubscription<Requirements = C> + QueryPolicy<Item = T, Context = C, Args = A> {}
 
@@ -36,95 +33,23 @@ pub trait PolicySubscription {
     }
 }
 
-pub type Bindings = HashMap<String, Vec<TelemetryValue>>;
-
-#[derive(Debug, Default, Clone, PartialEq)]
-pub struct QueryResult {
-    pub passed: bool,
-    pub bindings: Bindings,
-}
-
-impl QueryResult {
-    pub fn passed_without_bindings() -> Self {
-        Self { passed: true, bindings: Bindings::default() }
-    }
-
-    #[tracing::instrument(level = "debug", skip(query))]
-    pub fn from_query(query: Query) -> Result<Self, PolicyError> {
-        let mut bindings = Bindings::default();
-        let mut passed = None;
-
-        for result_set in query {
-            let result_set = result_set?;
-
-            if passed.is_none() {
-                tracing::info!(?result_set, "DMR: item passes policy review!");
-                passed = Some(true);
-            }
-
-            for key in result_set.keys() {
-                let value = result_set.get_typed(key);
-                tracing::info!(?result_set, "DMR: pulling binding: binding[{}]={:?}", key, value);
-                match value? {
-                    TelemetryValue::Unit => {
-                        tracing::debug!("Unit value bound to key[{}] - skipping.", key);
-                        ()
-                    }
-                    val => {
-                        if let Some(values) = bindings.get_mut(key) {
-                            values.push(val);
-                            tracing::info!("DMR: push binding[{}]: {:?}", key, values);
-                        } else {
-                            tracing::info!("DMR: started binding[{}]: [{:?}]", key, val);
-                            bindings.insert(key.to_string(), vec![val]);
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(Self { passed: passed.unwrap_or(false), bindings })
-    }
-
-    pub fn binding<T: FromTelemetry>(&self, var: impl AsRef<str>) -> Result<Vec<T>, PolicyError> {
-        if let Some(bindings) = self.bindings.get(var.as_ref()) {
-            let mut result = vec![];
-
-            for b in bindings {
-                result.push(T::from_telemetry(b.clone())?)
-            }
-
-            Ok(result)
-        } else {
-            Ok(vec![])
-        }
-    }
-}
-
-impl std::ops::Deref for QueryResult {
-    type Target = Bindings;
-
-    fn deref(&self) -> &Self::Target {
-        &self.bindings
-    }
-}
-
 pub trait QueryPolicy: Debug + Send + Sync {
     type Item: ToPolar + Clone;
     type Context: ToPolar + Clone;
     type Args: ToPolarList;
 
-    #[tracing::instrument(level="info", skip(engine))]
+    #[tracing::instrument(level = "info", skip(engine))]
     fn load_policy_engine(&self, engine: &mut oso::Oso) -> Result<(), PolicyError> {
-        for source in self.policy_sources() {
-            let status = source.load_into(engine);
-            tracing::info!(policy_source=?source, "policy source loaded[{:?}]", status);
-            let _ = status?;
-        }
+        engine.clear_rules()?;
+        let files = self.policy_sources().iter().map(|ps| ps.source_path()).collect();
+        tracing::info!(policy_sources=?files, "loading sources into policy engine...");
+        engine.load_files(files)?;
         Ok(())
     }
 
     fn policy_sources(&self) -> Vec<PolicySource>;
+    fn replace_sources(&mut self, sources: Vec<PolicySource>);
+
     fn initialize_policy_engine(&mut self, engine: &mut oso::Oso) -> Result<(), PolicyError>;
     fn make_query_args(&self, item: &Self::Item, context: &Self::Context) -> Self::Args;
     fn query_policy(&self, engine: &oso::Oso, args: Self::Args) -> Result<QueryResult, PolicyError>;

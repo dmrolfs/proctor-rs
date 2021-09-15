@@ -1420,9 +1420,9 @@ checksum = "6acbef58a60fe69ab50510a55bc8cdd4d6cf2283d27ad338f54cb52747a9cf2d"
 
 [[package]]
 name = "oso"
-version = "0.15.1"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6696e221f0def4c6e5ddaa050d5bcabf73f487348fd7ab5b653795a8efac9339"
+checksum = "544e330a9ff5db45880a17b147ebb5a14aa1a0ca1abcecf471aa433c0936123a"
 dependencies = [
  "impl-trait-for-tuples",
  "lazy_static",
@@ -1436,9 +1436,9 @@ dependencies = [
 
 [[package]]
 name = "oso-derive"
-version = "0.15.1"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e9ddf0e23da9abc67916e1dc4b2641b6545f5fa1dbdce916594d31071b7d0dd"
+checksum = "956f3d9d812488da4f1136b34b0ea3f3ca18c2266f14d022fc13109149f749a0"
 dependencies = [
  "quote",
  "syn",
@@ -1583,9 +1583,9 @@ dependencies = [
 
 [[package]]
 name = "polar-core"
-version = "0.15.1"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32e14c92709007815ce7b65771a07011d65540f2d66306013d39eb0928cf31e1"
+checksum = "a8f4c397ea006a370c349452e5e65b7ec24929efb189a25b2912b147a420e0b9"
 dependencies = [
  "js-sys",
  "lalrpop",
@@ -1744,6 +1744,7 @@ dependencies = [
  "serde_with",
  "static_assertions",
  "statrs",
+ "tempfile",
  "thiserror",
  "tokio",
  "tokio-test",
@@ -2155,9 +2156,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.67"
+version = "1.0.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7f9e390c27c3c0ce8bc5d725f6e4d30a29d26659494aa4b17535f7522c5c950"
+checksum = "0f690853975602e1bfe1ccbf50504d67174e3bcf340f23b5ea9992e0587a52d8"
 dependencies = [
  "itoa",
  "ryu",
