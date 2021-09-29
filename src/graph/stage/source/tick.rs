@@ -222,14 +222,8 @@ where
             tokio::select! {
                 next_tick = ticks.next() => match next_tick {
                     Some(tick) => {
-                        tracing::info!(?tick, "tick yielded -- sending...");
-                        match outlet.send(tick).instrument(tracing::info_span!("sending tick")).await {
-                            Ok(()) => (),
-                            Err(err) => {
-                                tracing::error!(error=?err, "failed to send tick - completing tick source");
-                                break;
-                            }
-                        }
+                        tracing::info!(?tick, "sending tick...");
+                        outlet.send(tick).await?;
                     },
 
                     None => {

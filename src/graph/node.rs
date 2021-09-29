@@ -1,5 +1,6 @@
 use tokio::task::JoinHandle;
 use tracing::Instrument;
+use crate::error::{ProctorError, GraphError};
 
 use super::stage::Stage;
 use crate::ProctorResult;
@@ -18,24 +19,6 @@ impl Node {
 }
 
 impl Node {
-    // #[tracing::instrument( level="info", skip(self), fields(node=%self.name),)]
-    // pub fn prepare_for_run(mut self) -> JoinHandle<GraphResult<Self>> {
-    //     tokio::spawn(
-    //         async move {
-    //             self.stage
-    //                 .prepare_for_run()
-    //                 .instrument(tracing::info_span!("prepare graph node for run"))
-    //                 .await
-    //                 .map_err(|err| {
-    //                     tracing::error!(error=?err, "node failed to prepare for run.");
-    //                     err
-    //                 })
-    //                 .map(|_| self)
-    //         }
-    //         .instrument(tracing::info_span!("spawn prepare graph node for run",)),
-    //     )
-    // }
-
     pub async fn check(&self) -> ProctorResult<()> {
         self.stage
             .check()
@@ -46,13 +29,24 @@ impl Node {
     }
 
     pub fn run(mut self) -> JoinHandle<ProctorResult<()>> {
-        let name = self.name.clone();
+        let node_name = self.name.clone();
         tokio::spawn(
             async move {
-                let run_result = self.stage.run().instrument(tracing::info_span!("run graph node")).await;
-                if let Err(err) = &run_result {
-                    tracing::error!(error=?err, "node run failed.");
-                }
+                let run_result: ProctorResult<()> = loop {
+                    match self.stage.run().await {
+                        Ok(()) => {
+                            tracing::info!("{} node completed and stopped", self.name);
+                            break Ok(());
+                        },
+                        Err(ProctorError::GraphError(err)) => {
+                            tracing::error!(error=?err, "Graph error in {} node - stopping", self.name);
+                            break Err(err.into());
+                        },
+                        Err(err) => {
+                            tracing::error!(error=?err, "{} node run failed - ", self.name);
+                        }
+                    }
+                };
 
                 let close_result = self
                     .stage
@@ -67,7 +61,7 @@ impl Node {
                 run_result.and(close_result)?;
                 Ok(())
             }
-            .instrument(tracing::info_span!("spawn node", node=%name)),
+            .instrument(tracing::info_span!("spawn node", node=%node_name)),
         )
     }
 }

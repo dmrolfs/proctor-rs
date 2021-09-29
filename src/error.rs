@@ -83,44 +83,6 @@ impl From<reqwest::header::InvalidHeaderValue> for IncompatibleSourceSettingsErr
     }
 }
 
-// /// Error variants related to configuration.
-// #[derive(Debug, Error)]
-// #[non_exhaustive]
-// pub enum SettingsError {
-//     /// Error working with environment variable
-//     #[error("{0}")]
-//     Environment(#[from] std::env::VarError),
-//
-//     /// Error in configuration settings.
-//     #[error(transparent)]
-//     Configuration(#[from] config::ConfigError),
-//
-//     /// Error in bootstrapping execution from configuration.
-//     #[error("error during system bootstrap: {message}: {setting}")]
-//     Bootstrap { message: String, setting: String },
-//
-//     #[error("{0}")]
-//     HttpRequestError(#[source] anyhow::Error),
-//
-//     #[error("{0}")]
-//     SourceError(#[source] anyhow::Error),
-//
-//     #[error("{0}")]
-//     IOError(#[from] std::io::Error),
-// }
-//
-// // impl From<toml::de::Error> for SettingsError {
-// //     fn from(that: toml::de::Error) -> Self {
-// //         SettingsError::SourceError(that.into())
-// //     }
-// // }
-//
-// // impl From<serde_hjson::Error> for SettingsError {
-// //     fn from(that: serde_hjson::Error) -> Self {
-// //         SettingsError::SourceError(that.into())
-// //     }
-// // }
-
 /// Set of errors occurring during telemetry collection
 #[derive(Debug, Error)]
 pub enum CollectionError {
