@@ -414,14 +414,14 @@ mod tests {
         pub location_code: u32,
         #[polar(attribute)]
         #[serde(flatten)]
-        pub qualities: telemetry::Table,
+        pub qualities: telemetry::TableValue,
     }
 
     #[async_trait]
     impl ProctorContext for TestContext {
         type Error = PolicyError;
 
-        fn custom(&self) -> telemetry::Table {
+        fn custom(&self) -> telemetry::TableValue {
             self.qualities.clone()
         }
     }
@@ -514,7 +514,8 @@ mod tests {
                 qualities: maplit::hashmap! {
                     "foo".to_string() => "bar".into(),
                     "score".to_string() => 13.into(),
-                },
+                }
+                .into(),
             };
 
             PolicyFilter::handle_item(item, &context, &policy_filter.policy, &oso, &outlet, &tx_monitor)

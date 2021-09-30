@@ -12,7 +12,7 @@ use claim::*;
 use lazy_static::lazy_static;
 use oso::{Oso, PolarClass, ToPolar};
 use pretty_assertions::assert_eq;
-use proctor::elements::telemetry::ToTelemetry;
+use proctor::elements::telemetry::{TableValue, ToTelemetry};
 use proctor::elements::{
     self, telemetry, Policy, PolicyFilterEvent, PolicyOutcome, PolicySettings, PolicySource, PolicySubscription,
     QueryPolicy, QueryResult, Telemetry, TelemetryValue,
@@ -47,14 +47,14 @@ pub struct TestPolicyPhaseContext {
 
     #[polar(attribute)]
     #[serde(flatten)]
-    pub custom: telemetry::Table,
+    pub custom: telemetry::TableValue,
 }
 
 #[async_trait]
 impl ProctorContext for TestPolicyPhaseContext {
     type Error = ProctorError;
 
-    fn custom(&self) -> telemetry::Table {
+    fn custom(&self) -> telemetry::TableValue {
         self.custom.clone()
     }
 }
@@ -171,7 +171,7 @@ fn test_context_serde() {
             is_deploying: false,
             last_deployment: DT_1.clone(),
         },
-        custom: HashMap::new(),
+        custom: TableValue::new(),
     };
 
     let mut expected = vec![
@@ -636,7 +636,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
                         is_deploying: false,
                         last_deployment: t1
                     },
-                    custom: HashMap::new(),
+                    custom: TableValue::new(),
                 }
             );
         }
@@ -920,7 +920,7 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
                 is_deploying: false,
                 last_deployment: DT_1.clone(),
             },
-            custom: HashMap::new(),
+            custom: TableValue::new(),
         }))
     );
     claim::assert_matches!(event, elements::PolicyFilterEvent::ContextChanged(_));

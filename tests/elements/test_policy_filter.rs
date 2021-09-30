@@ -60,15 +60,18 @@ struct TestFlowMetrics {
 struct TestContext {
     #[polar(attribute)]
     pub location_code: u32,
-    custom: telemetry::Table,
+    custom: telemetry::TableValue,
 }
 
 impl TestContext {
     pub fn new(location_code: u32) -> Self {
-        Self { location_code, custom: telemetry::Table::default() }
+        Self {
+            location_code,
+            custom: telemetry::TableValue::default(),
+        }
     }
 
-    pub fn with_custom(self, custom: telemetry::Table) -> Self {
+    pub fn with_custom(self, custom: telemetry::TableValue) -> Self {
         Self { custom, ..self }
     }
 }
@@ -77,7 +80,7 @@ impl TestContext {
 impl proctor::ProctorContext for TestContext {
     type Error = PolicyError;
 
-    fn custom(&self) -> telemetry::Table {
+    fn custom(&self) -> telemetry::TableValue {
         self.custom.clone()
     }
 }
@@ -468,8 +471,10 @@ async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
     )
     .await;
 
-    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}))
-        .await?;
+    flow.push_context(
+        TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
+    )
+    .await?;
     let event = flow.recv_policy_event().await?;
     tracing::info!(?event, "verifying context update...");
     claim::assert_matches!(event, elements::PolicyFilterEvent::ContextChanged(_));
@@ -488,26 +493,28 @@ async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
         vec![
             PolicyOutcome::new(
                 TestItem::new(consts::PI, ts, 1),
-                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
                 QueryResult {
                     passed: true,
                     bindings: maplit::hashmap! {
                         "custom".to_string() => vec![TelemetryValue::Table(maplit::hashmap! {
                             "cat".to_string() => "Otis".to_telemetry(),
-                        })],
+                        }.into())],
                     }
+                    .into()
                 }
             ),
             PolicyOutcome::new(
                 TestItem::new(consts::TAU, ts, 2),
-                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
                 QueryResult {
                     passed: true,
                     bindings: maplit::hashmap! {
                         "custom".to_string() => vec![TelemetryValue::Table(maplit::hashmap! {
                             "cat".to_string() => "Otis".to_telemetry(),
-                        })],
+                        }.into())],
                     }
+                    .into()
                 }
             )
         ],
@@ -534,8 +541,10 @@ async fn test_policy_w_binding() -> anyhow::Result<()> {
     )
     .await;
 
-    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}))
-        .await?;
+    flow.push_context(
+        TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
+    )
+    .await?;
     let event = flow.recv_policy_event().await?;
     tracing::info!(?event, "verifying context update...");
     claim::assert_matches!(event, elements::PolicyFilterEvent::ContextChanged(_));
@@ -554,26 +563,26 @@ async fn test_policy_w_binding() -> anyhow::Result<()> {
         vec![
             PolicyOutcome::new(
                 TestItem::new(consts::PI, ts, 1),
-                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
                 QueryResult {
                     passed: true,
                     bindings: maplit::hashmap! {
                         "custom".to_string() => vec![
                             TelemetryValue::Integer(13),
-                            TelemetryValue::Table(maplit::hashmap! { "cat".to_string() => "Otis".to_telemetry(), })
+                            TelemetryValue::Table(maplit::hashmap! { "cat".to_string() => "Otis".to_telemetry(), }.into())
                         ],
                     }
                 }
             ),
             PolicyOutcome::new(
                 TestItem::new(consts::TAU, ts, 2),
-                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
                 QueryResult {
                     passed: true,
                     bindings: maplit::hashmap! {
                         "custom".to_string() => vec![
                             TelemetryValue::Integer(13),
-                            TelemetryValue::Table(maplit::hashmap! { "cat".to_string() => "Otis".to_telemetry(), })
+                            TelemetryValue::Table(maplit::hashmap! { "cat".to_string() => "Otis".to_telemetry(), }.into())
                         ],
                     }
                 }
@@ -607,8 +616,10 @@ lag_2(_item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
     .await;
 
     tracing::info!("DMR-B:push env...");
-    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}))
-        .await?;
+    flow.push_context(
+        TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
+    )
+    .await?;
     tracing::info!("DMR-C:verify enviornment...");
 
     let ts = Utc::now().into();
@@ -624,12 +635,12 @@ lag_2(_item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
         actual,
         vec![PolicyOutcome::new(
             TestItem::new(consts::TAU, ts, 2),
-            TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
+            TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
             QueryResult {
                 passed: true,
                 bindings: maplit::hashmap! { "custom".to_string() => vec![TelemetryValue::Table(maplit::hashmap! {
                     "cat".to_string() => "Otis".to_telemetry(),
-                })]}
+                }.into())]}
             }
         ),]
     );
@@ -649,8 +660,10 @@ and item.input_messages_per_sec(item.inbox_lag) < 36;"#,
     )
     .await;
 
-    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}))
-        .await?;
+    flow.push_context(
+        TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
+    )
+    .await?;
 
     let ts = Utc::now().into();
     let item = TestItem::new(consts::PI, ts, 1);
@@ -665,7 +678,7 @@ and item.input_messages_per_sec(item.inbox_lag) < 36;"#,
         actual,
         vec![PolicyOutcome::new(
             TestItem::new(17.327, ts, 2),
-            TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
+            TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
             QueryResult::passed_without_bindings()
         )]
     );
@@ -688,8 +701,10 @@ async fn test_replace_policy() -> anyhow::Result<()> {
 
     let flow = TestFlow::new(policy_1).await;
 
-    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}))
-        .await?;
+    flow.push_context(
+        TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
+    )
+    .await?;
 
     let item_1 = TestItem::new(consts::PI, too_old_ts, 1);
     flow.push_item(item_1.clone()).await?;
@@ -711,27 +726,29 @@ async fn test_replace_policy() -> anyhow::Result<()> {
         vec![
             PolicyOutcome::new(
                 TestItem::new(consts::PI, too_old_ts, 1),
-                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
                 QueryResult {
                     passed: true,
                     bindings: maplit::hashmap! {"custom".to_string() => vec![TelemetryValue::Table(maplit::hashmap! {
                         "cat".to_string() => "Otis".to_telemetry(),
-                    })]}
+                    }.into())]}
+                    .into()
                 }
             ),
             PolicyOutcome::new(
                 TestItem::new(17.327, good_ts, 2),
-                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
                 QueryResult {
                     passed: true,
                     bindings: maplit::hashmap! {"custom".to_string() => vec![TelemetryValue::Table(maplit::hashmap! {
                         "cat".to_string() => "Otis".to_telemetry(),
-                    })]}
+                    }.into())]}
+                    .into()
                 }
             ),
             PolicyOutcome::new(
                 TestItem::new(17.327, good_ts, 2),
-                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
                 QueryResult::passed_without_bindings()
             ),
         ]
@@ -750,8 +767,10 @@ async fn test_append_policy() -> anyhow::Result<()> {
 
     let flow = TestFlow::new(policy_1).await;
 
-    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}))
-        .await?;
+    flow.push_context(
+        TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
+    )
+    .await?;
 
     let ts = Utc::now().into();
     let item = TestItem::new(consts::PI, ts, 1);
@@ -777,31 +796,31 @@ async fn test_append_policy() -> anyhow::Result<()> {
         vec![
             PolicyOutcome::new(
                 TestItem::new(17.327, ts, 2),
-                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
                 QueryResult::passed_without_bindings()
             ),
             PolicyOutcome::new(
                 TestItem::new(consts::SQRT_2, ts, 1),
-                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
                 QueryResult {
                     passed: true,
                     bindings: maplit::hashmap! {
                         "custom".to_string() => vec![
-                            TelemetryValue::Table(maplit::hashmap!{ "cat".to_string() => "Otis".to_telemetry(), })
+                            TelemetryValue::Table(maplit::hashmap!{ "cat".to_string() => "Otis".to_telemetry(), }.into())
                         ]
                     }
                 }
             ),
             PolicyOutcome::new(
                 TestItem::new(34.18723, ts, 2),
-                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
+                TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
                 QueryResult {
                     passed: true,
                     bindings: maplit::hashmap! {
                         "custom".to_string() => vec![
-                            TelemetryValue::Table(maplit::hashmap!{ "cat".to_string() => "Otis".to_telemetry(), })
+                            TelemetryValue::Table(maplit::hashmap!{ "cat".to_string() => "Otis".to_telemetry(), }.into())
                         ]
-                    }
+                    }.into()
                 }
             ),
         ]
@@ -821,8 +840,10 @@ async fn test_reset_policy() -> anyhow::Result<()> {
 
     let flow = TestFlow::new(policy_1).await;
 
-    flow.push_context(TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}))
-        .await?;
+    flow.push_context(
+        TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
+    )
+    .await?;
 
     let ts = Utc::now().into();
     let item = TestItem::new(consts::PI, ts, 1);
