@@ -31,7 +31,7 @@ pub trait ProctorContext:
 {
     type Error: std::error::Error + From<anyhow::Error> + Send + Sync;
 
-    fn custom(&self) -> telemetry::Table;
+    fn custom(&self) -> telemetry::TableValue;
 
     #[tracing::instrument(level = "info", skip(tx_clearinghouse_api))]
     async fn connect_context(

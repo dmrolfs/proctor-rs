@@ -1,6 +1,6 @@
 pub use from_telemetry::FromTelemetry;
 pub use to_telemetry::ToTelemetry;
-pub use value::{Seq, Table, TelemetryValue};
+pub use value::{SeqValue, TableValue, TelemetryValue};
 
 mod de;
 mod from_telemetry;
@@ -25,7 +25,7 @@ pub struct Telemetry(TelemetryValue);
 impl Default for Telemetry {
     #[tracing::instrument(level = "trace", skip())]
     fn default() -> Self {
-        Self(TelemetryValue::Table(HashMap::default()))
+        Self(TelemetryValue::Table(TableValue::default()))
     }
 }
 
@@ -98,7 +98,7 @@ impl std::ops::Deref for Telemetry {
 
     fn deref(&self) -> &Self::Target {
         if let TelemetryValue::Table(ref inner) = self.0 {
-            &*inner
+            &*inner.0
         } else {
             panic!("root telemetry value must be a Table, but is {:?}", self.0);
         }
@@ -108,7 +108,7 @@ impl std::ops::Deref for Telemetry {
 impl std::ops::DerefMut for Telemetry {
     fn deref_mut(&mut self) -> &mut Self::Target {
         if let TelemetryValue::Table(ref mut inner) = self.0 {
-            &mut *inner
+            &mut *inner.0
         } else {
             panic!("root telemetry value must be a Table, but is {:?}.", self.0);
         }
@@ -118,14 +118,14 @@ impl std::ops::DerefMut for Telemetry {
 impl Into<Telemetry> for HashMap<String, TelemetryValue> {
     #[tracing::instrument(level = "trace", skip())]
     fn into(self) -> Telemetry {
-        Telemetry(TelemetryValue::Table(self))
+        Telemetry(TelemetryValue::Table(self.into()))
     }
 }
 
 impl Into<Telemetry> for BTreeMap<String, TelemetryValue> {
     #[tracing::instrument(level = "trace", skip())]
     fn into(self) -> Telemetry {
-        self.into_iter().collect()
+        self.into_iter().collect::<HashMap<_, _>>().into()
     }
 }
 
@@ -141,14 +141,19 @@ impl std::ops::Add for Telemetry {
 
 impl FromIterator<(String, TelemetryValue)> for Telemetry {
     fn from_iter<T: IntoIterator<Item = (String, TelemetryValue)>>(iter: T) -> Self {
-        Telemetry(TelemetryValue::Table(iter.into_iter().collect()))
+        Telemetry(TelemetryValue::Table(
+            iter.into_iter().collect::<HashMap<_, _>>().into(),
+        ))
     }
 }
 
 impl<'a> FromIterator<(&'a str, TelemetryValue)> for Telemetry {
     fn from_iter<T: IntoIterator<Item = (&'a str, TelemetryValue)>>(iter: T) -> Self {
         Telemetry(TelemetryValue::Table(
-            iter.into_iter().map(|(k, v)| (k.to_string(), v)).collect(),
+            iter.into_iter()
+                .map(|(k, v)| (k.to_string(), v))
+                .collect::<HashMap<_, _>>()
+                .into(),
         ))
     }
 }
@@ -231,12 +236,15 @@ mod tests {
         let main_span = tracing::info_span!("test_telemetry_basic_serde");
         let _main_span_guard = main_span.enter();
 
-        let telemetry = TelemetryValue::Table(maplit::hashmap! {
-            "place".to_string() => TelemetryValue::Table(maplit::hashmap! {
-                "foo".to_string() => 37.into(),
-                "bar".to_string() => 19.into(),
-            })
-        });
+        let telemetry = TelemetryValue::Table(
+            maplit::hashmap! {
+                "place".to_string() => TelemetryValue::Table(maplit::hashmap! {
+                    "foo".to_string() => 37.into(),
+                    "bar".to_string() => 19.into(),
+                }.into())
+            }
+            .into(),
+        );
 
         let mut serializer = flexbuffers::FlexbufferSerializer::new();
         telemetry.serialize(&mut serializer).unwrap();
@@ -303,7 +311,7 @@ mod tests {
             "place".to_string() => TelemetryValue::Table(maplit::hashmap! {
                 "foo".to_string() => 37.into(),
                 "bar".to_string() => 19.into(),
-            })
+            }.into())
         }
         .into_iter()
         .collect();
@@ -394,7 +402,7 @@ mod tests {
                 //     "name".to_string() => TelemetryValue::Text("christmas".to_string()),
                 //     "infinite".to_string() => TelemetryValue::Boolean(true),
                 // })})
-            }),
+            }.into()),
         }
         .into_iter()
         .collect();
@@ -441,13 +449,13 @@ mod tests {
             "diodes".to_string() => TelemetryValue::Table(maplit::hashmap! {
                 // "green".to_string() => TelemetryValue::Table(maplit::hashmap! { "off".to_string() => TelemetryValue::Unit}),
                 "green".to_string() => TelemetryValue::Text("off".to_string()),
-                "red".to_string() => TelemetryValue::Table(maplit::hashmap!{"brightness".to_string() => TelemetryValue::Integer(100)}),
-                "blue".to_string() => TelemetryValue::Table(maplit::hashmap!{"blinking".to_string() => TelemetryValue::Seq(vec![TelemetryValue::Integer(300), TelemetryValue::Integer(700)])}),
+                "red".to_string() => TelemetryValue::Table(maplit::hashmap!{"brightness".to_string() => TelemetryValue::Integer(100)}.into()),
+                "blue".to_string() => TelemetryValue::Table(maplit::hashmap!{"blinking".to_string() => TelemetryValue::Seq(vec![TelemetryValue::Integer(300), TelemetryValue::Integer(700)])}.into()),
                 "white".to_string() => TelemetryValue::Table(maplit::hashmap!{"pattern".to_string() => TelemetryValue::Table(maplit::hashmap! {
                     "name".to_string() => TelemetryValue::Text("christmas".to_string()),
                     "infinite".to_string() => TelemetryValue::Boolean(true),
-                })})
-            }),
+                }.into())}.into())
+            }.into()),
         }.into_iter().collect();
 
         tracing::warn!("deserializing actual data from telemetry...");
@@ -487,7 +495,8 @@ mod tests {
             "cluster.last_deployment".to_string() => "2014-11-28T10:11:37.246310806Z".into(),
         }
         .into_iter()
-        .collect();
+        .collect::<HashMap<_, _>>()
+        .into();
 
         let foo: Option<bool> = data
             .get("cluster.is_deploying")

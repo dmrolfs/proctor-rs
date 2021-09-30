@@ -167,10 +167,13 @@ impl Into<i64> for &Timestamp {
 
 impl From<Timestamp> for TelemetryValue {
     fn from(that: Timestamp) -> Self {
-        Self::Table(maplit::hashmap! {
-            SECS_KEY.to_string() => that.0.to_telemetry(),
-            NANOS_KEY.to_string() => that.1.to_telemetry(),
-        })
+        Self::Table(
+            maplit::hashmap! {
+                SECS_KEY.to_string() => that.0.to_telemetry(),
+                NANOS_KEY.to_string() => that.1.to_telemetry(),
+            }
+            .into(),
+        )
     }
 }
 

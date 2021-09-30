@@ -2,14 +2,81 @@ use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedL
 use std::convert::TryFrom;
 use std::fmt;
 use std::num::{ParseFloatError, ParseIntError};
+use std::ops::{Deref, DerefMut};
 
 use config::Value as ConfigValue;
 use oso::{FromPolar, PolarValue, ResultSet, ToPolar};
 use serde::de::{EnumAccess, Error};
 use serde::ser::{SerializeMap, SerializeSeq};
-use serde::{de, Deserializer, Serialize, Serializer};
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::error::{TelemetryError, TypeExpectation};
+
+pub type SeqValue = Vec<TelemetryValue>;
+
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TableValue(pub Box<HashMap<String, TelemetryValue>>);
+// pub type Table = Box<HashMap<String, TelemetryValue>>; // to shrink TelemetryValue size
+
+impl TableValue {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn from(table: HashMap<String, TelemetryValue>) -> Self {
+        Self(Box::new(table))
+    }
+}
+
+impl Deref for TableValue {
+    type Target = HashMap<String, TelemetryValue>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for TableValue {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl fmt::Display for TableValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", "{")?;
+        let len = self.0.len();
+        for (i, (k, v)) in self.iter().enumerate() {
+            if i < len - 1 {
+                write!(f, "{}->{}, ", k, v)?
+            } else {
+                write!(f, "{}->{}", k, v)?
+            }
+        }
+        write!(f, "{}", "}")
+    }
+}
+
+impl From<HashMap<String, TelemetryValue>> for TableValue {
+    fn from(that: HashMap<String, TelemetryValue>) -> Self {
+        Self::from(that)
+    }
+}
+
+impl IntoIterator for TableValue {
+    type Item = (String, TelemetryValue);
+    type IntoIter = std::collections::hash_map::IntoIter<String, TelemetryValue>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl ToPolar for TableValue {
+    fn to_polar(self) -> PolarValue {
+        self.0.to_polar()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum TelemetryValue {
@@ -17,13 +84,35 @@ pub enum TelemetryValue {
     Float(f64),
     Boolean(bool),
     Text(String),
-    Seq(Seq),
-    Table(Table),
+    Seq(SeqValue),
+    Table(TableValue),
     Unit,
 }
 
-pub type Seq = Vec<TelemetryValue>;
-pub type Table = HashMap<String, TelemetryValue>;
+impl fmt::Display for TelemetryValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Integer(v) => write!(f, "{}", v),
+            Self::Float(v) => write!(f, "{}", v),
+            Self::Boolean(v) => write!(f, "{}", v),
+            Self::Text(v) => write!(f, "{}", v),
+            Self::Seq(vs) => {
+                write!(f, "{}", "[")?;
+                let len = vs.len();
+                for (i, v) in vs.iter().enumerate() {
+                    if i < len - 1 {
+                        write!(f, "{}, ", v)?
+                    } else {
+                        write!(f, "{}", v)?
+                    }
+                }
+                write!(f, "{}", "]")
+            }
+            Self::Table(vs) => write!(f, "{}", vs),
+            Self::Unit => write!(f, "{}", "()"),
+        }
+    }
+}
 
 impl TelemetryValue {
     #[tracing::instrument(level = "trace")]
@@ -50,7 +139,7 @@ impl TelemetryValue {
             (Self::Float(ref mut lhs), Self::Float(rhs)) => *lhs = *lhs + *rhs,
             (Self::Text(ref mut lhs), Self::Text(rhs)) => lhs.extend(rhs.chars()),
             (Self::Seq(lhs), Self::Seq(ref rhs)) => lhs.extend(rhs.clone()),
-            (Self::Table(lhs), Self::Table(rhs)) => lhs.extend(rhs.clone()),
+            (Self::Table(lhs), Self::Table(rhs)) => lhs.extend(rhs.clone().into_iter()),
             (lhs, rhs) => panic!("mismatched telemetry merge types: {:?} + {:?}.", lhs, rhs),
         };
     }
@@ -60,20 +149,6 @@ impl Default for TelemetryValue {
     #[tracing::instrument(level = "trace")]
     fn default() -> Self {
         Self::Unit
-    }
-}
-
-impl fmt::Display for TelemetryValue {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Unit => write!(f, "unit"),
-            Self::Boolean(value) => write!(f, "{}", value),
-            Self::Integer(value) => write!(f, "{}", value),
-            Self::Float(value) => write!(f, "{}", value),
-            Self::Text(value) => write!(f, "{}", value),
-            Self::Seq(values) => write!(f, "{:?}", values),
-            Self::Table(values) => write!(f, "{:?}", values),
-        }
     }
 }
 
@@ -145,7 +220,7 @@ impl Into<ConfigValue> for TelemetryValue {
 
 impl From<ResultSet> for TelemetryValue {
     fn from(that: ResultSet) -> Self {
-        let mut table = Table::default();
+        let mut table = TableValue::default();
         for key in that.keys() {
             let typed_value = that
                 .get_typed(key)
@@ -217,16 +292,6 @@ impl<'a> From<&'a str> for TelemetryValue {
     }
 }
 
-// impl From<DateTime<Utc>> for TelemetryValue {
-//     fn from(value: DateTime<Utc>) -> Self {
-//         TelemetryValue::Table(maplit::hashmap! {
-//             SECS.to_string() => value.timestamp().into(),
-//             NANOS.to_string() => value.timestamp_subsec_nanos().into(),
-//         })
-//         // TelemetryValue::Integer(value.timestamp_millis())
-//     }
-// }
-
 impl<T: Into<TelemetryValue>> From<Vec<T>> for TelemetryValue {
     fn from(values: Vec<T>) -> Self {
         Self::Seq(values.into_iter().map(|v| v.into()).collect())
@@ -271,25 +336,49 @@ impl<'a, T: Clone + Into<TelemetryValue>> From<&'a [T]> for TelemetryValue {
 
 impl<T: Into<TelemetryValue>> From<HashMap<String, T>> for TelemetryValue {
     fn from(table: HashMap<String, T>) -> Self {
-        Self::Table(table.into_iter().map(|(k, v)| (k, v.into())).collect())
+        Self::Table(
+            table
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect::<HashMap<_, _>>()
+                .into(),
+        )
     }
 }
 
 impl<T: Into<TelemetryValue>> From<HashMap<&str, T>> for TelemetryValue {
     fn from(table: HashMap<&str, T>) -> Self {
-        Self::Table(table.into_iter().map(|(k, v)| (k.to_string(), v.into())).collect())
+        Self::Table(
+            table
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v.into()))
+                .collect::<HashMap<_, _>>()
+                .into(),
+        )
     }
 }
 
 impl<T: Into<TelemetryValue>> From<BTreeMap<String, T>> for TelemetryValue {
     fn from(table: BTreeMap<String, T>) -> Self {
-        Self::Table(table.into_iter().map(|(k, v)| (k, v.into())).collect())
+        Self::Table(
+            table
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect::<HashMap<_, _>>()
+                .into(),
+        )
     }
 }
 
 impl<T: Into<TelemetryValue>> From<BTreeMap<&str, T>> for TelemetryValue {
     fn from(table: BTreeMap<&str, T>) -> Self {
-        Self::Table(table.into_iter().map(|(k, v)| (k.to_string(), v.into())).collect())
+        Self::Table(
+            table
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v.into()))
+                .collect::<HashMap<_, _>>()
+                .into(),
+        )
     }
 }
 
@@ -315,7 +404,11 @@ impl From<PolarValue> for TelemetryValue {
                 Self::Seq(vs)
             }
             PolarValue::Map(table) => {
-                let vs = table.into_iter().map(|(k, v)| (k, v.into())).collect();
+                let vs = table
+                    .into_iter()
+                    .map(|(k, v)| (k, v.into()))
+                    .collect::<HashMap<_, _>>()
+                    .into();
                 Self::Table(vs)
             }
             PolarValue::Instance(_) => {
@@ -617,41 +710,24 @@ impl<'de> Serialize for TelemetryValue {
     #[tracing::instrument(level = "trace", skip(serializer))]
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
-            Self::Unit => {
-                // serializer.serialize_unit()
-                serializer.serialize_unit_variant("TelemetryValue", 6, "Unit")
-            }
-            Self::Boolean(b) => {
-                serializer.serialize_bool(*b)
-                // serializer.serialize_newtype_variant("TelemetryValue", 2, "Boolean", b)
-            }
-            Self::Integer(i) => {
-                serializer.serialize_i64(*i)
-                // serializer.serialize_newtype_variant("TelemetryValue", 0, "Integer", i)
-            }
-            Self::Float(f) => {
-                serializer.serialize_f64(*f)
-                // serializer.serialize_newtype_variant("TelemetryValue", 1, "Float", f)
-            }
-            Self::Text(t) => {
-                serializer.serialize_str(t.as_str())
-                // serializer.serialize_newtype_variant("TelemetryValue", 3, "Text", t)
-            }
+            Self::Unit => serializer.serialize_unit_variant("TelemetryValue", 6, "Unit"),
+            Self::Boolean(b) => serializer.serialize_bool(*b),
+            Self::Integer(i) => serializer.serialize_i64(*i),
+            Self::Float(f) => serializer.serialize_f64(*f),
+            Self::Text(t) => serializer.serialize_str(t.as_str()),
             Self::Seq(values) => {
                 let mut seq = serializer.serialize_seq(Some(values.len()))?;
                 for element in values {
                     seq.serialize_element(element)?;
                 }
                 seq.end()
-                // serializer.serialize_newtype_variant("TelemetryValue",4, "Seq", values)
             }
             Self::Table(table) => {
                 let mut map = serializer.serialize_map(Some(table.len()))?;
-                for (k, v) in table {
+                for (k, v) in table.iter() {
                     map.serialize_entry(k, v)?;
                 }
                 map.end()
-                // serializer.serialize_newtype_variant("TelemetryValue",5, "Table", table)
             }
         }
     }
@@ -849,7 +925,7 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
             where
                 V: de::SeqAccess<'de>,
             {
-                let mut vec = Seq::new();
+                let mut vec = SeqValue::new();
 
                 while let Some(elem) = visitor.next_element()? {
                     tracing::debug!(value=?elem, "adding deserialized seq item");
@@ -864,7 +940,7 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
             where
                 V: de::MapAccess<'de>,
             {
-                let mut table = Table::new();
+                let mut table = TableValue::default();
                 while let Some((key, value)) = visitor.next_entry()? {
                     tracing::debug!(?key, ?value, "visiting next entry");
                     match value {
