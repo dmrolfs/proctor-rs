@@ -1,6 +1,6 @@
 pub use from_telemetry::FromTelemetry;
 pub use to_telemetry::ToTelemetry;
-pub use value::{SeqValue, TableValue, TelemetryValue};
+pub use value::{SeqValue, TableType, TableValue, TelemetryValue};
 
 mod de;
 mod from_telemetry;
@@ -94,7 +94,7 @@ impl Into<TelemetryValue> for Telemetry {
 }
 
 impl std::ops::Deref for Telemetry {
-    type Target = HashMap<String, TelemetryValue>;
+    type Target = TableType;
 
     fn deref(&self) -> &Self::Target {
         if let TelemetryValue::Table(ref inner) = self.0 {

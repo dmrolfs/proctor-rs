@@ -80,8 +80,8 @@ impl TestContext {
 impl proctor::ProctorContext for TestContext {
     type Error = PolicyError;
 
-    fn custom(&self) -> telemetry::TableValue {
-        self.custom.clone()
+    fn custom(&self) -> telemetry::TableType {
+        (&*self.custom).clone()
     }
 }
 

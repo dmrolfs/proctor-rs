@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::time::Duration;
@@ -54,8 +54,8 @@ pub struct TestPolicyPhaseContext {
 impl ProctorContext for TestPolicyPhaseContext {
     type Error = ProctorError;
 
-    fn custom(&self) -> telemetry::TableValue {
-        self.custom.clone()
+    fn custom(&self) -> telemetry::TableType {
+        (&*self.custom).clone()
     }
 }
 

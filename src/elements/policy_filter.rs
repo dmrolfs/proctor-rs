@@ -421,8 +421,8 @@ mod tests {
     impl ProctorContext for TestContext {
         type Error = PolicyError;
 
-        fn custom(&self) -> telemetry::TableValue {
-            self.qualities.clone()
+        fn custom(&self) -> telemetry::TableType {
+            (&*self.qualities).clone()
         }
     }
 

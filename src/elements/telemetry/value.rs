@@ -14,8 +14,10 @@ use crate::error::{TelemetryError, TypeExpectation};
 
 pub type SeqValue = Vec<TelemetryValue>;
 
+pub type TableType = HashMap<String, TelemetryValue>;
+
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TableValue(pub Box<HashMap<String, TelemetryValue>>);
+pub struct TableValue(pub Box<TableType>);
 // pub type Table = Box<HashMap<String, TelemetryValue>>; // to shrink TelemetryValue size
 
 impl TableValue {
@@ -23,13 +25,13 @@ impl TableValue {
         Self::default()
     }
 
-    pub fn from(table: HashMap<String, TelemetryValue>) -> Self {
+    pub fn from(table: TableType) -> Self {
         Self(Box::new(table))
     }
 }
 
 impl Deref for TableValue {
-    type Target = HashMap<String, TelemetryValue>;
+    type Target = TableType;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -57,8 +59,8 @@ impl fmt::Display for TableValue {
     }
 }
 
-impl From<HashMap<String, TelemetryValue>> for TableValue {
-    fn from(that: HashMap<String, TelemetryValue>) -> Self {
+impl From<TableType> for TableValue {
+    fn from(that: TableType) -> Self {
         Self::from(that)
     }
 }
