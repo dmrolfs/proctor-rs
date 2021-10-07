@@ -9,14 +9,31 @@ use std::fmt;
 use tracing::Instrument;
 
 use self::node::Node;
-pub use self::node::GRAPH_ERRORS;
 pub use self::port::{connect_out_to_in, Connect};
 pub use self::port::{Inlet, Outlet, Port, PORT_CONTEXT, PORT_DATA};
 pub use self::port::{STAGE_EGRESS_COUNTS, STAGE_INGRESS_COUNTS};
 pub use self::shape::*;
 use self::stage::Stage;
-use crate::error::GraphError;
+use crate::error::{GraphError, MetricLabel, ProctorError};
 use crate::ProctorResult;
+use lazy_static::lazy_static;
+use prometheus::{IntCounterVec, Opts};
+
+lazy_static! {
+    pub static ref GRAPH_ERRORS: IntCounterVec = IntCounterVec::new(
+        Opts::new(
+            "proctor_graph_errors",
+            "Number of recoverable errors occurring in graph processing"
+        ),
+        &["stage", "error_type"]
+    )
+    .expect("failed creating proctor_graph_errors metric");
+}
+
+#[inline]
+pub fn track_errors(stage: &str, error: &ProctorError) {
+    GRAPH_ERRORS.with_label_values(&[stage, error.label().as_ref()]).inc()
+}
 
 /// A Graph represents a runnable stream processing graph.
 ///
@@ -104,13 +121,56 @@ impl Graph {
 
         let results: ProctorResult<Vec<()>> = results.into_iter().collect();
         let _ = results?;
-        // let bad_apple = results.into_iter().find(|result| result.is_err());
-        //
-        // match bad_apple {
-        //     None => (),
-        //     Some(bad) => bad?,
-        // };
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::{EligibilityError, GraphError, PortError};
+    use claim::*;
+    use pretty_assertions::assert_eq;
+    use prometheus::Registry;
+
+    #[test]
+    fn test_track_error_metric() {
+        let registry_name = "test_track_error_metric";
+        let registry = assert_ok!(Registry::new_custom(Some(registry_name.to_string()), None));
+        assert_ok!(registry.register(Box::new(GRAPH_ERRORS.clone())));
+        track_errors(
+            "foo",
+            &GraphError::PortError(PortError::Detached("detached foo".to_string())).into(),
+        );
+        track_errors("foo", &EligibilityError::DataNotFound("no foo".to_string()).into());
+        track_errors("bar", &EligibilityError::ParseError("bad smell".to_string()).into());
+
+        let metric_family = registry.gather();
+        assert_eq!(metric_family.len(), 1);
+        assert_eq!(
+            metric_family[0].get_name(),
+            &format!("{}_{}", registry_name, "proctor_graph_errors")
+        );
+        let metrics = metric_family[0].get_metric();
+        assert_eq!(metrics.len(), 3);
+        let error_types: Vec<&str> = metrics
+            .iter()
+            .flat_map(|m| {
+                m.get_label()
+                    .iter()
+                    .filter(|l| l.get_name() == "error_type" )
+                    .map(|l| l.get_value())
+            })
+            // .sorted()
+            .collect();
+        assert_eq!(
+            error_types,
+            vec![
+                "proctor::eligibility::data_not_found",
+                "proctor::eligibility::parse",
+                "proctor::graph::port::detached",
+            ]
+        );
     }
 }

@@ -1,9 +1,10 @@
 use serde::de::DeserializeOwned;
 
 use super::Telemetry;
+use crate::error::ProctorError;
 use crate::graph::stage::{self, Stage};
-use crate::graph::{Graph, SinkShape, SourceShape, ThroughShape};
-use crate::AppData;
+use crate::graph::{self, Graph, SinkShape, SourceShape, ThroughShape};
+use crate::{AppData, SharedString};
 
 pub type FromTelemetryShape<Out> = Box<dyn FromTelemetryStage<Out>>;
 
@@ -16,20 +17,27 @@ pub async fn make_from_telemetry<Out>(name: impl Into<String>, log_conversion_fa
 where
     Out: AppData + DeserializeOwned,
 {
-    let name = name.into();
+    let name: SharedString = SharedString::Owned(name.into());
+    let stage_name = name.clone();
     let from_telemetry =
         stage::FilterMap::<_, Telemetry, Out>::new(format!("{}_from_telemetry", name), move |telemetry| {
             let span = tracing::info_span!("converting telemetry into data item", ?telemetry);
             let _ = span.enter();
 
-            let converted = telemetry.try_into::<Out>();
-            if log_conversion_failure {
-                if let Err(ref err) = converted {
-                    tracing::error!(error=?err, "failed to convert an entity from telemetry data");
+            match telemetry.try_into() {
+                Ok(converted) => {
+                    tracing::trace!(?converted, "data item derived from telemetry.");
+                    Some(converted)
+                }
+                Err(err) => {
+                    if log_conversion_failure {
+                        tracing::error!(error=?err, "failed to convert an entity from telemetry data");
+                    }
+
+                    graph::track_errors(stage_name.as_ref(), &ProctorError::CollectionError(err.into()));
+                    None
                 }
             }
-            tracing::trace!(?converted, "data item derived from telemetry.");
-            converted.ok()
         });
 
     let cg_inlet = from_telemetry.inlet().clone();
@@ -37,5 +45,5 @@ where
     let mut cg = Graph::default();
     cg.push_back(Box::new(from_telemetry)).await;
 
-    Box::new(stage::CompositeThrough::new(name, cg, cg_inlet, cg_outlet).await)
+    Box::new(stage::CompositeThrough::new(name.into_owned(), cg, cg_inlet, cg_outlet).await)
 }

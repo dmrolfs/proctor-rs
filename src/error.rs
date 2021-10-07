@@ -1,7 +1,7 @@
+use either::{Either, Left, Right};
 use std::convert::Infallible;
 use std::fmt;
 use std::fmt::Debug;
-use either::{Either, Left, Right};
 
 use chrono::{DateTime, Utc};
 use thiserror::Error;
@@ -50,7 +50,9 @@ pub enum ProctorError {
 }
 
 impl MetricLabel for ProctorError {
-    fn slug(&self) -> SharedString { "proctor".into() }
+    fn slug(&self) -> SharedString {
+        "proctor".into()
+    }
     fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
         match self {
             Self::CollectionError(e) => Right(Box::new(e)),
@@ -446,7 +448,7 @@ impl MetricLabel for TelemetryError {
     fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
         match self {
             _e @ Self::TypeError { .. } => Left("type".into()),
-            _e @ Self::ExpectedTypeError( .. ) => Left("expected_type".into()),
+            _e @ Self::ExpectedTypeError(..) => Left("expected_type".into()),
             Self::SerializationError(_) => Left("serializaton".into()),
             Self::DeserializationError(_) => Left("deserialization".into()),
             Self::ReaderError(_) => Left("reader".into()),
