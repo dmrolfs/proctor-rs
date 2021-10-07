@@ -76,17 +76,8 @@ impl<T: AppData> Stage for ActorSource<T> {
                 ActorSourceCmd::Push { item, tx } => {
                     let send_span = tracing::info_span!("sending item", ?item);
                     let _ = send_span.enter();
-                    match self.outlet().send(item).await {
-                        Ok(()) => {
-                            let _ignore_failure = tx.send(());
-                            ()
-                        }
-
-                        Err(err) => {
-                            tracing::error!(error=?err, "failed to send item - completing actor source.");
-                            break;
-                        }
-                    }
+                    self.outlet().send(item).await?;
+                    let _ignore_failure = tx.send(());
                 }
 
                 ActorSourceCmd::Stop(tx) => {
@@ -199,5 +190,11 @@ mod tests {
             let actual = tx_api.send(cmd);
             assert!(actual.is_err());
         })
+    }
+
+    #[ignore]
+    #[test]
+    fn test_push_w_fail() {
+        todo!()
     }
 }
