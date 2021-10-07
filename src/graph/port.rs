@@ -30,10 +30,12 @@ lazy_static! {
     .expect("failed creating proctor_stage_ingress_counts metric");
 }
 
+#[inline]
 fn track_ingress(stage: &str, port_name: &str) {
     STAGE_INGRESS_COUNTS.with_label_values(&[stage, port_name]).inc()
 }
 
+#[inline]
 fn track_egress(stage: &str, port_name: &str) {
     STAGE_EGRESS_COUNTS.with_label_values(&[stage, port_name]).inc()
 }

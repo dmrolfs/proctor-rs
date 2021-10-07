@@ -1,12 +1,26 @@
 use std::convert::Infallible;
 use std::fmt;
 use std::fmt::Debug;
+use either::{Either, Left, Right};
 
 use chrono::{DateTime, Utc};
 use thiserror::Error;
 
 use crate::elements::TelemetryValue;
 use crate::phases::collection::SourceSetting;
+use crate::SharedString;
+
+pub trait MetricLabel {
+    fn label(&self) -> SharedString {
+        match self.next() {
+            Either::Right(n) => format!("{}::{}", self.slug(), n.label()).into(),
+            Either::Left(ls) => format!("{}::{}", self.slug(), ls).into(),
+        }
+    }
+
+    fn slug(&self) -> SharedString;
+    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>>;
+}
 
 #[derive(Debug, Error)]
 pub enum ProctorError {
@@ -33,6 +47,22 @@ pub enum ProctorError {
 
     #[error("{0}")]
     PrometheusError(#[from] prometheus::Error),
+}
+
+impl MetricLabel for ProctorError {
+    fn slug(&self) -> SharedString { "proctor".into() }
+    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+        match self {
+            Self::CollectionError(e) => Right(Box::new(e)),
+            Self::EligibilityError(e) => Right(Box::new(e)),
+            Self::DecisionError(e) => Right(Box::new(e)),
+            Self::GovernanceError(e) => Right(Box::new(e)),
+            Self::PlanError(e) => Right(Box::new(e)),
+            Self::PhaseError(_) => Left("phase".into()),
+            Self::GraphError(e) => Right(Box::new(e)),
+            Self::PrometheusError(_) => Left("prometheus".into()),
+        }
+    }
 }
 
 impl From<PortError> for ProctorError {
@@ -62,6 +92,21 @@ pub enum GraphError {
     PortError(#[from] PortError),
 }
 
+impl MetricLabel for GraphError {
+    fn slug(&self) -> SharedString {
+        "graph".into()
+    }
+
+    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+        match self {
+            Self::PolicyError(e) => Right(Box::new(e)),
+            Self::StageError(e) => Right(Box::new(e)),
+            Self::JoinError(_) => Left("join".into()),
+            Self::PortError(e) => Right(Box::new(e)),
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum IncompatibleSourceSettingsError {
     #[error("expected {expected} source settings but got: {settings:?}")]
@@ -72,6 +117,20 @@ pub enum IncompatibleSourceSettingsError {
 
     #[error("{0}")]
     ConfigurationParseError(#[source] anyhow::Error),
+}
+
+impl MetricLabel for IncompatibleSourceSettingsError {
+    fn slug(&self) -> SharedString {
+        "incompatible_source_settings".into()
+    }
+
+    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+        match self {
+            _e @ Self::ExpectedTypeError { .. } => Left("expected_type".into()),
+            Self::InvalidDetailError(_) => Left("invalid_detail".into()),
+            Self::ConfigurationParseError(_) => Left("configuration_parse".into()),
+        }
+    }
 }
 
 impl From<reqwest::header::InvalidHeaderName> for IncompatibleSourceSettingsError {
@@ -123,6 +182,27 @@ pub enum CollectionError {
     StageError(#[from] anyhow::Error),
 }
 
+impl MetricLabel for CollectionError {
+    fn slug(&self) -> SharedString {
+        "collection".into()
+    }
+
+    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+        match self {
+            Self::IncompatibleSettings(e) => Right(Box::new(e)),
+            Self::CsvError(_) => Left("csv".into()),
+            Self::HttpError(_) => Left("http".into()),
+            Self::HttpMiddlewareError(_) => Left("http_middleware".into()),
+            Self::ClosedSubscription(_) => Left("closed_subscription".into()),
+            Self::DataNotFound(_) => Left("data_not_found".into()),
+            Self::ParseError(_) => Left("parse".into()),
+            Self::TelemetryError(e) => Right(Box::new(e)),
+            Self::PortError(e) => Right(Box::new(e)),
+            Self::StageError(_) => Left("stage".into()),
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum EligibilityError {
     #[error("data not found at key, {0}")]
@@ -144,6 +224,23 @@ pub enum EligibilityError {
     StageError(#[from] anyhow::Error),
 }
 
+impl MetricLabel for EligibilityError {
+    fn slug(&self) -> SharedString {
+        "eligibility".into()
+    }
+
+    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+        match self {
+            Self::DataNotFound(_) => Left("data_not_found".into()),
+            Self::ParseError(_) => Left("parse".into()),
+            Self::TelemetryError(e) => Right(Box::new(e)),
+            Self::PortError(e) => Right(Box::new(e)),
+            Self::CollectionError(e) => Right(Box::new(e)),
+            Self::StageError(_) => Left("stage".into()),
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum DecisionError {
     #[error("data not found at key, {0}")]
@@ -162,6 +259,22 @@ pub enum DecisionError {
     StageError(#[from] anyhow::Error),
 }
 
+impl MetricLabel for DecisionError {
+    fn slug(&self) -> SharedString {
+        "decision".into()
+    }
+
+    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+        match self {
+            Self::DataNotFound(_) => Left("data_not_found".into()),
+            Self::ParseError(_) => Left("parse".into()),
+            Self::TelemetryError(e) => Right(Box::new(e)),
+            Self::PortError(e) => Right(Box::new(e)),
+            Self::StageError(_) => Left("stage".into()),
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum GovernanceError {
     #[error("{0}")]
@@ -169,6 +282,19 @@ pub enum GovernanceError {
 
     #[error("{0}")]
     StageError(#[from] anyhow::Error),
+}
+
+impl MetricLabel for GovernanceError {
+    fn slug(&self) -> SharedString {
+        "governance".into()
+    }
+
+    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+        match self {
+            Self::PortError(e) => Right(Box::new(e)),
+            Self::StageError(_) => Left("stage".into()),
+        }
+    }
 }
 
 #[derive(Debug, Error)]
@@ -210,6 +336,29 @@ pub enum PlanError {
     SerdeError(#[from] serde_json::Error),
 }
 
+impl MetricLabel for PlanError {
+    fn slug(&self) -> SharedString {
+        "plan".into()
+    }
+
+    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+        match self {
+            Self::DataNotFound(_) => Left("data_not_found".into()),
+            Self::ParseError(_) => Left("parse".into()),
+            Self::TelemetryError(e) => Right(Box::new(e)),
+            Self::PortError(e) => Right(Box::new(e)),
+            Self::ForecastError(_) => Left("forecast".into()),
+            _e @ Self::NotEnoughData { .. } => Left("not_enough_data".into()),
+            Self::DurationLimitExceeded(_) => Left("duration_limit_exceeded".into()),
+            Self::ZeroDuration(_) => Left("zero_duration".into()),
+            Self::RegressionFailed(_) => Left("regression_failed".into()),
+            Self::StageError(_) => Left("stage".into()),
+            Self::IOError(_) => Left("io".into()),
+            Self::SerdeError(_) => Left("serde".into()),
+        }
+    }
+}
+
 /// Set of errors occurring during policy initialization or evaluation.
 #[derive(Debug, Error)]
 pub enum PolicyError {
@@ -235,6 +384,23 @@ pub enum PolicyError {
 
     #[error("policy error : {0}")]
     AnyError(#[from] anyhow::Error),
+}
+
+impl MetricLabel for PolicyError {
+    fn slug(&self) -> SharedString {
+        "policy".into()
+    }
+
+    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+        match self {
+            Self::IOError(_) => Left("io".into()),
+            Self::EngineError(_) => Left("engine".into()),
+            Self::PolicyError(_) => Left("policy_parsing".into()),
+            Self::TelemetryError(e) => Right(Box::new(e)),
+            Self::PublishError(_) => Left("publish".into()),
+            Self::AnyError(_) => Left("any".into()),
+        }
+    }
 }
 
 impl From<PortError> for PolicyError {
@@ -270,6 +436,25 @@ pub enum TelemetryError {
 
     #[error("type not support {0}")]
     NotSupported(String),
+}
+
+impl MetricLabel for TelemetryError {
+    fn slug(&self) -> SharedString {
+        "telemetry".into()
+    }
+
+    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+        match self {
+            _e @ Self::TypeError { .. } => Left("type".into()),
+            _e @ Self::ExpectedTypeError( .. ) => Left("expected_type".into()),
+            Self::SerializationError(_) => Left("serializaton".into()),
+            Self::DeserializationError(_) => Left("deserialization".into()),
+            Self::ReaderError(_) => Left("reader".into()),
+            Self::ConvertInfallible(_) => Left("convert_infallible".into()),
+            Self::ValueParseError(_) => Left("value_parse".into()),
+            Self::NotSupported(_) => Left("not_supported".into()),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -322,6 +507,19 @@ pub enum StageError {
     PortError(#[from] PortError),
 }
 
+impl MetricLabel for StageError {
+    fn slug(&self) -> SharedString {
+        "stage".into()
+    }
+
+    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+        match self {
+            Self::MaterializationError(_) => Left("materialization".into()),
+            Self::PortError(e) => Right(Box::new(e)),
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum PortError {
     #[error("cannot use detached port, {0}.")]
@@ -330,6 +528,19 @@ pub enum PortError {
     /// error occurred while attempting to send across a sync channel.
     #[error("{0:?}")]
     ChannelError(#[source] anyhow::Error),
+}
+
+impl MetricLabel for PortError {
+    fn slug(&self) -> SharedString {
+        "port".into()
+    }
+
+    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+        match self {
+            Self::Detached(_) => Left("detached".into()),
+            Self::ChannelError(_) => Left("channel".into()),
+        }
+    }
 }
 
 impl<T: 'static + Debug + Send + Sync> From<tokio::sync::mpsc::error::SendError<T>> for PortError {

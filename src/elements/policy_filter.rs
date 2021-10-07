@@ -48,12 +48,14 @@ lazy_static! {
     .expect("failed creating policy_filter_eval_counts metric");
 }
 
+#[inline]
 fn track_policy_evals(stage: &str, outcome: PolicyResult) {
     POLICY_FILTER_EVAL_COUNTS
         .with_label_values(&[stage, &format!("{}", outcome)])
         .inc();
 }
 
+#[inline]
 fn start_policy_timer(stage: &str) -> HistogramTimer {
     POLICY_FILTER_EVAL_TIME.with_label_values(&[stage]).start_timer()
 }

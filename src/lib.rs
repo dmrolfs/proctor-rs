@@ -4,6 +4,7 @@ extern crate static_assertions;
 
 extern crate enum_display_derive;
 extern crate proctor_derive;
+extern crate either;
 
 pub mod app_data;
 pub mod elements;
