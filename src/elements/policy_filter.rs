@@ -23,9 +23,58 @@ use tokio::sync::{broadcast, mpsc};
 
 use crate::error::{GraphError, PolicyError};
 use crate::graph::stage::{self, Stage};
-use crate::graph::{Inlet, Outlet, Port};
+use crate::graph::{Inlet, Outlet, Port, PORT_CONTEXT, PORT_DATA};
 use crate::graph::{SinkShape, SourceShape};
-use crate::{AppData, ProctorContext, ProctorResult};
+use crate::{AppData, ProctorContext, ProctorResult, SharedString};
+use lazy_static::lazy_static;
+use prometheus::{HistogramOpts, HistogramTimer, HistogramVec, IntCounterVec, Opts};
+
+lazy_static! {
+    pub static ref POLICY_FILTER_EVAL_TIME: HistogramVec = HistogramVec::new(
+        HistogramOpts::new(
+            "policy_filter_eval_time",
+            "Time spent in PolicyFilter policy evaluation in seconds"
+        ),
+        &["stage"]
+    )
+    .expect("failed creating policy_filter_eval_time metric");
+    pub static ref POLICY_FILTER_EVAL_COUNTS: IntCounterVec = IntCounterVec::new(
+        Opts::new(
+            "policy_filter_eval_counts",
+            "Number of items PolicyFilter has evaluated."
+        ),
+        &["stage", "outcome",]
+    )
+    .expect("failed creating policy_filter_eval_counts metric");
+}
+
+fn track_policy_evals(stage: &str, outcome: PolicyResult) {
+    POLICY_FILTER_EVAL_COUNTS
+        .with_label_values(&[stage, &format!("{}", outcome)])
+        .inc();
+}
+
+fn start_policy_timer(stage: &str) -> HistogramTimer {
+    POLICY_FILTER_EVAL_TIME.with_label_values(&[stage]).start_timer()
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum PolicyResult {
+    Passed,
+    Blocked,
+    Failed,
+}
+
+impl fmt::Display for PolicyResult {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let label = match *self {
+            Self::Passed => "passed",
+            Self::Blocked => "blocked",
+            Self::Failed => "failed",
+        };
+        write!(f, "{}", label)
+    }
+}
 
 pub struct PolicyFilter<T, C, A, P>
 where
@@ -48,13 +97,14 @@ where
     P: QueryPolicy<Item = T, Context = C, Args = A>,
 {
     pub fn new<S: AsRef<str>>(name: S, policy: P) -> Self {
-        let context_inlet = Inlet::new(format!("{}_policy_filter_inlet", name.as_ref()));
-        let inlet = Inlet::new(name.as_ref());
-        let outlet = Outlet::new(name.as_ref());
+        let name: SharedString = SharedString::Owned(name.as_ref().into());
+        let context_inlet = Inlet::new(name.clone(), PORT_CONTEXT);
+        let inlet = Inlet::new(name.clone(), PORT_DATA);
+        let outlet = Outlet::new(name.clone(), PORT_DATA);
         let (tx_api, rx_api) = mpsc::unbounded_channel();
         let (tx_monitor, _) = broadcast::channel(num_cpus::get() * 2);
         Self {
-            name: format!("{}_policy_filter_stage", name.as_ref()),
+            name: format!("{}_policy_filter_stage", name),
             policy,
             context_inlet,
             inlet,
@@ -160,7 +210,7 @@ where
                         tracing::trace!(?item, ?context, "handling next item...");
 
                         match context.lock().await.as_ref() {
-                            Some(ctx) => Self::handle_item(item, ctx, policy, &oso, outlet, tx_monitor).await?,
+                            Some(ctx) => Self::handle_item(name.as_str(), item, ctx, policy, &oso, outlet, tx_monitor).await?,
                             None => Self::handle_item_before_context(item, tx_monitor)?,
                         }
                     },
@@ -247,13 +297,17 @@ where
         fields()
     )]
     async fn handle_item(
-        item: T, context: &C, policy: &P, oso: &Oso, outlet: &Outlet<PolicyOutcome<T, C>>,
+        name: &str, item: T, context: &C, policy: &P, oso: &Oso, outlet: &Outlet<PolicyOutcome<T, C>>,
         tx: &broadcast::Sender<PolicyFilterEvent<T, C>>,
     ) -> Result<(), PolicyError> {
+        let name: SharedString = name.to_owned().into();
+        // let now = quanta::Instant::now();
+        let _timer = start_policy_timer(name.as_ref());
+
         // query lifetime cannot span across `.await` since it cannot `Send` between threads.
         let query_result = policy.query_policy(oso, policy.make_query_args(&item, context));
 
-        match query_result {
+        let outcome = match query_result {
             Ok(result) if result.passed => {
                 tracing::info!(
                     ?policy,
@@ -261,22 +315,31 @@ where
                     "item passed context policy review - sending via outlet."
                 );
                 outlet.send(PolicyOutcome::new(item, context.clone(), result)).await?;
+                track_policy_evals(name.as_ref(), PolicyResult::Passed);
                 Self::publish_event(PolicyFilterEvent::ItemPassed, tx)?;
                 Ok(())
             }
 
             Ok(result) => {
                 tracing::info!(?policy, ?result, "item failed context policy review - skipping.");
+                track_policy_evals(name.as_ref(), PolicyResult::Blocked);
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
                 Ok(())
             }
 
             Err(err) => {
                 tracing::warn!(error=?err, ?policy, "error in context policy review - skipping item.");
+                track_policy_evals(name.as_ref(), PolicyResult::Failed);
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
                 Err(err.into())
             }
-        }
+        };
+
+        // if let Some(delta) = quanta::Instant::now().checked_duration_since(now) {
+        //     histogram!(METRIC_POLICY_FILTER_PROCESS_TIME, delta, "stage" => name);
+        // }
+
+        outcome
     }
 
     #[tracing::instrument(
@@ -312,7 +375,7 @@ where
         match command {
             PolicyFilterCmd::Inspect(tx) => {
                 let detail = PolicyFilterDetail {
-                    name: name.to_owned(),
+                    name: name.to_string(),
                     context: context.lock().await.clone(),
                 };
                 let _ignore_failure = tx.send(detail);
@@ -386,7 +449,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use claim::assert_ok;
+    use claim::*;
     use oso::PolarClass;
     use pretty_assertions::assert_eq;
     use serde::{Deserialize, Serialize};
@@ -395,7 +458,8 @@ mod tests {
 
     use super::*;
     use crate::elements::telemetry;
-    use crate::phases::collection::{self, SubscriptionRequirements, TelemetrySubscription};
+    use crate::phases::collection::{SubscriptionRequirements, TelemetrySubscription};
+    use prometheus::Registry;
     use std::collections::HashSet;
 
     // Make sure the `PolicyFilter` object is threadsafe
@@ -427,7 +491,7 @@ mod tests {
     }
 
     impl SubscriptionRequirements for TestContext {
-        fn required_fields() -> HashSet<collection::Str> {
+        fn required_fields() -> HashSet<SharedString> {
             maplit::hashset! { "location_code".into(), }
         }
     }
@@ -490,6 +554,10 @@ mod tests {
     #[test]
     fn test_handle_item() -> anyhow::Result<()> {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        let registry = assert_ok!(Registry::new_custom(Some("test_handle_item".to_string()), None));
+        assert_ok!(registry.register(Box::new(POLICY_FILTER_EVAL_COUNTS.clone())));
+        assert_ok!(registry.register(Box::new(POLICY_FILTER_EVAL_TIME.clone())));
+
         let main_span = tracing::info_span!("policy_filter::test_handle_item");
         let _main_span_guard = main_span.enter();
 
@@ -504,7 +572,7 @@ mod tests {
 
         block_on(async move {
             let (tx, mut rx) = mpsc::channel(4);
-            let mut outlet = Outlet::new("test");
+            let mut outlet = Outlet::new("test", PORT_DATA);
             outlet.attach("test_tx", tx).await;
 
             let (tx_monitor, _rx_monitor) = broadcast::channel(4);
@@ -518,9 +586,17 @@ mod tests {
                 .into(),
             };
 
-            PolicyFilter::handle_item(item, &context, &policy_filter.policy, &oso, &outlet, &tx_monitor)
-                .await
-                .expect("handle_item failed");
+            PolicyFilter::handle_item(
+                "test_stage".into(),
+                item,
+                &context,
+                &policy_filter.policy,
+                &oso,
+                &outlet,
+                &tx_monitor,
+            )
+            .await
+            .expect("handle_item failed");
 
             outlet.close().await;
 
@@ -537,6 +613,9 @@ mod tests {
 
             assert!(rx.recv().await.is_none());
         });
+
+        //todo: this is simple experiment with metrics to eval how it may be used in testing.
+        assert_eq!(registry.gather().len(), 2);
 
         Ok(())
     }

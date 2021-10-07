@@ -6,8 +6,8 @@ use futures::future::{self, BoxFuture, FutureExt};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::error::StageError;
-use crate::graph::{stage, Inlet, InletsShape, Outlet, Port, SourceShape, Stage, UniformFanInShape};
-use crate::{AppData, ProctorResult};
+use crate::graph::{stage, Inlet, InletsShape, Outlet, Port, SourceShape, Stage, UniformFanInShape, PORT_DATA};
+use crate::{AppData, ProctorResult, SharedString};
 
 pub type MergeApi = mpsc::UnboundedSender<MergeMsg>;
 
@@ -141,16 +141,22 @@ pub struct MergeN<T> {
 
 impl<T: Send> MergeN<T> {
     pub fn new(name: impl Into<String>, input_ports: usize) -> Self {
-        let name = name.into();
-        let outlet = Outlet::new(name.clone());
+        let name: SharedString = SharedString::Owned(name.into());
+        let outlet = Outlet::new(name.clone(), PORT_DATA);
         let (tx_api, rx_api) = mpsc::unbounded_channel();
         let inlets = InletsShape::new(
             (0..input_ports)
-                .map(|pos| Inlet::new(format!("{}_{}", name.as_str(), pos)))
+                .map(|pos| Inlet::new(name.clone(), format!("{}_{}", PORT_DATA, pos)))
                 .collect(),
         );
 
-        Self { name, inlets, outlet, tx_api, rx_api }
+        Self {
+            name: name.into_owned(),
+            inlets,
+            outlet,
+            tx_api,
+            rx_api,
+        }
     }
 }
 

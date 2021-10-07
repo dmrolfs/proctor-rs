@@ -11,7 +11,7 @@ use crate::AppData;
 
 mod collection;
 mod from_telemetry;
-mod policy_filter;
+pub mod policy_filter;
 pub mod records_per_second;
 pub mod signal;
 pub mod telemetry;

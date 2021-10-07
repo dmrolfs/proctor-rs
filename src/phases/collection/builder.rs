@@ -4,7 +4,7 @@ use crate::error::{CollectionError, PortError};
 use crate::graph::stage::{self, SourceStage, Stage, WithApi};
 use crate::graph::{Connect, Graph, SinkShape, SourceShape, UniformFanInShape};
 use crate::phases::collection::TelemetrySubscription;
-use crate::AppData;
+use crate::{AppData, SharedString};
 use cast_trait_object::DynCastExt;
 use serde::de::DeserializeOwned;
 use std::collections::HashSet;
@@ -66,7 +66,8 @@ impl CollectBuilder<Telemetry> {
         fields(nr_sources = %self.sources.len())
     )]
     pub async fn build_for_telemetry_out(
-        mut self, out_required_fields: HashSet<impl Into<String>>, out_optional_fields: HashSet<impl Into<String>>,
+        mut self, out_required_fields: HashSet<impl Into<SharedString>>,
+        out_optional_fields: HashSet<impl Into<SharedString>>,
     ) -> Result<Collect<Telemetry>, CollectionError> {
         let out_channel = SubscriptionChannel::connect_telemetry_channel(
             self.name.clone().as_str(),
@@ -94,7 +95,8 @@ where
 
     #[tracing::instrument(level = "info", skip(out_required_fields, out_optional_fields, ), fields(nr_sources = % self.sources.len()))]
     pub async fn build_for_out_requirements(
-        mut self, out_required_fields: HashSet<impl Into<String>>, out_optional_fields: HashSet<impl Into<String>>,
+        mut self, out_required_fields: HashSet<impl Into<SharedString>>,
+        out_optional_fields: HashSet<impl Into<SharedString>>,
     ) -> Result<Collect<Out>, CollectionError> {
         let out_channel: SubscriptionChannel<Out> = SubscriptionChannel::connect_channel_with_requirements(
             self.name.clone().as_str(),

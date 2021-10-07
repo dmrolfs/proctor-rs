@@ -6,8 +6,8 @@ use cast_trait_object::dyn_upcast;
 use tokio::sync::mpsc;
 
 use crate::graph::shape::SourceShape;
-use crate::graph::{Outlet, Port, Stage};
-use crate::{AppData, ProctorResult};
+use crate::graph::{Outlet, Port, Stage, PORT_DATA};
+use crate::{AppData, ProctorResult, SharedString};
 
 /// A source that produces a single outcome, which may be restarted or cancelled via a control
 /// channel and evaluation function.
@@ -29,9 +29,14 @@ where
     F: Future<Output = Option<Out>>,
 {
     pub fn new<S: Into<String>>(name: S, action: A, rx_control: mpsc::Receiver<Ctrl>) -> Self {
-        let name = name.into();
-        let outlet = Outlet::new(name.clone());
-        Self { name, action, rx_control, outlet }
+        let name: SharedString = SharedString::Owned(name.into());
+        let outlet = Outlet::new(name.clone(), PORT_DATA);
+        Self {
+            name: name.into_owned(),
+            action,
+            rx_control,
+            outlet,
+        }
     }
 }
 

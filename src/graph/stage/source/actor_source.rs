@@ -5,8 +5,8 @@ use cast_trait_object::dyn_upcast;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::graph::stage::{self, Stage};
-use crate::graph::{Outlet, Port, SourceShape};
-use crate::{Ack, AppData, ProctorResult};
+use crate::graph::{Outlet, Port, SourceShape, PORT_DATA};
+use crate::{Ack, AppData, ProctorResult, SharedString};
 
 pub type ActorSourceApi<T> = mpsc::UnboundedSender<ActorSourceCmd<T>>;
 
@@ -40,10 +40,10 @@ pub struct ActorSource<T> {
 
 impl<T> ActorSource<T> {
     pub fn new(name: impl Into<String>) -> Self {
-        let name = name.into();
-        let outlet = Outlet::new(name.clone());
+        let name: SharedString = SharedString::Owned(name.into());
+        let outlet = Outlet::new(name.clone(), PORT_DATA);
         let (tx_api, rx_api) = mpsc::unbounded_channel();
-        Self { name, outlet, tx_api, rx_api }
+        Self { name: name.into_owned(), outlet, tx_api, rx_api }
     }
 }
 

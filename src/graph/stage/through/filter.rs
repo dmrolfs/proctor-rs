@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 
 use crate::graph::shape::{SinkShape, SourceShape};
-use crate::graph::{Inlet, Outlet, Port, Stage};
-use crate::{AppData, ProctorResult};
+use crate::graph::{Inlet, Outlet, Port, Stage, PORT_DATA};
+use crate::{AppData, ProctorResult, SharedString};
 
 /// Filter the incoming elements using a predicate.
 ///
@@ -66,10 +66,16 @@ where
     P: FnMut(&T) -> bool,
 {
     pub fn new<S: Into<String>>(name: S, predicate: P) -> Self {
-        let name = name.into();
-        let inlet = Inlet::new(name.clone());
-        let outlet = Outlet::new(name.clone());
-        Self { name, predicate, inlet, outlet, log_blocks: false }
+        let name: SharedString = SharedString::Owned(name.into());
+        let inlet = Inlet::new(name.clone(), PORT_DATA);
+        let outlet = Outlet::new(name.clone(), PORT_DATA);
+        Self {
+            name: name.into_owned(),
+            predicate,
+            inlet,
+            outlet,
+            log_blocks: false,
+        }
     }
 
     pub fn with_block_logging(self) -> Self {

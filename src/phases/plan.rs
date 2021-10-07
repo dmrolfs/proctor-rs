@@ -6,8 +6,8 @@ use tokio::sync::broadcast;
 
 use crate::error::PlanError;
 use crate::graph::stage::{Stage, WithMonitor};
-use crate::graph::{Inlet, Outlet, Port, SinkShape, SourceShape};
-use crate::{AppData, ProctorResult};
+use crate::graph::{Inlet, Outlet, Port, SinkShape, SourceShape, PORT_CONTEXT, PORT_DATA};
+use crate::{AppData, ProctorResult, SharedString};
 
 pub type PlanMonitor<P> =
     broadcast::Receiver<PlanEvent<<P as Planning>::Observation, <P as Planning>::Decision, <P as Planning>::Out>>;
@@ -44,16 +44,16 @@ pub struct Plan<P: Planning> {
 impl<P: Planning> Plan<P> {
     #[tracing::instrument(level = "info", skip(name))]
     pub fn new(name: impl Into<String>, mut planning: P) -> Self {
-        let name = name.into();
-        let inlet = Inlet::new(name.clone());
-        let decision_inlet = Inlet::new(format!("decision_{}", name.as_str()));
-        let outlet = Outlet::new(name.clone());
+        let name: SharedString = SharedString::Owned(format!("{}_plan", name.into()));
+        let inlet = Inlet::new(name.clone(), PORT_DATA);
+        let decision_inlet = Inlet::new(name.clone(), PORT_CONTEXT);
+        let outlet = Outlet::new(name.clone(), PORT_DATA);
         planning.set_outlet(outlet.clone());
 
         let (tx_monitor, _) = broadcast::channel(num_cpus::get() * 2);
 
         Self {
-            name,
+            name: name.into_owned(),
             planning,
             inlet,
             decision_inlet,

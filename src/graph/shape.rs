@@ -60,7 +60,7 @@ impl<T: Send> InletsShape<T> {
     }
 
     pub async fn get(&self, index: usize) -> Option<Inlet<T>> {
-        self.0.lock().await.get(index).map(|i| i.clone())
+        self.0.lock().await.get(index).cloned()
     }
 
     pub async fn close(&mut self) {

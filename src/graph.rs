@@ -9,8 +9,10 @@ use std::fmt;
 use tracing::Instrument;
 
 use self::node::Node;
+pub use self::node::GRAPH_ERRORS;
 pub use self::port::{connect_out_to_in, Connect};
-pub use self::port::{Inlet, Outlet, Port};
+pub use self::port::{Inlet, Outlet, Port, PORT_CONTEXT, PORT_DATA};
+pub use self::port::{STAGE_EGRESS_COUNTS, STAGE_INGRESS_COUNTS};
 pub use self::shape::*;
 use self::stage::Stage;
 use crate::error::GraphError;

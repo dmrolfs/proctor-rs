@@ -6,12 +6,11 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use futures_util::stream::StreamExt;
 use tokio::sync::{mpsc, oneshot};
-use tracing::Instrument;
 
 use crate::error::StageError;
 use crate::graph::shape::SourceShape;
-use crate::graph::{stage, Outlet, Port, Stage};
-use crate::{AppData, ProctorResult};
+use crate::graph::{stage, Outlet, Port, Stage, PORT_DATA};
+use crate::{AppData, ProctorResult, SharedString};
 
 pub type TickApi = mpsc::UnboundedSender<TickMsg>;
 
@@ -153,12 +152,12 @@ impl<T> Tick<T> {
         name: S, initial_delay: Duration, interval: Duration, tick: T, constraint: Constraint,
     ) -> Self {
         assert!(interval > Duration::new(0, 0), "`interval` must be non-zero.");
-        let name = name.into();
-        let outlet = Outlet::new(name.clone());
+        let name: SharedString = SharedString::Owned(name.into());
+        let outlet = Outlet::new(name.clone(), PORT_DATA);
         let (tx_api, rx_api) = mpsc::unbounded_channel();
 
         Self {
-            name,
+            name: name.into_owned(),
             initial_delay,
             interval,
             tick,

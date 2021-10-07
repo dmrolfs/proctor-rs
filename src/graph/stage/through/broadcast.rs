@@ -3,8 +3,8 @@ use std::fmt::{self, Debug};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 
-use crate::graph::{Inlet, Outlet, OutletsShape, Port, SinkShape, Stage, UniformFanOutShape};
-use crate::{AppData, ProctorResult};
+use crate::graph::{Inlet, Outlet, OutletsShape, Port, SinkShape, Stage, UniformFanOutShape, PORT_DATA};
+use crate::{AppData, ProctorResult, SharedString};
 
 /// Fan-out the stream to several streams emitting each incoming upstream element to all downstream
 /// consumers.
@@ -80,13 +80,13 @@ pub struct Broadcast<T> {
 
 impl<T> Broadcast<T> {
     pub fn new<S: Into<String>>(name: S, output_ports: usize) -> Self {
-        let name = name.into();
-        let inlet = Inlet::new(name.clone());
+        let name: SharedString = SharedString::Owned(name.into());
+        let inlet = Inlet::new(name.clone(), PORT_DATA);
         let outlets = (0..output_ports)
-            .map(|pos| Outlet::new(format!("{}_{}", name, pos)))
+            .map(|pos| Outlet::new(name.clone(), format!("{}_{}", PORT_DATA, pos)))
             .collect();
 
-        Self { name, inlet, outlets }
+        Self { name: name.into_owned(), inlet, outlets }
     }
 }
 

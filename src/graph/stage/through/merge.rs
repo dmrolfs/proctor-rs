@@ -3,8 +3,8 @@ use std::fmt::{self, Debug};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 
-use crate::graph::{FanInShape2, Inlet, Outlet, Port, SourceShape, Stage};
-use crate::{AppData, ProctorResult};
+use crate::graph::{FanInShape2, Inlet, Outlet, Port, SourceShape, Stage, PORT_DATA};
+use crate::{AppData, ProctorResult, SharedString};
 
 /// Merge multiple sources. Picks elements randomly if all sources has elements ready.
 ///
@@ -47,11 +47,11 @@ pub struct Merge<T> {
 
 impl<T> Merge<T> {
     pub fn new<S: Into<String>>(name: S) -> Self {
-        let name = name.into();
-        let inlet_0 = Inlet::new(format!("{}_0", name));
-        let inlet_1 = Inlet::new(format!("{}_1", name));
-        let outlet = Outlet::new(name.clone());
-        Self { name, inlet_0, inlet_1, outlet }
+        let name: SharedString = SharedString::Owned(name.into());
+        let inlet_0 = Inlet::new(name.clone(), format!("{}_0", PORT_DATA));
+        let inlet_1 = Inlet::new(name.clone(), format!("{}_1", PORT_DATA));
+        let outlet = Outlet::new(name.clone(), PORT_DATA);
+        Self { name: name.into_owned(), inlet_0, inlet_1, outlet }
     }
 }
 

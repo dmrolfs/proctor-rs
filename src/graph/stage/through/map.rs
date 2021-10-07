@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 
 use crate::graph::shape::{SinkShape, SourceShape};
-use crate::graph::{Inlet, Outlet, Port, Stage};
-use crate::{AppData, ProctorResult};
+use crate::graph::{Inlet, Outlet, Port, Stage, PORT_DATA};
+use crate::{AppData, ProctorResult, SharedString};
 
 /// Transform this stream by applying the given function to each of the elements as they pass
 /// through this processing step.
@@ -67,10 +67,10 @@ where
     F: FnMut(In) -> Out,
 {
     pub fn new(name: impl Into<String>, operation: F) -> Self {
-        let name = name.into();
-        let inlet = Inlet::new(name.clone());
-        let outlet = Outlet::new(name.clone());
-        Self { name, operation, inlet, outlet }
+        let name: SharedString = SharedString::Owned(name.into());
+        let inlet = Inlet::new(name.clone(), PORT_DATA);
+        let outlet = Outlet::new(name.clone(), PORT_DATA);
+        Self { name: name.into_owned(), operation, inlet, outlet }
     }
 }
 

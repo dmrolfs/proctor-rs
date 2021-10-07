@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 
 use crate::graph::shape::SourceShape;
-use crate::graph::{stage, Connect, Graph, Inlet, Outlet, Port, Stage};
-use crate::{AppData, ProctorResult};
+use crate::graph::{stage, Connect, Graph, Inlet, Outlet, Port, Stage, PORT_DATA};
+use crate::{AppData, ProctorResult, SharedString};
 
 /// Source shape that encapsulates externally created stages, supporting graph stage composition.
 ///
@@ -147,16 +147,23 @@ pub struct CompositeSource<Out> {
 }
 
 impl<Out: AppData> CompositeSource<Out> {
-    pub async fn new(name: impl Into<String>, graph: Graph, graph_outlet: Outlet<Out>) -> Self {
+    pub async fn new(name: impl Into<SharedString>, graph: Graph, graph_outlet: Outlet<Out>) -> Self {
         let name = name.into();
-        let (graph, outlet) = Self::extend_graph(name.as_ref(), graph, graph_outlet).await;
-        Self { name, graph: Some(graph), outlet }
+        let (graph, outlet) = Self::extend_graph(name.clone(), graph, graph_outlet).await;
+        Self {
+            name: name.into_owned(),
+            graph: Some(graph),
+            outlet,
+        }
     }
 
-    async fn extend_graph(name: &str, mut graph: Graph, graph_outlet: Outlet<Out>) -> (Graph, Outlet<Out>) {
-        let from_graph = Inlet::new("from_graph");
+    async fn extend_graph(
+        name: impl Into<SharedString>, mut graph: Graph, graph_outlet: Outlet<Out>,
+    ) -> (Graph, Outlet<Out>) {
+        let name = name.into();
+        let from_graph = Inlet::new(name.clone(), "from_graph");
         (&graph_outlet, &from_graph).connect().await;
-        let composite_outlet = Outlet::new(format!("{}_outlet", name));
+        let composite_outlet = Outlet::new(name.clone(), PORT_DATA);
         let bridge = stage::Identity::new(format!("{}_bridge", name), from_graph, composite_outlet.clone());
 
         graph.push_back(Box::new(bridge)).await;

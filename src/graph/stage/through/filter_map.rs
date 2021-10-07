@@ -3,9 +3,9 @@ use std::fmt::{self, Debug};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 
-use crate::graph::{Inlet, Outlet, Port, Stage};
+use crate::graph::{Inlet, Outlet, Port, Stage, PORT_DATA};
 use crate::graph::{SinkShape, SourceShape};
-use crate::{AppData, ProctorResult};
+use crate::{AppData, ProctorResult, SharedString};
 
 /// The FilterMap stage both filters and maps on items.
 ///
@@ -72,11 +72,11 @@ where
     F: FnMut(In) -> Option<Out>,
 {
     pub fn new(name: impl Into<String>, f: F) -> Self {
-        let name = name.into();
-        let inlet = Inlet::new(name.clone());
-        let outlet = Outlet::new(name.clone());
+        let name: SharedString = SharedString::Owned(name.into());
+        let inlet = Inlet::new(name.clone(), PORT_DATA);
+        let outlet = Outlet::new(name.clone(), PORT_DATA);
         Self {
-            name,
+            name: name.into_owned(),
             filter_map: f,
             inlet,
             outlet,

@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 
 use crate::graph::shape::SinkShape;
-use crate::graph::{Inlet, Port, Stage};
-use crate::{AppData, ProctorResult};
+use crate::graph::{Inlet, Port, Stage, PORT_DATA};
+use crate::{AppData, ProctorResult, SharedString};
 
 /// A Sink that will invoke the given procedure for each received element.
 ///
@@ -69,9 +69,9 @@ where
     F: Fn(In) -> (),
 {
     pub fn new<S: Into<String>>(name: S, operation: F) -> Self {
-        let name = name.into();
-        let inlet = Inlet::new(name.clone());
-        Self { name, operation, inlet }
+        let name: SharedString = SharedString::Owned(name.into());
+        let inlet = Inlet::new(name.clone(), PORT_DATA);
+        Self { name: name.into_owned(), operation, inlet }
     }
 }
 

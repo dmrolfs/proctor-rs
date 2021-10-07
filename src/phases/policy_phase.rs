@@ -10,8 +10,8 @@ use crate::elements::{
 };
 use crate::error::ProctorError;
 use crate::graph::stage::{Stage, ThroughStage, WithApi, WithMonitor};
-use crate::graph::{stage, Connect, Graph, Inlet, Outlet, Port, SinkShape, SourceShape};
-use crate::{AppData, ProctorContext, ProctorResult};
+use crate::graph::{stage, Connect, Graph, Inlet, Outlet, Port, SinkShape, SourceShape, PORT_DATA};
+use crate::{AppData, ProctorContext, ProctorResult, SharedString};
 
 pub struct PolicyPhase<In, Out, C> {
     name: String,
@@ -30,10 +30,13 @@ impl<In: AppData + ToPolar, C: ProctorContext> PolicyPhase<In, PolicyOutcome<In,
         P: 'static + QueryPolicy<Item = In, Context = C>,
         S: AsRef<str>,
     {
-        let name = format!("{}_carry_policy_outcome", name.as_ref());
-        let identity: stage::Identity<PolicyOutcome<In, C>> =
-            stage::Identity::new(name.as_str(), Inlet::new(name.as_str()), Outlet::new(name.as_str()));
-        Self::with_transform(name.as_str(), policy, identity).await
+        let name = SharedString::Owned(format!("{}_carry_policy_outcome", name.as_ref()));
+        let identity: stage::Identity<PolicyOutcome<In, C>> = stage::Identity::new(
+            name.to_string(),
+            Inlet::new(name.clone(), PORT_DATA),
+            Outlet::new(name.clone(), PORT_DATA),
+        );
+        Self::with_transform(name, policy, identity).await
     }
 }
 
@@ -44,9 +47,9 @@ impl<T: AppData + ToPolar, C: ProctorContext> PolicyPhase<T, T, C> {
         P: 'static + QueryPolicy<Item = T, Context = C>,
         S: AsRef<str>,
     {
-        let name = format!("{}_strip_policy_outcome", name.as_ref());
-        let strip = stage::Map::new(name.as_str(), |outcome: PolicyOutcome<T, C>| outcome.item);
-        Self::with_transform(name.as_str(), policy, strip).await
+        let name = SharedString::Owned(format!("{}_strip_policy_outcome", name.as_ref()));
+        let strip = stage::Map::new(name.to_string(), |outcome: PolicyOutcome<T, C>| outcome.item);
+        Self::with_transform(name, policy, strip).await
     }
 }
 
@@ -56,10 +59,10 @@ impl<In: AppData + ToPolar, Out: AppData, C: ProctorContext> PolicyPhase<In, Out
     where
         P: 'static + QueryPolicy<Item = In, Context = C>,
         T: 'static + ThroughStage<PolicyOutcome<In, C>, Out>,
-        S: Into<String>,
+        S: Into<SharedString>,
     {
         let name = name.into();
-        let policy_filter = PolicyFilter::new(format!("{}_phase", name), policy);
+        let policy_filter = PolicyFilter::new(format!("{}_filter", name), policy);
         let context_inlet = policy_filter.context_inlet();
         let tx_policy_api = policy_filter.tx_api();
         let tx_policy_monitor = policy_filter.tx_monitor.clone();
@@ -80,7 +83,7 @@ impl<In: AppData + ToPolar, Out: AppData, C: ProctorContext> PolicyPhase<In, Out
         let outlet = policy_transform.outlet();
 
         Self {
-            name,
+            name: name.to_string(),
             policy_transform,
             context_inlet,
             inlet,

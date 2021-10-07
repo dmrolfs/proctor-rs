@@ -13,8 +13,8 @@ use proctor::elements::{self, telemetry, PolicyOutcome, PolicySubscription, Quer
 use proctor::error::PolicyError;
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape};
-use proctor::phases::collection::{self, SubscriptionRequirements};
-use proctor::ProctorContext;
+use proctor::phases::collection::SubscriptionRequirements;
+use proctor::{ProctorContext, SharedString};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
@@ -86,7 +86,7 @@ impl proctor::ProctorContext for TestContext {
 }
 
 impl SubscriptionRequirements for TestContext {
-    fn required_fields() -> HashSet<collection::Str> {
+    fn required_fields() -> HashSet<SharedString> {
         maplit::hashset! { "location_code".into(), "input_messages_per_sec".into(), }
     }
 }

@@ -1,14 +1,14 @@
-use super::Str;
 use crate::elements::Telemetry;
 use crate::error::CollectionError;
-use crate::graph::{Connect, Inlet, Outlet, Port};
+use crate::graph::{Connect, Inlet, Outlet, Port, PORT_DATA};
+use crate::SharedString;
 use std::collections::HashSet;
 
 //todo: refactor to based on something like Json Schema
 pub trait SubscriptionRequirements {
-    fn required_fields() -> HashSet<Str>;
+    fn required_fields() -> HashSet<SharedString>;
 
-    fn optional_fields() -> HashSet<Str> {
+    fn optional_fields() -> HashSet<SharedString> {
         HashSet::default()
     }
 }
@@ -16,13 +16,13 @@ pub trait SubscriptionRequirements {
 #[derive(Debug, Clone)]
 pub enum TelemetrySubscription {
     All {
-        name: String,
+        name: SharedString,
         outlet_to_subscription: Outlet<Telemetry>,
     },
     Explicit {
-        name: String,
-        required_fields: HashSet<String>,
-        optional_fields: HashSet<String>,
+        name: SharedString,
+        required_fields: HashSet<SharedString>,
+        optional_fields: HashSet<SharedString>,
         outlet_to_subscription: Outlet<Telemetry>,
     },
     /* Remainder {
@@ -32,9 +32,9 @@ pub enum TelemetrySubscription {
 }
 
 impl TelemetrySubscription {
-    pub fn new(name: impl Into<String>) -> Self {
-        let name = name.into();
-        let outlet_to_subscription = Outlet::new(format!("outlet_for_subscription_{}", name));
+    pub fn new(name: impl AsRef<str>) -> Self {
+        let name: SharedString = SharedString::Owned(format!("{}_subscription", name.as_ref()));
+        let outlet_to_subscription = Outlet::new(name.clone(), PORT_DATA);
         Self::All { name, outlet_to_subscription }
     }
 
@@ -43,7 +43,7 @@ impl TelemetrySubscription {
             .with_optional_fields(T::optional_fields())
     }
 
-    pub fn with_required_fields<S: Into<String>>(self, required_fields: HashSet<S>) -> Self {
+    pub fn with_required_fields<S: Into<SharedString>>(self, required_fields: HashSet<S>) -> Self {
         let required_fields = required_fields.into_iter().map(|s| s.into()).collect();
 
         match self {
@@ -70,7 +70,7 @@ impl TelemetrySubscription {
         }
     }
 
-    pub fn with_optional_fields<S: Into<String>>(self, optional_fields: HashSet<S>) -> Self {
+    pub fn with_optional_fields<S: Into<SharedString>>(self, optional_fields: HashSet<S>) -> Self {
         let optional_fields = optional_fields.into_iter().map(|s| s.into()).collect();
         match self {
             Self::All { name, outlet_to_subscription } => Self::Explicit {
@@ -102,15 +102,15 @@ impl TelemetrySubscription {
     //     Self::Remainder { name, outlet_to_subscription }
     // }
 
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> SharedString {
         match self {
-            Self::All { name, outlet_to_subscription: _ } => name.as_str(),
+            Self::All { name, outlet_to_subscription: _ } => name.clone(),
             Self::Explicit {
                 name,
                 required_fields: _,
                 optional_fields: _,
                 outlet_to_subscription: _,
-            } => name.as_str(),
+            } => name.clone(),
         }
     }
 
@@ -137,7 +137,8 @@ impl TelemetrySubscription {
             } => {
                 let mut interested = false;
                 for changed in changed_fields {
-                    if required_fields.contains(changed) || optional_fields.contains(changed) {
+                    let changed: SharedString = SharedString::Owned(changed.clone());
+                    if required_fields.contains(&changed) || optional_fields.contains(&changed) {
                         interested = true;
                         break;
                     }
@@ -160,20 +161,21 @@ impl TelemetrySubscription {
             } => {
                 let mut missing = HashSet::default();
                 for (key, _value) in database.iter() {
-                    if !required_fields.contains(key) && !optional_fields.contains(key) {
-                        let _ = db.remove(key);
+                    let key = SharedString::Owned(key.clone());
+                    if !required_fields.contains(&key) && !optional_fields.contains(&key) {
+                        let _ = db.remove(key.as_ref());
                     }
                 }
 
                 for req in required_fields {
-                    if !db.contains_key(req) {
-                        missing.insert(req.into());
+                    if !db.contains_key(req.as_ref()) {
+                        missing.insert(req.to_string());
                     }
                 }
 
                 for opt in optional_fields {
-                    if !db.contains_key(opt) {
-                        missing.insert(opt.into());
+                    if !db.contains_key(opt.as_ref()) {
+                        missing.insert(opt.to_string());
                     }
                 }
 
@@ -196,8 +198,8 @@ impl TelemetrySubscription {
                 let mut unfilled = Vec::new();
 
                 for required in required_fields.iter() {
-                    match database.get(required) {
-                        Some(value) => ready.push((required.clone(), value)),
+                    match database.get(required.as_ref()) {
+                        Some(value) => ready.push((required.to_string(), value)),
                         None => unfilled.push(required),
                     }
                 }
@@ -205,8 +207,8 @@ impl TelemetrySubscription {
                 if unfilled.is_empty() {
                     for optional in optional_fields.iter() {
                         tracing::trace!(?optional, "looking for optional.");
-                        if let Some(value) = database.get(optional) {
-                            ready.push((optional.clone(), value))
+                        if let Some(value) = database.get(optional.as_ref()) {
+                            ready.push((optional.to_string(), value))
                         }
                     }
                 }
@@ -216,7 +218,7 @@ impl TelemetrySubscription {
                     tracing::info!(
                         subscription=?self,
                         unfilled_fields=?unfilled,
-                        "unsatisfided subscription - not publishing."
+                        "unsatisfied subscription - not publishing."
                     );
 
                     None

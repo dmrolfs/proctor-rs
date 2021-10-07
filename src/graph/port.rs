@@ -1,16 +1,53 @@
-use std::fmt::{self, Debug};
+use std::fmt;
 use std::sync::Arc;
 
+use crate::SharedString;
 use async_trait::async_trait;
+use lazy_static::lazy_static;
+use prometheus::{IntCounterVec, Opts};
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 
 use crate::error::PortError;
 use crate::AppData;
 
+lazy_static! {
+    pub static ref STAGE_INGRESS_COUNTS: IntCounterVec = IntCounterVec::new(
+        Opts::new(
+            "proctor_stage_ingress_counts",
+            "Number of items entering a stage via an Inlet"
+        ),
+        &["stage", "port"]
+    )
+    .expect("failed creating proctor_stage_ingress_counts metric");
+    pub static ref STAGE_EGRESS_COUNTS: IntCounterVec = IntCounterVec::new(
+        Opts::new(
+            "proctor_stage_egress_counts",
+            "Number of items exiting a stage via an Outlet"
+        ),
+        &["stage", "port"]
+    )
+    .expect("failed creating proctor_stage_ingress_counts metric");
+}
+
+fn track_ingress(stage: &str, port_name: &str) {
+    STAGE_INGRESS_COUNTS.with_label_values(&[stage, port_name]).inc()
+}
+
+fn track_egress(stage: &str, port_name: &str) {
+    STAGE_EGRESS_COUNTS.with_label_values(&[stage, port_name]).inc()
+}
+
+pub const PORT_DATA: &'static str = "data";
+pub const PORT_CONTEXT: &'static str = "context";
+
 #[async_trait]
-pub trait Port: fmt::Debug {
+pub trait Port {
+    fn stage(&self) -> &str;
     fn name(&self) -> &str;
+    fn full_name(&self) -> String {
+        format!("{}::{}", self.stage(), self.name())
+    }
 
     /// Closes this half of a channel without dropping it.
     /// This prevents any further messages from being sent on the port while still enabling the
@@ -65,37 +102,56 @@ impl<T: AppData> Connect<T> for (&Inlet<T>, &Outlet<T>) {
 
 pub async fn connect_out_to_in<T: AppData>(mut lhs: Outlet<T>, mut rhs: Inlet<T>) {
     let (tx, rx) = mpsc::channel(num_cpus::get());
-    lhs.attach(rhs.0.clone(), tx).await;
-    rhs.attach(lhs.0.clone(), rx).await;
+    lhs.attach(rhs.full_name(), tx).await;
+    rhs.attach(lhs.full_name(), rx).await;
 }
 
-pub struct Inlet<T>(String, Arc<Mutex<Option<(String, mpsc::Receiver<T>)>>>);
+pub struct Inlet<T> {
+    pub stage: SharedString,
+    pub name: SharedString,
+    connection: Arc<Mutex<Option<(mpsc::Receiver<T>, SharedString)>>>,
+}
 
 impl<T> Inlet<T> {
-    pub fn new(name: impl Into<String>) -> Self {
-        Self(name.into(), Arc::new(Mutex::new(None)))
+    pub fn new(stage: impl Into<SharedString>, port_name: impl Into<SharedString>) -> Self {
+        Self {
+            stage: stage.into(),
+            name: port_name.into(),
+            connection: Arc::new(Mutex::new(None)),
+        }
     }
 
-    pub fn with_receiver(name: impl Into<String>, receiver_name: impl Into<String>, rx: mpsc::Receiver<T>) -> Self {
-        Self(name.into(), Arc::new(Mutex::new(Some((receiver_name.into(), rx)))))
+    pub fn with_receiver(
+        stage: impl Into<SharedString>, port_name: impl Into<SharedString>, receiver_name: impl Into<SharedString>,
+        rx: mpsc::Receiver<T>,
+    ) -> Self {
+        Self {
+            stage: stage.into(),
+            name: port_name.into(),
+            connection: Arc::new(Mutex::new(Some((rx, receiver_name.into())))),
+        }
     }
 }
 
 #[async_trait]
 impl<T: Send> Port for Inlet<T> {
+    fn stage(&self) -> &str {
+        self.stage.as_ref()
+    }
+
     fn name(&self) -> &str {
-        self.0.as_str()
+        self.name.as_ref()
     }
 
     async fn close(&mut self) {
-        let mut rx = self.1.lock().await;
+        let mut rx = self.connection.lock().await;
         match rx.as_mut() {
             Some(r) => {
-                tracing::trace!(inlet=%self.0, "closing Inlet");
-                r.1.close()
+                tracing::trace!(stage=%self.stage, inlet=%self.name, "closing Inlet");
+                r.0.close()
             }
             None => {
-                tracing::trace!(inlet=%self.0, "Inlet close ignored - not attached");
+                tracing::trace!(stage=%self.stage, inlet=%self.name, "Inlet close ignored - not attached");
                 ()
             }
         }
@@ -104,29 +160,33 @@ impl<T: Send> Port for Inlet<T> {
 
 impl<T> Clone for Inlet<T> {
     fn clone(&self) -> Self {
-        Self(self.0.clone(), Arc::clone(&self.1))
+        Self {
+            stage: self.stage.clone(),
+            name: self.name.clone(),
+            connection: self.connection.clone(),
+        }
     }
 }
 
-impl<T: Debug> Inlet<T> {
-    pub async fn attach<S: Into<String>>(&mut self, receiver_name: S, rx: mpsc::Receiver<T>) {
-        let mut port = self.1.lock().await;
-        *port = Some((receiver_name.into(), rx));
+impl<T: fmt::Debug + Send> Inlet<T> {
+    pub async fn attach<S: Into<SharedString>>(&mut self, sender_name: S, rx: mpsc::Receiver<T>) {
+        let mut port = self.connection.lock().await;
+        *port = Some((rx, sender_name.into()));
     }
 
     pub async fn is_attached(&self) -> bool {
-        self.1.lock().await.is_some()
+        self.connection.lock().await.is_some()
     }
 
     pub async fn check_attachment(&self) -> Result<(), PortError> {
         if self.is_attached().await {
-            let sender = self.1.lock().await.as_ref().map(|s| s.0.clone()).unwrap();
-            tracing::trace!("inlet connected: {} -> {}", sender, self.0);
+            let sender = self.connection.lock().await.as_ref().map(|s| s.1.clone()).unwrap();
+            tracing::trace!("inlet connected: {} -> {}", sender, self.full_name());
             return Ok(());
         } else {
             return Err(PortError::Detached(format!(
                 "{}[{}]",
-                self.0.clone(),
+                self.full_name(),
                 std::any::type_name::<Self>()
             )));
         }
@@ -150,7 +210,7 @@ impl<T: Debug> Inlet<T> {
     /// #[tokio::main]
     /// async fn main() {
     ///     let (tx, mut rx) = mpsc::channel(100);
-    ///     let mut port = Inlet::new("port");
+    ///     let mut port = Inlet::new("port", "data");
     ///     port.attach("test_channel", rx).await;
     ///
     ///     tokio::spawn(async move {
@@ -171,7 +231,7 @@ impl<T: Debug> Inlet<T> {
     /// #[tokio::main]
     /// async fn main() {
     ///     let (tx, mut rx) = mpsc::channel(100);
-    ///     let mut port = Inlet::new("port");
+    ///     let mut port = Inlet::new("port", "data");
     ///     port.attach("test_channel", rx).await;
     ///
     ///     tx.send("hello").await.unwrap();
@@ -184,19 +244,19 @@ impl<T: Debug> Inlet<T> {
     // #[tracing::instrument(level = "trace", skip(self), fields(inlet=%self.0))]
     pub async fn recv(&mut self) -> Option<T> {
         if self.is_attached().await {
-            let mut rx = self.1.lock().await;
-            tracing::trace!(inlet=%self.0, "Inlet awaiting next item...");
-            let item = (*rx).as_mut()?.1.recv().await;
-            tracing::trace!(inlet=%self.0, ?item, "Inlet received {} item.", if item.is_some() {"an"} else { "no"});
+            let mut rx = self.connection.lock().await;
+            tracing::trace!(stage=%self.stage, inlet=%self.name, "Inlet awaiting next item...");
+            let item = (*rx).as_mut()?.0.recv().await;
+            tracing::trace!(stage=%self.stage, inlet=%self.name, ?item, "Inlet received {} item.", if item.is_some() {"an"} else { "no"});
             if item.is_none() && rx.is_some() {
-                tracing::info!(inlet=%self.0, "Inlet depleted - closing receiver");
-                rx.as_mut().unwrap().1.close();
+                tracing::info!(stage=%self.stage, inlet=%self.name, "Inlet depleted - closing receiver");
+                rx.as_mut().unwrap().0.close();
                 let _ = rx.take();
             }
 
+            track_ingress(self.stage.as_ref(), self.name.as_ref());
             item
         } else {
-            // tracing::trace!(inlet=%self.0, "Inlet not attached");
             None
         }
     }
@@ -204,59 +264,85 @@ impl<T: Debug> Inlet<T> {
 
 impl<T> fmt::Debug for Inlet<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("Inlet").field(&self.0).finish()
+        // copy Port::full_name to avoid stricter bounds on T
+        f.debug_tuple("Inlet")
+            .field(&format!("{}::{}", self.stage, self.name))
+            .finish()
     }
 }
 
-pub struct Outlet<T>(String, Arc<Mutex<Option<(String, mpsc::Sender<T>)>>>);
+pub struct Outlet<T> {
+    pub stage: SharedString,
+    pub name: SharedString,
+    connection: Arc<Mutex<Option<(mpsc::Sender<T>, SharedString)>>>,
+}
 
 impl<T> Outlet<T> {
-    pub fn new(name: impl Into<String>) -> Self {
-        Self(name.into(), Arc::new(Mutex::new(None)))
+    pub fn new(stage: impl Into<SharedString>, port_name: impl Into<SharedString>) -> Self {
+        Self {
+            stage: stage.into(),
+            name: port_name.into(),
+            connection: Arc::new(Mutex::new(None)),
+        }
     }
 
-    pub fn with_sender(name: impl Into<String>, sender_name: impl Into<String>, tx: mpsc::Sender<T>) -> Outlet<T> {
-        Self(name.into(), Arc::new(Mutex::new(Some((sender_name.into(), tx)))))
+    pub fn with_receiver(
+        stage: impl Into<SharedString>, port_name: impl Into<SharedString>, receiver_name: impl Into<SharedString>,
+        tx: mpsc::Sender<T>,
+    ) -> Outlet<T> {
+        Self {
+            stage: stage.into(),
+            name: port_name.into(),
+            connection: Arc::new(Mutex::new(Some((tx, receiver_name.into())))),
+        }
     }
 }
 
 #[async_trait]
 impl<T: Send> Port for Outlet<T> {
+    fn stage(&self) -> &str {
+        self.stage.as_ref()
+    }
+
     fn name(&self) -> &str {
-        self.0.as_str()
+        self.name.as_ref()
     }
 
     async fn close(&mut self) {
         tracing::trace!(inlet=%self.name(), "closing Outlet");
-        self.1.lock().await.take();
+        self.connection.lock().await.take();
     }
 }
 
 impl<T> Clone for Outlet<T> {
     fn clone(&self) -> Self {
-        Self(self.0.clone(), Arc::clone(&self.1))
+        Self {
+            stage: self.stage.clone(),
+            name: self.name.clone(),
+            connection: self.connection.clone(),
+        }
     }
 }
 
 impl<T: AppData> Outlet<T> {
-    pub async fn attach<S: Into<String>>(&mut self, sender_name: S, tx: mpsc::Sender<T>) {
-        let mut port = self.1.lock().await;
-        *port = Some((sender_name.into(), tx));
+    pub async fn attach<S: Into<SharedString>>(&mut self, sender_name: S, tx: mpsc::Sender<T>) {
+        let mut port = self.connection.lock().await;
+        *port = Some((tx, sender_name.into()));
     }
 
     pub async fn is_attached(&self) -> bool {
-        self.1.lock().await.is_some()
+        self.connection.lock().await.is_some()
     }
 
     pub async fn check_attachment(&self) -> Result<(), PortError> {
         if self.is_attached().await {
-            let receiver = self.1.lock().await.as_ref().map(|s| s.0.clone()).unwrap();
-            tracing::info!("outlet connected: {} -> {}", self.0, receiver);
+            let receiver = self.connection.lock().await.as_ref().map(|s| s.1.clone()).unwrap();
+            tracing::info!("outlet connected: {} -> {}", self.full_name(), receiver);
             return Ok(());
         } else {
             return Err(PortError::Detached(format!(
                 "{}[{}]",
-                self.0.clone(),
+                self.full_name(),
                 std::any::type_name::<Self>()
             )));
         }
@@ -293,7 +379,7 @@ impl<T: AppData> Outlet<T> {
     /// #[tokio::main]
     /// async fn main() {
     ///     let (tx, mut rx) = mpsc::channel(1);
-    ///     let mut port = Outlet::new("port");
+    ///     let mut port = Outlet::new("port", "data");
     ///     port.attach("test_channel", tx).await;
     ///
     ///     tokio::spawn(async move {
@@ -313,15 +399,19 @@ impl<T: AppData> Outlet<T> {
     // #[tracing::instrument(level = "trace", skip(self), fields(?value))]
     pub async fn send(&self, value: T) -> Result<(), PortError> {
         self.check_attachment().await?;
-        let tx = self.1.lock().await;
-        (*tx).as_ref().unwrap().1.send(value).await?;
+        let tx = self.connection.lock().await;
+        (*tx).as_ref().unwrap().0.send(value).await?;
+        track_egress(self.stage.as_ref(), self.name.as_ref());
         Ok(())
     }
 }
 
 impl<T> fmt::Debug for Outlet<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("Outlet").field(&self.0).finish()
+        // copy Port::full_name to avoid stricter bounds on T
+        f.debug_tuple("Outlet")
+            .field(&format!("{}::{}", self.stage, self.name))
+            .finish()
     }
 }
 
@@ -338,7 +428,7 @@ mod tests {
     #[test]
     fn test_cloning_outlet() {
         let (tx, mut rx) = mpsc::channel(8);
-        let mut port_1 = Outlet::new("port_1");
+        let mut port_1 = Outlet::new("port_1", PORT_DATA);
 
         block_on(async move {
             port_1.attach("test_tx", tx).await;

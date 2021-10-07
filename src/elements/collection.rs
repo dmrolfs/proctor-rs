@@ -10,7 +10,7 @@ use super::Telemetry;
 use crate::error::CollectionError;
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Connect, Graph, Inlet, Outlet, Port, SinkShape, SourceShape};
-use crate::{AppData, ProctorResult};
+use crate::{AppData, ProctorResult, SharedString};
 
 // todo: collect once every minute for scaling metrics
 
@@ -106,7 +106,7 @@ use crate::{AppData, ProctorResult};
 /// }
 /// ```
 pub struct Collect {
-    name: String,
+    name: SharedString,
     target: Url,
     graph: Option<Graph>,
     trigger: Inlet<()>,
@@ -115,7 +115,7 @@ pub struct Collect {
 
 impl Collect {
     #[deprecated(since = "2021/09/15", note = "prefer proctor::phases::collection module.")]
-    pub async fn new<T, F, U>(name: impl Into<String>, url: U, default_headers: HeaderMap, transform: F) -> Self
+    pub async fn new<T, F, U>(name: impl Into<SharedString>, url: U, default_headers: HeaderMap, transform: F) -> Self
     where
         T: AppData + DeserializeOwned + 'static,
         F: FnMut(T) -> Telemetry + Send + Sync + 'static,
@@ -124,13 +124,13 @@ impl Collect {
         let name = name.into();
         let target = url.into_url().expect("failed to parse url");
         let (graph, trigger, outlet) =
-            Self::make_graph::<T, _>(name.as_ref(), target.clone(), default_headers, transform).await;
+            Self::make_graph::<T, _>(name.clone(), target.clone(), default_headers, transform).await;
 
         Self { name, target, graph: Some(graph), trigger, outlet }
     }
 
     async fn make_graph<T, F>(
-        name: &str, url: Url, default_headers: HeaderMap, transform: F,
+        name: SharedString, url: Url, default_headers: HeaderMap, transform: F,
     ) -> (Graph, Inlet<()>, Outlet<Telemetry>)
     where
         T: AppData + DeserializeOwned + 'static,
@@ -146,18 +146,18 @@ impl Collect {
         });
         let transform = stage::Map::<_, T, Telemetry>::new(format!("{}-transform", name), transform);
 
-        let bridge_inlet = Inlet::new("into_collection_graph");
+        let bridge_inlet = Inlet::new(name.clone(), "collection");
 
         let in_bridge = stage::Identity::new(
             format!("{}-trigger-bridge", name),
             bridge_inlet.clone(),
-            Outlet::new("from_collection_graph"),
+            Outlet::new(name.clone(), "from_collection_graph"),
         );
 
-        let bridge_outlet = Outlet::new("collection-outlet");
+        let bridge_outlet = Outlet::new(name.clone(), "collection");
         let out_bridge = stage::Identity::new(
             format!("{}-output-bridge", name),
-            Inlet::new("from_collection_graph"),
+            Inlet::new(name.clone(), "from_collection_graph"),
             bridge_outlet.clone(),
         );
 
@@ -210,7 +210,7 @@ impl SinkShape for Collect {
 impl Stage for Collect {
     #[inline]
     fn name(&self) -> &str {
-        self.name.as_str()
+        self.name.as_ref()
     }
 
     #[tracing::instrument(level = "info", skip(self))]

@@ -7,9 +7,9 @@ use serde::de::DeserializeOwned;
 use crate::elements::{make_from_telemetry, FromTelemetryShape, Telemetry};
 use crate::error::CollectionError;
 use crate::graph::stage::Stage;
-use crate::graph::{Inlet, Outlet, Port, SourceShape};
+use crate::graph::{Inlet, Outlet, Port, SourceShape, PORT_DATA};
 use crate::phases::collection::{ClearinghouseSubscriptionMagnet, SubscriptionRequirements, TelemetrySubscription};
-use crate::{AppData, ProctorResult};
+use crate::{AppData, ProctorResult, SharedString};
 use std::collections::HashSet;
 
 //todo: consider refactor all of these builder functions into a typed subscription channel builder.
@@ -52,8 +52,8 @@ impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
 
     #[tracing::instrument(level = "info", skip(required_fields, optional_fields))]
     pub async fn connect_channel_with_requirements(
-        channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'_>, required_fields: HashSet<impl Into<String>>,
-        optional_fields: HashSet<impl Into<String>>,
+        channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'_>,
+        required_fields: HashSet<impl Into<SharedString>>, optional_fields: HashSet<impl Into<SharedString>>,
     ) -> Result<SubscriptionChannel<T>, CollectionError> {
         let subscription = TelemetrySubscription::new(channel_name)
             .with_required_fields(required_fields)
@@ -76,8 +76,8 @@ impl SubscriptionChannel<Telemetry> {
 
     #[tracing::instrument(level = "info", skip(required_fields, optional_fields))]
     pub async fn connect_telemetry_channel(
-        channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'_>, required_fields: HashSet<impl Into<String>>,
-        optional_fields: HashSet<impl Into<String>>,
+        channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'_>,
+        required_fields: HashSet<impl Into<SharedString>>, optional_fields: HashSet<impl Into<SharedString>>,
     ) -> Result<SubscriptionChannel<Telemetry>, CollectionError> {
         let subscription = TelemetrySubscription::new(channel_name)
             .with_required_fields(required_fields)
@@ -87,14 +87,15 @@ impl SubscriptionChannel<Telemetry> {
 }
 
 impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
-    #[tracing::instrument(level="info", name="subscription_channel_new", skip(name), fields(channel_name=%name.as_ref()))]
-    pub async fn new(name: impl AsRef<str>) -> Result<Self, CollectionError> {
-        let inner_stage = make_from_telemetry(name.as_ref(), true).await;
+    #[tracing::instrument(level = "info", name = "subscription_channel_new", skip(name))]
+    pub async fn new(name: impl Into<SharedString>) -> Result<Self, CollectionError> {
+        let name = name.into();
+        let inner_stage = make_from_telemetry(name.to_string(), true).await;
         let subscription_receiver = inner_stage.inlet();
         let outlet = inner_stage.outlet();
 
         Ok(Self {
-            name: format!("{}_typed_subscription", name.as_ref()),
+            name: format!("{}_typed_subscription", name),
             subscription_receiver,
             inner_stage: Some(inner_stage),
             outlet,
@@ -103,16 +104,21 @@ impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
 }
 
 impl SubscriptionChannel<Telemetry> {
-    #[tracing::instrument(level="info", name="subscription_channel_telemetry", skip(name), fields(channel_name=%name.as_ref()))]
-    pub async fn telemetry(name: impl AsRef<str>) -> Result<Self, CollectionError> {
-        let identity =
-            crate::graph::stage::Identity::new(name.as_ref(), Inlet::new(name.as_ref()), Outlet::new(name.as_ref()));
+    /// Create a subscription channel for direct telemetry data; i.e., no schema conversion.
+    #[tracing::instrument(level = "info", name = "subscription_channel_telemetry", skip(name))]
+    pub async fn telemetry(name: impl Into<SharedString>) -> Result<Self, CollectionError> {
+        let name = name.into();
+        let identity = crate::graph::stage::Identity::new(
+            name.to_string(),
+            Inlet::new(name.clone(), PORT_DATA),
+            Outlet::new(name.clone(), PORT_DATA),
+        );
         let inner_stage: FromTelemetryShape<Telemetry> = Box::new(identity);
         let subscription_receiver = inner_stage.inlet();
         let outlet = inner_stage.outlet();
 
         Ok(Self {
-            name: format!("{}_telemetry_subscription", name.as_ref()),
+            name: format!("{}_telemetry_subscription", name),
             subscription_receiver,
             inner_stage: Some(inner_stage),
             outlet,

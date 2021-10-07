@@ -8,8 +8,8 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::error::StageError;
 use crate::graph::shape::SinkShape;
-use crate::graph::{stage, Inlet, Port, Stage};
-use crate::{AppData, ProctorResult};
+use crate::graph::{stage, Inlet, Port, Stage, PORT_DATA};
+use crate::{AppData, ProctorResult, SharedString};
 
 pub type FoldApi<Acc> = mpsc::UnboundedSender<FoldCmd<Acc>>;
 
@@ -106,17 +106,17 @@ where
 impl<F, In, Acc> Fold<F, In, Acc>
 where
     F: FnMut(Acc, In) -> Acc,
-    In: Debug,
+    In: Debug + Send,
     Acc: Debug + Clone,
 {
     pub fn new<S: Into<String>>(name: S, initial: Acc, operation: F) -> Self {
-        let name = name.into();
-        let inlet = Inlet::new(name.clone());
+        let name: SharedString = SharedString::Owned(name.into());
+        let inlet = Inlet::new(name.clone(), PORT_DATA);
         let (tx_api, rx_api) = mpsc::unbounded_channel();
         let (tx_final, rx_final) = oneshot::channel();
 
         Self {
-            name,
+            name: name.into_owned(),
             acc: Arc::new(Mutex::new(initial.clone())),
             initial,
             operation,

@@ -18,10 +18,7 @@ use crate::elements::Telemetry;
 use crate::error::CollectionError;
 use crate::graph::stage::Stage;
 use crate::graph::{stage, Inlet, OutletsShape, Port, SinkShape, UniformFanOutShape};
-use crate::ProctorResult;
-use std::borrow::Cow;
-
-pub type Str = Cow<'static, str>;
+use crate::{ProctorResult, SharedString};
 
 /// Clearinghouse is a sink for collected telemetry data and a subscription-based source for
 /// groups of telemetry fields.
@@ -34,14 +31,16 @@ pub struct Clearinghouse {
     rx_api: mpsc::UnboundedReceiver<ClearinghouseCmd>,
 }
 
+const PORT_TELEMETRY: &'static str = "telemetry";
+
 impl Clearinghouse {
     pub fn new(name: impl Into<String>) -> Self {
-        let name = name.into();
+        let name: SharedString = SharedString::Owned(name.into());
         let (tx_api, rx_api) = mpsc::unbounded_channel();
-        let inlet = Inlet::new(name.clone());
+        let inlet = Inlet::new(name.clone(), PORT_TELEMETRY);
 
         Self {
-            name,
+            name: name.into_owned(),
             subscriptions: Vec::default(),
             database: Telemetry::default(),
             inlet,
@@ -375,27 +374,27 @@ mod tests {
     use super::*;
     use crate::elements::telemetry::ToTelemetry;
     use crate::graph::stage::{self, Stage, WithApi};
-    use crate::graph::{Connect, Outlet, SinkShape, SourceShape};
+    use crate::graph::{Connect, Outlet, SinkShape, SourceShape, PORT_DATA};
 
     lazy_static! {
         static ref SUBSCRIPTIONS: Vec<TelemetrySubscription> = vec![
             TelemetrySubscription::Explicit {
-                name: "none".to_string(),
+                name: "none".into(),
                 required_fields: HashSet::default(),
                 optional_fields: HashSet::default(),
-                outlet_to_subscription: Outlet::new("none_outlet"),
+                outlet_to_subscription: Outlet::new("none_outlet", PORT_DATA),
             },
             TelemetrySubscription::Explicit {
-                name: "cat_pos".to_string(),
-                required_fields: maplit::hashset! {"pos".to_string(), "cat".to_string()},
-                optional_fields: maplit::hashset! {"extra".to_string()},
-                outlet_to_subscription: Outlet::new("cat_pos_outlet"),
+                name: "cat_pos".into(),
+                required_fields: maplit::hashset! {"pos".into(), "cat".into()},
+                optional_fields: maplit::hashset! {"extra".into()},
+                outlet_to_subscription: Outlet::new("cat_pos_outlet", PORT_DATA),
             },
             TelemetrySubscription::Explicit {
-                name: "all".to_string(),
-                required_fields: maplit::hashset! {"pos".to_string(), "cat".to_string(), "value".to_string()},
+                name: "all".into(),
+                required_fields: maplit::hashset! {"pos".into(), "cat".into(), "value".into()},
                 optional_fields: HashSet::default(),
-                outlet_to_subscription: Outlet::new("all_outlet"),
+                outlet_to_subscription: Outlet::new("all_outlet", PORT_DATA),
             },
         ];
         static ref DB_ROWS: Vec<Telemetry> = vec![
@@ -437,7 +436,7 @@ mod tests {
         assert!(clearinghouse.subscriptions.is_empty());
         assert_eq!(clearinghouse.name, "test");
 
-        let sub1_inlet = Inlet::new("sub1");
+        let sub1_inlet = Inlet::new("sub1", PORT_DATA);
         block_on(async {
             assert!(!clearinghouse.inlet.is_attached().await);
 
@@ -493,7 +492,7 @@ mod tests {
             assert_eq!(nr_subscriptions, 0);
 
             tracing::info!("sending add subscriber command to clearinghouse...");
-            let sub1_inlet = Inlet::new("sub1");
+            let sub1_inlet = Inlet::new("sub1", PORT_DATA);
             let (add_cmd, rx_add) = ClearinghouseCmd::subscribe(
                 TelemetrySubscription::new("sub1")
                     .with_required_fields(maplit::hashset! {"aaa", "bbb"})
@@ -551,7 +550,7 @@ mod tests {
             let tick_handle = tokio::spawn(async move { tick.run().await });
             let clear_handle = tokio::spawn(async move { clearinghouse.run().await });
 
-            let inlet_1 = Inlet::new("inlet_1");
+            let inlet_1 = Inlet::new("inlet_1", PORT_DATA);
             let (add, rx_add) = ClearinghouseCmd::subscribe(
                 TelemetrySubscription::new("sub1")
                     .with_required_fields(maplit::hashset! { "dr" })
@@ -672,7 +671,7 @@ mod tests {
                 outlet_to_subscription: _,
             } = &SUBSCRIPTIONS[subscriber]
             {
-                let expected = &EXPECTED[sub_name];
+                let expected = &EXPECTED[sub_name.as_ref()];
                 tracing::info!(
                     nr=%subscriber,
                     subscriber_name=%sub_name,
@@ -732,7 +731,7 @@ mod tests {
             let mut sub_receivers = Vec::with_capacity(subscriptions.len());
             for s in SUBSCRIPTIONS.iter().skip(nr_skip).take(nr_take) {
                 // todo expand test to remove this line
-                let receiver: Inlet<Telemetry> = Inlet::new(format!("recv_from_{}", s.name()));
+                let receiver: Inlet<Telemetry> = Inlet::new(s.name(), PORT_DATA);
                 (&s.outlet_to_subscription(), &receiver).connect().await;
                 sub_receivers.push((s, receiver));
             }
@@ -754,10 +753,10 @@ mod tests {
                 for (sub, receiver) in sub_receivers.iter_mut() {
                     let sub_name = sub.name();
                     tracing::warn!(%sub_name, "test iteration");
-                    let expected = &all_expected[sub_name][row];
+                    let expected = &all_expected[sub_name.as_ref()][row];
                     let actual: Option<Telemetry> = receiver.recv().await;
                     tracing::warn!(%sub_name, ?actual, ?expected, "asserting scenario");
-                    assert_eq!((row, sub_name, &actual), (row, sub_name, expected));
+                    assert_eq!((row, &sub_name, &actual), (row, &sub_name, expected));
                 }
             }
         })

@@ -30,6 +30,9 @@ pub enum ProctorError {
 
     #[error("{0}")]
     GraphError(#[from] GraphError),
+
+    #[error("{0}")]
+    PrometheusError(#[from] prometheus::Error),
 }
 
 impl From<PortError> for ProctorError {
@@ -225,9 +228,8 @@ pub enum PolicyError {
     #[error("failed to pull policy data from telemetry: {0}")]
     TelemetryError(#[from] TelemetryError),
 
-    #[error("policy data, {0}, not found")]
-    DataNotFound(String),
-
+    // #[error("policy data, {0}, not found")]
+    // DataNotFound(String),
     #[error("failed to publish policy event: {0}")]
     PublishError(#[source] anyhow::Error),
 

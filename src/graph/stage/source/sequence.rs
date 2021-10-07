@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 
 use crate::graph::shape::SourceShape;
-use crate::graph::{Outlet, Port, Stage};
-use crate::{AppData, ProctorResult};
+use crate::graph::{Outlet, Port, Stage, PORT_DATA};
+use crate::{AppData, ProctorResult, SharedString};
 
 /// Helper to create Source from Iterable. Example usage: Slice::new(vec![1,2,3]).
 ///
@@ -67,10 +67,14 @@ impl<T, I> Sequence<T, I> {
         I0: IntoIterator<Item = T, IntoIter = I>,
         S: Into<String>,
     {
-        let name = name.into();
-        let outlet = Outlet::new(name.clone());
+        let name: SharedString = SharedString::Owned(name.into());
+        let outlet = Outlet::new(name.clone(), PORT_DATA);
         let items = data.into_iter();
-        Self { name, items: Some(items), outlet }
+        Self {
+            name: name.into_owned(),
+            items: Some(items),
+            outlet,
+        }
     }
 }
 
