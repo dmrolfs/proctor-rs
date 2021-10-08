@@ -12,13 +12,38 @@ use std::fmt::{self, Debug};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use futures::future::FutureExt;
+use lazy_static::lazy_static;
 use tokio::sync::mpsc;
 
 use crate::elements::Telemetry;
-use crate::error::CollectionError;
+use crate::error::{CollectionError, ProctorError};
 use crate::graph::stage::Stage;
 use crate::graph::{stage, Inlet, OutletsShape, Port, SinkShape, UniformFanOutShape};
 use crate::{ProctorResult, SharedString};
+use prometheus::{IntCounterVec, IntGauge, Opts};
+
+lazy_static! {
+    pub(crate) static ref SUBSCRIPTIONS_GAUGE: IntGauge = IntGauge::new(
+        "clearinghouse_subscriptions",
+        "Number of active data subscriptions to the telemetry clearinghouse."
+    )
+    .expect("failed creating clearinghouse_subscriptions metric");
+    pub(crate) static ref PUBLICATIONS: IntCounterVec = IntCounterVec::new(
+        Opts::new("clearinghouse_publications", "Count of subscription publications"),
+        &["subscription"]
+    )
+    .expect("failed creating clearninghouse_publications metric");
+}
+
+#[inline]
+fn track_subscriptions(count: usize) {
+    SUBSCRIPTIONS_GAUGE.set(count as i64);
+}
+
+#[inline]
+fn track_publications(subscription: &str) {
+    PUBLICATIONS.with_label_values(&[subscription]).inc();
+}
 
 /// Clearinghouse is a sink for collected telemetry data and a subscription-based source for
 /// groups of telemetry fields.
@@ -54,11 +79,13 @@ impl Clearinghouse {
         tracing::info!(stage=%self.name, ?subscription, "adding clearinghouse subscription.");
         subscription.connect_to_receiver(receiver).await;
         self.subscriptions.push(subscription);
+        track_subscriptions(self.subscriptions.len());
     }
 
     #[tracing::instrument(level = "trace", skip(subscriptions, database,))]
     async fn handle_telemetry_data(
-        data: Option<Telemetry>, subscriptions: &Vec<TelemetrySubscription>, database: &mut Telemetry,
+        stage_name: &SharedString, data: Option<Telemetry>, subscriptions: &Vec<TelemetrySubscription>,
+        database: &mut Telemetry,
     ) -> Result<bool, CollectionError> {
         match data {
             Some(d) => {
@@ -67,7 +94,7 @@ impl Clearinghouse {
                     Self::find_interested_subscriptions(subscriptions, database.keys().collect(), updated_fields);
 
                 database.extend(d);
-                Self::push_to_subscribers(database, interested).await?;
+                Self::push_to_subscribers(stage_name, database, interested).await?;
                 Ok(true)
             }
 
@@ -115,7 +142,7 @@ impl Clearinghouse {
         fields(subscribers = ?subscribers.iter().map(|s| s.name()).collect::<Vec<_>>(), ),
     )]
     async fn push_to_subscribers(
-        database: &Telemetry, subscribers: Vec<&TelemetrySubscription>,
+        stage_name: &SharedString, database: &Telemetry, subscribers: Vec<&TelemetrySubscription>,
     ) -> Result<(), CollectionError> {
         if subscribers.is_empty() {
             tracing::info!("not publishing - no subscribers corresponding to field changes.");
@@ -129,16 +156,30 @@ impl Clearinghouse {
             .flatten()
             .map(|(s, fulfillment)| {
                 tracing::info!(subscription=%s.name(), "sending subscription data update.");
-                s.send(fulfillment).map(move |send_status| (s, send_status))
+                s.send(fulfillment).map(move |send_status| {
+                    track_publications(s.name().as_ref());
+                    (s, send_status)
+                })
             })
             .collect::<Vec<_>>();
 
         let nr_fulfilled = fulfilled.len();
 
         let statuses = futures::future::join_all(fulfilled).await;
-        let result = if let Some((s, err)) = statuses.into_iter().find(|(_, status)| status.is_err()) {
+        let result = if let Some((s, Err(err))) = statuses.into_iter().find(|(_, status)| status.is_err()) {
             tracing::error!(subscription=%s.name(), "failed to send fulfilled subscription.");
-            err
+            //todo: change to track *all* errors -- only first found is currently tracked
+            //todo: resolve design to avoid this hack to satisfy track_errors api while not exposing
+            // collection stage with proctor error.
+            let proctor_err = ProctorError::CollectionError(err);
+            crate::graph::track_errors(stage_name.as_ref(), &proctor_err);
+            let err = match proctor_err {
+                ProctorError::CollectionError(err) => Some(err),
+                _ => None,
+            }
+            .unwrap();
+
+            Err(err)
         } else {
             Ok(())
         };
@@ -211,16 +252,17 @@ impl Clearinghouse {
                 tracing::info!(?subscription, "adding telemetry subscriber.");
                 subscription.connect_to_receiver(&receiver).await;
                 subscriptions.push(subscription);
+                track_subscriptions(subscriptions.len());
                 let _ = tx.send(());
                 Ok(true)
             }
 
             ClearinghouseCmd::Unsubscribe { name, tx } => {
                 // let mut subs = subscriptions.lock().await;
-                let dropped = subscriptions
-                    .iter()
-                    .position(|s| s.name() == name.as_str())
-                    .map(|pos| subscriptions.remove(pos));
+                let dropped = subscriptions.iter().position(|s| s.name() == name.as_str()).map(|pos| {
+                    let _dropped = subscriptions.remove(pos);
+                    track_subscriptions(subscriptions.len());
+                });
 
                 tracing::info!(?dropped, "subscription dropped");
                 let _ = tx.send(());
@@ -293,6 +335,7 @@ impl Clearinghouse {
     }
 
     async fn do_run(&mut self) -> Result<(), CollectionError> {
+        let stage_name = SharedString::Owned(self.name.clone());
         let mut inlet = self.inlet.clone();
         let rx_api = &mut self.rx_api;
         let database = &mut self.database;
@@ -308,7 +351,7 @@ impl Clearinghouse {
 
             tokio::select! {
                 data = inlet.recv() => {
-                    let cont_loop = Self::handle_telemetry_data(data, subscriptions, database).await?;
+                    let cont_loop = Self::handle_telemetry_data(&stage_name, data, subscriptions, database).await?;
 
                     if !cont_loop {
                         break;
@@ -739,7 +782,7 @@ mod tests {
             for row in 0..DB_ROWS.len() {
                 let db = &DB_ROWS[row];
                 tracing::warn!(?db, "pushing database to subscribers");
-                Clearinghouse::push_to_subscribers(db, subscriptions.clone())
+                Clearinghouse::push_to_subscribers(&"test_clearinghouse".into(), db, subscriptions.clone())
                     .await
                     .expect("failed to publish");
             }
