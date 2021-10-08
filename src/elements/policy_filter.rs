@@ -30,7 +30,7 @@ use lazy_static::lazy_static;
 use prometheus::{HistogramOpts, HistogramTimer, HistogramVec, IntCounterVec, Opts};
 
 lazy_static! {
-    pub static ref POLICY_FILTER_EVAL_TIME: HistogramVec = HistogramVec::new(
+    pub(crate) static ref POLICY_FILTER_EVAL_TIME: HistogramVec = HistogramVec::new(
         HistogramOpts::new(
             "policy_filter_eval_time",
             "Time spent in PolicyFilter policy evaluation in seconds"
@@ -38,7 +38,7 @@ lazy_static! {
         &["stage"]
     )
     .expect("failed creating policy_filter_eval_time metric");
-    pub static ref POLICY_FILTER_EVAL_COUNTS: IntCounterVec = IntCounterVec::new(
+    pub(crate) static ref POLICY_FILTER_EVAL_COUNTS: IntCounterVec = IntCounterVec::new(
         Opts::new(
             "policy_filter_eval_counts",
             "Number of items PolicyFilter has evaluated."

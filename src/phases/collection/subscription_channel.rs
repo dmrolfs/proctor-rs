@@ -28,13 +28,7 @@ impl<T: SubscriptionRequirements + AppData + DeserializeOwned> SubscriptionChann
     pub async fn connect_channel(
         channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'_>,
     ) -> Result<SubscriptionChannel<T>, CollectionError> {
-        Self::connect_channel_with_requirements(
-            channel_name,
-            magnet,
-            <T as SubscriptionRequirements>::required_fields(),
-            <T as SubscriptionRequirements>::optional_fields(),
-        )
-        .await
+        Self::connect_channel_with_requirements(channel_name, magnet, T::required_fields(), T::optional_fields()).await
     }
 }
 
