@@ -444,25 +444,6 @@ mod tests {
         registry
     }
 
-    fn u_m(subscription: &str, telemetry: &Telemetry) {
-        let cat_found = telemetry.iter().find(|(k, _)| k.as_str() == "cat").is_some();
-        if cat_found {
-            CAT_COUNTS.with_label_values(&[subscription]).inc();
-        }
-
-        let pos: Option<i64> = telemetry.iter().find_map(|(k, v)| {
-            if k.as_str() == "pos" {
-                let v: Option<i64> = v.clone().try_into().ok();
-                v
-            } else {
-                None
-            }
-        });
-        if let Some(p) = pos {
-            CURRENT_POS.with_label_values(&[subscription]).set(p);
-        }
-    }
-
     lazy_static! {
         static ref SUBSCRIPTIONS: Vec<TelemetrySubscription> = vec![
             TelemetrySubscription::Explicit {
