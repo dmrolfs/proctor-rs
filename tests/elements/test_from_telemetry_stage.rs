@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 use claim::*;
 use lazy_static::lazy_static;
 use pretty_assertions::assert_eq;
-use proctor::elements::make_from_telemetry;
+use proctor::elements;
 use proctor::graph::{stage, Connect, Graph, SinkShape};
 use proctor::phases::collection::{make_telemetry_cvs_source, SourceSetting};
 use serde::{Deserialize, Serialize};
@@ -135,7 +135,7 @@ async fn test_make_from_telemetry_stage() -> Result<()> {
     let setting = SourceSetting::Csv { path };
 
     let mut source = assert_ok!(make_telemetry_cvs_source::<Data, _>("local", &setting));
-    let convert = make_from_telemetry("convert", true).await;
+    let convert = elements::make_from_telemetry("convert", true).await;
 
     let mut sink = stage::Fold::<_, Data, Vec<Data>>::new("sink", Vec::default(), |mut acc, item| {
         acc.push(item);

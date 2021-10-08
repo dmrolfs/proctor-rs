@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use serde::de::DeserializeOwned;
 
-use crate::elements::{make_from_telemetry, FromTelemetryShape, Telemetry};
+use crate::elements::{self, FromTelemetryShape, Telemetry};
 use crate::error::CollectionError;
 use crate::graph::stage::Stage;
 use crate::graph::{Inlet, Outlet, Port, SourceShape, PORT_DATA};
@@ -84,7 +84,7 @@ impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
     #[tracing::instrument(level = "info", name = "subscription_channel_new", skip(name))]
     pub async fn new(name: impl Into<SharedString>) -> Result<Self, CollectionError> {
         let name = name.into();
-        let inner_stage = make_from_telemetry(name.to_string(), true).await;
+        let inner_stage = elements::make_from_telemetry(name.to_string(), true).await;
         let subscription_receiver = inner_stage.inlet();
         let outlet = inner_stage.outlet();
 

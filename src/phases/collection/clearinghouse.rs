@@ -156,6 +156,7 @@ impl Clearinghouse {
             .flatten()
             .map(|(s, fulfillment)| {
                 tracing::info!(subscription=%s.name(), "sending subscription data update.");
+                Self::update_metrics(s, &fulfillment);
                 s.send(fulfillment).map(move |send_status| {
                     track_publications(s.name().as_ref());
                     (s, send_status)
@@ -194,9 +195,14 @@ impl Clearinghouse {
         result
     }
 
-    #[tracing::instrument(level = "trace")]
+    #[tracing::instrument(level = "info")]
     fn fulfill_subscription(subscription: &TelemetrySubscription, database: &Telemetry) -> Option<Telemetry> {
         subscription.fulfill(database)
+    }
+
+    #[tracing::instrument(level = "info", skip(subscription, telemetry))]
+    fn update_metrics(subscription: &TelemetrySubscription, telemetry: &Telemetry) {
+        subscription.update_metrics(telemetry)
     }
 
     #[tracing::instrument(level = "trace", skip(subscriptions, database))]
@@ -382,7 +388,6 @@ impl Clearinghouse {
     }
 
     async fn do_close(mut self: Box<Self>) -> Result<(), CollectionError> {
-        tracing::warn!("DMR: closing clearinghouse.");
         self.inlet.close().await;
         for s in self.subscriptions {
             s.close().await;
@@ -408,6 +413,7 @@ mod tests {
     use std::collections::HashMap;
     use std::time::Duration;
 
+    use claim::*;
     use lazy_static::lazy_static;
     use pretty_assertions::assert_eq;
     use tokio::sync::oneshot;
@@ -418,6 +424,44 @@ mod tests {
     use crate::elements::telemetry::ToTelemetry;
     use crate::graph::stage::{self, Stage, WithApi};
     use crate::graph::{Connect, Outlet, SinkShape, SourceShape, PORT_DATA};
+    use prometheus::{IntCounterVec, IntGaugeVec, Opts, Registry};
+    use std::convert::TryInto;
+    use std::sync::Arc;
+
+    lazy_static! {
+        static ref CAT_COUNTS: IntCounterVec =
+            IntCounterVec::new(Opts::new("cat_counts", "How many cats were found."), &["subscription"])
+                .expect("failed to create cat_counts metric");
+        static ref CURRENT_POS: IntGaugeVec =
+            IntGaugeVec::new(Opts::new("current_pos", "current position"), &["subscription"])
+                .expect("failed to create current_pos metric");
+    }
+
+    fn setup_metrics(name: impl Into<String>) -> Registry {
+        let registry = assert_ok!(Registry::new_custom(Some(name.into()), None));
+        assert_ok!(registry.register(Box::new(CAT_COUNTS.clone())));
+        assert_ok!(registry.register(Box::new(CURRENT_POS.clone())));
+        registry
+    }
+
+    fn u_m(subscription: &str, telemetry: &Telemetry) {
+        let cat_found = telemetry.iter().find(|(k, _)| k.as_str() == "cat").is_some();
+        if cat_found {
+            CAT_COUNTS.with_label_values(&[subscription]).inc();
+        }
+
+        let pos: Option<i64> = telemetry.iter().find_map(|(k, v)| {
+            if k.as_str() == "pos" {
+                let v: Option<i64> = v.clone().try_into().ok();
+                v
+            } else {
+                None
+            }
+        });
+        if let Some(p) = pos {
+            CURRENT_POS.with_label_values(&[subscription]).set(p);
+        }
+    }
 
     lazy_static! {
         static ref SUBSCRIPTIONS: Vec<TelemetrySubscription> = vec![
@@ -426,18 +470,45 @@ mod tests {
                 required_fields: HashSet::default(),
                 optional_fields: HashSet::default(),
                 outlet_to_subscription: Outlet::new("none_outlet", PORT_DATA),
+                update_metrics: None,
             },
             TelemetrySubscription::Explicit {
                 name: "cat_pos".into(),
                 required_fields: maplit::hashset! {"pos".into(), "cat".into()},
                 optional_fields: maplit::hashset! {"extra".into()},
                 outlet_to_subscription: Outlet::new("cat_pos_outlet", PORT_DATA),
+                update_metrics: Some(Arc::new(|subscription, telemetry| {
+                    let update_span = tracing::info_span!(
+                        "update_cat_pos_subscription_metrics", %subscription, ?telemetry
+                    );
+                    let _guard = update_span.enter();
+
+                    let cat_found = telemetry.iter().find(|(k, _)| k.as_str() == "cat").is_some();
+                    if cat_found {
+                        tracing::info!(%cat_found, "recording CAT_COUNTS metric..");
+                        CAT_COUNTS.with_label_values(&[subscription]).inc();
+                    }
+
+                    let pos: Option<i64> = telemetry.iter().find_map(|(k, v)| {
+                        if k.as_str() == "pos" {
+                            let v: Option<i64> = v.clone().try_into().ok();
+                            v
+                        } else {
+                            None
+                        }
+                    });
+                    if let Some(p) = pos {
+                        tracing::info!(?pos, "recording CURRENT_POS metric...");
+                        CURRENT_POS.with_label_values(&[subscription]).set(p);
+                    }
+                })),
             },
             TelemetrySubscription::Explicit {
                 name: "all".into(),
                 required_fields: maplit::hashset! {"pos".into(), "cat".into(), "value".into()},
                 optional_fields: HashSet::default(),
                 outlet_to_subscription: Outlet::new("all_outlet", PORT_DATA),
+                update_metrics: None,
             },
         ];
         static ref DB_ROWS: Vec<Telemetry> = vec![
@@ -502,7 +573,8 @@ mod tests {
     #[test]
     fn test_api_add_subscriptions() -> anyhow::Result<()> {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
-        let main_span = tracing::info_span!("test_api_add_subscriptions");
+        const SPAN_NAME: &'static str = "test_api_add_subscriptions";
+        let main_span = tracing::info_span!(SPAN_NAME);
         let _main_span_guard = main_span.enter();
 
         block_on(async move {
@@ -560,7 +632,7 @@ mod tests {
             tracing::info!(%nr_subscriptions, "assert nr_subscriptions is now 1...");
             assert_eq!(nr_subscriptions, 1);
 
-            tracing::warn!("stopping tick source...");
+            tracing::info!("stopping tick source...");
             let (tx_tick_stop, rx_tick_stop) = oneshot::channel();
             let stop_tick = stage::tick::TickMsg::Stop { tx: tx_tick_stop };
             tx_tick_api.send(stop_tick)?;
@@ -570,8 +642,10 @@ mod tests {
             tick_handle.await??;
             clear_handle.await??;
             tracing::info!("test finished");
-            Ok(())
-        })
+            anyhow::Result::<()>::Ok(())
+        })?;
+
+        Ok(())
     }
 
     #[test]
@@ -711,7 +785,7 @@ mod tests {
                 name: sub_name,
                 required_fields: sub_required_fields,
                 optional_fields: sub_optional_fields,
-                outlet_to_subscription: _,
+                ..
             } = &SUBSCRIPTIONS[subscriber]
             {
                 let expected = &EXPECTED[sub_name.as_ref()];
@@ -740,8 +814,11 @@ mod tests {
     #[test]
     fn test_push_to_subscribers() {
         lazy_static::initialize(&crate::tracing::TEST_TRACING);
-        let main_span = tracing::info_span!("test_push_to_subscribers");
+        const SPAN_NAME: &'static str = "test_push_to_subscribers";
+        let main_span = tracing::info_span!(SPAN_NAME);
         let _main_span_guard = main_span.enter();
+
+        let registry = setup_metrics(SPAN_NAME);
 
         let all_expected: HashMap<String, Vec<Option<Telemetry>>> = maplit::hashmap! {
             SUBSCRIPTIONS[0].name().to_string() => vec![
@@ -781,7 +858,7 @@ mod tests {
 
             for row in 0..DB_ROWS.len() {
                 let db = &DB_ROWS[row];
-                tracing::warn!(?db, "pushing database to subscribers");
+                tracing::info!(?db, "pushing database to subscribers");
                 Clearinghouse::push_to_subscribers(&"test_clearinghouse".into(), db, subscriptions.clone())
                     .await
                     .expect("failed to publish");
@@ -795,13 +872,30 @@ mod tests {
             for row in 0..DB_ROWS.len() {
                 for (sub, receiver) in sub_receivers.iter_mut() {
                     let sub_name = sub.name();
-                    tracing::warn!(%sub_name, "test iteration");
+                    tracing::info!(%sub_name, "test iteration");
                     let expected = &all_expected[sub_name.as_ref()][row];
                     let actual: Option<Telemetry> = receiver.recv().await;
-                    tracing::warn!(%sub_name, ?actual, ?expected, "asserting scenario");
+                    tracing::info!(%sub_name, ?actual, ?expected, "asserting scenario");
                     assert_eq!((row, &sub_name, &actual), (row, &sub_name, expected));
                 }
             }
-        })
+        });
+
+        let metric_family = registry.gather();
+        assert_eq!(metric_family.len(), 2);
+
+        let cat_metric_name = format!("{}_{}", SPAN_NAME, "cat_counts");
+        let cat_metric = assert_some!(metric_family.iter().find(|m| m.get_name() == &cat_metric_name));
+        assert_eq!(
+            format!("{:?}", cat_metric),
+            r##"name: "test_push_to_subscribers_cat_counts" help: "How many cats were found." type: COUNTER metric {label {name: "subscription" value: "cat_pos"} counter {value: 3}}"##
+        );
+
+        let pos_metric_name = format!("{}_{}", SPAN_NAME, "current_pos");
+        let pos_metric = assert_some!(metric_family.iter().find(|m| m.get_name() == &pos_metric_name));
+        assert_eq!(
+            format!("{:?}", pos_metric),
+            r##"name: "test_push_to_subscribers_current_pos" help: "current position" type: GAUGE metric {label {name: "subscription" value: "cat_pos"} gauge {value: 4}}"##
+        );
     }
 }

@@ -3,6 +3,8 @@ use crate::error::CollectionError;
 use crate::graph::{Connect, Inlet, Outlet, Port, PORT_DATA};
 use crate::SharedString;
 use std::collections::HashSet;
+use std::fmt;
+use std::sync::Arc;
 
 //todo: refactor to based on something like Json Schema
 pub trait SubscriptionRequirements {
@@ -13,29 +15,54 @@ pub trait SubscriptionRequirements {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum TelemetrySubscription {
     All {
         name: SharedString,
         outlet_to_subscription: Outlet<Telemetry>,
+        update_metrics: Option<Arc<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>>,
     },
     Explicit {
         name: SharedString,
         required_fields: HashSet<SharedString>,
         optional_fields: HashSet<SharedString>,
         outlet_to_subscription: Outlet<Telemetry>,
+        update_metrics: Option<Arc<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>>,
     },
-    /* Remainder {
-     *     name: String,
-     *     outlet_to_subscription: Outlet<TelemetryData>,
-     * } */
+}
+
+impl fmt::Debug for TelemetrySubscription {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::All { name, outlet_to_subscription, update_metrics: _ } => f
+                .debug_struct("TelemetrySubscription")
+                .field("name", &name)
+                .field("outlet_to_subscription", &outlet_to_subscription)
+                .field("required_fields", &"[]")
+                .field("optional_fields", &"[<all>]")
+                .finish(),
+            Self::Explicit {
+                name,
+                required_fields,
+                optional_fields,
+                outlet_to_subscription,
+                update_metrics: _,
+            } => f
+                .debug_struct("TelemetrySubscription")
+                .field("name", &name)
+                .field("outlet_to_subscription", &outlet_to_subscription)
+                .field("required_fields", &required_fields)
+                .field("optional_fields", &optional_fields)
+                .finish(),
+        }
+    }
 }
 
 impl TelemetrySubscription {
     pub fn new(name: impl AsRef<str>) -> Self {
         let name: SharedString = SharedString::Owned(format!("{}_subscription", name.as_ref()));
         let outlet_to_subscription = Outlet::new(name.clone(), PORT_DATA);
-        Self::All { name, outlet_to_subscription }
+        Self::All { name, outlet_to_subscription, update_metrics: None }
     }
 
     pub fn with_requirements<T: SubscriptionRequirements>(self) -> Self {
@@ -47,17 +74,19 @@ impl TelemetrySubscription {
         let required_fields = required_fields.into_iter().map(|s| s.into()).collect();
 
         match self {
-            Self::All { name, outlet_to_subscription } => Self::Explicit {
+            Self::All { name, outlet_to_subscription, update_metrics } => Self::Explicit {
                 name,
                 required_fields,
                 optional_fields: HashSet::default(),
                 outlet_to_subscription,
+                update_metrics,
             },
             Self::Explicit {
                 name,
                 required_fields: mut my_required_fields,
                 optional_fields,
                 outlet_to_subscription,
+                update_metrics,
             } => {
                 my_required_fields.extend(required_fields);
                 Self::Explicit {
@@ -65,6 +94,7 @@ impl TelemetrySubscription {
                     required_fields: my_required_fields,
                     optional_fields,
                     outlet_to_subscription,
+                    update_metrics,
                 }
             }
         }
@@ -73,17 +103,19 @@ impl TelemetrySubscription {
     pub fn with_optional_fields<S: Into<SharedString>>(self, optional_fields: HashSet<S>) -> Self {
         let optional_fields = optional_fields.into_iter().map(|s| s.into()).collect();
         match self {
-            Self::All { name, outlet_to_subscription } => Self::Explicit {
+            Self::All { name, outlet_to_subscription, update_metrics } => Self::Explicit {
                 name,
                 required_fields: HashSet::default(),
                 optional_fields,
                 outlet_to_subscription,
+                update_metrics,
             },
             Self::Explicit {
                 name,
                 required_fields,
                 optional_fields: mut my_optional_fields,
                 outlet_to_subscription,
+                update_metrics,
             } => {
                 my_optional_fields.extend(optional_fields);
                 Self::Explicit {
@@ -91,50 +123,56 @@ impl TelemetrySubscription {
                     required_fields,
                     optional_fields: my_optional_fields,
                     outlet_to_subscription,
+                    update_metrics,
                 }
             }
         }
     }
 
-    // pub fn remainder<S: Into<String>>(name: S) -> Self {
-    //     let name = name.into();
-    //     let outlet_to_subscription = Outlet::new(format!("outlet_for_subscription_{}", name));
-    //     Self::Remainder { name, outlet_to_subscription }
-    // }
+    pub fn with_update_metrics_fn<F>(self, update_metrics: F) -> Self
+    where
+        F: Fn(&str, &Telemetry) -> () + Send + Sync + 'static,
+    {
+        match self {
+            Self::All { name, outlet_to_subscription, .. } => Self::All {
+                name,
+                outlet_to_subscription,
+                update_metrics: Some(Arc::new(update_metrics)),
+            },
+            Self::Explicit {
+                name,
+                required_fields,
+                optional_fields,
+                outlet_to_subscription,
+                ..
+            } => Self::Explicit {
+                name,
+                required_fields,
+                optional_fields,
+                outlet_to_subscription,
+                update_metrics: Some(Arc::new(update_metrics)),
+            },
+        }
+    }
 
     pub fn name(&self) -> SharedString {
         match self {
-            Self::All { name, outlet_to_subscription: _ } => name.clone(),
-            Self::Explicit {
-                name,
-                required_fields: _,
-                optional_fields: _,
-                outlet_to_subscription: _,
-            } => name.clone(),
+            Self::All { name, .. } => name.clone(),
+            Self::Explicit { name, .. } => name.clone(),
         }
     }
 
     pub fn outlet_to_subscription(&self) -> Outlet<Telemetry> {
         match self {
-            Self::All { name: _, outlet_to_subscription } => outlet_to_subscription.clone(),
-            Self::Explicit {
-                name: _,
-                required_fields: _,
-                optional_fields: _,
-                outlet_to_subscription,
-            } => outlet_to_subscription.clone(),
+            Self::All { outlet_to_subscription, .. } => outlet_to_subscription.clone(),
+            Self::Explicit { outlet_to_subscription, .. } => outlet_to_subscription.clone(),
         }
     }
 
     pub fn any_interest(&self, _available_fields: &HashSet<&String>, changed_fields: &HashSet<String>) -> bool {
         match self {
             Self::All { .. } => true,
-            Self::Explicit {
-                name: _,
-                required_fields,
-                optional_fields,
-                outlet_to_subscription: _,
-            } => {
+            Self::Explicit { required_fields, optional_fields, .. } => {
                 let mut interested = false;
                 for changed in changed_fields {
                     let changed: SharedString = SharedString::Owned(changed.clone());
@@ -153,12 +191,7 @@ impl TelemetrySubscription {
 
         match self {
             Self::All { .. } => Ok((db, HashSet::default())),
-            Self::Explicit {
-                name: _,
-                required_fields,
-                optional_fields,
-                outlet_to_subscription: _,
-            } => {
+            Self::Explicit { required_fields, optional_fields, .. } => {
                 let mut missing = HashSet::default();
                 for (key, _value) in database.iter() {
                     let key = SharedString::Owned(key.clone());
@@ -188,12 +221,7 @@ impl TelemetrySubscription {
     pub fn fulfill(&self, database: &Telemetry) -> Option<Telemetry> {
         match self {
             Self::All { .. } => Some(database.clone()),
-            Self::Explicit {
-                name: _,
-                required_fields,
-                optional_fields,
-                outlet_to_subscription: _,
-            } => {
+            Self::Explicit { required_fields, optional_fields, .. } => {
                 let mut ready = Vec::new();
                 let mut unfilled = Vec::new();
 
@@ -230,6 +258,17 @@ impl TelemetrySubscription {
         }
     }
 
+    pub fn update_metrics(&self, telemetry: &Telemetry) {
+        let update_fn = match self {
+            Self::All { update_metrics, .. } => update_metrics,
+            Self::Explicit { update_metrics, .. } => update_metrics,
+        };
+
+        if let Some(update_metrics) = update_fn {
+            update_metrics(self.name().as_ref(), telemetry)
+        }
+    }
+
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn connect_to_receiver(&self, receiver: &Inlet<Telemetry>) {
         let outlet = self.outlet_to_subscription();
@@ -254,21 +293,32 @@ impl PartialEq for TelemetrySubscription {
         use TelemetrySubscription::*;
 
         match (self, other) {
-            (All { name: lhs_name, outlet_to_subscription: _ }, All { name: rhs_name, outlet_to_subscription: _ }) => {
-                lhs_name == rhs_name
-            }
+            (
+                All {
+                    name: lhs_name,
+                    outlet_to_subscription: _,
+                    update_metrics: _,
+                },
+                All {
+                    name: rhs_name,
+                    outlet_to_subscription: _,
+                    update_metrics: _,
+                },
+            ) => lhs_name == rhs_name,
             (
                 Explicit {
                     name: lhs_name,
                     required_fields: lhs_required,
                     optional_fields: lhs_optional,
                     outlet_to_subscription: _,
+                    update_metrics: _,
                 },
                 Explicit {
                     name: rhs_name,
                     required_fields: rhs_required,
                     optional_fields: rhs_optional,
                     outlet_to_subscription: _,
+                    update_metrics: _,
                 },
             ) => (lhs_name == rhs_name) && (lhs_required == rhs_required) && (lhs_optional == rhs_optional),
             _ => false,
