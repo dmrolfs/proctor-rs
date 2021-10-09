@@ -22,7 +22,7 @@ pub trait PolicySubscription {
             Self::Requirements::optional_fields(),
         );
 
-        let subscription = TelemetrySubscription::new(name).with_requirements::<Self::Requirements>();
+        let subscription = TelemetrySubscription::new(name).for_requirements::<Self::Requirements>();
         let subscription = self.do_extend_subscription(subscription);
         tracing::trace!("subscription after extension: {:?}", subscription);
         subscription

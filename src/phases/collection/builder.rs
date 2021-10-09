@@ -48,6 +48,18 @@ where
         )
         .await
     }
+
+    #[tracing::instrument(level = "info", skip(update_metrics), fields(nr_sources = % self.sources.len()))]
+    pub async fn build_for_out_w_metrics(
+        self, update_metrics: impl Fn(&str, &Telemetry) -> () + Send + Sync + 'static,
+    ) -> Result<Collect<Out>, CollectionError> {
+        self.build_for_out_requirements_w_metrics(
+            <Out as SubscriptionRequirements>::required_fields(),
+            <Out as SubscriptionRequirements>::optional_fields(),
+            update_metrics,
+        )
+        .await
+    }
 }
 
 impl CollectBuilder<Telemetry> {
@@ -62,20 +74,38 @@ impl CollectBuilder<Telemetry> {
 
     #[tracing::instrument(
         level = "info",
-        skip(out_required_fields, out_optional_fields,),
+        skip(out_required_fields, out_optional_fields, ),
         fields(nr_sources = %self.sources.len())
     )]
     pub async fn build_for_telemetry_out(
         mut self, out_required_fields: HashSet<impl Into<SharedString>>,
         out_optional_fields: HashSet<impl Into<SharedString>>,
     ) -> Result<Collect<Telemetry>, CollectionError> {
-        let out_channel = SubscriptionChannel::connect_telemetry_channel(
-            self.name.clone().as_str(),
-            (&mut self).into(),
-            out_required_fields,
-            out_optional_fields,
-        )
-        .await?;
+        let subscription = TelemetrySubscription::new(self.name.as_str())
+            .with_required_fields(out_required_fields)
+            .with_optional_fields(out_optional_fields);
+
+        let out_channel = SubscriptionChannel::connect_telemetry_subscription(subscription, (&mut self).into()).await?;
+
+        self.finish(out_channel).await
+    }
+
+    #[tracing::instrument(
+        level = "info",
+        skip(out_required_fields, out_optional_fields, update_metrics),
+        fields(nr_sources = %self.sources.len())
+    )]
+    pub async fn build_for_telemetry_out_w_metrics(
+        mut self, out_required_fields: HashSet<impl Into<SharedString>>,
+        out_optional_fields: HashSet<impl Into<SharedString>>,
+        update_metrics: impl Fn(&str, &Telemetry) -> () + Send + Sync + 'static,
+    ) -> Result<Collect<Telemetry>, CollectionError> {
+        let subscription = TelemetrySubscription::new(self.name.as_str())
+            .with_required_fields(out_required_fields)
+            .with_optional_fields(out_optional_fields)
+            .with_update_metrics_fn(update_metrics);
+
+        let out_channel = SubscriptionChannel::connect_telemetry_subscription(subscription, (&mut self).into()).await?;
 
         self.finish(out_channel).await
     }
@@ -93,18 +123,42 @@ where
         self.finish(out_channel).await
     }
 
-    #[tracing::instrument(level = "info", skip(out_required_fields, out_optional_fields, ), fields(nr_sources = % self.sources.len()))]
+    #[tracing::instrument(
+        level = "info",
+        skip(out_required_fields, out_optional_fields),
+        fields(nr_sources = % self.sources.len())
+    )]
     pub async fn build_for_out_requirements(
         mut self, out_required_fields: HashSet<impl Into<SharedString>>,
         out_optional_fields: HashSet<impl Into<SharedString>>,
     ) -> Result<Collect<Out>, CollectionError> {
-        let out_channel: SubscriptionChannel<Out> = SubscriptionChannel::connect_channel_with_requirements(
-            self.name.clone().as_str(),
-            (&mut self).into(),
-            out_required_fields,
-            out_optional_fields,
-        )
-        .await?;
+        let subscription = TelemetrySubscription::new(self.name.as_str())
+            .with_required_fields(out_required_fields)
+            .with_optional_fields(out_optional_fields);
+
+        let out_channel: SubscriptionChannel<Out> =
+            SubscriptionChannel::connect_subscription(subscription, (&mut self).into()).await?;
+
+        self.finish(out_channel).await
+    }
+
+    #[tracing::instrument(
+        level = "info",
+        skip(out_required_fields, out_optional_fields, update_metrics),
+        fields(nr_sources = % self.sources.len())
+    )]
+    pub async fn build_for_out_requirements_w_metrics(
+        mut self, out_required_fields: HashSet<impl Into<SharedString>>,
+        out_optional_fields: HashSet<impl Into<SharedString>>,
+        update_metrics: impl Fn(&str, &Telemetry) -> () + Send + Sync + 'static,
+    ) -> Result<Collect<Out>, CollectionError> {
+        let subscription = TelemetrySubscription::new(self.name.as_str())
+            .with_required_fields(out_required_fields)
+            .with_optional_fields(out_optional_fields)
+            .with_update_metrics_fn(update_metrics);
+
+        let out_channel: SubscriptionChannel<Out> =
+            SubscriptionChannel::connect_subscription(subscription, (&mut self).into()).await?;
 
         self.finish(out_channel).await
     }

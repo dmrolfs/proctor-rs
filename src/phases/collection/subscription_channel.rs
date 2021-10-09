@@ -8,9 +8,8 @@ use crate::elements::{self, FromTelemetryShape, Telemetry};
 use crate::error::CollectionError;
 use crate::graph::stage::Stage;
 use crate::graph::{Inlet, Outlet, Port, SourceShape, PORT_DATA};
-use crate::phases::collection::{ClearinghouseSubscriptionMagnet, SubscriptionRequirements, TelemetrySubscription};
+use crate::phases::collection::{ClearinghouseSubscriptionMagnet, TelemetrySubscription};
 use crate::{AppData, ProctorResult, SharedString};
-use std::collections::HashSet;
 
 //todo: consider refactor all of these builder functions into a typed subscription channel builder.
 
@@ -23,14 +22,14 @@ pub struct SubscriptionChannel<T> {
     outlet: Outlet<T>,
 }
 
-impl<T: SubscriptionRequirements + AppData + DeserializeOwned> SubscriptionChannel<T> {
-    #[tracing::instrument(level = "info")]
-    pub async fn connect_channel(
-        channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'_>,
-    ) -> Result<SubscriptionChannel<T>, CollectionError> {
-        Self::connect_channel_with_requirements(channel_name, magnet, T::required_fields(), T::optional_fields()).await
-    }
-}
+// impl<T: SubscriptionRequirements + AppData + DeserializeOwned> SubscriptionChannel<T> {
+//     #[tracing::instrument(level = "info")]
+//     pub async fn connect_channel(
+//         channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'_>,
+//     ) -> Result<SubscriptionChannel<T>, CollectionError> {
+//         Self::connect_channel_with_requirements(channel_name, magnet, T::required_fields(), T::optional_fields()).await
+//     }
+// }
 
 impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
     #[tracing::instrument(level = "info")]
@@ -44,16 +43,16 @@ impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
         Ok(channel)
     }
 
-    #[tracing::instrument(level = "info", skip(required_fields, optional_fields))]
-    pub async fn connect_channel_with_requirements(
-        channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'_>,
-        required_fields: HashSet<impl Into<SharedString>>, optional_fields: HashSet<impl Into<SharedString>>,
-    ) -> Result<SubscriptionChannel<T>, CollectionError> {
-        let subscription = TelemetrySubscription::new(channel_name)
-            .with_required_fields(required_fields)
-            .with_optional_fields(optional_fields);
-        Self::connect_subscription(subscription, magnet).await
-    }
+    // #[tracing::instrument(level = "info", skip(required_fields, optional_fields))]
+    // pub async fn connect_channel_with_requirements(
+    //     channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'_>,
+    //     required_fields: HashSet<impl Into<SharedString>>, optional_fields: HashSet<impl Into<SharedString>>,
+    // ) -> Result<SubscriptionChannel<T>, CollectionError> {
+    //     let subscription = TelemetrySubscription::new(channel_name)
+    //         .with_required_fields(required_fields)
+    //         .with_optional_fields(optional_fields);
+    //     Self::connect_subscription(subscription, magnet).await
+    // }
 }
 
 impl SubscriptionChannel<Telemetry> {
@@ -68,16 +67,16 @@ impl SubscriptionChannel<Telemetry> {
         Ok(channel)
     }
 
-    #[tracing::instrument(level = "info", skip(required_fields, optional_fields))]
-    pub async fn connect_telemetry_channel(
-        channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'_>,
-        required_fields: HashSet<impl Into<SharedString>>, optional_fields: HashSet<impl Into<SharedString>>,
-    ) -> Result<SubscriptionChannel<Telemetry>, CollectionError> {
-        let subscription = TelemetrySubscription::new(channel_name)
-            .with_required_fields(required_fields)
-            .with_optional_fields(optional_fields);
-        Self::connect_telemetry_subscription(subscription, magnet).await
-    }
+    // #[tracing::instrument(level = "info", skip(required_fields, optional_fields))]
+    // pub async fn connect_telemetry_channel(
+    //     channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'_>,
+    //     required_fields: HashSet<impl Into<SharedString>>, optional_fields: HashSet<impl Into<SharedString>>,
+    // ) -> Result<SubscriptionChannel<Telemetry>, CollectionError> {
+    //     let subscription = TelemetrySubscription::new(channel_name)
+    //         .with_required_fields(required_fields)
+    //         .with_optional_fields(optional_fields);
+    //     Self::connect_telemetry_subscription(subscription, magnet).await
+    // }
 }
 
 impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {

@@ -65,7 +65,7 @@ impl TelemetrySubscription {
         Self::All { name, outlet_to_subscription, update_metrics: None }
     }
 
-    pub fn with_requirements<T: SubscriptionRequirements>(self) -> Self {
+    pub fn for_requirements<T: SubscriptionRequirements>(self) -> Self {
         self.with_required_fields(T::required_fields())
             .with_optional_fields(T::optional_fields())
     }
