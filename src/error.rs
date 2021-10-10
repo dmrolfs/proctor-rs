@@ -283,6 +283,9 @@ pub enum GovernanceError {
     PortError(#[from] PortError),
 
     #[error("{0}")]
+    TelemetryError(#[from] TelemetryError),
+
+    #[error("{0}")]
     StageError(#[from] anyhow::Error),
 }
 
@@ -294,6 +297,7 @@ impl MetricLabel for GovernanceError {
     fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
         match self {
             Self::PortError(e) => Right(Box::new(e)),
+            Self::TelemetryError(e) => Right(Box::new(e)),
             Self::StageError(_) => Left("stage".into()),
         }
     }
