@@ -156,7 +156,7 @@ impl Clearinghouse {
             .flatten()
             .map(|(s, fulfillment)| {
                 tracing::info!(subscription=%s.name(), "sending subscription data update.");
-                Self::update_metrics(s, &fulfillment);
+                Self::update_metrics(s, fulfillment.clone());
                 s.send(fulfillment).map(move |send_status| {
                     track_publications(s.name().as_ref());
                     (s, send_status)
@@ -201,7 +201,7 @@ impl Clearinghouse {
     }
 
     #[tracing::instrument(level = "info", skip(subscription, telemetry))]
-    fn update_metrics(subscription: &TelemetrySubscription, telemetry: &Telemetry) {
+    fn update_metrics(subscription: &TelemetrySubscription, telemetry: Telemetry) {
         subscription.update_metrics(telemetry)
     }
 
@@ -467,7 +467,7 @@ mod tests {
                     let cat_found = telemetry.iter().find(|(k, _)| k.as_str() == "cat").is_some();
                     if cat_found {
                         tracing::info!(%cat_found, "recording CAT_COUNTS metric..");
-                        CAT_COUNTS.with_label_values(&[subscription]).inc();
+                        CAT_COUNTS.with_label_values(&[subscription.as_ref()]).inc();
                     }
 
                     let pos: Option<i64> = telemetry.iter().find_map(|(k, v)| {
@@ -480,7 +480,7 @@ mod tests {
                     });
                     if let Some(p) = pos {
                         tracing::info!(?pos, "recording CURRENT_POS metric...");
-                        CURRENT_POS.with_label_values(&[subscription]).set(p);
+                        CURRENT_POS.with_label_values(&[subscription.as_ref()]).set(p);
                     }
                 })),
             },

@@ -50,9 +50,10 @@ where
     }
 
     #[tracing::instrument(level = "info", skip(update_metrics), fields(nr_sources = % self.sources.len()))]
-    pub async fn build_for_out_w_metrics(
-        self, update_metrics: impl Fn(&str, &Telemetry) -> () + Send + Sync + 'static,
-    ) -> Result<Collect<Out>, CollectionError> {
+    pub async fn build_for_out_w_metrics<F>(self, update_metrics: F) -> Result<Collect<Out>, CollectionError>
+    where
+        F: Fn(SharedString, Telemetry) -> () + Send + Sync + 'static,
+    {
         self.build_for_out_requirements_w_metrics(
             <Out as SubscriptionRequirements>::required_fields(),
             <Out as SubscriptionRequirements>::optional_fields(),
@@ -95,11 +96,13 @@ impl CollectBuilder<Telemetry> {
         skip(out_required_fields, out_optional_fields, update_metrics),
         fields(nr_sources = %self.sources.len())
     )]
-    pub async fn build_for_telemetry_out_w_metrics(
+    pub async fn build_for_telemetry_out_w_metrics<F>(
         mut self, out_required_fields: HashSet<impl Into<SharedString>>,
-        out_optional_fields: HashSet<impl Into<SharedString>>,
-        update_metrics: impl Fn(&str, &Telemetry) -> () + Send + Sync + 'static,
-    ) -> Result<Collect<Telemetry>, CollectionError> {
+        out_optional_fields: HashSet<impl Into<SharedString>>, update_metrics: F,
+    ) -> Result<Collect<Telemetry>, CollectionError>
+    where
+        F: Fn(SharedString, Telemetry) -> () + Send + Sync + 'static,
+    {
         let subscription = TelemetrySubscription::new(self.name.as_str())
             .with_required_fields(out_required_fields)
             .with_optional_fields(out_optional_fields)
@@ -147,11 +150,13 @@ where
         skip(out_required_fields, out_optional_fields, update_metrics),
         fields(nr_sources = % self.sources.len())
     )]
-    pub async fn build_for_out_requirements_w_metrics(
+    pub async fn build_for_out_requirements_w_metrics<F>(
         mut self, out_required_fields: HashSet<impl Into<SharedString>>,
-        out_optional_fields: HashSet<impl Into<SharedString>>,
-        update_metrics: impl Fn(&str, &Telemetry) -> () + Send + Sync + 'static,
-    ) -> Result<Collect<Out>, CollectionError> {
+        out_optional_fields: HashSet<impl Into<SharedString>>, update_metrics: F,
+    ) -> Result<Collect<Out>, CollectionError>
+    where
+        F: Fn(SharedString, Telemetry) -> () + Send + Sync + 'static,
+    {
         let subscription = TelemetrySubscription::new(self.name.as_str())
             .with_required_fields(out_required_fields)
             .with_optional_fields(out_optional_fields)
