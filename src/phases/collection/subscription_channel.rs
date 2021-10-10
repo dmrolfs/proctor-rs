@@ -22,15 +22,6 @@ pub struct SubscriptionChannel<T> {
     outlet: Outlet<T>,
 }
 
-// impl<T: SubscriptionRequirements + AppData + DeserializeOwned> SubscriptionChannel<T> {
-//     #[tracing::instrument(level = "info")]
-//     pub async fn connect_channel(
-//         channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'_>,
-//     ) -> Result<SubscriptionChannel<T>, CollectionError> {
-//         Self::connect_channel_with_requirements(channel_name, magnet, T::required_fields(), T::optional_fields()).await
-//     }
-// }
-
 impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
     #[tracing::instrument(level = "info")]
     pub async fn connect_subscription(
@@ -42,17 +33,6 @@ impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
             .await?;
         Ok(channel)
     }
-
-    // #[tracing::instrument(level = "info", skip(required_fields, optional_fields))]
-    // pub async fn connect_channel_with_requirements(
-    //     channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'_>,
-    //     required_fields: HashSet<impl Into<SharedString>>, optional_fields: HashSet<impl Into<SharedString>>,
-    // ) -> Result<SubscriptionChannel<T>, CollectionError> {
-    //     let subscription = TelemetrySubscription::new(channel_name)
-    //         .with_required_fields(required_fields)
-    //         .with_optional_fields(optional_fields);
-    //     Self::connect_subscription(subscription, magnet).await
-    // }
 }
 
 impl SubscriptionChannel<Telemetry> {
@@ -66,17 +46,6 @@ impl SubscriptionChannel<Telemetry> {
             .await?;
         Ok(channel)
     }
-
-    // #[tracing::instrument(level = "info", skip(required_fields, optional_fields))]
-    // pub async fn connect_telemetry_channel(
-    //     channel_name: &str, magnet: ClearinghouseSubscriptionMagnet<'_>,
-    //     required_fields: HashSet<impl Into<SharedString>>, optional_fields: HashSet<impl Into<SharedString>>,
-    // ) -> Result<SubscriptionChannel<Telemetry>, CollectionError> {
-    //     let subscription = TelemetrySubscription::new(channel_name)
-    //         .with_required_fields(required_fields)
-    //         .with_optional_fields(optional_fields);
-    //     Self::connect_telemetry_subscription(subscription, magnet).await
-    // }
 }
 
 impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
