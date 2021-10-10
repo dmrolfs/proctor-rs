@@ -156,7 +156,7 @@ impl Clearinghouse {
             .flatten()
             .map(|(s, fulfillment)| {
                 tracing::info!(subscription=%s.name(), "sending subscription data update.");
-                Self::update_metrics(s, fulfillment.clone());
+                Self::update_metrics(s, &fulfillment);
                 s.send(fulfillment).map(move |send_status| {
                     track_publications(s.name().as_ref());
                     (s, send_status)
@@ -201,7 +201,7 @@ impl Clearinghouse {
     }
 
     #[tracing::instrument(level = "info", skip(subscription, telemetry))]
-    fn update_metrics(subscription: &TelemetrySubscription, telemetry: Telemetry) {
+    fn update_metrics(subscription: &TelemetrySubscription, telemetry: &Telemetry) {
         subscription.update_metrics(telemetry)
     }
 

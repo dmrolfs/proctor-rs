@@ -52,7 +52,7 @@ where
     #[tracing::instrument(level = "info", skip(update_metrics), fields(nr_sources = % self.sources.len()))]
     pub async fn build_for_out_w_metrics<F>(self, update_metrics: F) -> Result<Collect<Out>, CollectionError>
     where
-        F: Fn(SharedString, Telemetry) -> () + Send + Sync + 'static,
+        F: Fn(&str, &Telemetry) -> () + Send + Sync + 'static,
     {
         self.build_for_out_requirements_w_metrics(
             <Out as SubscriptionRequirements>::required_fields(),
@@ -101,7 +101,7 @@ impl CollectBuilder<Telemetry> {
         out_optional_fields: HashSet<impl Into<SharedString>>, update_metrics: F,
     ) -> Result<Collect<Telemetry>, CollectionError>
     where
-        F: Fn(SharedString, Telemetry) -> () + Send + Sync + 'static,
+        F: Fn(&str, &Telemetry) -> () + Send + Sync + 'static,
     {
         let subscription = TelemetrySubscription::new(self.name.as_str())
             .with_required_fields(out_required_fields)
@@ -155,7 +155,7 @@ where
         out_optional_fields: HashSet<impl Into<SharedString>>, update_metrics: F,
     ) -> Result<Collect<Out>, CollectionError>
     where
-        F: Fn(SharedString, Telemetry) -> () + Send + Sync + 'static,
+        F: Fn(&str, &Telemetry) -> () + Send + Sync + 'static,
     {
         let subscription = TelemetrySubscription::new(self.name.as_str())
             .with_required_fields(out_required_fields)

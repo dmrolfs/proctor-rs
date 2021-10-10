@@ -20,14 +20,14 @@ pub enum TelemetrySubscription {
     All {
         name: SharedString,
         outlet_to_subscription: Outlet<Telemetry>,
-        update_metrics: Option<Arc<dyn Fn(SharedString, Telemetry) -> () + Send + Sync + 'static>>,
+        update_metrics: Option<Arc<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>>,
     },
     Explicit {
         name: SharedString,
         required_fields: HashSet<SharedString>,
         optional_fields: HashSet<SharedString>,
         outlet_to_subscription: Outlet<Telemetry>,
-        update_metrics: Option<Arc<dyn Fn(SharedString, Telemetry) -> () + Send + Sync + 'static>>,
+        update_metrics: Option<Arc<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>>,
     },
 }
 
@@ -131,7 +131,7 @@ impl TelemetrySubscription {
 
     pub fn with_update_metrics_fn<F>(self, update_metrics: F) -> Self
     where
-        F: Fn(SharedString, Telemetry) -> () + Send + Sync + 'static,
+        F: Fn(&str, &Telemetry) -> () + Send + Sync + 'static,
     {
         match self {
             Self::All { name, outlet_to_subscription, .. } => Self::All {
@@ -258,14 +258,14 @@ impl TelemetrySubscription {
         }
     }
 
-    pub fn update_metrics(&self, telemetry: Telemetry) {
+    pub fn update_metrics(&self, telemetry: &Telemetry) {
         let update_fn = match self {
             Self::All { update_metrics, .. } => update_metrics,
             Self::Explicit { update_metrics, .. } => update_metrics,
         };
 
         if let Some(update_metrics) = update_fn {
-            update_metrics(self.name().clone(), telemetry)
+            update_metrics(self.name().as_ref(), telemetry)
         }
     }
 
