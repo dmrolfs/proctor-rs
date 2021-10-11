@@ -20,14 +20,14 @@ pub enum TelemetrySubscription {
     All {
         name: SharedString,
         outlet_to_subscription: Outlet<Telemetry>,
-        update_metrics: Option<Arc<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>>, // Arc to support Clone
+        update_metrics: Option<Arc<Box<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>>>, // Arc to support Clone
     },
     Explicit {
         name: SharedString,
         required_fields: HashSet<SharedString>,
         optional_fields: HashSet<SharedString>,
         outlet_to_subscription: Outlet<Telemetry>,
-        update_metrics: Option<Arc<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>>, // Arc to support Clone
+        update_metrics: Option<Arc<Box<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>>>, // Arc to support Clone
     },
 }
 
@@ -129,10 +129,9 @@ impl TelemetrySubscription {
         }
     }
 
-    pub fn with_update_metrics_fn<F>(self, update_metrics: F) -> Self
-    where
-        F: Fn(&str, &Telemetry) -> () + Send + Sync + 'static,
-    {
+    pub fn with_update_metrics_fn(
+        self, update_metrics: Box<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>,
+    ) -> Self {
         match self {
             Self::All { name, outlet_to_subscription, .. } => Self::All {
                 name,

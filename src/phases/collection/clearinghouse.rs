@@ -458,7 +458,7 @@ mod tests {
                 required_fields: maplit::hashset! {"pos".into(), "cat".into()},
                 optional_fields: maplit::hashset! {"extra".into()},
                 outlet_to_subscription: Outlet::new("cat_pos_outlet", PORT_DATA),
-                update_metrics: Some(Arc::new(|subscription, telemetry| {
+                update_metrics: Some(Arc::new(Box::new(|subscription, telemetry| {
                     let update_span = tracing::info_span!(
                         "update_cat_pos_subscription_metrics", %subscription, ?telemetry
                     );
@@ -482,7 +482,7 @@ mod tests {
                         tracing::info!(?pos, "recording CURRENT_POS metric...");
                         CURRENT_POS.with_label_values(&[subscription.as_ref()]).set(p);
                     }
-                })),
+                }))),
             },
             TelemetrySubscription::Explicit {
                 name: "all".into(),
