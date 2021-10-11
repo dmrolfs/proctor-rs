@@ -20,14 +20,14 @@ pub enum TelemetrySubscription {
     All {
         name: SharedString,
         outlet_to_subscription: Outlet<Telemetry>,
-        update_metrics: Option<Arc<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>>,
+        update_metrics: Option<Arc<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>>, // Arc to support Clone
     },
     Explicit {
         name: SharedString,
         required_fields: HashSet<SharedString>,
         optional_fields: HashSet<SharedString>,
         outlet_to_subscription: Outlet<Telemetry>,
-        update_metrics: Option<Arc<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>>,
+        update_metrics: Option<Arc<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>>, // Arc to support Clone
     },
 }
 
