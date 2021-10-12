@@ -316,9 +316,11 @@ where
                     ?result,
                     "item passed context policy review - sending via outlet."
                 );
-                outlet.send(PolicyOutcome::new(item, context.clone(), result)).await?;
+                outlet
+                    .send(PolicyOutcome::new(item.clone(), context.clone(), result))
+                    .await?;
                 track_policy_evals(name.as_ref(), PolicyResult::Passed);
-                Self::publish_event(PolicyFilterEvent::ItemPassed, tx)?;
+                Self::publish_event(PolicyFilterEvent::ItemPassed(item), tx)?;
                 Ok(())
             }
 

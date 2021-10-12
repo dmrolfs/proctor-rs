@@ -563,7 +563,7 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
         PolicyFilterEvent::ContextChanged(ctx) => {
             panic!("unexpected context change:{:?}", ctx);
         }
-        PolicyFilterEvent::ItemPassed => panic!("unexpected data passed policy"),
+        PolicyFilterEvent::ItemPassed(data) => panic!("unexpected data passed policy {:?}", data),
     }
 
     let actual = flow.close().await?;
@@ -642,7 +642,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
         }
         PolicyFilterEvent::ContextChanged(None) => panic!("did not expect to clear context"),
         PolicyFilterEvent::ItemBlocked(item) => panic!("unexpected item receipt - blocked: {:?}", item),
-        PolicyFilterEvent::ItemPassed => panic!("unexpected data passed policy"),
+        PolicyFilterEvent::ItemPassed(data) => panic!("unexpected data passed policy: {:?}", data),
     };
     tracing::warn!("DMR: 04. environment change verified.");
 
@@ -865,7 +865,7 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
     tracing::warn!(?item, ?telemetry, "DMR-A.2: converted item to telemetry and pushing...");
     flow.push_telemetry(telemetry?).await?;
     let event = flow.recv_policy_event().await?;
-    claim::assert_matches!(event, elements::PolicyFilterEvent::ItemPassed);
+    claim::assert_matches!(event, elements::PolicyFilterEvent::ItemPassed(_));
 
     tracing::info!("waiting for item to reach sink...");
     assert!(

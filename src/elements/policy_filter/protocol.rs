@@ -45,7 +45,7 @@ pub struct PolicyFilterDetail<C> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum PolicyFilterEvent<T, C> {
     ContextChanged(Option<C>),
-    ItemPassed,
+    ItemPassed(T),
     ItemBlocked(T),
 }
 

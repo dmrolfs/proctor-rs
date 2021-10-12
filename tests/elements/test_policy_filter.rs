@@ -401,7 +401,7 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     let item = TestItem::new(consts::PI, ts, 1);
     flow.push_item(item).await?;
     let event = flow.recv_policy_event().await?;
-    claim::assert_matches!(event, elements::PolicyFilterEvent::ItemPassed);
+    claim::assert_matches!(event, elements::PolicyFilterEvent::ItemPassed(_));
 
     flow.push_context(TestContext::new(19)).await?;
     let event = flow.recv_policy_event().await?;
@@ -434,7 +434,7 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     let item = TestItem::new(consts::LN_2, ts, 5);
     flow.push_item(item).await?;
     let event = flow.recv_policy_event().await?;
-    claim::assert_matches!(event, elements::PolicyFilterEvent::ItemPassed);
+    claim::assert_matches!(event, elements::PolicyFilterEvent::ItemPassed(_));
 
     let actual = flow.close().await?;
 
