@@ -28,6 +28,7 @@ lazy_static! {
         "Number of active data subscriptions to the telemetry clearinghouse."
     )
     .expect("failed creating clearinghouse_subscriptions metric");
+    
     pub(crate) static ref PUBLICATIONS: IntCounterVec = IntCounterVec::new(
         Opts::new("clearinghouse_publications", "Count of subscription publications"),
         &["subscription"]
