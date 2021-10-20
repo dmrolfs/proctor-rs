@@ -2,9 +2,10 @@ use crate::elements::Telemetry;
 use crate::error::CollectionError;
 use crate::graph::stage::{SourceStage, Stage, WithApi};
 use crate::graph::{Outlet, Port, SourceShape};
-use crate::{AppData, ProctorResult};
+use crate::{AppData, IdGenerator, ProctorResult};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
+use pretty_snowflake::{AlphabetCodec, DatacenterWorker, IdPrettifier};
 use std::fmt::{self, Debug};
 
 pub use builder::*;
@@ -53,8 +54,18 @@ pub struct Collect<Out> {
 
 impl<Out> Collect<Out> {
     #[tracing::instrument(level = "info", skip(name, sources))]
-    pub fn builder(name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>) -> CollectBuilder<Out> {
-        CollectBuilder::new(name, sources)
+    pub fn builder(
+        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>, datacenter_worker: DatacenterWorker,
+    ) -> CollectBuilder<Out> {
+        let id_generator = IdGenerator::distributed(datacenter_worker, IdPrettifier::<AlphabetCodec>::default());
+        CollectBuilder::new(name, sources, id_generator)
+    }
+
+    #[tracing::instrument(level = "info", skip(name, sources))]
+    pub fn single_node_builder(
+        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
+    ) -> CollectBuilder<Out> {
+        Self::builder(name, sources, DatacenterWorker::default())
     }
 }
 

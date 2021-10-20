@@ -15,11 +15,11 @@ use futures::future::FutureExt;
 use lazy_static::lazy_static;
 use tokio::sync::mpsc;
 
-use crate::elements::Telemetry;
+use crate::elements::{Telemetry, Timestamp};
 use crate::error::{CollectionError, ProctorError};
 use crate::graph::stage::Stage;
 use crate::graph::{stage, Inlet, OutletsShape, Port, SinkShape, UniformFanOutShape};
-use crate::{ProctorResult, SharedString};
+use crate::{IdGenerator, ProctorResult, SharedString};
 use prometheus::{IntCounterVec, IntGauge, Opts};
 
 lazy_static! {
@@ -28,7 +28,6 @@ lazy_static! {
         "Number of active data subscriptions to the telemetry clearinghouse."
     )
     .expect("failed creating clearinghouse_subscriptions metric");
-    
     pub(crate) static ref PUBLICATIONS: IntCounterVec = IntCounterVec::new(
         Opts::new("clearinghouse_publications", "Count of subscription publications"),
         &["subscription"]
@@ -46,12 +45,16 @@ fn track_publications(subscription: &str) {
     PUBLICATIONS.with_label_values(&[subscription]).inc();
 }
 
+pub const SUBSCRIPTION_TIMESTAMP: &'static str = "timestamp";
+pub const SUBSCRIPTION_CORRELATION: &'static str = "correlation_id";
+
 /// Clearinghouse is a sink for collected telemetry data and a subscription-based source for
 /// groups of telemetry fields.
 pub struct Clearinghouse {
     name: String,
     subscriptions: Vec<TelemetrySubscription>,
     database: Telemetry,
+    correlation_generator: IdGenerator,
     inlet: Inlet<Telemetry>,
     tx_api: ClearinghouseApi,
     rx_api: mpsc::UnboundedReceiver<ClearinghouseCmd>,
@@ -60,7 +63,7 @@ pub struct Clearinghouse {
 const PORT_TELEMETRY: &'static str = "telemetry";
 
 impl Clearinghouse {
-    pub fn new(name: impl Into<String>) -> Self {
+    pub fn new(name: impl Into<String>, correlation_generator: IdGenerator) -> Self {
         let name: SharedString = SharedString::Owned(name.into());
         let (tx_api, rx_api) = mpsc::unbounded_channel();
         let inlet = Inlet::new(name.clone(), PORT_TELEMETRY);
@@ -69,6 +72,7 @@ impl Clearinghouse {
             name: name.into_owned(),
             subscriptions: Vec::default(),
             database: Telemetry::default(),
+            correlation_generator,
             inlet,
             tx_api,
             rx_api,
@@ -86,7 +90,7 @@ impl Clearinghouse {
     #[tracing::instrument(level = "trace", skip(subscriptions, database,))]
     async fn handle_telemetry_data(
         stage_name: &SharedString, data: Option<Telemetry>, subscriptions: &Vec<TelemetrySubscription>,
-        database: &mut Telemetry,
+        database: &mut Telemetry, correlation_generator: &mut IdGenerator,
     ) -> Result<bool, CollectionError> {
         match data {
             Some(d) => {
@@ -95,7 +99,7 @@ impl Clearinghouse {
                     Self::find_interested_subscriptions(subscriptions, database.keys().collect(), updated_fields);
 
                 database.extend(d);
-                Self::push_to_subscribers(stage_name, database, interested).await?;
+                Self::push_to_subscribers(stage_name, database, interested, correlation_generator).await?;
                 Ok(true)
             }
 
@@ -144,6 +148,7 @@ impl Clearinghouse {
     )]
     async fn push_to_subscribers(
         stage_name: &SharedString, database: &Telemetry, subscribers: Vec<&TelemetrySubscription>,
+        correlation_generator: &mut IdGenerator,
     ) -> Result<(), CollectionError> {
         if subscribers.is_empty() {
             tracing::info!("not publishing - no subscribers corresponding to field changes.");
@@ -151,12 +156,19 @@ impl Clearinghouse {
         }
 
         let nr_subscribers = subscribers.len();
+        let now = Timestamp::now();
+
         let fulfilled = subscribers
             .into_iter()
             .map(|s| Self::fulfill_subscription(&s, database).map(|fulfillment| (s, fulfillment)))
             .flatten()
-            .map(|(s, fulfillment)| {
-                tracing::info!(subscription=%s.name(), "sending subscription data update.");
+            .map(|(s, mut fulfillment)| {
+                // auto-filled properties
+                fulfillment.insert(SUBSCRIPTION_TIMESTAMP.to_string(), now.into());
+                let correlation_id = correlation_generator.next_id();
+                fulfillment.insert(SUBSCRIPTION_CORRELATION.to_string(), correlation_id.clone().into());
+
+                tracing::info!(subscription=%s.name(), ?correlation_id, "sending subscription data update.");
                 Self::update_metrics(s, &fulfillment);
                 s.send(fulfillment).map(move |send_status| {
                     track_publications(s.name().as_ref());
@@ -346,6 +358,7 @@ impl Clearinghouse {
         let mut inlet = self.inlet.clone();
         let rx_api = &mut self.rx_api;
         let database = &mut self.database;
+        let correlation_generator = &mut self.correlation_generator;
         let subscriptions = &mut self.subscriptions;
 
         loop {
@@ -358,7 +371,13 @@ impl Clearinghouse {
 
             tokio::select! {
                 data = inlet.recv() => {
-                    let cont_loop = Self::handle_telemetry_data(&stage_name, data, subscriptions, database).await?;
+                    let cont_loop = Self::handle_telemetry_data(
+                        &stage_name,
+                        data,
+                        subscriptions,
+                        database,
+                        correlation_generator
+                    ).await?;
 
                     if !cont_loop {
                         break;
@@ -425,11 +444,14 @@ mod tests {
     use crate::elements::telemetry::ToTelemetry;
     use crate::graph::stage::{self, Stage, WithApi};
     use crate::graph::{Connect, Outlet, SinkShape, SourceShape, PORT_DATA};
+    use pretty_snowflake::{AlphabetCodec, Id, IdPrettifier};
     use prometheus::{IntCounterVec, IntGaugeVec, Opts, Registry};
+    use std::convert::TryFrom;
     use std::convert::TryInto;
     use std::sync::Arc;
 
     lazy_static! {
+        static ref ID_GENERATOR: IdGenerator = IdGenerator::single_node(IdPrettifier::<AlphabetCodec>::default());
         static ref CAT_COUNTS: IntCounterVec =
             IntCounterVec::new(Opts::new("cat_counts", "How many cats were found."), &["subscription"])
                 .expect("failed to create cat_counts metric");
@@ -527,7 +549,7 @@ mod tests {
         let main_span = tracing::info_span!("test_create_with_subscriptions");
         let _main_span_guard = main_span.enter();
 
-        let mut clearinghouse = Clearinghouse::new("test");
+        let mut clearinghouse = Clearinghouse::new("test", ID_GENERATOR.clone());
         assert!(clearinghouse.database.is_empty());
         assert!(clearinghouse.subscriptions.is_empty());
         assert_eq!(clearinghouse.name, "test");
@@ -565,7 +587,7 @@ mod tests {
                 .collect();
             let mut tick = stage::Tick::new("tick", Duration::from_nanos(0), Duration::from_millis(5), data);
             let tx_tick_api = tick.tx_api();
-            let mut clearinghouse = Clearinghouse::new("test-clearinghouse");
+            let mut clearinghouse = Clearinghouse::new("test-clearinghouse", ID_GENERATOR.clone());
             let tx_api = clearinghouse.tx_api();
             (tick.outlet(), clearinghouse.inlet()).connect().await;
 
@@ -642,7 +664,7 @@ mod tests {
                 .collect();
             let mut tick = stage::Tick::new("tick", Duration::from_nanos(0), Duration::from_millis(5), data);
             let tx_tick_api = tick.tx_api();
-            let mut clearinghouse = Clearinghouse::new("test-clearinghouse");
+            let mut clearinghouse = Clearinghouse::new("test-clearinghouse", ID_GENERATOR.clone());
             let tx_api = clearinghouse.tx_api();
             (tick.outlet(), clearinghouse.inlet()).connect().await;
 
@@ -822,6 +844,9 @@ mod tests {
                 None,
             ],
         };
+
+        let mut id_generator = ID_GENERATOR.clone();
+
         block_on(async move {
             let nr_skip = 0; // todo expand test to remove this line
             let nr_take = SUBSCRIPTIONS.len(); // todo expand test to remove this line
@@ -841,9 +866,14 @@ mod tests {
             for row in 0..DB_ROWS.len() {
                 let db = &DB_ROWS[row];
                 tracing::info!(?db, "pushing database to subscribers");
-                Clearinghouse::push_to_subscribers(&"test_clearinghouse".into(), db, subscriptions.clone())
-                    .await
-                    .expect("failed to publish");
+                Clearinghouse::push_to_subscribers(
+                    &"test_clearinghouse".into(),
+                    db,
+                    subscriptions.clone(),
+                    &mut id_generator,
+                )
+                .await
+                .expect("failed to publish");
             }
 
             for s in subscriptions.iter() {
@@ -858,7 +888,20 @@ mod tests {
                     let expected = &all_expected[sub_name.as_ref()][row];
                     let actual: Option<Telemetry> = receiver.recv().await;
                     tracing::info!(%sub_name, ?actual, ?expected, "asserting scenario");
-                    assert_eq!((row, &sub_name, &actual), (row, &sub_name, expected));
+                    let actuals = actual.and_then(|mut a| {
+                        let ts = assert_ok!(a
+                            .remove(SUBSCRIPTION_TIMESTAMP)
+                            .map(|ts| Timestamp::try_from(ts))
+                            .transpose());
+                        let corr = assert_ok!(a.remove(SUBSCRIPTION_CORRELATION).map(|c| Id::try_from(c)).transpose());
+                        let auto = ts.zip(corr);
+                        Some(a).zip(auto)
+                    });
+                    assert_eq!(actuals.is_some(), expected.is_some());
+                    actuals.map(|(a, (_ts, _corr))| {
+                        let a = Some(a);
+                        assert_eq!((row, &sub_name, &a), (row, &sub_name, expected));
+                    });
                 }
             }
         });

@@ -106,7 +106,7 @@ async fn test_scenario(focus: HashSet<String>) -> anyhow::Result<(i64, i64)> {
     let mut cvs_source = collection::make_telemetry_cvs_source::<Data, _>("cvs", &cvs_setting)?;
     let cvs_stage = cvs_source.take().unwrap().0;
 
-    let collect = Collect::builder("collect", vec![cvs_stage])
+    let collect = Collect::single_node_builder("collect", vec![cvs_stage])
         .build_for_out_requirements(focus, HashSet::<String>::default())
         .await?;
 

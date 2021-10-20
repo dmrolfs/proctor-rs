@@ -43,6 +43,7 @@ num_cpus = "*"
 num-traits = "*"
 oso = "*"
 polar-core = "*"
+pretty-snowflake = { git = "https://github.com/dmrolfs/pretty-snowflake-rs" }
 proctor_derive = { path = "proctor_derive" }
 prometheus = { version = "0.13", features = ["process"] }
 prometheus-static-metric = "0.5"
@@ -63,6 +64,7 @@ tracing-flame = "*"
 tracing-futures = "*"
 tracing-log = "*"
 tracing-subscriber = "*"
+validator = { version = "0.14", features = ["derive"] }
 
 [dev-dependencies]
 claim = "*"

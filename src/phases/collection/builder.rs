@@ -4,7 +4,7 @@ use crate::error::{CollectionError, PortError};
 use crate::graph::stage::{self, SourceStage, Stage, WithApi};
 use crate::graph::{Connect, Graph, SinkShape, SourceShape, UniformFanInShape};
 use crate::phases::collection::TelemetrySubscription;
-use crate::{AppData, SharedString};
+use crate::{AppData, IdGenerator, SharedString};
 use cast_trait_object::DynCastExt;
 use serde::de::DeserializeOwned;
 use std::collections::HashSet;
@@ -21,11 +21,14 @@ pub struct CollectBuilder<Out> {
 
 impl<Out> CollectBuilder<Out> {
     #[tracing::instrument(level = "info", skip(name, sources))]
-    pub fn new(name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>) -> Self {
+    pub fn new(
+        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>, correlation_generator: IdGenerator,
+    ) -> Self {
         let name = name.into();
         let nr_sources = sources.len();
         let merge = stage::MergeN::new(format!("{}_source_merge_{}", name, nr_sources), nr_sources);
-        let clearinghouse = Clearinghouse::new(format!("{}_clearinghouse", name));
+        let clearinghouse = Clearinghouse::new(format!("{}_clearinghouse", name), correlation_generator);
+
         Self {
             name,
             sources,

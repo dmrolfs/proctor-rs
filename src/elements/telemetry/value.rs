@@ -6,6 +6,7 @@ use std::ops::{Deref, DerefMut};
 
 use config::Value as ConfigValue;
 use oso::{FromPolar, PolarValue, ResultSet, ToPolar};
+use pretty_snowflake::Id;
 use serde::de::{EnumAccess, Error};
 use serde::ser::{SerializeMap, SerializeSeq};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
@@ -239,6 +240,23 @@ impl From<ResultSet> for TelemetryValue {
     }
 }
 
+pub const ID_SNOWFLAKE: &'static str = "snowflake";
+pub const ID_PRETTY: &'static str = "pretty";
+
+impl From<Id> for TelemetryValue {
+    fn from(that: Id) -> Self {
+        let pretty = format!("{}", that);
+        let snowflake: i64 = that.into();
+        TelemetryValue::Table(
+            maplit::hashmap! {
+                "snowflake".to_string() => snowflake.into(),
+                "pretty".to_string() => pretty.into(),
+            }
+            .into(),
+        )
+    }
+}
+
 impl From<bool> for TelemetryValue {
     fn from(value: bool) -> Self {
         TelemetryValue::Boolean(value)
@@ -425,6 +443,29 @@ impl From<PolarValue> for TelemetryValue {
                 // Err(StageError::TypeError("PolarValue::Variable is not a supported telemetry
                 // type.".to_string()))
             }
+        }
+    }
+}
+
+impl TryFrom<TelemetryValue> for Id {
+    type Error = TelemetryError;
+
+    fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
+        match telemetry {
+            TelemetryValue::Seq(mut seq) if seq.len() == 2 => {
+                let snowflake = seq.pop().map(i64::try_from).transpose()?.unwrap();
+                let pretty = seq.pop().map(String::try_from).transpose()?.unwrap();
+                Ok(Self::direct(snowflake, pretty))
+            }
+            TelemetryValue::Table(mut table) => {
+                let snowflake = table.remove(ID_SNOWFLAKE).map(i64::try_from).transpose()?.unwrap();
+                let pretty = table.remove(ID_PRETTY).map(String::try_from).transpose()?.unwrap();
+                Ok(Self::direct(snowflake, pretty))
+            }
+            value => Err(TelemetryError::TypeError {
+                expected: format!("a telemetry {}", TypeExpectation::Table),
+                actual: Some(format!("{:?}", value)),
+            }),
         }
     }
 }

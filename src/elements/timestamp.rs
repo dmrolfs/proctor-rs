@@ -82,8 +82,8 @@ impl TryFrom<TelemetryValue> for Timestamp {
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         match telemetry {
             TelemetryValue::Seq(mut seq) if seq.len() == 2 => {
-                let nanos = seq.pop().map(|v| u32::try_from(v)).transpose()?.unwrap();
-                let secs = seq.pop().map(|v| i64::try_from(v)).transpose()?.unwrap();
+                let nanos = seq.pop().map(u32::try_from).transpose()?.unwrap();
+                let secs = seq.pop().map(i64::try_from).transpose()?.unwrap();
                 Ok(Self::new(secs, nanos))
             }
             TelemetryValue::Float(f64) => Ok(f64.into()),
@@ -120,6 +120,12 @@ impl TryFrom<TelemetryValue> for Timestamp {
 //         &self.as_f64()
 //     }
 // }
+
+impl Into<DateTime<Utc>> for Timestamp {
+    fn into(self) -> DateTime<Utc> {
+        Utc.timestamp(self.0, self.1)
+    }
+}
 
 impl From<DateTime<Utc>> for Timestamp {
     fn from(that: DateTime<Utc>) -> Self {
@@ -165,17 +171,28 @@ impl Into<i64> for &Timestamp {
     }
 }
 
-impl From<Timestamp> for TelemetryValue {
-    fn from(that: Timestamp) -> Self {
-        Self::Table(
+impl Into<TelemetryValue> for Timestamp {
+    fn into(self) -> TelemetryValue {
+        TelemetryValue::Table(
             maplit::hashmap! {
-                SECS_KEY.to_string() => that.0.to_telemetry(),
-                NANOS_KEY.to_string() => that.1.to_telemetry(),
+                SECS_KEY.to_string() => self.0.to_telemetry(),
+                NANOS_KEY.to_string() => self.1.to_telemetry(),
             }
             .into(),
         )
     }
 }
+// impl From<Timestamp> for TelemetryValue {
+//     fn from(that: Timestamp) -> Self {
+//         Self::Table(
+//             maplit::hashmap! {
+//                 SECS_KEY.to_string() => that.0.to_telemetry(),
+//                 NANOS_KEY.to_string() => that.1.to_telemetry(),
+//             }
+//             .into(),
+//         )
+//     }
+// }
 
 impl std::ops::Add<Duration> for Timestamp {
     type Output = Timestamp;

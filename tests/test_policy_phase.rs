@@ -11,33 +11,46 @@ use chrono::*;
 use claim::*;
 use lazy_static::lazy_static;
 use oso::{Oso, PolarClass, ToPolar};
-use pretty_assertions::assert_eq;
+use pretty_assertions::{assert_eq, assert_ne};
+use pretty_snowflake::{AlphabetCodec, Id, IdPrettifier, PrettyIdGenerator, RealTimeGenerator};
 use proctor::elements::telemetry::{TableValue, ToTelemetry};
 use proctor::elements::{
     self, telemetry, Policy, PolicyFilterEvent, PolicyOutcome, PolicySettings, PolicySource, PolicySubscription,
-    QueryPolicy, QueryResult, Telemetry, TelemetryValue,
+    QueryPolicy, QueryResult, Telemetry, TelemetryValue, Timestamp,
 };
 use proctor::error::{PolicyError, ProctorError};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape, UniformFanInShape};
-use proctor::phases::collection::{self, SubscriptionRequirements, TelemetrySubscription};
+use proctor::phases::collection::{
+    self, SubscriptionRequirements, TelemetrySubscription, SUBSCRIPTION_CORRELATION, SUBSCRIPTION_TIMESTAMP,
+};
 use proctor::phases::policy_phase::PolicyPhase;
-use proctor::ProctorContext;
 use proctor::{AppData, SharedString};
+use proctor::{IdGenerator, ProctorContext};
 use serde_test::{assert_tokens, Token};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
-#[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(PolarClass, Debug, Clone, Serialize, Deserialize)]
 pub struct Data {
     pub input_messages_per_sec: f64,
     #[serde(with = "proctor::serde")]
     pub timestamp: DateTime<Utc>,
+    pub correlation_id: Id,
     pub inbox_lag: i64,
 }
 
-#[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
+impl PartialEq for Data {
+    fn eq(&self, other: &Self) -> bool {
+        self.input_messages_per_sec.eq(&other.input_messages_per_sec) && self.inbox_lag.eq(&other.inbox_lag)
+    }
+}
+
+#[derive(PolarClass, Debug, Clone, Serialize, Deserialize)]
 pub struct TestPolicyPhaseContext {
+    pub timestamp: Timestamp,
+    pub correlation_id: Id,
+
     #[polar(attribute)]
     #[serde(flatten)]
     pub task_status: TestTaskStatus,
@@ -48,6 +61,12 @@ pub struct TestPolicyPhaseContext {
     #[polar(attribute)]
     #[serde(flatten)]
     pub custom: telemetry::TableValue,
+}
+
+impl PartialEq for TestPolicyPhaseContext {
+    fn eq(&self, other: &Self) -> bool {
+        self.task_status == other.task_status && self.cluster_status == other.cluster_status
+    }
 }
 
 #[async_trait]
@@ -134,7 +153,7 @@ struct TestItem {
 
     #[serde_as(as = "TimestampSeconds")]
     // #[serde(with = "proctor::serde")]
-    pub timestamp: DateTime<Utc>,
+    pub my_timestamp: DateTime<Utc>,
 }
 
 impl TestItem {
@@ -142,14 +161,14 @@ impl TestItem {
         Self {
             flow: TestFlowMetrics { input_messages_per_sec },
             inbox_lag,
-            timestamp: ts,
+            my_timestamp: ts,
         }
     }
 
     pub fn within_seconds(&self, secs: i64) -> bool {
         let now = (*DT_1).clone();
         let boundary = now - chrono::Duration::seconds(secs);
-        boundary < self.timestamp
+        boundary < self.my_timestamp
     }
 
     pub fn lag_duration_secs_f64(&self, message_lag: u32) -> f64 {
@@ -164,7 +183,12 @@ fn test_context_serde() {
     let main_span = tracing::info_span!("test_context_serde");
     let _ = main_span.enter();
 
+    let now = Timestamp::now();
+    let corr = PrettyIdGenerator::<RealTimeGenerator, AlphabetCodec>::single_node(IdPrettifier::default()).next_id();
+
     let context = TestPolicyPhaseContext {
+        timestamp: now.clone(),
+        correlation_id: corr.clone(),
         task_status: TestTaskStatus { last_failure: None },
         cluster_status: TestClusterStatus {
             location_code: 3,
@@ -313,6 +337,7 @@ impl<D: AppData + ToPolar + Clone> QueryPolicy for TestPolicyA<D> {
 
 #[allow(dead_code)]
 struct TestFlow<D, C> {
+    pub id_generator: IdGenerator,
     pub graph_handle: JoinHandle<()>,
     pub tx_data_source_api: stage::ActorSourceApi<Telemetry>,
     pub tx_context_source_api: stage::ActorSourceApi<Telemetry>,
@@ -339,7 +364,8 @@ where
 
         let merge = stage::MergeN::new("source_merge", 2);
 
-        let mut clearinghouse = collection::Clearinghouse::new("clearinghouse");
+        let id_generator = IdGenerator::single_node(IdPrettifier::<AlphabetCodec>::default());
+        let mut clearinghouse = collection::Clearinghouse::new("clearinghouse", id_generator.clone());
         let tx_clearinghouse_api = clearinghouse.tx_api();
 
         let context_subscription = policy.subscription("eligibility_context");
@@ -401,6 +427,7 @@ where
         });
 
         Ok(Self {
+            id_generator,
             graph_handle,
             tx_data_source_api,
             tx_context_source_api,
@@ -541,11 +568,14 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
     let data = Data {
         input_messages_per_sec: std::f64::consts::PI,
         timestamp: now_utc,
+        correlation_id: flow.id_generator.next_id(),
         inbox_lag: 3,
     };
 
-    let data_telemetry = Telemetry::try_from(&data)?;
-    tracing::warn!("test_eligibility_before_context_baseline_C");
+    let mut data_telemetry = Telemetry::try_from(&data)?;
+    data_telemetry.remove(SUBSCRIPTION_TIMESTAMP);
+    data_telemetry.remove(SUBSCRIPTION_CORRELATION);
+    tracing::warn!(?data_telemetry, "test_eligibility_before_context_baseline_C");
 
     flow.push_telemetry(data_telemetry).await?;
     tracing::warn!("test_eligibility_before_context_baseline_D");
@@ -557,7 +587,13 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
 
     match assert_ok!(flow.rx_eligibility_monitor.recv().await) {
         PolicyFilterEvent::ItemBlocked(blocked) => {
-            tracing::warn!("receive item blocked notification re: {:?}", blocked);
+            tracing::warn!(
+                blocked_ts=%blocked.timestamp, data_ts=%data.timestamp,
+                blocked_corr=?blocked.correlation_id, data_corr=?data.correlation_id,
+                "receive item blocked notification re: {:?}", blocked
+            );
+            assert!(blocked.timestamp > data.timestamp);
+            assert_ne!(blocked.correlation_id, data.correlation_id);
             assert_eq!(blocked, data);
         }
         PolicyFilterEvent::ContextChanged(ctx) => {
@@ -618,7 +654,9 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
         "cluster.is_deploying" => false.to_telemetry(),
         "cluster.last_deployment" => t1_rep.to_telemetry(),
     };
-    let context_telemetry: Telemetry = context_data.clone().into_iter().collect();
+    let mut context_telemetry: Telemetry = context_data.clone().into_iter().collect();
+    context_telemetry.insert(SUBSCRIPTION_TIMESTAMP.to_string(), Timestamp::now().into());
+    context_telemetry.insert(SUBSCRIPTION_CORRELATION.to_string(), flow.id_generator.next_id().into());
     let context: TestPolicyPhaseContext = context_telemetry.try_into()?;
     flow.push_context(context_data).await?;
 
@@ -630,6 +668,8 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
             assert_eq!(
                 ctx,
                 TestPolicyPhaseContext {
+                    timestamp: Timestamp::now(),
+                    correlation_id: flow.id_generator.next_id(),
                     task_status: TestTaskStatus { last_failure: None },
                     cluster_status: TestClusterStatus {
                         location_code: 3,
@@ -710,7 +750,7 @@ fn test_item_serde() {
     assert_eq!(
         json,
         format!(
-            r#"{{"input_messages_per_sec":{},"inbox_lag":3,"timestamp":{}}}"#,
+            r#"{{"input_messages_per_sec":{},"inbox_lag":3,"my_timestamp":{}}}"#,
             std::f64::consts::PI,
             *DT_1_TS
         )
@@ -722,7 +762,7 @@ fn test_item_serde() {
         maplit::hashmap! {
             "input_messages_per_sec" => std::f64::consts::PI.to_telemetry(),
             "inbox_lag" => 3.to_telemetry(),
-            "timestamp" => DT_1_TS.to_telemetry(),
+            "my_timestamp" => DT_1_TS.to_telemetry(),
         }
         .into_iter()
         .collect()
@@ -840,7 +880,7 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
     let subscription = TelemetrySubscription::new("measurements").with_required_fields(maplit::hashset! {
         "input_messages_per_sec",
         "inbox_lag",
-        "timestamp",
+        "my_timestamp",
     });
 
     let policy = TestPolicyB::new(r#"eligible(_item, environment) if environment.cluster_status.location_code == 33;"#);
@@ -914,6 +954,8 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
     assert_eq!(
         event,
         elements::PolicyFilterEvent::ContextChanged(Some(TestPolicyPhaseContext {
+            timestamp: Timestamp::now(),
+            correlation_id: flow.id_generator.next_id(),
             task_status: TestTaskStatus { last_failure: None },
             cluster_status: TestClusterStatus {
                 location_code: 33,
@@ -961,7 +1003,7 @@ async fn test_eligibility_w_custom_fields() -> anyhow::Result<()> {
     let subscription = TelemetrySubscription::new("measurements").with_required_fields(maplit::hashset! {
         "input_messages_per_sec",
         "inbox_lag",
-        "timestamp",
+        "my_timestamp",
     });
 
     let policy = TestPolicyB::new_with_extension(
@@ -1022,7 +1064,7 @@ async fn test_eligibility_w_item_n_env() -> anyhow::Result<()> {
     let subscription = TelemetrySubscription::new("data").with_required_fields(maplit::hashset! {
         "input_messages_per_sec",
         "inbox_lag",
-        "timestamp",
+        "my_timestamp",
     });
 
     let policy = TestPolicyB::new_with_extension(
@@ -1084,7 +1126,7 @@ async fn test_eligibility_replace_policy() -> anyhow::Result<()> {
     let data_subscription = TelemetrySubscription::new("data").with_required_fields(maplit::hashset! {
         "input_messages_per_sec",
         "inbox_lag",
-        "timestamp",
+        "my_timestamp",
     });
 
     let policy_1 = r#"eligible(_, env: PhaseContext) if env.custom.cat = "Otis";"#;
@@ -1101,7 +1143,12 @@ async fn test_eligibility_replace_policy() -> anyhow::Result<()> {
         "cluster.last_deployment" => DT_1_STR.as_str().to_telemetry(),
         "cat" => "Otis".to_telemetry(),
     };
-    let context_telemetry: Telemetry = context_data.clone().into_iter().collect();
+    let mut context_telemetry: Telemetry = context_data.clone().into_iter().collect();
+    context_telemetry.insert(SUBSCRIPTION_TIMESTAMP.to_string(), Timestamp::new(0, 0).into());
+    context_telemetry.insert(
+        SUBSCRIPTION_CORRELATION.to_string(),
+        Id::direct(0, "".to_string()).into(),
+    );
     let context: TestPolicyPhaseContext = context_telemetry.try_into()?;
     flow.push_context(context_data).await?;
 
@@ -1110,23 +1157,27 @@ async fn test_eligibility_replace_policy() -> anyhow::Result<()> {
     tracing::warn!(?event, "DMR-A: environment changed confirmed");
 
     let item_1 = TestItem::new(std::f64::consts::PI, 1, too_old_ts);
+    tracing::warn!(?item_1, "DMR-A-1: item passes...");
     let telemetry_1 = Telemetry::try_from(&item_1)?;
     flow.push_telemetry(telemetry_1.clone()).await?;
 
     let item_2 = TestItem::new(17.327, 2, good_ts);
+    tracing::warn!(?item_2, "DMR-A-2: item passes...");
     let telemetry_2 = Telemetry::try_from(&item_2)?;
     flow.push_telemetry(telemetry_2.clone()).await?;
 
-    tracing::info!("replace policy and re-send");
+    tracing::warn!("replace policy and re-send");
     let cmd_rx = elements::PolicyFilterCmd::replace_policy(elements::PolicySource::String(policy_2.to_string()));
     flow.tell_policy(cmd_rx).await?;
 
-    tracing::info!("after policy change, pushing telemetry data...");
+    tracing::warn!("DMR-B: after policy change, pushing telemetry data...");
+    tracing::warn!(?telemetry_1, "DMR-B-1: item blocked...");
     flow.push_telemetry(telemetry_1).await?;
+    tracing::warn!(?telemetry_2, "DMR-B-2: item passes...");
     flow.push_telemetry(telemetry_2).await?;
 
     let actual = flow.close().await?;
-    tracing::info!(?actual, "verifying actual result...");
+    tracing::warn!(?actual, "verifying actual result...");
     assert_eq!(
         actual,
         vec![
