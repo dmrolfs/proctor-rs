@@ -143,7 +143,7 @@ impl Clearinghouse {
 
     #[tracing::instrument(
         level = "info",
-        skip(database, subscribers),
+        skip(database, subscribers, correlation_generator),
         fields(subscribers = ?subscribers.iter().map(|s| s.name()).collect::<Vec<_>>(), ),
     )]
     async fn push_to_subscribers(
