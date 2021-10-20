@@ -5,7 +5,7 @@ use crate::graph::{Outlet, Port, SourceShape};
 use crate::{AppData, IdGenerator, ProctorResult};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
-use pretty_snowflake::{AlphabetCodec, DatacenterWorker, IdPrettifier};
+use pretty_snowflake::{AlphabetCodec, IdPrettifier, MachineNode};
 use std::fmt::{self, Debug};
 
 pub use builder::*;
@@ -55,9 +55,9 @@ pub struct Collect<Out> {
 impl<Out> Collect<Out> {
     #[tracing::instrument(level = "info", skip(name, sources))]
     pub fn builder(
-        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>, datacenter_worker: DatacenterWorker,
+        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>, machine_node: MachineNode,
     ) -> CollectBuilder<Out> {
-        let id_generator = IdGenerator::distributed(datacenter_worker, IdPrettifier::<AlphabetCodec>::default());
+        let id_generator = IdGenerator::distributed(machine_node, IdPrettifier::<AlphabetCodec>::default());
         CollectBuilder::new(name, sources, id_generator)
     }
 
@@ -65,7 +65,7 @@ impl<Out> Collect<Out> {
     pub fn single_node_builder(
         name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
     ) -> CollectBuilder<Out> {
-        Self::builder(name, sources, DatacenterWorker::default())
+        Self::builder(name, sources, MachineNode::default())
     }
 }
 
