@@ -227,7 +227,7 @@ impl Clearinghouse {
                 let snapshot = match name {
                     None => {
                         tracing::info!("no subscription specified - responding with clearinghouse snapshot.");
-                        ClearinghouseResp::Snapshot {
+                        ClearinghouseSnapshot {
                             database: database.clone(),
                             missing: HashSet::default(),
                             subscriptions: subscriptions.clone(),
@@ -245,7 +245,7 @@ impl Clearinghouse {
                                 "subscription found - focusing snapshot."
                             );
 
-                            ClearinghouseResp::Snapshot {
+                            ClearinghouseSnapshot {
                                 database: db,
                                 missing,
                                 subscriptions: vec![sub.clone()],
@@ -254,7 +254,7 @@ impl Clearinghouse {
 
                         None => {
                             tracing::info!(requested_subscription=%name, "subscription not found - returning clearinghouse snapshot.");
-                            ClearinghouseResp::Snapshot {
+                            ClearinghouseSnapshot {
                                 database: database.clone(),
                                 missing: HashSet::default(),
                                 subscriptions: subscriptions.clone(),
@@ -601,7 +601,7 @@ mod tests {
 
             let (get_0, rx_get_0) = ClearinghouseCmd::get_clearinghouse_snapshot();
             tx_api.send(get_0)?;
-            let ClearinghouseResp::Snapshot {
+            let ClearinghouseSnapshot {
                 database: _db_0,
                 missing: _missing_0,
                 subscriptions: subs_0,
@@ -627,7 +627,7 @@ mod tests {
 
             let (get_1, rx_get_1) = ClearinghouseCmd::get_clearinghouse_snapshot();
             tx_api.send(get_1)?;
-            let ClearinghouseResp::Snapshot {
+            let ClearinghouseSnapshot {
                 database: _db_1,
                 missing: _missing_1,
                 subscriptions: subs_1,
@@ -684,7 +684,7 @@ mod tests {
             tx_api.send(get_1)?;
 
             rx_add.await?;
-            let ClearinghouseResp::Snapshot { database: _, missing: _, subscriptions: subs1 } = rx_get_1.await?;
+            let ClearinghouseSnapshot { database: _, missing: _, subscriptions: subs1 } = rx_get_1.await?;
             assert_eq!(subs1.len(), 1);
 
             let name_1 = subs1[0].name();
@@ -694,7 +694,7 @@ mod tests {
 
             let (get_2, rx_get_2) = ClearinghouseCmd::get_clearinghouse_snapshot();
             tx_api.send(get_2)?;
-            let ClearinghouseResp::Snapshot { database: _, missing: _, subscriptions: subs2 } = rx_get_2.await?;
+            let ClearinghouseSnapshot { database: _, missing: _, subscriptions: subs2 } = rx_get_2.await?;
             assert_eq!(subs2.len(), 0);
 
             tracing::info!("stopping tick source...");

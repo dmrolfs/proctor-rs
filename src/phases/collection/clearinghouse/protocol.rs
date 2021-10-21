@@ -19,7 +19,7 @@ pub enum ClearinghouseCmd {
     },
     GetSnapshot {
         name: Option<String>,
-        tx: oneshot::Sender<ClearinghouseResp>,
+        tx: oneshot::Sender<ClearinghouseSnapshot>,
     },
 }
 
@@ -39,23 +39,21 @@ impl ClearinghouseCmd {
     }
 
     #[inline]
-    pub fn get_clearinghouse_snapshot() -> (Self, oneshot::Receiver<ClearinghouseResp>) {
+    pub fn get_clearinghouse_snapshot() -> (Self, oneshot::Receiver<ClearinghouseSnapshot>) {
         let (tx, rx) = oneshot::channel();
         (Self::GetSnapshot { name: None, tx }, rx)
     }
 
     #[inline]
-    pub fn get_subscription_snapshot<S: Into<String>>(name: S) -> (Self, oneshot::Receiver<ClearinghouseResp>) {
+    pub fn get_subscription_snapshot<S: Into<String>>(name: S) -> (Self, oneshot::Receiver<ClearinghouseSnapshot>) {
         let (tx, rx) = oneshot::channel();
         (Self::GetSnapshot { name: Some(name.into()), tx }, rx)
     }
 }
 
 #[derive(Debug)]
-pub enum ClearinghouseResp {
-    Snapshot {
-        database: Telemetry,
-        missing: HashSet<String>,
-        subscriptions: Vec<TelemetrySubscription>,
-    },
+pub struct ClearinghouseSnapshot {
+    pub database: Telemetry,
+    pub missing: HashSet<String>,
+    pub subscriptions: Vec<TelemetrySubscription>,
 }
