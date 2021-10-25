@@ -63,7 +63,7 @@ tracing-bunyan-formatter = "*"
 tracing-flame = "*"
 tracing-futures = "*"
 tracing-log = "*"
-tracing-subscriber = "*"
+tracing-subscriber = { version = "0.2", features = ["env-filter", "json"] }
 validator = { version = "0.14", features = ["derive"] }
 
 [dev-dependencies]
