@@ -64,6 +64,7 @@ tracing-flame = "*"
 tracing-futures = "*"
 tracing-log = "*"
 tracing-subscriber = { version = "0.2", features = ["env-filter", "json"] }
+trim-margin = "0.1"
 validator = { version = "0.14", features = ["derive"] }
 
 [dev-dependencies]

@@ -63,7 +63,7 @@ mod tests {
 
     #[test]
     fn test_serde_policy_source() {
-        let ps = PolicySource::from_string("foo");
+        let ps = assert_ok!(PolicySource::from_string("foo"));
         assert_tokens(
             &ps,
             &vec![
@@ -72,6 +72,27 @@ mod tests {
                 Token::Str("string"),
                 Token::Str("policy"),
                 Token::Str("foo"),
+                Token::StructEnd,
+            ],
+        );
+
+        let ps = assert_ok!(PolicySource::from_string(
+            r##"
+            |foobar
+            |zed
+            "##
+        ));
+        assert_tokens(
+            &ps,
+            &vec![
+                Token::Struct { name: "PolicySource", len: 2 },
+                Token::Str("source"),
+                Token::Str("string"),
+                Token::Str("policy"),
+                Token::Str(
+                    r##"foobar
+zed"##,
+                ),
                 Token::StructEnd,
             ],
         );
@@ -93,7 +114,7 @@ mod tests {
     #[test]
     fn test_serde_ron_policy_source() {
         let ps = vec![
-            PolicySource::from_string("foobar"),
+            assert_ok!(PolicySource::from_string("foobar")),
             assert_ok!(PolicySource::from_file(PathBuf::from("./resources/policy.polar"))),
         ];
 

@@ -93,16 +93,17 @@ impl SubscriptionRequirements for TestContext {
 
 #[derive(Debug)]
 struct TestPolicy {
-    policy: String,
+    policy: Vec<PolicySource>,
     query: String,
 }
 
 impl TestPolicy {
-    pub fn with_query(policy: impl Into<String>, query: impl Into<String>) -> Self {
-        let policy = policy.into();
+    pub fn with_query(policy: impl AsRef<str>, query: impl Into<String>) -> Self {
+        let policy = PolicySource::from_string(policy).expect("failed to parse string policy");
+        let policy_rep: String = policy.clone().into();
         let polar = polar_core::polar::Polar::new();
-        polar.load_str(policy.as_str()).expect("failed to parse policy");
-        Self { policy, query: query.into() }
+        polar.load_str(&policy_rep).expect("failed to parse policy");
+        Self { policy: vec![policy], query: query.into() }
     }
 }
 
@@ -155,8 +156,8 @@ impl QueryPolicy for TestPolicy {
         Ok(result)
     }
 
-    fn policy_sources(&self) -> Vec<PolicySource> {
-        vec![PolicySource::String(self.policy.clone())]
+    fn policy_sources(&self) -> &[PolicySource] {
+        self.policy.as_slice()
     }
 
     fn replace_sources(&mut self, sources: Vec<PolicySource>) {
@@ -165,7 +166,7 @@ impl QueryPolicy for TestPolicy {
             let source_policy: String = s.into();
             new_policy.push_str(source_policy.as_str());
         }
-        self.policy = new_policy;
+        self.policy = vec![PolicySource::from_string(new_policy).expect("failed to parse string policy")];
     }
 }
 
@@ -180,11 +181,11 @@ struct TestFlow {
 }
 
 impl TestFlow {
-    pub async fn new(policy: impl Into<String>) -> Self {
+    pub async fn new(policy: impl AsRef<str>) -> Self {
         Self::with_query(policy, "eligible").await
     }
 
-    pub async fn with_query(policy: impl Into<String>, query: impl Into<String>) -> Self {
+    pub async fn with_query(policy: impl AsRef<str>, query: impl Into<String>) -> Self {
         let item_source = stage::ActorSource::<TestItem>::new("item_source");
         let tx_item_source_api = item_source.tx_api();
 
@@ -465,9 +466,11 @@ async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
     let _ = main_span.enter();
 
     let mut flow = TestFlow::new(
-        r#"eligible(_item, context, c) if
-            c = context.custom() and
-            c.cat = "Otis";"#,
+        r##"
+        | eligible(_item, context, c) if
+        |   c = context.custom() and
+        |   c.cat = "Otis";
+        "##,
     )
     .await;
 
@@ -529,14 +532,14 @@ async fn test_policy_w_binding() -> anyhow::Result<()> {
     let _ = main_span.enter();
 
     let mut flow = TestFlow::with_query(
-        r#"
-        eligible(_, _context, length) if length = 13;
-
-        eligible(_item, context, c) if
-            c = context.custom() and
-            c.cat = "Otis" and
-            cut;
-        "#,
+        r##"
+        | eligible(_, _context, length) if length = 13;
+        |
+        | eligible(_item, context, c) if
+        |   c = context.custom() and
+        |   c.cat = "Otis" and
+        |   cut;
+        "##,
         "eligible",
     )
     .await;
@@ -606,12 +609,14 @@ async fn test_policy_w_item_n_env() -> anyhow::Result<()> {
     //     lag_2(item, _) if item.inbox_lag = 2;
     // "#,
     let flow = TestFlow::new(
-        r#"eligible(item, env, c) if proper_cat(item, env, c) and lag_2(item, env);
-proper_cat(_, env, c) if
-c = env.custom() and
-c.cat = "Otis";
-
-lag_2(_item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
+        r##"
+        | eligible(item, env, c) if proper_cat(item, env, c) and lag_2(item, env);
+        |   proper_cat(_, env, c) if
+        |   c = env.custom() and
+        |   c.cat = "Otis";
+        |
+        | lag_2(_item: TestMetricCatalog{ inbox_lag: 2 }, _);
+        "##,
     )
     .await;
 
@@ -654,9 +659,11 @@ async fn test_policy_w_method() -> anyhow::Result<()> {
     let _ = main_span.enter();
 
     let flow = TestFlow::new(
-        r#"eligible(item, _env, _) if
-34 < item.input_messages_per_sec(item.inbox_lag)
-and item.input_messages_per_sec(item.inbox_lag) < 36;"#,
+        r##"
+        | eligible(item, _env, _) if
+        |   34 < item.input_messages_per_sec(item.inbox_lag)
+        |   and item.input_messages_per_sec(item.inbox_lag) < 36;
+        "##,
     )
     .await;
 

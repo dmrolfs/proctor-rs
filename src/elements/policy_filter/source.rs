@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
+use trim_margin::MarginTrimmable;
 
 #[derive(Debug)]
 pub enum PolicySourcePath {
@@ -30,8 +31,21 @@ pub enum PolicySource {
 assert_impl_all!(PolicySource: serde::ser::Serialize, Sync, Send);
 
 impl PolicySource {
-    pub fn from_string<S: Into<String>>(policy: S) -> Self {
-        Self::String(policy.into())
+    /// Creates a PolicySource from a string. Multi-line strings must begin with a '|' margin
+    /// character in order to facilitate trimming with pleasant alignment. Single-lined strings
+    /// do not need to begin with the margin character.
+    pub fn from_string<S: AsRef<str>>(policy: S) -> Result<Self, PolicyError> {
+        let lines: Vec<&str> = policy.as_ref().lines().take(2).collect();
+        let multi_line = 1 < lines.len();
+        let policy_rep = if multi_line {
+            policy.trim_margin_with("|").ok_or(PolicyError::StringPolicyError(
+                "Multi-line policy strings must begin each line with the '|' margin character.".to_string(),
+            ))
+        } else {
+            Ok(policy.as_ref().to_string())
+        };
+
+        policy_rep.map(|p| Self::String(p))
     }
 
     pub fn from_file(policy_path: impl AsRef<Path>) -> Result<Self, PolicyError> {

@@ -47,7 +47,7 @@ pub trait QueryPolicy: Debug + Send + Sync {
         Ok(())
     }
 
-    fn policy_sources(&self) -> Vec<PolicySource>;
+    fn policy_sources(&self) -> &[PolicySource];
     fn replace_sources(&mut self, sources: Vec<PolicySource>);
 
     fn initialize_policy_engine(&mut self, engine: &mut oso::Oso) -> Result<(), PolicyError>;

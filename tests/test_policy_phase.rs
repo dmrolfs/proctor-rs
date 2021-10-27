@@ -296,8 +296,8 @@ impl<D: AppData + ToPolar + Clone> QueryPolicy for TestPolicyA<D> {
     type Context = TestPolicyPhaseContext;
     type Args = (Self::Item, Self::Context);
 
-    fn policy_sources(&self) -> Vec<PolicySource> {
-        self.policies.clone()
+    fn policy_sources(&self) -> &[PolicySource] {
+        self.policies.as_slice()
     }
 
     fn replace_sources(&mut self, sources: Vec<PolicySource>) {
@@ -793,26 +793,27 @@ struct TestFlowMetrics {
 
 #[derive(Debug)]
 struct TestPolicyB {
-    policy: String,
+    policy: Vec<PolicySource>,
     subscription_extension: HashSet<String>,
 }
 
 impl TestPolicyB {
-    pub fn new<S: Into<String>>(policy: S) -> Self {
+    pub fn new<S: AsRef<str>>(policy: S) -> Self {
         Self::new_with_extension(policy, HashSet::<String>::new())
     }
 
     pub fn new_with_extension<S0, S1>(policy: S0, subscription_extension: HashSet<S1>) -> Self
     where
-        S0: Into<String>,
+        S0: AsRef<str>,
         S1: Into<String>,
     {
-        let policy = policy.into();
+        let policy = PolicySource::from_string(policy).expect("failed to parse string policy");
         let subscription_extension = subscription_extension.into_iter().map(|s| s.into()).collect();
 
         let polar = polar_core::polar::Polar::new();
-        polar.load_str(policy.as_str()).expect("failed to parse policy text");
-        Self { policy, subscription_extension }
+        let policy_rep: String = policy.clone().into();
+        polar.load_str(policy_rep.as_str()).expect("failed to parse policy text");
+        Self { policy: vec![policy], subscription_extension }
     }
 }
 
@@ -857,8 +858,8 @@ impl QueryPolicy for TestPolicyB {
         QueryResult::from_query(oso.query_rule("eligible", args)?)
     }
 
-    fn policy_sources(&self) -> Vec<PolicySource> {
-        vec![PolicySource::from_string(self.policy.clone())]
+    fn policy_sources(&self) -> &[PolicySource] {
+        self.policy.as_slice()
     }
 
     fn replace_sources(&mut self, sources: Vec<PolicySource>) {
@@ -867,7 +868,7 @@ impl QueryPolicy for TestPolicyB {
             let source_policy: String = s.into();
             new_policy.push_str(source_policy.as_str());
         }
-        self.policy = new_policy;
+        self.policy = vec![PolicySource::from_string(new_policy).expect("failed to parse string policy")];
     }
 }
 
@@ -1007,9 +1008,11 @@ async fn test_eligibility_w_custom_fields() -> anyhow::Result<()> {
     });
 
     let policy = TestPolicyB::new_with_extension(
-        r#"eligible(_item, environment) if
-            c = environment.custom() and
-            c.cat = "Otis";"#,
+        r#"
+                |eligible(_item, environment) if
+                |   c = environment.custom() and
+                |   c.cat = "Otis";
+            "#,
         maplit::hashset! {"cat"},
     );
 
@@ -1068,9 +1071,11 @@ async fn test_eligibility_w_item_n_env() -> anyhow::Result<()> {
     });
 
     let policy = TestPolicyB::new_with_extension(
-        r#"eligible(item, env) if proper_cat(item, env) and lag_2(item, env);
-proper_cat(_, env) if env.custom.cat = "Otis";
-lag_2(_item: TestMetricCatalog{ inbox_lag: 2 }, _);"#,
+        r##"
+        |eligible(item, env) if proper_cat(item, env) and lag_2(item, env);
+        |   proper_cat(_, env) if env.custom.cat = "Otis";
+        |   lag_2(_item: TestMetricCatalog{ inbox_lag: 2 }, _);
+        "##,
         maplit::hashset! { "cat" },
     );
 

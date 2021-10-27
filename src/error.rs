@@ -377,7 +377,11 @@ pub enum PolicyError {
 
     /// Error in parsing or evaluation of Polar policy.
     #[error("{0}")]
-    PolicyError(#[from] polar_core::error::PolarError),
+    PolicyParseError(#[from] polar_core::error::PolarError),
+
+    /// Error in string policy parsing
+    #[error("Failed to parse string policy: {0}")]
+    StringPolicyError(String),
 
     /// Error in using telemetry data in policies.
     #[error("failed to pull policy data from telemetry: {0}")]
@@ -401,7 +405,8 @@ impl MetricLabel for PolicyError {
         match self {
             Self::IOError(_) => Left("io".into()),
             Self::EngineError(_) => Left("engine".into()),
-            Self::PolicyError(_) => Left("policy_parsing".into()),
+            Self::PolicyParseError(_) => Left("parsing".into()),
+            Self::StringPolicyError(_) => Left("string".into()),
             Self::TelemetryError(e) => Right(Box::new(e)),
             Self::PublishError(_) => Left("publish".into()),
             Self::AnyError(_) => Left("any".into()),

@@ -398,7 +398,7 @@ where
             }
 
             PolicyFilterCmd::AppendPolicy { additional_policy: policy_source, tx } => {
-                let mut sources = policy.policy_sources();
+                let mut sources: Vec<PolicySource> = policy.policy_sources().iter().cloned().collect();
                 sources.push(policy_source);
                 policy.replace_sources(sources);
                 policy.load_policy_engine(oso)?;
@@ -501,13 +501,12 @@ mod tests {
     }
 
     #[derive(Debug)]
-    struct TestPolicy {
-        policy: String,
-    }
+    struct TestPolicy(Vec<PolicySource>);
 
     impl TestPolicy {
-        pub fn new<S: Into<String>>(policy: S) -> Self {
-            Self { policy: policy.into() }
+        pub fn new<S: AsRef<str>>(policy: S) -> Self {
+            let policy = PolicySource::from_string(policy).expect("failed to make test policy");
+            Self(vec![policy])
         }
     }
 
@@ -541,8 +540,8 @@ mod tests {
             QueryResult::from_query(engine.query_rule("allow", args)?)
         }
 
-        fn policy_sources(&self) -> Vec<PolicySource> {
-            vec![PolicySource::from_string(self.policy.as_str())]
+        fn policy_sources(&self) -> &[PolicySource] {
+            self.0.as_slice()
         }
 
         fn replace_sources(&mut self, sources: Vec<PolicySource>) {
@@ -551,7 +550,7 @@ mod tests {
                 let source_policy: String = s.into();
                 new_policy.push_str(source_policy.as_str());
             }
-            self.policy = new_policy;
+            self.0 = vec![PolicySource::from_string(&new_policy).expect("failed to replace policy")];
         }
     }
 
