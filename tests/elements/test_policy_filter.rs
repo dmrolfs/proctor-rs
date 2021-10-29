@@ -8,8 +8,8 @@ use claim::*;
 use oso::{Oso, PolarClass, PolarValue};
 use pretty_assertions::assert_eq;
 use proctor::elements::telemetry::ToTelemetry;
-use proctor::elements::PolicySource;
 use proctor::elements::{self, telemetry, PolicyOutcome, PolicySubscription, QueryPolicy, QueryResult, TelemetryValue};
+use proctor::elements::{PolicyRegistry, PolicySource};
 use proctor::error::PolicyError;
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape};
@@ -91,19 +91,44 @@ impl SubscriptionRequirements for TestContext {
     }
 }
 
+#[derive(Debug, Serialize, Clone)]
+struct PolicyTemplateData {
+    pub location_code: u32,
+    #[serde(default)]
+    pub lag: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cat: Option<String>,
+}
+
 #[derive(Debug)]
 struct TestPolicy {
-    policy: Vec<PolicySource>,
+    sources: Vec<PolicySource>,
+    template_data: PolicyTemplateData,
     query: String,
 }
 
 impl TestPolicy {
-    pub fn with_query(policy: impl AsRef<str>, query: impl Into<String>) -> Self {
-        let policy = PolicySource::from_string(policy).expect("failed to parse string policy");
-        let policy_rep: String = policy.clone().into();
+    #[tracing::instrument(
+        level="info",
+        name="TestPolicy::with_query",
+        skip(policy, query),
+        fields(policy=%policy.as_ref())
+    )]
+    pub fn with_query(policy: impl AsRef<str>, template_data: PolicyTemplateData, query: impl Into<String>) -> Self {
         let polar = polar_core::polar::Polar::new();
-        polar.load_str(&policy_rep).expect("failed to parse policy");
-        Self { policy: vec![policy], query: query.into() }
+        let mut registry = PolicyRegistry::new();
+        let source = assert_ok!(PolicySource::from_string(TestPolicy::base_template_name(), policy));
+        let template_name = source.name();
+        let policy_template: String = assert_ok!((&source).try_into());
+        assert_ok!(registry.register_template_string(template_name.as_ref(), policy_template));
+        assert!(registry.has_template(template_name.as_ref()));
+        let rendered_policy = assert_ok!(registry.render(template_name.as_ref(), &template_data));
+        assert_ok!(polar.load_str(&rendered_policy));
+        Self {
+            sources: vec![source],
+            template_data,
+            query: query.into(),
+        }
     }
 }
 
@@ -117,9 +142,30 @@ impl PolicySubscription for TestPolicy {
 }
 
 impl QueryPolicy for TestPolicy {
-    type Args = (TestItem, TestContext, PolarValue);
-    type Context = TestContext;
     type Item = TestItem;
+    type Context = TestContext;
+    type Args = (TestItem, TestContext, PolarValue);
+    type TemplateData = PolicyTemplateData;
+
+    fn base_template_name() -> &'static str {
+        "test_policy"
+    }
+
+    fn policy_template_data(&self) -> Option<&Self::TemplateData> {
+        Some(&self.template_data)
+    }
+
+    fn policy_template_data_mut(&mut self) -> Option<&mut Self::TemplateData> {
+        Some(&mut self.template_data)
+    }
+
+    fn sources(&self) -> &[PolicySource] {
+        self.sources.as_slice()
+    }
+
+    fn sources_mut(&mut self) -> &mut Vec<PolicySource> {
+        &mut self.sources
+    }
 
     fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
         oso.register_class(
@@ -155,45 +201,34 @@ impl QueryPolicy for TestPolicy {
         tracing::info!(?result, "DMR: query policy results!");
         Ok(result)
     }
-
-    fn policy_sources(&self) -> &[PolicySource] {
-        self.policy.as_slice()
-    }
-
-    fn replace_sources(&mut self, sources: Vec<PolicySource>) {
-        let mut new_policy = String::new();
-        for s in sources {
-            let source_policy: String = s.into();
-            new_policy.push_str(source_policy.as_str());
-        }
-        self.policy = vec![PolicySource::from_string(new_policy).expect("failed to parse string policy")];
-    }
 }
 
 struct TestFlow {
     pub graph_handle: JoinHandle<()>,
     pub tx_item_source_api: stage::ActorSourceApi<TestItem>,
     pub tx_env_source_api: stage::ActorSourceApi<TestContext>,
-    pub tx_policy_api: elements::PolicyFilterApi<TestContext>,
+    pub tx_policy_api: elements::PolicyFilterApi<TestContext, PolicyTemplateData>,
     pub rx_policy_monitor: elements::PolicyFilterMonitor<TestItem, TestContext>,
     pub tx_sink_api: stage::FoldApi<Vec<PolicyOutcome<TestItem, TestContext>>>,
     pub rx_sink: Option<oneshot::Receiver<Vec<PolicyOutcome<TestItem, TestContext>>>>,
 }
 
 impl TestFlow {
-    pub async fn new(policy: impl AsRef<str>) -> Self {
-        Self::with_query(policy, "eligible").await
+    pub async fn new(policy: impl AsRef<str>, data: PolicyTemplateData) -> Result<Self, PolicyError> {
+        Self::with_query(policy, data, "eligible").await
     }
 
-    pub async fn with_query(policy: impl AsRef<str>, query: impl Into<String>) -> Self {
+    pub async fn with_query(
+        policy: impl AsRef<str>, data: PolicyTemplateData, query: impl Into<String>,
+    ) -> Result<Self, PolicyError> {
         let item_source = stage::ActorSource::<TestItem>::new("item_source");
         let tx_item_source_api = item_source.tx_api();
 
         let env_source = stage::ActorSource::<TestContext>::new("env_source");
         let tx_env_source_api = env_source.tx_api();
 
-        let policy = TestPolicy::with_query(policy, query);
-        let policy_filter = elements::PolicyFilter::new("eligibility", policy);
+        let policy = TestPolicy::with_query(policy, data, query);
+        let policy_filter = elements::PolicyFilter::new("eligibility", policy)?;
         let tx_policy_api = policy_filter.tx_api();
         let rx_policy_monitor = policy_filter.rx_monitor();
 
@@ -225,7 +260,7 @@ impl TestFlow {
                 .expect("graph run failed")
         });
 
-        Self {
+        Ok(Self {
             graph_handle,
             tx_item_source_api,
             tx_env_source_api,
@@ -233,7 +268,7 @@ impl TestFlow {
             rx_policy_monitor,
             tx_sink_api,
             rx_sink,
-        }
+        })
     }
 
     pub async fn push_item(&self, item: TestItem) -> anyhow::Result<()> {
@@ -249,7 +284,11 @@ impl TestFlow {
     }
 
     pub async fn tell_policy(
-        &self, command_rx: (elements::PolicyFilterCmd<TestContext>, oneshot::Receiver<proctor::Ack>),
+        &self,
+        command_rx: (
+            elements::PolicyFilterCmd<TestContext, PolicyTemplateData>,
+            oneshot::Receiver<proctor::Ack>,
+        ),
     ) -> anyhow::Result<proctor::Ack> {
         self.tx_policy_api.send(command_rx.0)?;
         command_rx.1.await.map_err(|err| err.into())
@@ -259,7 +298,9 @@ impl TestFlow {
         self.rx_policy_monitor.recv().await.map_err(|err| err.into())
     }
 
-    pub async fn inspect_filter_context(&self) -> anyhow::Result<elements::PolicyFilterDetail<TestContext>> {
+    pub async fn inspect_filter_context(
+        &self,
+    ) -> anyhow::Result<elements::PolicyFilterDetail<TestContext, PolicyTemplateData>> {
         let (cmd, detail) = elements::PolicyFilterCmd::inspect();
         self.tx_policy_api.send(cmd)?;
         detail
@@ -301,7 +342,11 @@ async fn test_policy_filter_before_context_baseline() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_policy_filter_before_context_baseline");
     let _ = main_span.enter();
 
-    let flow = TestFlow::new(r#"eligible(_item, context) if context.location_code == 33;"#).await;
+    let flow = TestFlow::new(
+        r##"eligible(_item, context) if context.location_code == {{location_code}};"##,
+        PolicyTemplateData { location_code: 33, lag: None, cat: None },
+    )
+    .await?;
     let item = TestItem {
         flow: TestFlowMetrics { input_messages_per_sec: 3.1415926535 },
         timestamp: Utc::now().into(),
@@ -321,7 +366,11 @@ async fn test_policy_filter_happy_context() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_policy_filter_happy_context");
     let _ = main_span.enter();
 
-    let flow = TestFlow::new(r#"eligible(_item, context, _) if context.location_code == 33;"#).await;
+    let flow = TestFlow::new(
+        r##"eligible(_item, context, _) if context.location_code == {{location_code}};"##,
+        PolicyTemplateData { location_code: 33, lag: None, cat: None },
+    )
+    .await?;
 
     tracing::info!("DMR: 01. Make sure empty env...");
 
@@ -392,7 +441,11 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_policy_filter_w_pass_and_blocks");
     let _ = main_span.enter();
 
-    let mut flow = TestFlow::new(r#"eligible(_item, context, _) if context.location_code == 33;"#).await;
+    let mut flow = TestFlow::new(
+        r##"eligible(_item, context, _) if context.location_code == {{location_code}};"##,
+        PolicyTemplateData { location_code: 33, lag: None, cat: None },
+    )
+    .await?;
     flow.push_context(TestContext::new(33)).await?;
     let event = flow.recv_policy_event().await?;
     claim::assert_matches!(event, elements::PolicyFilterEvent::ContextChanged(_));
@@ -469,10 +522,15 @@ async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
         r##"
         | eligible(_item, context, c) if
         |   c = context.custom() and
-        |   c.cat = "Otis";
+        |   c.cat = "{{cat}}";
         "##,
+        PolicyTemplateData {
+            location_code: 33_333,
+            lag: Some(10),
+            cat: Some("Otis".to_string()),
+        },
     )
-    .await;
+    .await?;
 
     flow.push_context(
         TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
@@ -533,16 +591,21 @@ async fn test_policy_w_binding() -> anyhow::Result<()> {
 
     let mut flow = TestFlow::with_query(
         r##"
-        | eligible(_, _context, length) if length = 13;
+        | eligible(_, _context, length) if length = {{lag}};
         |
         | eligible(_item, context, c) if
         |   c = context.custom() and
-        |   c.cat = "Otis" and
+        |   c.cat = "{{cat}}" and
         |   cut;
         "##,
+        PolicyTemplateData {
+            location_code: 1_000,
+            lag: Some(13),
+            cat: Some("Otis".to_string()),
+        },
         "eligible",
     )
-    .await;
+    .await?;
 
     flow.push_context(
         TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
@@ -613,12 +676,17 @@ async fn test_policy_w_item_n_env() -> anyhow::Result<()> {
         | eligible(item, env, c) if proper_cat(item, env, c) and lag_2(item, env);
         |   proper_cat(_, env, c) if
         |   c = env.custom() and
-        |   c.cat = "Otis";
+        |   c.cat = "{{cat}}";
         |
-        | lag_2(_item: TestMetricCatalog{ inbox_lag: 2 }, _);
+        | lag_2(_item: TestMetricCatalog{ inbox_lag: {{lag}} }, _);
         "##,
+        PolicyTemplateData {
+            location_code: 33,
+            lag: Some(2),
+            cat: Some("Otis".to_string()),
+        },
     )
-    .await;
+    .await?;
 
     tracing::info!("DMR-B:push env...");
     flow.push_context(
@@ -662,10 +730,11 @@ async fn test_policy_w_method() -> anyhow::Result<()> {
         r##"
         | eligible(item, _env, _) if
         |   34 < item.input_messages_per_sec(item.inbox_lag)
-        |   and item.input_messages_per_sec(item.inbox_lag) < 36;
+        |   and item.input_messages_per_sec(item.inbox_lag) < {{lag}};
         "##,
+        PolicyTemplateData { location_code: 33, lag: Some(36), cat: None },
     )
-    .await;
+    .await?;
 
     flow.push_context(
         TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
@@ -702,11 +771,19 @@ async fn test_replace_policy() -> anyhow::Result<()> {
     let good_ts = Utc::now();
     let too_old_ts = Utc::now() - chrono::Duration::seconds(boundary_age_secs + 5);
 
-    let policy_1 = r#"eligible(_, env: TestContext, c) if c = env.custom() and c.cat = "Otis";"#;
+    let policy_1 = r##"eligible(_, env: TestContext, c) if c = env.custom() and c.cat = "{{cat}}";"##;
     let policy_2 = format!("eligible(item, _, _) if item.within_seconds({});", boundary_age_secs);
     tracing::info!(?policy_2, "DMR: policy with timestamp");
 
-    let flow = TestFlow::new(policy_1).await;
+    let flow = TestFlow::new(
+        policy_1,
+        PolicyTemplateData {
+            location_code: 33,
+            lag: None,
+            cat: Some("Otis".to_string()),
+        },
+    )
+    .await?;
 
     flow.push_context(
         TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
@@ -720,7 +797,13 @@ async fn test_replace_policy() -> anyhow::Result<()> {
     flow.push_item(item_2.clone()).await?;
 
     tracing::info!("replace policy and re-send");
-    let cmd_rx = elements::PolicyFilterCmd::replace_policy(elements::PolicySource::String(policy_2.to_string()));
+    let cmd_rx = elements::PolicyFilterCmd::replace_policies(
+        Some(elements::PolicySource::from_string(
+            TestPolicy::base_template_name(),
+            policy_2.to_string(),
+        )?),
+        None,
+    );
     flow.tell_policy(cmd_rx).await?;
 
     flow.push_item(item_1).await?;
@@ -769,10 +852,18 @@ async fn test_append_policy() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_append_policy");
     let _ = main_span.enter();
 
-    let policy_1 = r#"eligible(_item: TestMetricCatalog{ inbox_lag: 2 }, _, _);"#;
-    let policy_2 = r#"eligible(_, env: TestContext, c) if c = env.custom() and c.cat = "Otis";"#;
+    let policy_1 = r##"eligible(_item: TestMetricCatalog{ inbox_lag: {{lag}} }, _, _);"##;
+    let policy_2 = r##"eligible(_, env: TestContext, c) if c = env.custom() and c.cat = "{{cat}}";"##;
 
-    let flow = TestFlow::new(policy_1).await;
+    let flow = TestFlow::new(
+        policy_1,
+        PolicyTemplateData {
+            location_code: 33,
+            lag: Some(2),
+            cat: Some("Otis".to_string()),
+        },
+    )
+    .await?;
 
     flow.push_context(
         TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
@@ -787,7 +878,10 @@ async fn test_append_policy() -> anyhow::Result<()> {
     flow.push_item(item).await?;
 
     tracing::info!("add to policy and re-send");
-    let cmd_rx = elements::PolicyFilterCmd::append_policy(elements::PolicySource::String(policy_2.to_string()));
+    let cmd_rx = elements::PolicyFilterCmd::append_policy(
+        elements::PolicySource::from_string(TestPolicy::base_template_name(), policy_2.to_string())?,
+        None,
+    );
     flow.tell_policy(cmd_rx).await?;
 
     let item = TestItem::new(consts::SQRT_2, ts, 1);
@@ -842,10 +936,18 @@ async fn test_reset_policy() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_reset_policy");
     let _ = main_span.enter();
 
-    let policy_1 = r#"eligible(_item: TestMetricCatalog{ inbox_lag: 2 }, _, _);"#;
-    let policy_2 = r#"eligible(_, env, c) if c = env.custom() and c.cat = "Otis";"#;
+    let policy_1 = r##"eligible(_item: TestMetricCatalog{ inbox_lag: {{lag}} }, _, _);"##;
+    let policy_2 = r##"eligible(_, env, c) if c = env.custom() and c.cat = "{{cat}}";"##;
 
-    let flow = TestFlow::new(policy_1).await;
+    let flow = TestFlow::new(
+        policy_1,
+        PolicyTemplateData {
+            location_code: 37,
+            lag: Some(2),
+            cat: Some("Otis".to_string()),
+        },
+    )
+    .await?;
 
     flow.push_context(
         TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
@@ -860,7 +962,10 @@ async fn test_reset_policy() -> anyhow::Result<()> {
     flow.push_item(item).await?;
 
     tracing::info!("add to policy and resend");
-    let cmd_rx = elements::PolicyFilterCmd::append_policy(elements::PolicySource::String(policy_2.to_string()));
+    let cmd_rx = elements::PolicyFilterCmd::append_policy(
+        elements::PolicySource::from_string(TestPolicy::base_template_name(), policy_2.to_string())?,
+        None,
+    );
     flow.tell_policy(cmd_rx).await?;
 
     let item = TestItem::new(consts::TAU, ts, 1);

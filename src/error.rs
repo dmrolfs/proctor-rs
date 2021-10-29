@@ -46,6 +46,9 @@ pub enum ProctorError {
     GraphError(#[from] GraphError),
 
     #[error("{0}")]
+    PolicyError(#[from] PolicyError),
+
+    #[error("{0}")]
     PrometheusError(#[from] prometheus::Error),
 }
 
@@ -62,6 +65,7 @@ impl MetricLabel for ProctorError {
             Self::PlanError(e) => Right(Box::new(e)),
             Self::PhaseError(_) => Left("phase".into()),
             Self::GraphError(e) => Right(Box::new(e)),
+            Self::PolicyError(e) => Right(Box::new(e)),
             Self::PrometheusError(_) => Left("prometheus".into()),
         }
     }
@@ -383,6 +387,11 @@ pub enum PolicyError {
     #[error("Failed to parse string policy: {0}")]
     StringPolicyError(String),
 
+    #[error("Failed to render policy from template: {0}")]
+    RenderError(#[from] handlebars::RenderError),
+
+    #[error("Failed to register template with policy source registry: {0}")]
+    TemplateError(#[from] handlebars::TemplateError),
     /// Error in using telemetry data in policies.
     #[error("failed to pull policy data from telemetry: {0}")]
     TelemetryError(#[from] TelemetryError),
@@ -407,6 +416,7 @@ impl MetricLabel for PolicyError {
             Self::EngineError(_) => Left("engine".into()),
             Self::PolicyParseError(_) => Left("parsing".into()),
             Self::StringPolicyError(_) => Left("string".into()),
+            Self::RenderError(_) | Self::TemplateError(_) => Left("template".into()),
             Self::TelemetryError(e) => Right(Box::new(e)),
             Self::PublishError(_) => Left("publish".into()),
             Self::AnyError(_) => Left("any".into()),

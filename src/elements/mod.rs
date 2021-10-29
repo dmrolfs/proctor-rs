@@ -26,9 +26,7 @@ pub use timestamp::*;
 pub type Point = (f64, f64);
 
 #[async_trait]
-pub trait ProctorContext:
-    AppData + SubscriptionRequirements + Clone + PolarClass + Serialize + DeserializeOwned
-{
+pub trait ProctorContext: AppData + SubscriptionRequirements + PolarClass + Serialize + DeserializeOwned {
     type Error: std::error::Error + From<anyhow::Error> + Send + Sync;
 
     fn custom(&self) -> telemetry::TableType;

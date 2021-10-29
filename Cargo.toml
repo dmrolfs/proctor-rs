@@ -1,8 +1,8 @@
 [package]
 name = "proctor"
-version = "0.1.0"
+version = "0.5.0"
 authors = ["Damon Rolfs <drolfs@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -37,6 +37,7 @@ enum-display-derive = "*"
 flexbuffers = "*"
 futures = "*"
 futures-util = "*"
+handlebars = "*"
 lazy_static = "*"
 maplit = "*"
 num_cpus = "*"
@@ -63,7 +64,7 @@ tracing-bunyan-formatter = "*"
 tracing-flame = "*"
 tracing-futures = "*"
 tracing-log = "*"
-tracing-subscriber = { version = "0.2", features = ["env-filter", "json"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 trim-margin = "0.1"
 validator = { version = "0.14", features = ["derive"] }
 

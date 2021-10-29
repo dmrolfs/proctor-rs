@@ -3,31 +3,37 @@ use std::fmt::{self, Debug};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use oso::ToPolar;
+use serde::Serialize;
 use tokio::sync::broadcast;
 
 use crate::elements::{
     PolicyFilter, PolicyFilterApi, PolicyFilterEvent, PolicyFilterMonitor, PolicyOutcome, QueryPolicy,
 };
-use crate::error::ProctorError;
+use crate::error::{PolicyError, ProctorError};
 use crate::graph::stage::{Stage, ThroughStage, WithApi, WithMonitor};
 use crate::graph::{stage, Connect, Graph, Inlet, Outlet, Port, SinkShape, SourceShape, PORT_DATA};
 use crate::{AppData, ProctorContext, ProctorResult, SharedString};
 
-pub struct PolicyPhase<In, Out, C> {
+pub struct PolicyPhase<In, Out, C, D> {
     name: String,
     policy_transform: Box<dyn ThroughStage<In, Out>>,
     pub context_inlet: Inlet<C>,
     inlet: Inlet<In>,
     outlet: Outlet<Out>,
-    tx_policy_api: PolicyFilterApi<C>,
+    tx_policy_api: PolicyFilterApi<C, D>,
     tx_policy_monitor: broadcast::Sender<PolicyFilterEvent<In, C>>,
 }
 
-impl<In: AppData + ToPolar, C: ProctorContext> PolicyPhase<In, PolicyOutcome<In, C>, C> {
+impl<In, C, D> PolicyPhase<In, PolicyOutcome<In, C>, C, D>
+where
+    In: AppData + ToPolar,
+    C: ProctorContext,
+    D: AppData + Serialize,
+{
     #[tracing::instrument(level = "info", skip(name))]
-    pub async fn carry_policy_outcome<P, S>(name: S, policy: P) -> Self
+    pub async fn carry_policy_outcome<P, S>(name: S, policy: P) -> Result<Self, PolicyError>
     where
-        P: 'static + QueryPolicy<Item = In, Context = C>,
+        P: 'static + QueryPolicy<Item = In, Context = C, TemplateData = D>,
         S: AsRef<str>,
     {
         let name = SharedString::Owned(format!("{}_carry_policy_outcome", name.as_ref()));
@@ -40,11 +46,16 @@ impl<In: AppData + ToPolar, C: ProctorContext> PolicyPhase<In, PolicyOutcome<In,
     }
 }
 
-impl<T: AppData + ToPolar, C: ProctorContext> PolicyPhase<T, T, C> {
+impl<T, C, D> PolicyPhase<T, T, C, D>
+where
+    T: AppData + ToPolar,
+    C: ProctorContext,
+    D: AppData + Serialize,
+{
     #[tracing::instrument(level = "info", skip(name))]
-    pub async fn strip_policy_outcome<P, S>(name: S, policy: P) -> Self
+    pub async fn strip_policy_outcome<P, S>(name: S, policy: P) -> Result<Self, PolicyError>
     where
-        P: 'static + QueryPolicy<Item = T, Context = C>,
+        P: 'static + QueryPolicy<Item = T, Context = C, TemplateData = D>,
         S: AsRef<str>,
     {
         let name = SharedString::Owned(format!("{}_strip_policy_outcome", name.as_ref()));
@@ -53,16 +64,22 @@ impl<T: AppData + ToPolar, C: ProctorContext> PolicyPhase<T, T, C> {
     }
 }
 
-impl<In: AppData + ToPolar, Out: AppData, C: ProctorContext> PolicyPhase<In, Out, C> {
+impl<In, Out, C, D> PolicyPhase<In, Out, C, D>
+where
+    In: AppData + ToPolar,
+    Out: AppData,
+    C: ProctorContext,
+    D: AppData + Serialize,
+{
     #[tracing::instrument(level = "info", skip(name))]
-    pub async fn with_transform<P, T, S>(name: S, policy: P, transform: T) -> Self
+    pub async fn with_transform<P, T, S>(name: S, policy: P, transform: T) -> Result<Self, PolicyError>
     where
-        P: 'static + QueryPolicy<Item = In, Context = C>,
+        P: 'static + QueryPolicy<Item = In, Context = C, TemplateData = D>,
         T: 'static + ThroughStage<PolicyOutcome<In, C>, Out>,
         S: Into<SharedString>,
     {
         let name = name.into();
-        let policy_filter = PolicyFilter::new(format!("{}_filter", name), policy);
+        let policy_filter = PolicyFilter::new(format!("{}_filter", name), policy)?;
         let context_inlet = policy_filter.context_inlet();
         let tx_policy_api = policy_filter.tx_api();
         let tx_policy_monitor = policy_filter.tx_monitor.clone();
@@ -82,7 +99,7 @@ impl<In: AppData + ToPolar, Out: AppData, C: ProctorContext> PolicyPhase<In, Out
         let inlet = policy_transform.inlet();
         let outlet = policy_transform.outlet();
 
-        Self {
+        Ok(Self {
             name: name.to_string(),
             policy_transform,
             context_inlet,
@@ -90,7 +107,7 @@ impl<In: AppData + ToPolar, Out: AppData, C: ProctorContext> PolicyPhase<In, Out
             outlet,
             tx_policy_api,
             tx_policy_monitor,
-        }
+        })
     }
 
     pub fn context_inlet(&self) -> Inlet<C> {
@@ -98,7 +115,10 @@ impl<In: AppData + ToPolar, Out: AppData, C: ProctorContext> PolicyPhase<In, Out
     }
 }
 
-impl<In, Out, C: Debug> Debug for PolicyPhase<In, Out, C> {
+impl<In, Out, C, D> Debug for PolicyPhase<In, Out, C, D>
+where
+    C: Debug,
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct(format!("PolicyPhase[{}]", self.name).as_str())
             .field("policy_transform", &self.policy_transform)
@@ -109,7 +129,7 @@ impl<In, Out, C: Debug> Debug for PolicyPhase<In, Out, C> {
     }
 }
 
-impl<In, Out, C> SinkShape for PolicyPhase<In, Out, C> {
+impl<In, Out, C, D> SinkShape for PolicyPhase<In, Out, C, D> {
     type In = In;
 
     fn inlet(&self) -> Inlet<Self::In> {
@@ -117,7 +137,7 @@ impl<In, Out, C> SinkShape for PolicyPhase<In, Out, C> {
     }
 }
 
-impl<In, Out, C> SourceShape for PolicyPhase<In, Out, C> {
+impl<In, Out, C, D> SourceShape for PolicyPhase<In, Out, C, D> {
     type Out = Out;
 
     fn outlet(&self) -> Outlet<Self::Out> {
@@ -127,11 +147,12 @@ impl<In, Out, C> SourceShape for PolicyPhase<In, Out, C> {
 
 #[dyn_upcast]
 #[async_trait]
-impl<In, Out, C> Stage for PolicyPhase<In, Out, C>
+impl<In, Out, C, D> Stage for PolicyPhase<In, Out, C, D>
 where
     In: AppData,
     Out: AppData,
     C: ProctorContext,
+    D: AppData,
 {
     fn name(&self) -> &str {
         self.name.as_str()
@@ -157,7 +178,7 @@ where
 }
 
 // this implementation block provides a convenient means to ground errors to the phase error.
-impl<In: AppData, Out: AppData, C: ProctorContext> PolicyPhase<In, Out, C>
+impl<In, Out, C, D> PolicyPhase<In, Out, C, D>
 where
     In: AppData,
     Out: AppData,
@@ -187,15 +208,15 @@ where
     }
 }
 
-impl<In, Out, C> WithApi for PolicyPhase<In, Out, C> {
-    type Sender = PolicyFilterApi<C>;
+impl<In, Out, C, D> WithApi for PolicyPhase<In, Out, C, D> {
+    type Sender = PolicyFilterApi<C, D>;
 
     fn tx_api(&self) -> Self::Sender {
         self.tx_policy_api.clone()
     }
 }
 
-impl<In, Out, C> WithMonitor for PolicyPhase<In, Out, C> {
+impl<In, Out, C, D> WithMonitor for PolicyPhase<In, Out, C, D> {
     type Receiver = PolicyFilterMonitor<In, C>;
 
     fn rx_monitor(&self) -> Self::Receiver {

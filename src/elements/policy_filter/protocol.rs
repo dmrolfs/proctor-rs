@@ -1,45 +1,54 @@
 use crate::elements::PolicySource;
 use crate::Ack;
+use std::fmt::Debug;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
-pub type PolicyFilterApi<C> = mpsc::UnboundedSender<PolicyFilterCmd<C>>;
-pub type PolicyFilterApiReceiver<C> = mpsc::UnboundedReceiver<PolicyFilterCmd<C>>;
+pub type PolicyFilterApi<C, D> = mpsc::UnboundedSender<PolicyFilterCmd<C, D>>;
+pub type PolicyFilterApiReceiver<C, D> = mpsc::UnboundedReceiver<PolicyFilterCmd<C, D>>;
 pub type PolicyFilterMonitor<T, C> = broadcast::Receiver<PolicyFilterEvent<T, C>>;
 
 #[derive(Debug)]
-pub enum PolicyFilterCmd<C> {
-    ReplacePolicy {
-        new_policy: PolicySource,
+pub enum PolicyFilterCmd<C, D> {
+    ReplacePolicies {
+        new_policies: Vec<PolicySource>,
+        new_template_data: Option<D>,
         tx: oneshot::Sender<Ack>,
     },
     AppendPolicy {
         additional_policy: PolicySource,
+        new_template_data: Option<D>,
         tx: oneshot::Sender<Ack>,
     },
-    Inspect(oneshot::Sender<PolicyFilterDetail<C>>),
+    Inspect(oneshot::Sender<PolicyFilterDetail<C, D>>),
 }
 
-impl<C> PolicyFilterCmd<C> {
-    pub fn replace_policy(new_policy: PolicySource) -> (PolicyFilterCmd<C>, oneshot::Receiver<Ack>) {
+impl<C, D> PolicyFilterCmd<C, D> {
+    pub fn replace_policies(
+        new_policies: impl IntoIterator<Item = PolicySource>, new_template_data: Option<D>,
+    ) -> (PolicyFilterCmd<C, D>, oneshot::Receiver<Ack>) {
         let (tx, rx) = oneshot::channel();
-        (Self::ReplacePolicy { new_policy, tx }, rx)
+        let new_policies = new_policies.into_iter().collect();
+        (Self::ReplacePolicies { new_policies, new_template_data, tx }, rx)
     }
 
-    pub fn append_policy(additional_policy: PolicySource) -> (PolicyFilterCmd<C>, oneshot::Receiver<Ack>) {
+    pub fn append_policy(
+        additional_policy: PolicySource, new_template_data: Option<D>,
+    ) -> (PolicyFilterCmd<C, D>, oneshot::Receiver<Ack>) {
         let (tx, rx) = oneshot::channel();
-        (Self::AppendPolicy { additional_policy, tx }, rx)
+        (Self::AppendPolicy { additional_policy, new_template_data, tx }, rx)
     }
 
-    pub fn inspect() -> (PolicyFilterCmd<C>, oneshot::Receiver<PolicyFilterDetail<C>>) {
+    pub fn inspect() -> (PolicyFilterCmd<C, D>, oneshot::Receiver<PolicyFilterDetail<C, D>>) {
         let (tx, rx) = oneshot::channel();
         (Self::Inspect(tx), rx)
     }
 }
 
 #[derive(Debug)]
-pub struct PolicyFilterDetail<C> {
+pub struct PolicyFilterDetail<C, D> {
     pub name: String,
     pub context: Option<C>,
+    pub policy_template_data: Option<D>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -63,7 +72,7 @@ mod tests {
 
     #[test]
     fn test_serde_policy_source() {
-        let ps = assert_ok!(PolicySource::from_string("foo"));
+        let ps = assert_ok!(PolicySource::from_string("template_name", "foo"));
         assert_tokens(
             &ps,
             &vec![
@@ -71,12 +80,18 @@ mod tests {
                 Token::Str("source"),
                 Token::Str("string"),
                 Token::Str("policy"),
+                Token::Struct { name: "string", len: 2 },
+                Token::Str("name"),
+                Token::Str("template_name"),
+                Token::Str("policy"),
                 Token::Str("foo"),
+                Token::StructEnd,
                 Token::StructEnd,
             ],
         );
 
         let ps = assert_ok!(PolicySource::from_string(
+            "template_name",
             r##"
             |foobar
             |zed
@@ -89,10 +104,15 @@ mod tests {
                 Token::Str("source"),
                 Token::Str("string"),
                 Token::Str("policy"),
+                Token::Struct { name: "string", len: 2 },
+                Token::Str("name"),
+                Token::Str("template_name"),
+                Token::Str("policy"),
                 Token::Str(
                     r##"foobar
 zed"##,
                 ),
+                Token::StructEnd,
                 Token::StructEnd,
             ],
         );
@@ -114,14 +134,14 @@ zed"##,
     #[test]
     fn test_serde_ron_policy_source() {
         let ps = vec![
-            assert_ok!(PolicySource::from_string("foobar")),
+            assert_ok!(PolicySource::from_string("template", "foobar")),
             assert_ok!(PolicySource::from_file(PathBuf::from("./resources/policy.polar"))),
         ];
 
         let rep = assert_ok!(ron::to_string(&ps));
         assert_eq!(
             rep,
-            r#"[(source:"string",policy:"foobar"),(source:"file",policy:"./resources/policy.polar")]"#
+            r#"[(source:"string",policy:(name:"template",policy:"foobar")),(source:"file",policy:"./resources/policy.polar")]"#
         );
     }
 }

@@ -25,9 +25,10 @@ use crate::error::{GraphError, PolicyError};
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Inlet, Outlet, Port, PORT_CONTEXT, PORT_DATA};
 use crate::graph::{SinkShape, SourceShape};
-use crate::{AppData, ProctorContext, ProctorResult, SharedString};
+use crate::{track_errors, AppData, ProctorContext, ProctorResult, SharedString};
 use lazy_static::lazy_static;
 use prometheus::{HistogramOpts, HistogramTimer, HistogramVec, IntCounterVec, Opts};
+use serde::Serialize;
 
 lazy_static! {
     pub(crate) static ref POLICY_FILTER_EVAL_TIME: HistogramVec = HistogramVec::new(
@@ -78,34 +79,37 @@ impl fmt::Display for PolicyResult {
     }
 }
 
-pub struct PolicyFilter<T, C, A, P>
+pub struct PolicyFilter<T, C, A, P, D>
 where
-    P: QueryPolicy<Item = T, Context = C, Args = A>,
+    P: QueryPolicy<Item = T, Context = C, Args = A, TemplateData = D>,
 {
     name: String,
     policy: P,
     context_inlet: Inlet<C>,
     inlet: Inlet<T>,
     outlet: Outlet<PolicyOutcome<T, C>>,
-    tx_api: PolicyFilterApi<C>,
-    rx_api: mpsc::UnboundedReceiver<PolicyFilterCmd<C>>,
+    tx_api: PolicyFilterApi<C, D>,
+    rx_api: mpsc::UnboundedReceiver<PolicyFilterCmd<C, D>>,
     pub tx_monitor: broadcast::Sender<PolicyFilterEvent<T, C>>,
 }
 
-impl<T, C, A, P> PolicyFilter<T, C, A, P>
+impl<T, C, A, P, D> PolicyFilter<T, C, A, P, D>
 where
     T: Clone,
     C: Clone,
-    P: QueryPolicy<Item = T, Context = C, Args = A>,
+    P: QueryPolicy<Item = T, Context = C, Args = A, TemplateData = D>,
 {
-    pub fn new<S: AsRef<str>>(name: S, policy: P) -> Self {
+    pub fn new<S: AsRef<str>>(name: S, mut policy: P) -> Result<Self, PolicyError> {
+        Self::check_policy(&mut policy)?;
+
         let name: SharedString = SharedString::Owned(name.as_ref().into());
         let context_inlet = Inlet::new(name.clone(), PORT_CONTEXT);
         let inlet = Inlet::new(name.clone(), PORT_DATA);
         let outlet = Outlet::new(name.clone(), PORT_DATA);
         let (tx_api, rx_api) = mpsc::unbounded_channel();
         let (tx_monitor, _) = broadcast::channel(num_cpus::get() * 2);
-        Self {
+
+        Ok(Self {
             name: format!("{}_policy_filter_stage", name),
             policy,
             context_inlet,
@@ -114,7 +118,13 @@ where
             tx_api,
             rx_api,
             tx_monitor,
-        }
+        })
+    }
+
+    fn check_policy(policy: &mut P) -> Result<(), PolicyError> {
+        let mut oso = Oso::new();
+        policy.load_policy_engine(&mut oso)?;
+        Ok(())
     }
 
     #[inline]
@@ -123,9 +133,9 @@ where
     }
 }
 
-impl<T, C, A, P> SinkShape for PolicyFilter<T, C, A, P>
+impl<T, C, A, P, D> SinkShape for PolicyFilter<T, C, A, P, D>
 where
-    P: QueryPolicy<Item = T, Context = C, Args = A>,
+    P: QueryPolicy<Item = T, Context = C, Args = A, TemplateData = D>,
 {
     type In = T;
 
@@ -135,9 +145,9 @@ where
     }
 }
 
-impl<T, C, A, P> SourceShape for PolicyFilter<T, C, A, P>
+impl<T, C, A, P, D> SourceShape for PolicyFilter<T, C, A, P, D>
 where
-    P: QueryPolicy<Item = T, Context = C, Args = A>,
+    P: QueryPolicy<Item = T, Context = C, Args = A, TemplateData = D>,
 {
     type Out = PolicyOutcome<T, C>;
 
@@ -149,12 +159,13 @@ where
 
 #[dyn_upcast]
 #[async_trait]
-impl<T, C, A, P> Stage for PolicyFilter<T, C, A, P>
+impl<T, C, A, P, D> Stage for PolicyFilter<T, C, A, P, D>
 where
-    T: AppData + ToPolar + Clone + Sync,
-    C: ProctorContext + Debug + Clone + Send + Sync,
+    T: AppData + ToPolar,
+    C: ProctorContext,
     A: 'static,
-    P: QueryPolicy<Item = T, Context = C, Args = A> + 'static,
+    P: QueryPolicy<Item = T, Context = C, Args = A, TemplateData = D> + 'static,
+    D: AppData + Serialize,
 {
     #[inline]
     fn name(&self) -> &str {
@@ -179,12 +190,13 @@ where
     }
 }
 
-impl<T, C, A, P> PolicyFilter<T, C, A, P>
+impl<T, C, A, P, D> PolicyFilter<T, C, A, P, D>
 where
-    T: AppData + ToPolar + Clone + Sync,
-    C: ProctorContext + Debug + Clone + Send + Sync,
+    T: AppData + ToPolar,
+    C: ProctorContext,
     A: 'static,
-    P: QueryPolicy<Item = T, Context = C, Args = A> + 'static,
+    P: QueryPolicy<Item = T, Context = C, Args = A, TemplateData = D> + 'static,
+    D: AppData + Serialize,
 {
     #[inline]
     async fn do_check(&self) -> Result<(), GraphError> {
@@ -231,7 +243,7 @@ where
                         name.as_str(),
                         policy,
                         Arc::clone(&context),
-                    ).await?;
+                    ).await;
 
                     if !cont_loop {
                         tracing::trace!("policy commanded to stop - breaking...");
@@ -258,11 +270,12 @@ where
     }
 }
 
-impl<T, C, A, P> PolicyFilter<T, C, A, P>
+impl<T, C, A, P, D> PolicyFilter<T, C, A, P, D>
 where
-    T: AppData + ToPolar + Clone,
-    C: ProctorContext + Debug + Clone,
-    P: QueryPolicy<Item = T, Context = C, Args = A>,
+    T: AppData + ToPolar,
+    C: ProctorContext,
+    P: QueryPolicy<Item = T, Context = C, Args = A, TemplateData = D>,
+    D: AppData + Serialize,
 {
     #[tracing::instrument(level = "info", name = "make policy knowledge base", skip(self))]
     fn oso(&mut self) -> Result<Oso, PolicyError> {
@@ -303,7 +316,6 @@ where
         tx: &broadcast::Sender<PolicyFilterEvent<T, C>>,
     ) -> Result<(), PolicyError> {
         let name: SharedString = name.to_owned().into();
-        // let now = quanta::Instant::now();
         let _timer = start_policy_timer(name.as_ref());
 
         // query lifetime cannot span across `.await` since it cannot `Send` between threads.
@@ -339,10 +351,6 @@ where
             }
         };
 
-        // if let Some(delta) = quanta::Instant::now().checked_duration_since(now) {
-        //     histogram!(METRIC_POLICY_FILTER_PROCESS_TIME, delta, "stage" => name);
-        // }
-
         outcome
     }
 
@@ -372,8 +380,8 @@ where
 
     #[tracing::instrument(level = "info", name = "policy_filter handle command", skip(oso, policy,), fields())]
     async fn handle_command(
-        command: PolicyFilterCmd<C>, oso: &mut Oso, name: &str, policy: &mut P, context: Arc<Mutex<Option<C>>>,
-    ) -> Result<bool, PolicyError> {
+        command: PolicyFilterCmd<C, D>, oso: &mut Oso, name: &str, policy: &mut P, context: Arc<Mutex<Option<C>>>,
+    ) -> bool {
         tracing::trace!(?command, ?context, "handling policy filter command...");
 
         match command {
@@ -381,39 +389,59 @@ where
                 let detail = PolicyFilterDetail {
                     name: name.to_string(),
                     context: context.lock().await.clone(),
+                    policy_template_data: policy.policy_template_data().cloned(),
                 };
                 let _ignore_failure = tx.send(detail);
-                Ok(true)
+                true
             }
 
-            PolicyFilterCmd::ReplacePolicy { new_policy, tx } => {
-                oso.clear_rules()?;
-                match new_policy {
-                    PolicySource::String(policy) => oso.load_str(policy.as_str())?,
-                    PolicySource::File(path) => oso.load_files(vec![path])?,
-                };
-
+            PolicyFilterCmd::ReplacePolicies { new_policies, new_template_data, tx } => {
+                Self::do_reset_policy_engine(name, policy, new_policies, new_template_data, oso);
                 let _ignore_failure = tx.send(());
-                Ok(true)
+                true
             }
 
-            PolicyFilterCmd::AppendPolicy { additional_policy: policy_source, tx } => {
-                let mut sources: Vec<PolicySource> = policy.policy_sources().iter().cloned().collect();
-                sources.push(policy_source);
-                policy.replace_sources(sources);
-                policy.load_policy_engine(oso)?;
+            PolicyFilterCmd::AppendPolicy { additional_policy, new_template_data, tx } => {
+                let mut sources: Vec<PolicySource> = policy.sources().iter().cloned().collect();
+                sources.push(additional_policy);
+                Self::do_reset_policy_engine(name, policy, sources, new_template_data, oso);
                 let _ignore_failure = tx.send(());
-                Ok(true)
+                true
             }
+        }
+    }
+
+    fn do_reset_policy_engine(
+        name: &str, policy: &mut P, new_policies: Vec<PolicySource>, new_template_data: Option<D>, engine: &mut Oso,
+    ) {
+        let sources = policy.sources_mut();
+        *sources = new_policies;
+
+        let new_data = new_template_data.clone();
+        if let Some((template_data, data)) = policy.policy_template_data_mut().zip(new_data) {
+            *template_data = data;
+        }
+
+        if let Err(err) = policy.load_policy_engine(engine) {
+            let policy_type = type_name_of_val(policy);
+            tracing::error!(
+                policy_stage=%name, error=?err, ?new_template_data,
+                "failed to replace policies in {}", policy_type
+            );
+            track_errors(name, &err.into());
         }
     }
 }
 
-impl<T, C, A, P> stage::WithApi for PolicyFilter<T, C, A, P>
+fn type_name_of_val<T>(_val: &T) -> &'static str {
+    std::any::type_name::<T>()
+}
+
+impl<T, C, A, P, D> stage::WithApi for PolicyFilter<T, C, A, P, D>
 where
-    P: QueryPolicy<Item = T, Context = C, Args = A>,
+    P: QueryPolicy<Item = T, Context = C, Args = A, TemplateData = D>,
 {
-    type Sender = PolicyFilterApi<C>;
+    type Sender = PolicyFilterApi<C, D>;
 
     #[inline]
     fn tx_api(&self) -> Self::Sender {
@@ -421,9 +449,9 @@ where
     }
 }
 
-impl<T, C, A, P> stage::WithMonitor for PolicyFilter<T, C, A, P>
+impl<T, C, A, P, D> stage::WithMonitor for PolicyFilter<T, C, A, P, D>
 where
-    P: QueryPolicy<Item = T, Context = C, Args = A>,
+    P: QueryPolicy<Item = T, Context = C, Args = A, TemplateData = D>,
 {
     type Receiver = PolicyFilterMonitor<T, C>;
 
@@ -433,9 +461,9 @@ where
     }
 }
 
-impl<T, C, A, P> Debug for PolicyFilter<T, C, A, P>
+impl<T, C, A, P, D> Debug for PolicyFilter<T, C, A, P, D>
 where
-    P: QueryPolicy<Item = T, Context = C, Args = A>,
+    P: QueryPolicy<Item = T, Context = C, Args = A, TemplateData = D>,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("PolicyFilter")
@@ -465,10 +493,6 @@ mod tests {
     use crate::phases::collection::{SubscriptionRequirements, TelemetrySubscription};
     use prometheus::Registry;
     use std::collections::HashSet;
-
-    // Make sure the `PolicyFilter` object is threadsafe
-    // #[test]
-    // static_assertions::assert_impl_all!(PolicyFilter: Send, Sync);
 
     #[derive(Debug, PartialEq, Clone, PolarClass)]
     struct User {
@@ -505,7 +529,9 @@ mod tests {
 
     impl TestPolicy {
         pub fn new<S: AsRef<str>>(policy: S) -> Self {
-            let policy = PolicySource::from_string(policy).expect("failed to make test policy");
+            let policy =
+                PolicySource::from_string(Self::base_template_name(), policy).expect("failed to make test policy");
+
             Self(vec![policy])
         }
     }
@@ -519,9 +545,30 @@ mod tests {
     }
 
     impl QueryPolicy for TestPolicy {
-        type Args = (Self::Item, &'static str, &'static str);
-        type Context = TestContext;
         type Item = User;
+        type Context = TestContext;
+        type Args = (Self::Item, &'static str, &'static str);
+        type TemplateData = ();
+
+        fn base_template_name() -> &'static str {
+            "test_policy"
+        }
+
+        fn policy_template_data(&self) -> Option<&Self::TemplateData> {
+            None
+        }
+
+        fn policy_template_data_mut(&mut self) -> Option<&mut Self::TemplateData> {
+            None
+        }
+
+        fn sources(&self) -> &[PolicySource] {
+            &self.0
+        }
+
+        fn sources_mut(&mut self) -> &mut Vec<PolicySource> {
+            &mut self.0
+        }
 
         #[tracing::instrument(level = "info", skip(oso))]
         fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
@@ -539,19 +586,6 @@ mod tests {
         fn query_policy(&self, engine: &Oso, args: Self::Args) -> Result<QueryResult, PolicyError> {
             QueryResult::from_query(engine.query_rule("allow", args)?)
         }
-
-        fn policy_sources(&self) -> &[PolicySource] {
-            self.0.as_slice()
-        }
-
-        fn replace_sources(&mut self, sources: Vec<PolicySource>) {
-            let mut new_policy = String::new();
-            for s in sources {
-                let source_policy: String = s.into();
-                new_policy.push_str(source_policy.as_str());
-            }
-            self.0 = vec![PolicySource::from_string(&new_policy).expect("failed to replace policy")];
-        }
     }
 
     #[test]
@@ -566,7 +600,7 @@ mod tests {
 
         let policy = TestPolicy::new(r#"allow(actor, _action, _resource) if actor.username.ends_with("example.com");"#);
 
-        let mut policy_filter = PolicyFilter::new("test-policy-filter", policy);
+        let mut policy_filter = PolicyFilter::new("test-policy-filter", policy)?;
         let oso = assert_ok!(policy_filter.oso()); //.expect("failed to build policy engine");
 
         let item = User { username: "peter.pan@example.com".to_string() };
