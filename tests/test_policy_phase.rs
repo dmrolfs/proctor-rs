@@ -246,7 +246,7 @@ fn make_test_policy<T>(
 where
     T: AppData + ToPolar + Clone,
 {
-    let data = settings.policy_attributes.clone();
+    let data = settings.template_data.clone();
     TestPolicyA::new(settings, data)
 }
 
@@ -583,7 +583,7 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
             POLICY_A_TEMPLATE_NAME,
             r##"eligible(_item, environment) if environment.location_code == {{location_code}};"##,
         )?],
-        policy_attributes: Some(PolicyData { location_code: 33 }),
+        template_data: Some(PolicyData { location_code: 33 }),
     });
     let mut flow: TestFlow<Data, TestPolicyPhaseContext, PolicyData> =
         TestFlow::new(TelemetrySubscription::new("all_data"), policy).await?;
@@ -653,7 +653,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
             TestPolicyA::<MeasurementData>::base_template_name(),
             r##"eligible(_, context) if context.cluster_status.is_deploying == false;"##,
         )?],
-        policy_attributes: None,
+        template_data: None,
     });
 
     let mut flow: TestFlow<MeasurementData, TestPolicyPhaseContext, PolicyData> = TestFlow::new(

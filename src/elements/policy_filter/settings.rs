@@ -16,7 +16,7 @@ pub struct PolicySettings<T> {
     pub policies: Vec<PolicySource>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub policy_attributes: Option<T>,
+    pub template_data: Option<T>,
 }
 
 impl<T> PolicySettings<T>
@@ -28,7 +28,7 @@ where
             required_subscription_fields: required_fields,
             optional_subscription_fields: optional_fields,
             policies: vec![],
-            policy_attributes: None,
+            template_data: None,
         }
     }
 
@@ -37,8 +37,8 @@ where
         self
     }
 
-    pub fn with_attributes(mut self, policy_attributes: T) -> Self {
-        self.policy_attributes = Some(policy_attributes);
+    pub fn with_template_data(mut self, data: T) -> Self {
+        self.template_data = Some(data);
         self
     }
 }
