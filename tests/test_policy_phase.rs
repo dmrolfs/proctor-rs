@@ -244,7 +244,7 @@ fn make_test_policy<T>(
     settings: &PolicySettings<PolicyData>,
 ) -> impl Policy<T, TestPolicyPhaseContext, (T, TestPolicyPhaseContext), TemplateData = PolicyData>
 where
-    T: AppData + ToPolar + Clone,
+    T: AppData + ToPolar + Serialize + DeserializeOwned,
 {
     let data = settings.template_data.clone();
     TestPolicyA::new(settings, data)
@@ -252,7 +252,7 @@ where
 
 const POLICY_A_TEMPLATE_NAME: &'static str = "policy_a";
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct PolicyData {
     pub location_code: u32,
 }

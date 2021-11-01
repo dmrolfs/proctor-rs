@@ -18,7 +18,7 @@ pub mod telemetry;
 pub mod timestamp;
 
 pub use policy_filter::*;
-pub use records_per_second::*;
+pub use records_per_second::RecordsPerSecond;
 pub use signal::*;
 pub use telemetry::{FromTelemetry, Telemetry, TelemetryValue, ToTelemetry};
 pub use timestamp::*;

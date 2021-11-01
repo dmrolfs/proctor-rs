@@ -95,3 +95,91 @@ impl TryInto<String> for &PolicySource {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use claim::assert_ok;
+    use pretty_assertions::assert_eq;
+    use serde_test::{assert_tokens, Token};
+    use std::path::PathBuf;
+
+    // assert_impl_all!(PolicyFilterCmd<C>: Sync, Send);
+    // assert_impl_all!(PolicyFilterDetail: Sync, Send);
+    // assert_impl_all!(PolicyFilterEvent: Sync, Send);
+
+    #[test]
+    fn test_serde_policy_source() {
+        let ps = assert_ok!(PolicySource::from_string("template_name", "foo"));
+        assert_tokens(
+            &ps,
+            &vec![
+                Token::Struct { name: "PolicySource", len: 2 },
+                Token::Str("source"),
+                Token::Str("string"),
+                Token::Str("policy"),
+                Token::Struct { name: "string", len: 2 },
+                Token::Str("name"),
+                Token::Str("template_name"),
+                Token::Str("policy"),
+                Token::Str("foo"),
+                Token::StructEnd,
+                Token::StructEnd,
+            ],
+        );
+
+        let ps = assert_ok!(PolicySource::from_string(
+            "template_name",
+            r##"
+            |foobar
+            |zed
+            "##
+        ));
+        assert_tokens(
+            &ps,
+            &vec![
+                Token::Struct { name: "PolicySource", len: 2 },
+                Token::Str("source"),
+                Token::Str("string"),
+                Token::Str("policy"),
+                Token::Struct { name: "string", len: 2 },
+                Token::Str("name"),
+                Token::Str("template_name"),
+                Token::Str("policy"),
+                Token::Str(
+                    r##"foobar
+zed"##,
+                ),
+                Token::StructEnd,
+                Token::StructEnd,
+            ],
+        );
+
+        let ps = assert_ok!(PolicySource::from_file(PathBuf::from("./resources/policy.polar")));
+        assert_tokens(
+            &ps,
+            &vec![
+                Token::Struct { name: "PolicySource", len: 2 },
+                Token::Str("source"),
+                Token::Str("file"),
+                Token::Str("policy"),
+                Token::Str("./resources/policy.polar"),
+                Token::StructEnd,
+            ],
+        );
+    }
+
+    #[test]
+    fn test_serde_ron_policy_source() {
+        let ps = vec![
+            assert_ok!(PolicySource::from_string("template", "foobar")),
+            assert_ok!(PolicySource::from_file(PathBuf::from("./resources/policy.polar"))),
+        ];
+
+        let rep = assert_ok!(ron::to_string(&ps));
+        assert_eq!(
+            rep,
+            r#"[(source:"string",policy:(name:"template",policy:"foobar")),(source:"file",policy:"./resources/policy.polar")]"#
+        );
+    }
+}

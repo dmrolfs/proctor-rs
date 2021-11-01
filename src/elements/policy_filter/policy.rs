@@ -71,20 +71,21 @@ pub trait QueryPolicy: Debug + Send + Sync {
                     let policy_template: String = s.try_into()?;
                     registry.register_template_string(s.name().as_ref(), policy_template)?;
                 }
+                tracing::debug!(?registry, "policy templates registered with handlerbars registry");
                 let policy = registry.render(template_name, data)?;
-                tracing::info!(%policy, ?template_data, "rendered {} policy from template and data.", template_name);
+                tracing::info!(%policy, "rendered {} policy from template and data.", template_name);
                 Ok(policy)
             })
             .unwrap_or_else(|| {
                 tracing::info!("no template data supplied -- assuming policy string is not a template.");
 
-                self
-                    .sources()
+                self.sources()
                     .iter()
                     .find(|s| s.name().as_ref() == template_name)
                     .map(|s| s.try_into())
                     .unwrap_or(Err(PolicyError::StringPolicyError(format!(
-                        "failed to find policy template: {}", template_name
+                        "failed to find policy template: {}",
+                        template_name
                     ))))
             })
     }
