@@ -41,6 +41,28 @@ pub enum PolicySource {
 assert_impl_all!(PolicySource: serde::ser::Serialize, Sync, Send);
 
 impl PolicySource {
+    /// Creates a PolicySource from a complete polar string. Multi-line strings must begin with a
+    /// '|' margin character in order to facilitate trimming with pleasant alignment. Single-lined
+    /// strings do not need to begin with the margin character.
+    pub fn from_complete_string<S0, S1>(name: S0, polar: S1) -> Result<Self, PolicyError>
+    where
+        S0: Into<String>,
+        S1: AsRef<str>,
+    {
+        Self::from_string(name, false, polar)
+    }
+
+    /// Creates a PolicySource from a polar string template. Multi-line strings must begin with a
+    /// '|' margin character in order to facilitate trimming with pleasant alignment. Single-lined
+    /// strings do not need to begin with the margin character.
+    pub fn from_template_string<S0, S1>(name: S0, polar: S1) -> Result<Self, PolicyError>
+    where
+        S0: Into<String>,
+        S1: AsRef<str>,
+    {
+        Self::from_string(name, true, polar)
+    }
+
     /// Creates a PolicySource from a string. Multi-line strings must begin with a '|' margin
     /// character in order to facilitate trimming with pleasant alignment. Single-lined strings
     /// do not need to begin with the margin character.
@@ -62,16 +84,24 @@ impl PolicySource {
         polar_rep.map(|polar| Self::String { name: name.into(), polar, is_template })
     }
 
-    pub fn from_file(policy_path: impl AsRef<Path>, is_template: bool) -> Result<Self, PolicyError> {
-        if !policy_path.as_ref().extension().map(|ext| ext == "polar").unwrap_or(false) {
+    pub fn from_complete_file(polar_path: impl AsRef<Path>) -> Result<Self, PolicyError> {
+        Self::from_file(polar_path, false)
+    }
+
+    pub fn from_template_file(polar_path: impl AsRef<Path>) -> Result<Self, PolicyError> {
+        Self::from_file(polar_path, true)
+    }
+
+    pub fn from_file(polar_path: impl AsRef<Path>, is_template: bool) -> Result<Self, PolicyError> {
+        if !polar_path.as_ref().extension().map(|ext| ext == "polar").unwrap_or(false) {
             return Err(oso::OsoError::IncorrectFileType {
-                filename: policy_path.as_ref().to_string_lossy().into_owned(),
+                filename: polar_path.as_ref().to_string_lossy().into_owned(),
             })
             .map_err(|err| err.into());
         }
 
         Ok(Self::File {
-            path: policy_path.as_ref().to_path_buf(),
+            path: polar_path.as_ref().to_path_buf(),
             is_template,
         })
     }
@@ -131,7 +161,7 @@ mod tests {
 
     #[test]
     fn test_serde_policy_source() {
-        let ps = assert_ok!(PolicySource::from_string("template_name", false, "foo"));
+        let ps = assert_ok!(PolicySource::from_complete_string("template_name", "foo"));
         assert_tokens(
             &ps,
             &vec![
@@ -151,9 +181,8 @@ mod tests {
             ],
         );
 
-        let ps = assert_ok!(PolicySource::from_string(
+        let ps = assert_ok!(PolicySource::from_complete_string(
             "template_name",
-            false,
             r##"
             |foobar
             |zed
@@ -181,7 +210,9 @@ zed"##,
             ],
         );
 
-        let ps = assert_ok!(PolicySource::from_file(PathBuf::from("./resources/policy.polar"), true));
+        let ps = assert_ok!(PolicySource::from_template_file(PathBuf::from(
+            "./resources/policy.polar"
+        )));
         assert_tokens(
             &ps,
             &vec![

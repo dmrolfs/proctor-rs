@@ -579,9 +579,8 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
     let policy = make_test_policy(&PolicySettings {
         required_subscription_fields: HashSet::default(),
         optional_subscription_fields: HashSet::default(),
-        policies: vec![PolicySource::from_string(
+        policies: vec![PolicySource::from_template_string(
             POLICY_A_TEMPLATE_NAME,
-            true,
             r##"eligible(_item, environment) if environment.location_code == {{location_code}};"##,
         )?],
         template_data: Some(PolicyData { location_code: 33 }),
@@ -650,9 +649,8 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     let policy = make_test_policy(&PolicySettings {
         required_subscription_fields: HashSet::default(),
         optional_subscription_fields: HashSet::default(),
-        policies: vec![PolicySource::from_string(
+        policies: vec![PolicySource::from_complete_string(
             TestPolicyA::<MeasurementData>::base_template_name(),
-            false,
             r##"eligible(_, context) if context.cluster_status.is_deploying == false;"##,
         )?],
         template_data: None,
@@ -842,9 +840,8 @@ impl TestPolicyB {
         S1: Into<String>,
     {
         let mut registry = PolicyRegistry::new();
-        let source = assert_ok!(PolicySource::from_string(
+        let source = assert_ok!(PolicySource::from_template_string(
             TestPolicyB::base_template_name(),
-            true,
             policy
         ));
         let template_name = source.name();
@@ -1242,9 +1239,8 @@ async fn test_eligibility_replace_policy() -> anyhow::Result<()> {
 
     tracing::warn!("replace policy and re-send");
     let cmd_rx = elements::PolicyFilterCmd::replace_policies(
-        Some(elements::PolicySource::from_string(
+        Some(elements::PolicySource::from_template_string(
             TestPolicyB::base_template_name(),
-            true,
             policy_2.to_string(),
         )?),
         None,
