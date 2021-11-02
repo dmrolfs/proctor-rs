@@ -71,9 +71,9 @@ pub trait QueryPolicy: Debug + Send + Sync {
                     let policy_template: String = s.try_into()?;
                     registry.register_template_string(s.name().as_ref(), policy_template)?;
                 }
-                tracing::debug!(?registry, "policy templates registered with handlerbars registry");
+                tracing::debug!(?registry, "policy templates registered with handlebars registry");
                 let policy = registry.render(template_name, data)?;
-                tracing::info!(%policy, "rendered {} policy from template and data.", template_name);
+                tracing::info!(rendered_policy=%policy, "rendered {} policy from template and data.", template_name);
                 Ok(policy)
             })
             .unwrap_or_else(|| {
