@@ -90,12 +90,10 @@ pub trait QueryPolicy: Debug + Send + Sync {
 }
 
 #[tracing::instrument(level = "info")]
-fn render_template_policy<T>(templates: Vec<&PolicySource>, name: &str, data: Option<&T>) -> Result<String, PolicyError>
+pub fn render_template_policy<T>(templates: Vec<&PolicySource>, name: &str, data: Option<&T>) -> Result<String, PolicyError>
 where
     T: Serialize + Debug,
 {
-    // template_data
-    //     .map(|data| {
     tracing::info!("rendering policy string as template with data.");
 
     // I tried to facilitate registry caching in policy, but handlebars' lifetime parameter
@@ -111,19 +109,6 @@ where
     let policy = registry.render(name, &data)?;
     tracing::info!(rendered_policy=%policy, "rendered {} policy from template and data.", name);
     Ok(policy)
-    // })
-    // .unwrap_or_else(|| {
-    //     tracing::info!("no template data supplied -- assuming policy string is not a template.");
-    //
-    //     self.sources()
-    //         .iter()
-    //         .find(|s| s.name().as_ref() == template_name)
-    //         .map(|s| s.try_into())
-    //         .unwrap_or(Err(PolicyError::StringPolicyError(format!(
-    //             "failed to find policy template: {}",
-    //             template_name
-    //         ))))
-    // })
 }
 
 #[tracing::instrument(level = "info", skip())]
