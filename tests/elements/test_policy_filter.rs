@@ -117,12 +117,19 @@ impl TestPolicy {
     pub fn with_query(policy: impl AsRef<str>, template_data: PolicyTemplateData, query: impl Into<String>) -> Self {
         let polar = polar_core::polar::Polar::new();
         let mut registry = PolicyRegistry::new();
-        let source = assert_ok!(PolicySource::from_string(TestPolicy::base_template_name(), policy));
+        let source = assert_ok!(PolicySource::from_string(
+            TestPolicy::base_template_name(),
+            true,
+            policy
+        ));
         let template_name = source.name();
+        tracing::info!(%template_name, ?source, ?template_data, "creating test policy");
         let policy_template: String = assert_ok!((&source).try_into());
+        tracing::info!(%policy_template, "made template from source");
         assert_ok!(registry.register_template_string(template_name.as_ref(), policy_template));
         assert!(registry.has_template(template_name.as_ref()));
         let rendered_policy = assert_ok!(registry.render(template_name.as_ref(), &template_data));
+        tracing::info!(%rendered_policy, "rendered policy");
         assert_ok!(polar.load_str(&rendered_policy));
         Self {
             sources: vec![source],
@@ -228,7 +235,9 @@ impl TestFlow {
         let tx_env_source_api = env_source.tx_api();
 
         let policy = TestPolicy::with_query(policy, data, query);
+        tracing::info!(?policy, "created policy");
         let policy_filter = elements::PolicyFilter::new("eligibility", policy)?;
+        tracing::info!(?policy_filter, "created policy filter");
         let tx_policy_api = policy_filter.tx_api();
         let rx_policy_monitor = policy_filter.rx_monitor();
 
@@ -800,6 +809,7 @@ async fn test_replace_policy() -> anyhow::Result<()> {
     let cmd_rx = elements::PolicyFilterCmd::replace_policies(
         Some(elements::PolicySource::from_string(
             TestPolicy::base_template_name(),
+            true,
             policy_2.to_string(),
         )?),
         None,
@@ -879,7 +889,7 @@ async fn test_append_policy() -> anyhow::Result<()> {
 
     tracing::info!("add to policy and re-send");
     let cmd_rx = elements::PolicyFilterCmd::append_policy(
-        elements::PolicySource::from_string(TestPolicy::base_template_name(), policy_2.to_string())?,
+        elements::PolicySource::from_string(TestPolicy::base_template_name(), true, policy_2.to_string())?,
         None,
     );
     flow.tell_policy(cmd_rx).await?;
@@ -963,7 +973,7 @@ async fn test_reset_policy() -> anyhow::Result<()> {
 
     tracing::info!("add to policy and resend");
     let cmd_rx = elements::PolicyFilterCmd::append_policy(
-        elements::PolicySource::from_string(TestPolicy::base_template_name(), policy_2.to_string())?,
+        elements::PolicySource::from_string(TestPolicy::base_template_name(), true, policy_2.to_string())?,
         None,
     );
     flow.tell_policy(cmd_rx).await?;

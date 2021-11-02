@@ -529,8 +529,8 @@ mod tests {
 
     impl TestPolicy {
         pub fn new<S: AsRef<str>>(policy: S) -> Self {
-            let policy =
-                PolicySource::from_string(Self::base_template_name(), policy).expect("failed to make test policy");
+            let policy = PolicySource::from_string(Self::base_template_name(), false, policy)
+                .expect("failed to make test policy");
 
             Self(vec![policy])
         }
