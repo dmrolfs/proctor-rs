@@ -89,10 +89,11 @@ pub trait QueryPolicy: Debug + Send + Sync {
     fn query_policy(&self, engine: &oso::Oso, args: Self::Args) -> Result<QueryResult, PolicyError>;
 }
 
-#[tracing::instrument(level = "info")]
-pub fn render_template_policy<T>(templates: Vec<&PolicySource>, name: &str, data: Option<&T>) -> Result<String, PolicyError>
+#[tracing::instrument(level = "info", skip(templates))]
+pub fn render_template_policy<'a, T, D>(templates: T, name: &str, data: Option<&D>) -> Result<String, PolicyError>
 where
-    T: Serialize + Debug,
+    T: IntoIterator<Item = &'a PolicySource>,
+    D: Serialize + Debug,
 {
     tracing::info!("rendering policy string as template with data.");
 
