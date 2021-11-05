@@ -32,7 +32,7 @@
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
-///     let subscriber = get_subscriber("sandbox", "trace");
+///     let subscriber = get_subscriber("sandbox", "trace", std::io::stdout);
 ///     init_subscriber(subscriber);
 ///
 ///     let main_span = tracing::info_span!("main");

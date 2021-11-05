@@ -35,7 +35,7 @@ pub enum MergeMsg {
 ///
 /// #[tokio::main]
 /// async fn main() {
-///     let subscriber = get_subscriber("merge_n doc test", "trace");
+///     let subscriber = get_subscriber("merge_n doc test", "trace", std::io::stdout);
 ///     init_subscriber(subscriber);
 ///
 ///     let main_span = tracing::info_span!("main");

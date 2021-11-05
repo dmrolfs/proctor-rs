@@ -21,7 +21,7 @@ use crate::{AppData, ProctorResult, SharedString};
 ///
 /// #[tokio::main(flavor = "multi_thread", worker_threads = 16)]
 /// async fn main() -> anyhow::Result<()> {
-/// let subscriber = get_subscriber("sandbox", "trace");
+/// let subscriber = get_subscriber("sandbox", "trace", std::io::stdout);
 ///     init_subscriber(subscriber);
 ///
 ///     let main_span = tracing::info_span!("main");

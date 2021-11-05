@@ -22,7 +22,7 @@ use crate::{AppData, ProctorResult, SharedString};
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
-///     let subscriber = get_subscriber("proctor", "trace");
+///     let subscriber = get_subscriber("proctor", "trace", std::io::stdout);
 ///     init_subscriber(subscriber);
 ///
 ///     let main_span = tracing::info_span!("main");
