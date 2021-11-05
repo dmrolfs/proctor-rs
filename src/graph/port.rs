@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::SharedString;
 use async_trait::async_trait;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use prometheus::{IntCounterVec, Opts};
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
@@ -11,24 +11,27 @@ use tokio::sync::Mutex;
 use crate::error::PortError;
 use crate::AppData;
 
-lazy_static! {
-    pub static ref STAGE_INGRESS_COUNTS: IntCounterVec = IntCounterVec::new(
+pub static STAGE_INGRESS_COUNTS: Lazy<IntCounterVec> = Lazy::new(|| {
+    IntCounterVec::new(
         Opts::new(
             "proctor_stage_ingress_counts",
-            "Number of items entering a stage via an Inlet"
+            "Number of items entering a stage via an Inlet",
         ),
-        &["stage", "port"]
+        &["stage", "port"],
     )
-    .expect("failed creating proctor_stage_ingress_counts metric");
-    pub static ref STAGE_EGRESS_COUNTS: IntCounterVec = IntCounterVec::new(
+    .expect("failed creating proctor_stage_ingress_counts metric")
+});
+
+pub static STAGE_EGRESS_COUNTS: Lazy<IntCounterVec> = Lazy::new(|| {
+    IntCounterVec::new(
         Opts::new(
             "proctor_stage_egress_counts",
-            "Number of items exiting a stage via an Outlet"
+            "Number of items exiting a stage via an Outlet",
         ),
-        &["stage", "port"]
+        &["stage", "port"],
     )
-    .expect("failed creating proctor_stage_ingress_counts metric");
-}
+    .expect("failed creating proctor_stage_ingress_counts metric")
+});
 
 #[inline]
 fn track_ingress(stage: &str, port_name: &str) {

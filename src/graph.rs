@@ -3,6 +3,7 @@ mod port;
 mod shape;
 pub mod stage;
 
+use once_cell::sync::Lazy;
 use std::collections::VecDeque;
 use std::fmt;
 
@@ -16,19 +17,18 @@ pub use self::shape::*;
 use self::stage::Stage;
 use crate::error::{GraphError, MetricLabel, ProctorError};
 use crate::ProctorResult;
-use lazy_static::lazy_static;
 use prometheus::{IntCounterVec, Opts};
 
-lazy_static! {
-    pub static ref GRAPH_ERRORS: IntCounterVec = IntCounterVec::new(
+pub static GRAPH_ERRORS: Lazy<IntCounterVec> = Lazy::new(|| {
+    IntCounterVec::new(
         Opts::new(
             "proctor_graph_errors",
-            "Number of recoverable errors occurring in graph processing"
+            "Number of recoverable errors occurring in graph processing",
         ),
-        &["stage", "error_type"]
+        &["stage", "error_type"],
     )
-    .expect("failed creating proctor_graph_errors metric");
-}
+    .expect("failed creating proctor_graph_errors metric")
+});
 
 #[inline]
 pub fn track_errors(stage: &str, error: &ProctorError) {

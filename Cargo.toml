@@ -1,6 +1,6 @@
 [package]
 name = "proctor"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Damon Rolfs <drolfs@gmail.com>"]
 edition = "2021"
 
@@ -38,10 +38,10 @@ flexbuffers = "*"
 futures = "*"
 futures-util = "*"
 handlebars = "*"
-lazy_static = "*"
 maplit = "*"
 num_cpus = "*"
 num-traits = "*"
+once_cell = "*"
 oso = "*"
 polar-core = "*"
 pretty-snowflake = { git = "https://github.com/dmrolfs/pretty-snowflake-rs" }

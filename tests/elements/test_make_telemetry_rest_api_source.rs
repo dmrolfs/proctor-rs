@@ -42,7 +42,7 @@ impl Default for Data {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_make_telemetry_rest_api_source() -> Result<()> {
-    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
+    once_cell::sync::Lazy::force(&proctor::tracing::TEST_TRACING);
     // fixtures::init_tracing("test_make_telemetry_rest_api_source");
     let main_span = tracing::info_span!("main");
     let _main_span_guard = main_span.enter();

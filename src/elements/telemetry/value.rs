@@ -1014,6 +1014,7 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
 #[cfg(test)]
 mod tests {
     use fmt::Debug;
+    use once_cell::sync::Lazy;
     use pretty_assertions::assert_eq;
     use serde::{Deserialize, Serialize};
     use serde_test::{assert_tokens, Token};
@@ -1027,7 +1028,7 @@ mod tests {
 
     #[test]
     fn test_telemetry_value_integer_serde() {
-        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        Lazy::force(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_telemetry_value_integer_serde");
         let _main_span_guard = main_span.enter();
 

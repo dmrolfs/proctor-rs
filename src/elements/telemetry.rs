@@ -208,10 +208,12 @@ impl IntoIterator for Telemetry {
 //
 #[cfg(test)]
 mod tests {
+    use crate::elements::TelemetryValue;
     use ::serde::{Deserialize, Serialize};
     use chrono::{DateTime, Utc};
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
+    use std::convert::TryFrom;
 
     use super::*;
 
@@ -232,7 +234,7 @@ mod tests {
 
     #[test]
     fn test_basic_serde() {
-        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        once_cell::sync::Lazy::force(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_telemetry_basic_serde");
         let _main_span_guard = main_span.enter();
 
@@ -257,7 +259,7 @@ mod tests {
 
     #[test]
     fn test_simple_struct() {
-        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        once_cell::sync::Lazy::force(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_simple_struct");
         let _main_span_guard = main_span.enter();
 
@@ -291,7 +293,7 @@ mod tests {
 
     #[test]
     fn test_telemetry_map_struct() {
-        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        once_cell::sync::Lazy::force(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_telemetry_map_struct");
         let _main_span_guard = main_span.enter();
 
@@ -364,7 +366,7 @@ mod tests {
 
     #[test]
     fn test_telemetry_simple_enum() {
-        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        once_cell::sync::Lazy::force(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_telemetry_enum");
         let _main_span_guard = main_span.enter();
 
@@ -419,7 +421,7 @@ mod tests {
 
     #[test]
     fn test_telemetry_enum() {
-        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        once_cell::sync::Lazy::force(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_telemetry_enum");
         let _main_span_guard = main_span.enter();
 
@@ -479,13 +481,9 @@ mod tests {
         // );
     }
 
-    use std::convert::TryFrom;
-
-    use crate::elements::TelemetryValue;
-
     #[test]
     fn test_telemetry_data_try_into_deserializer() -> anyhow::Result<()> {
-        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        once_cell::sync::Lazy::force(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_telemetry_data_try_into_deserializer");
         let _main_span_guard = main_span.enter();
 
@@ -517,7 +515,7 @@ mod tests {
 
     #[test]
     fn test_telemetry_retain() {
-        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        once_cell::sync::Lazy::force(&crate::tracing::TEST_TRACING);
         tracing::info!("start test_telemetry_retain...");
         let mut telemetry: Telemetry = (0..8).map(|x| (x.to_string(), TelemetryValue::Integer(x * 10))).collect();
         tracing::info!(?telemetry, "test_telemetry_retain telemetry");

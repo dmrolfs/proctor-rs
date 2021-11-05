@@ -12,7 +12,7 @@ use std::fmt::{self, Debug};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use futures::future::FutureExt;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use tokio::sync::mpsc;
 
 use crate::elements::{Telemetry, Timestamp};
@@ -22,18 +22,21 @@ use crate::graph::{stage, Inlet, OutletsShape, Port, SinkShape, UniformFanOutSha
 use crate::{IdGenerator, ProctorResult, SharedString};
 use prometheus::{IntCounterVec, IntGauge, Opts};
 
-lazy_static! {
-    pub(crate) static ref SUBSCRIPTIONS_GAUGE: IntGauge = IntGauge::new(
+pub(crate) static SUBSCRIPTIONS_GAUGE: Lazy<IntGauge> = Lazy::new(|| {
+    IntGauge::new(
         "clearinghouse_subscriptions",
-        "Number of active data subscriptions to the telemetry clearinghouse."
+        "Number of active data subscriptions to the telemetry clearinghouse.",
     )
-    .expect("failed creating clearinghouse_subscriptions metric");
-    pub(crate) static ref PUBLICATIONS: IntCounterVec = IntCounterVec::new(
+    .expect("failed creating clearinghouse_subscriptions metric")
+});
+
+pub(crate) static PUBLICATIONS: Lazy<IntCounterVec> = Lazy::new(|| {
+    IntCounterVec::new(
         Opts::new("clearinghouse_publications", "Count of subscription publications"),
-        &["subscription"]
+        &["subscription"],
     )
-    .expect("failed creating clearninghouse_publications metric");
-}
+    .expect("failed creating clearninghouse_publications metric")
+});
 
 #[inline]
 fn track_subscriptions(count: usize) {
@@ -434,7 +437,6 @@ mod tests {
     use std::time::Duration;
 
     use claim::*;
-    use lazy_static::lazy_static;
     use pretty_assertions::assert_eq;
     use tokio::sync::oneshot;
     use tokio_test::block_on;
@@ -450,15 +452,16 @@ mod tests {
     use std::convert::TryInto;
     use std::sync::Arc;
 
-    lazy_static! {
-        static ref ID_GENERATOR: IdGenerator = IdGenerator::single_node(IdPrettifier::<AlphabetCodec>::default());
-        static ref CAT_COUNTS: IntCounterVec =
-            IntCounterVec::new(Opts::new("cat_counts", "How many cats were found."), &["subscription"])
-                .expect("failed to create cat_counts metric");
-        static ref CURRENT_POS: IntGaugeVec =
-            IntGaugeVec::new(Opts::new("current_pos", "current position"), &["subscription"])
-                .expect("failed to create current_pos metric");
-    }
+    static ID_GENERATOR: Lazy<IdGenerator> =
+        Lazy::new(|| IdGenerator::single_node(IdPrettifier::<AlphabetCodec>::default()));
+    static CAT_COUNTS: Lazy<IntCounterVec> = Lazy::new(|| {
+        IntCounterVec::new(Opts::new("cat_counts", "How many cats were found."), &["subscription"])
+            .expect("failed to create cat_counts metric")
+    });
+    static CURRENT_POS: Lazy<IntGaugeVec> = Lazy::new(|| {
+        IntGaugeVec::new(Opts::new("current_pos", "current position"), &["subscription"])
+            .expect("failed to create current_pos metric")
+    });
 
     fn setup_metrics(name: impl Into<String>) -> Registry {
         let registry = assert_ok!(Registry::new_custom(Some(name.into()), None));
@@ -467,8 +470,8 @@ mod tests {
         registry
     }
 
-    lazy_static! {
-        static ref SUBSCRIPTIONS: Vec<TelemetrySubscription> = vec![
+    static SUBSCRIPTIONS: Lazy<Vec<TelemetrySubscription>> = Lazy::new(|| {
+        vec![
             TelemetrySubscription::Explicit {
                 name: "none".into(),
                 required_fields: HashSet::default(),
@@ -514,14 +517,20 @@ mod tests {
                 outlet_to_subscription: Outlet::new("all_outlet", PORT_DATA),
                 update_metrics: None,
             },
-        ];
-        static ref DB_ROWS: Vec<Telemetry> = vec![
+        ]
+    });
+
+    static DB_ROWS: Lazy<Vec<Telemetry>> = Lazy::new(|| {
+        vec![
             maplit::btreemap! {"pos".to_string() => 1.into(), "cat".to_string() => "Stella".into(), "extra".to_string() => "Ripley".into(),}.into_iter().collect(),
             maplit::btreemap! {"value".to_string() => 3.14159.into(), "cat".to_string() => "Otis".into(), "extra".to_string() => "Ripley".into(),}.into_iter().collect(),
             maplit::btreemap! {"pos".to_string() => 3.into(), "cat".to_string() => "Neo".into(), "extra".to_string() => "Ripley".into(),}.into_iter().collect(),
             maplit::btreemap! {"pos".to_string() => 4.into(), "value".to_string() => 2.71828.into(), "cat".to_string() => "Apollo".into(), "extra".to_string() => "Ripley".into(),}.into_iter().collect(),
-        ];
-        static ref EXPECTED: HashMap<String, Vec<Option<Telemetry>>> = maplit::hashmap! {
+        ]
+    });
+
+    static EXPECTED: Lazy<HashMap<String, Vec<Option<Telemetry>>>> = Lazy::new(|| {
+        maplit::hashmap! {
             SUBSCRIPTIONS[0].name().to_string() => vec![
                 None,
                 None,
@@ -540,12 +549,12 @@ mod tests {
                 None,
                 Some(maplit::btreemap! {"pos".to_string() => 4.into(), "value".to_string() => 2.71828.into(), "cat".to_string() => "Apollo".into(),}.into_iter().collect()),
             ],
-        };
-    }
+        }
+    });
 
     #[test]
     fn test_create_with_subscriptions() -> anyhow::Result<()> {
-        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        Lazy::force(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_create_with_subscriptions");
         let _main_span_guard = main_span.enter();
 
@@ -576,7 +585,7 @@ mod tests {
 
     #[test]
     fn test_api_add_subscriptions() -> anyhow::Result<()> {
-        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        Lazy::force(&crate::tracing::TEST_TRACING);
         const SPAN_NAME: &'static str = "test_api_add_subscriptions";
         let main_span = tracing::info_span!(SPAN_NAME);
         let _main_span_guard = main_span.enter();
@@ -654,7 +663,7 @@ mod tests {
 
     #[test]
     fn test_api_remove_subscriptions() -> anyhow::Result<()> {
-        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        Lazy::force(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_api_remove_subscriptions");
         let _main_span_guard = main_span.enter();
 
@@ -709,7 +718,7 @@ mod tests {
 
     #[test]
     fn test_find_interested_subscriptions() {
-        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        Lazy::force(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_find_interested_subscriptions");
         let _main_span_guard = main_span.enter();
 
@@ -779,7 +788,7 @@ mod tests {
 
     #[test]
     fn test_fulfill_subscription() {
-        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        Lazy::force(&crate::tracing::TEST_TRACING);
         let main_span = tracing::info_span!("test_fulfill_subscription");
         let _main_span_guard = main_span.enter();
 
@@ -817,7 +826,7 @@ mod tests {
 
     #[test]
     fn test_push_to_subscribers() {
-        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        Lazy::force(&crate::tracing::TEST_TRACING);
         const SPAN_NAME: &'static str = "test_push_to_subscribers";
         let main_span = tracing::info_span!(SPAN_NAME);
         let _main_span_guard = main_span.enter();

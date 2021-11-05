@@ -48,9 +48,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.44"
+version = "1.0.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61604a8f862e1d5c3229fdd78f8b02c68dcf73a4c4b05fd636d12240aaa242c1"
+checksum = "ee10e43ae4a853c0a3591d4e2ada1719e553be18199d9da9d4a83f5927c2f5c7"
 
 [[package]]
 name = "approx"
@@ -1044,9 +1044,9 @@ dependencies = [
 
 [[package]]
 name = "inferno"
-version = "0.10.7"
+version = "0.10.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfa5bd9a10b38bf5f3c670f9d75c194adbecd2b1573f737668ab8599f41edc87"
+checksum = "d5e0d042b82d2153d831ad6f4b865ddb06d9941a086eb9974f8f58cf0368b6e3"
 dependencies = [
  "ahash",
  "atty",
@@ -1797,11 +1797,11 @@ checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
 
 [[package]]
 name = "pretty-snowflake"
-version = "1.3.4"
-source = "git+https://github.com/dmrolfs/pretty-snowflake-rs#e7f7fc1c5f3abe88088a3e16fdbe24bb04240d84"
+version = "1.3.5"
+source = "git+https://github.com/dmrolfs/pretty-snowflake-rs#7c9ab923b8784f21db08c41a2ec2d615d94343e6"
 dependencies = [
  "itertools",
- "lazy_static",
+ "once_cell",
  "rs-snowflake",
  "serde 1.0.130",
  "tailcall",
@@ -1901,7 +1901,7 @@ dependencies = [
 
 [[package]]
 name = "proctor"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "approx",
@@ -1922,10 +1922,10 @@ dependencies = [
  "futures-util",
  "handlebars",
  "itertools",
- "lazy_static",
  "maplit",
  "num-traits 0.2.14",
  "num_cpus",
+ "once_cell",
  "oso",
  "polar-core",
  "pprof",
@@ -2407,9 +2407,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.68"
+version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f690853975602e1bfe1ccbf50504d67174e3bcf340f23b5ea9992e0587a52d8"
+checksum = "e466864e431129c7e0d3476b92f20458e5879919a0596c6472738d9fa2d342f8"
 dependencies = [
  "itoa",
  "ryu",

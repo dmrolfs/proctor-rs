@@ -9,7 +9,7 @@ use ::serde::{Deserialize, Serialize};
 use ::serde_with::{serde_as, TimestampSeconds};
 use chrono::*;
 use claim::*;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use oso::{Oso, PolarClass, ToPolar};
 use pretty_assertions::{assert_eq, assert_ne};
 use pretty_snowflake::{AlphabetCodec, Id, IdPrettifier, PrettyIdGenerator, RealTimeGenerator};
@@ -133,13 +133,13 @@ impl TestClusterStatus {
     }
 }
 
-lazy_static! {
-    static ref DT_1: DateTime<Utc> = DateTime::parse_from_str("2021-05-05T17:11:07.246310806Z", "%+")
+static DT_1: Lazy<DateTime<Utc>> = Lazy::new(|| {
+    DateTime::parse_from_str("2021-05-05T17:11:07.246310806Z", "%+")
         .unwrap()
-        .with_timezone(&Utc);
-    static ref DT_1_STR: String = format!("{}", DT_1.format("%+"));
-    static ref DT_1_TS: i64 = DT_1.timestamp();
-}
+        .with_timezone(&Utc)
+});
+static DT_1_STR: Lazy<String> = Lazy::new(|| format!("{}", DT_1.format("%+")));
+static DT_1_TS: Lazy<i64> = Lazy::new(|| DT_1.timestamp());
 
 #[serde_as]
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -179,7 +179,7 @@ impl TestItem {
 #[test]
 #[ignore = "intermittent (false?) error wrt timestamp map order and key resolution"]
 fn test_context_serde() {
-    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
+    Lazy::force(&proctor::tracing::TEST_TRACING);
     let main_span = tracing::info_span!("test_context_serde");
     let _ = main_span.enter();
 
@@ -571,7 +571,7 @@ where
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
-    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
+    Lazy::force(&proctor::tracing::TEST_TRACING);
     let main_span = tracing::info_span!("test_eligibility_before_context_baseline");
     let _ = main_span.enter();
 
@@ -637,7 +637,7 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_eligibility_happy_context() -> anyhow::Result<()> {
-    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
+    Lazy::force(&proctor::tracing::TEST_TRACING);
     let main_span = tracing::info_span!("test_eligibility_happy_context");
     let _ = main_span.enter();
 
@@ -765,7 +765,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
 
 #[test]
 fn test_item_serde() {
-    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
+    Lazy::force(&proctor::tracing::TEST_TRACING);
     let main_span = tracing::info_span!("test_item_serde");
     let _ = main_span.enter();
 
@@ -925,7 +925,7 @@ impl QueryPolicy for TestPolicyB {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
-    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
+    Lazy::force(&proctor::tracing::TEST_TRACING);
     let main_span = tracing::info_span!("test_eligibility_w_pass_and_blocks");
     let _ = main_span.enter();
 
@@ -1051,7 +1051,7 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
 // #[tokio::test(flavor="multi_thread", worker_threads = 4)]
 #[tokio::test]
 async fn test_eligibility_w_custom_fields() -> anyhow::Result<()> {
-    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
+    Lazy::force(&proctor::tracing::TEST_TRACING);
     let main_span = tracing::info_span!("test_eligibility_w_custom_fields");
     let _ = main_span.enter();
 
@@ -1113,7 +1113,7 @@ async fn test_eligibility_w_custom_fields() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_eligibility_w_item_n_env() -> anyhow::Result<()> {
-    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
+    Lazy::force(&proctor::tracing::TEST_TRACING);
     let main_span = tracing::info_span!("test_eligibility_w_item_n_env");
     let _ = main_span.enter();
 
@@ -1178,7 +1178,7 @@ async fn test_eligibility_w_item_n_env() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_eligibility_replace_policy() -> anyhow::Result<()> {
-    lazy_static::initialize(&proctor::tracing::TEST_TRACING);
+    Lazy::force(&proctor::tracing::TEST_TRACING);
     let main_span = tracing::info_span!("test_eligibility_replace_policy");
     let _ = main_span.enter();
 

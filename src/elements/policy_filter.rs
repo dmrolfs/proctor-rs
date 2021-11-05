@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
+use once_cell::sync::Lazy;
 use oso::{Oso, ToPolar};
 use tokio::sync::Mutex;
 use tokio::sync::{broadcast, mpsc};
@@ -26,28 +27,30 @@ use crate::graph::stage::{self, Stage};
 use crate::graph::{Inlet, Outlet, Port, PORT_CONTEXT, PORT_DATA};
 use crate::graph::{SinkShape, SourceShape};
 use crate::{track_errors, AppData, ProctorContext, ProctorResult, SharedString};
-use lazy_static::lazy_static;
 use prometheus::{HistogramOpts, HistogramTimer, HistogramVec, IntCounterVec, Opts};
 use serde::Serialize;
 
-lazy_static! {
-    pub(crate) static ref POLICY_FILTER_EVAL_TIME: HistogramVec = HistogramVec::new(
+pub(crate) static POLICY_FILTER_EVAL_TIME: Lazy<HistogramVec> = Lazy::new(|| {
+    HistogramVec::new(
         HistogramOpts::new(
             "policy_filter_eval_time",
-            "Time spent in PolicyFilter policy evaluation in seconds"
+            "Time spent in PolicyFilter policy evaluation in seconds",
         ),
-        &["stage"]
+        &["stage"],
     )
-    .expect("failed creating policy_filter_eval_time metric");
-    pub(crate) static ref POLICY_FILTER_EVAL_COUNTS: IntCounterVec = IntCounterVec::new(
+    .expect("failed creating policy_filter_eval_time metric")
+});
+
+pub(crate) static POLICY_FILTER_EVAL_COUNTS: Lazy<IntCounterVec> = Lazy::new(|| {
+    IntCounterVec::new(
         Opts::new(
             "policy_filter_eval_counts",
-            "Number of items PolicyFilter has evaluated."
+            "Number of items PolicyFilter has evaluated.",
         ),
-        &["stage", "outcome",]
+        &["stage", "outcome"],
     )
-    .expect("failed creating policy_filter_eval_counts metric");
-}
+    .expect("failed creating policy_filter_eval_counts metric")
+});
 
 #[inline]
 fn track_policy_evals(stage: &str, outcome: PolicyResult) {
@@ -590,7 +593,7 @@ mod tests {
 
     #[test]
     fn test_handle_item() -> anyhow::Result<()> {
-        lazy_static::initialize(&crate::tracing::TEST_TRACING);
+        Lazy::force(&crate::tracing::TEST_TRACING);
         let registry = assert_ok!(Registry::new_custom(Some("test_handle_item".to_string()), None));
         assert_ok!(registry.register(Box::new(POLICY_FILTER_EVAL_COUNTS.clone())));
         assert_ok!(registry.register(Box::new(POLICY_FILTER_EVAL_TIME.clone())));
