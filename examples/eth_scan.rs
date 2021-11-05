@@ -251,7 +251,7 @@ impl<'de> de::Deserialize<'de> for ExchangeRate {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let subscriber = get_subscriber("eth_scan", "trace");
+    let subscriber = get_subscriber("eth_scan", "trace", std::io::stdout);
     init_subscriber(subscriber);
 
     let main_span = tracing::info_span!("main");
