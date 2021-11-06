@@ -8,7 +8,7 @@ use std::fmt::Debug;
 #[serde(default)]
 pub struct PolicySettings<T>
 where
-    T: Serialize + DeserializeOwned,
+    T: Debug + Serialize + DeserializeOwned,
 {
     #[serde(skip_serializing_if = "HashSet::is_empty")]
     pub required_subscription_fields: HashSet<String>,
@@ -25,7 +25,7 @@ where
 
 impl<T> PolicySettings<T>
 where
-    T: Serialize + DeserializeOwned,
+    T: Debug + Serialize + DeserializeOwned,
 {
     pub fn new(required_fields: HashSet<String>, optional_fields: HashSet<String>) -> Self {
         Self {
