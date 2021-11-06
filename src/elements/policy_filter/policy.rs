@@ -49,6 +49,13 @@ pub trait QueryPolicy: Debug + Send + Sync {
     #[tracing::instrument(level = "info", skip(engine))]
     fn load_policy_engine(&mut self, engine: &mut oso::Oso) -> Result<(), PolicyError> {
         engine.clear_rules()?;
+        let source_paths = self.render_policy_sources()?;
+        engine.load_files(source_paths)?;
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "info")]
+    fn render_policy_sources(&self) -> Result<Vec<PolicySourcePath>, PolicyError> {
         let (templates, complete) = self.sources().iter().partition::<Vec<_>, _>(|s| s.is_template());
         tracing::info!(?complete, ?templates, "loading complete and template sources...");
         let mut source_paths = Vec::with_capacity(complete.len() + 1);
@@ -72,8 +79,7 @@ pub trait QueryPolicy: Debug + Send + Sync {
             tracing::debug!(template_name=%name, "loaded template policy.");
         }
 
-        engine.load_files(source_paths)?;
-        Ok(())
+        Ok(source_paths)
     }
 
     fn base_template_name() -> &'static str;
