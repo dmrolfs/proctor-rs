@@ -68,7 +68,11 @@ impl Timestamp {
 
 impl fmt::Display for Timestamp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!("{}_s", self.0))
+        if f.alternate() {
+            write!(f, "({},{})", self.0, self.1)
+        } else {
+            write!(f, "{}_s", self.0)
+        }
     }
 }
 

@@ -126,7 +126,7 @@ fn policy_source_path_for(name: &str, policy: Either<PathBuf, &str>) -> Result<P
             let tempdir = std::env::current_dir()?;
 
             let mut tmp = tempfile::Builder::new()
-                .prefix(format!("policy_{}", name).as_str())
+                .prefix(format!("policy_{}_", name).as_str())
                 .rand_bytes(4)
                 .suffix(".polar")
                 .tempfile_in(tempdir)?;
