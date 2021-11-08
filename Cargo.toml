@@ -48,6 +48,7 @@ pretty-snowflake = { git = "https://github.com/dmrolfs/pretty-snowflake-rs" }
 proctor_derive = { path = "proctor_derive" }
 prometheus = { version = "0.13.0", features = ["process"] }
 prometheus-static-metric = "0.5.1"
+regex = "1.5"
 reqwest = { version = "0.11.6", features = ["blocking", "json"] }
 reqwest-middleware = "0.1.2"
 reqwest-retry = "0.1.3"

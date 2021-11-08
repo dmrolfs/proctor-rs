@@ -1935,6 +1935,7 @@ dependencies = [
  "prometheus",
  "prometheus-static-metric",
  "rand",
+ "regex",
  "reqwest",
  "reqwest-middleware",
  "reqwest-retry",

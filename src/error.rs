@@ -176,7 +176,7 @@ pub enum CollectionError {
     DataNotFound(String),
 
     #[error("failed to parse decision from {0}")]
-    ParseError(String),
+    DecisionError(String),
 
     #[error("{0}")]
     TelemetryError(#[from] TelemetryError),
@@ -201,7 +201,7 @@ impl MetricLabel for CollectionError {
             Self::HttpMiddlewareError(_) => Left("http_middleware".into()),
             Self::ClosedSubscription(_) => Left("closed_subscription".into()),
             Self::DataNotFound(_) => Left("data_not_found".into()),
-            Self::ParseError(_) => Left("parse".into()),
+            Self::DecisionError(_) => Left("decision".into()),
             Self::TelemetryError(e) => Right(Box::new(e)),
             Self::PortError(e) => Right(Box::new(e)),
             Self::StageError(_) => Left("stage".into()),

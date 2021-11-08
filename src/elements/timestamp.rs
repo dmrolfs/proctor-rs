@@ -3,12 +3,15 @@ use crate::error::{TelemetryError, TypeExpectation};
 use approx::{AbsDiffEq, RelativeEq};
 use chrono::{DateTime, TimeZone, Utc};
 use num_traits::cast::FromPrimitive;
+use once_cell::sync::Lazy;
 use oso::PolarClass;
+use regex::Regex;
 use serde::de::Unexpected;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::{self, Debug};
+use std::str::FromStr;
 use std::time::Duration;
 
 #[derive(PolarClass, Debug, Copy, Clone, Default, PartialEq, PartialOrd, Serialize)]
@@ -79,6 +82,26 @@ impl fmt::Display for Timestamp {
 pub const FORMAT: &'static str = "%+";
 pub const SECS_KEY: &'static str = "secs";
 pub const NANOS_KEY: &'static str = "nanos";
+
+static TUPLE_FORM: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\((\d+),(\d+)\)$").expect("failed to create tuple timestamp regex"));
+
+impl FromStr for Timestamp {
+    type Err = TelemetryError;
+
+    fn from_str(ts_rep: &str) -> Result<Self, Self::Err> {
+        if let Some(cap) = TUPLE_FORM.captures(ts_rep) {
+            let secs = i64::from_str(&cap[1]).map_err(|err| TelemetryError::ValueParseError(err.into()))?;
+            let nanos = u32::from_str(&cap[2]).map_err(|err| TelemetryError::ValueParseError(err.into()))?;
+            return Ok(Self(secs, nanos));
+        }
+
+        let dt = DateTime::parse_from_str(ts_rep, FORMAT)
+            .map_err(|err| TelemetryError::ValueParseError(err.into()))?
+            .with_timezone(&Utc);
+        Ok(dt.into())
+    }
+}
 
 impl TryFrom<TelemetryValue> for Timestamp {
     type Error = TelemetryError;
@@ -474,15 +497,18 @@ impl<'de> de::Visitor<'de> for TimestampVisitor {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use pretty_assertions::assert_eq;
-//     use claim::*;
-//     use approx::assert_relative_eq;
-//
-//     #[test]
-//     fn test_timestamp_secs_FOO_BAR() -> anyhow::Result<()> {
-//         todo!()
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use claim::*;
+    use pretty_assertions::assert_eq;
+    //     use approx::assert_relative_eq;
+
+    #[test]
+    fn test_from_pair_string() {
+        let ts = Timestamp::now();
+        let ts_rep = format!("{:#}", ts);
+        let actual = assert_ok!(Timestamp::from_str(&ts_rep));
+        assert_eq!(actual, ts);
+    }
+}
