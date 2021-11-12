@@ -3,45 +3,46 @@ use crate::elements::Telemetry;
 use crate::error::{CollectionError, PortError};
 use crate::graph::stage::{self, SourceStage, Stage, WithApi};
 use crate::graph::{Connect, Graph, SinkShape, SourceShape, UniformFanInShape};
-use crate::phases::collection::TelemetrySubscription;
-use crate::{AppData, IdGenerator, SharedString};
+use crate::phases::collection::{CorrelationGenerator, TelemetrySubscription};
+use crate::{AppData, SharedString};
 use cast_trait_object::DynCastExt;
 use serde::de::DeserializeOwned;
 use std::collections::HashSet;
+use std::fmt::Debug;
 use std::marker::PhantomData;
+use pretty_snowflake::Labeling;
 
 #[derive(Debug)]
-pub struct CollectBuilder<Out> {
+pub struct CollectBuilder<Out, L: Labeling> {
     name: String,
     sources: Vec<Box<dyn SourceStage<Telemetry>>>,
     merge: stage::MergeN<Telemetry>,
-    pub clearinghouse: Clearinghouse,
-    out_marker: PhantomData<Out>,
+    pub clearinghouse: Clearinghouse<L>,
+    marker: PhantomData<Out>,
 }
 
-impl<Out> CollectBuilder<Out> {
+impl<Out, L> CollectBuilder<Out, L>
+where
+    L: Labeling + Debug,
+{
     #[tracing::instrument(level = "info", skip(name, sources))]
     pub fn new(
-        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>, correlation_generator: IdGenerator,
+        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
+        correlation_generator: CorrelationGenerator<L>
     ) -> Self {
         let name = name.into();
         let nr_sources = sources.len();
         let merge = stage::MergeN::new(format!("{}_source_merge_{}", name, nr_sources), nr_sources);
         let clearinghouse = Clearinghouse::new(format!("{}_clearinghouse", name), correlation_generator);
 
-        Self {
-            name,
-            sources,
-            merge,
-            clearinghouse,
-            out_marker: PhantomData,
-        }
+        Self { name, sources, merge, clearinghouse, marker: PhantomData }
     }
 }
 
-impl<Out> CollectBuilder<Out>
+impl<Out, L> CollectBuilder<Out, L>
 where
     Out: AppData + SubscriptionRequirements + DeserializeOwned,
+    L: Labeling + Debug + Send + Sync + 'static,
 {
     #[tracing::instrument(level = "info", skip(), fields(nr_sources = % self.sources.len()))]
     pub async fn build_for_out(self) -> Result<Collect<Out>, CollectionError> {
@@ -65,7 +66,10 @@ where
     }
 }
 
-impl CollectBuilder<Telemetry> {
+impl<L> CollectBuilder<Telemetry, L>
+where
+    L: Labeling + Debug + Send + Sync + 'static,
+{
     #[tracing::instrument(level="info", fields(nr_sources = %self.sources.len()))]
     pub async fn build_for_telemetry_out_subscription(
         mut self, out_subscription: TelemetrySubscription,
@@ -114,9 +118,10 @@ impl CollectBuilder<Telemetry> {
     }
 }
 
-impl<Out> CollectBuilder<Out>
+impl<Out, L> CollectBuilder<Out, L>
 where
     Out: AppData + DeserializeOwned,
+    L: Labeling + Debug + Send + Sync + 'static,
 {
     #[tracing::instrument(level="info", fields(nr_sources=%self.sources.len()))]
     pub async fn build_for_out_subscription(
@@ -167,7 +172,11 @@ where
     }
 }
 
-impl<Out: AppData> CollectBuilder<Out> {
+impl<Out, L> CollectBuilder<Out, L>
+where
+    Out: AppData,
+    L: Labeling + Debug + Send + Sync + 'static,
+{
     #[tracing::instrument(level = "info")]
     async fn finish(self, out_channel: SubscriptionChannel<Out>) -> Result<Collect<Out>, CollectionError> {
         out_channel.subscription_receiver.check_attachment().await?;

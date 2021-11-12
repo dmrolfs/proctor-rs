@@ -273,9 +273,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.0.71"
+version = "1.0.72"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79c2681d6594606957bbb8631c4b90a7fcaaa72cdb714743a437b156d6a7eedd"
+checksum = "22a9137b95ea06864e018375b72adfb7db6e6f68cfc8df5a04d00288050485ee"
 
 [[package]]
 name = "cfg-if"
@@ -656,9 +656,9 @@ checksum = "e88a8acf291dafb59c2d96e8f59828f3838bb1a70398823ade51a84de6a6deed"
 
 [[package]]
 name = "findshlibs"
-version = "0.10.1"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d691fdb3f817632d259d09220d4cf0991dbb2c9e59e044a02a59194bf6e14484"
+checksum = "40b9e59cd0f7e0806cca4be089683ecb6434e602038df21fe6bf6711b2f07f64"
 dependencies = [
  "cc",
  "lazy_static",
@@ -1797,17 +1797,24 @@ checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
 
 [[package]]
 name = "pretty-snowflake"
-version = "1.3.5"
-source = "git+https://github.com/dmrolfs/pretty-snowflake-rs#39d2dfdcabef12de62b65bcf5c82f5a2b4e66ccb"
+version = "1.3.7"
+source = "git+https://github.com/dmrolfs/pretty-snowflake-rs#7a57c71721d42772dfdfad3ec0b96d19cf30f4b2"
 dependencies = [
  "itertools",
  "once_cell",
+ "pretty-type-name",
  "rs-snowflake",
  "serde 1.0.130",
  "tailcall",
  "thiserror",
  "validator",
 ]
+
+[[package]]
+name = "pretty-type-name"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8815d101cfb4cb491154896bdab292a395a7ac9ab185a9941a2f5be0135900d"
 
 [[package]]
 name = "pretty_assertions"
@@ -2585,9 +2592,9 @@ checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
 name = "symbolic-common"
-version = "8.3.2"
+version = "8.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1c77c64c4a8138a8d26b6ab26b29fdbe4fae7f6537cf9bf30e51b282efa2361"
+checksum = "5f544125aace169c385db21fc22f38b77710138e90e3f57077c98344b38d5880"
 dependencies = [
  "debugid",
  "memmap",
@@ -2597,9 +2604,9 @@ dependencies = [
 
 [[package]]
 name = "symbolic-demangle"
-version = "8.3.2"
+version = "8.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "027d1ff6cc3cf63e523c60dfeaca5fb54c3ed15ecd9418f70a76854d966c79fb"
+checksum = "b2270b3f640a8954786db9e3ff47ed0d52fd079fb4823b77e9f2455f32dd8b45"
 dependencies = [
  "cpp_demangle",
  "rustc-demangle",
@@ -2759,9 +2766,9 @@ dependencies = [
 
 [[package]]
 name = "tinyvec"
-version = "1.5.0"
+version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f83b2a3d4d9091d0abd7eba4dc2710b1718583bd4d8992e2190720ea38f391f7"
+checksum = "2c1c1d5a42b6245520c249549ec267180beaffcc0615401ac8e31853d4b6d8d2"
 dependencies = [
  "tinyvec_macros",
 ]

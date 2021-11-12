@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use ::serde::{Deserialize, Serialize};
 use anyhow::Result;
+use pretty_snowflake::MakeLabeling;
 use proctor::elements::{self, Telemetry};
 use proctor::error::TelemetryError;
 use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
@@ -70,7 +71,11 @@ async fn main() -> Result<()> {
     let cvs_stage = cvs_source.take().unwrap().0;
 
     let pos_stats_fields = maplit::hashset! { POS_FIELD.to_string() };
-    let collect = Collect::single_node_builder("collect", vec![cvs_stage])
+    let collect = Collect::single_node_builder(
+        "collect",
+        vec![cvs_stage],
+        MakeLabeling::<Data>::default()
+    )
         .build_for_telemetry_out(pos_stats_fields.clone(), HashSet::<String>::default())
         .await?;
 

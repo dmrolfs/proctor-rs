@@ -19,12 +19,12 @@ pub mod tracing;
 pub use app_data::AppData;
 pub use elements::ProctorContext;
 pub use graph::track_errors;
-use pretty_snowflake::{AlphabetCodec, PrettyIdGenerator, RealTimeGenerator};
+use pretty_snowflake::PrettyRealtimeIdGenerator;
 use std::borrow::Cow;
 
 pub type ProctorResult<T> = Result<T, error::ProctorError>;
 
-pub type IdGenerator = PrettyIdGenerator<RealTimeGenerator, AlphabetCodec>;
+pub type ProctorIdGenerator<T> = PrettyRealtimeIdGenerator<T>;
 
 pub type Ack = ();
 

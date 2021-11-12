@@ -2,6 +2,7 @@ use std::fmt::{self, Debug};
 
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
+use pretty_snowflake::Labeling;
 use serde::de::DeserializeOwned;
 
 use crate::elements::{self, FromTelemetryShape, Telemetry};
@@ -24,8 +25,8 @@ pub struct SubscriptionChannel<T> {
 
 impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
     #[tracing::instrument(level = "info")]
-    pub async fn connect_subscription(
-        subscription: TelemetrySubscription, mut magnet: ClearinghouseSubscriptionMagnet<'_>,
+    pub async fn connect_subscription<L: Labeling + Debug>(
+        subscription: TelemetrySubscription, mut magnet: ClearinghouseSubscriptionMagnet<'_, L>,
     ) -> Result<SubscriptionChannel<T>, CollectionError> {
         let channel = Self::new(format!("{}_channel", subscription.name())).await?;
         magnet
@@ -37,9 +38,12 @@ impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
 
 impl SubscriptionChannel<Telemetry> {
     #[tracing::instrument(level = "info")]
-    pub async fn connect_telemetry_subscription(
-        subscription: TelemetrySubscription, mut magnet: ClearinghouseSubscriptionMagnet<'_>,
-    ) -> Result<SubscriptionChannel<Telemetry>, CollectionError> {
+    pub async fn connect_telemetry_subscription<L>(
+        subscription: TelemetrySubscription, mut magnet: ClearinghouseSubscriptionMagnet<'_, L>,
+    ) -> Result<SubscriptionChannel<Telemetry>, CollectionError>
+    where
+        L: Labeling + Debug,
+    {
         let channel = Self::telemetry(format!("{}_telemetry_channel", subscription.name())).await?;
         magnet
             .subscribe(subscription, channel.subscription_receiver.clone())

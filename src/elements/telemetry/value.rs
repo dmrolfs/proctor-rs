@@ -240,17 +240,19 @@ impl From<ResultSet> for TelemetryValue {
     }
 }
 
+pub const ID_LABEL: &'static str = "label";
 pub const ID_SNOWFLAKE: &'static str = "snowflake";
 pub const ID_PRETTY: &'static str = "pretty";
 
 impl From<Id> for TelemetryValue {
     fn from(that: Id) -> Self {
         let pretty = format!("{}", that);
-        let snowflake: i64 = that.into();
+        let snowflake: i64 = that.clone().into();
         TelemetryValue::Table(
             maplit::hashmap! {
-                "snowflake".to_string() => snowflake.into(),
-                "pretty".to_string() => pretty.into(),
+                ID_LABEL.to_string() => that.label.into(),
+                ID_SNOWFLAKE.to_string() => snowflake.into(),
+                ID_PRETTY.to_string() => pretty.into(),
             }
             .into(),
         )
@@ -453,14 +455,16 @@ impl TryFrom<TelemetryValue> for Id {
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         match telemetry {
             TelemetryValue::Seq(mut seq) if seq.len() == 2 => {
+                let label = seq.pop().map(String::try_from).transpose()?.unwrap();
                 let snowflake = seq.pop().map(i64::try_from).transpose()?.unwrap();
                 let pretty = seq.pop().map(String::try_from).transpose()?.unwrap();
-                Ok(Self::direct(snowflake, pretty))
+                Ok(Self::direct(label, snowflake, pretty))
             }
             TelemetryValue::Table(mut table) => {
+                let label = table.remove(ID_LABEL).map(String::try_from).transpose()?.unwrap();
                 let snowflake = table.remove(ID_SNOWFLAKE).map(i64::try_from).transpose()?.unwrap();
                 let pretty = table.remove(ID_PRETTY).map(String::try_from).transpose()?.unwrap();
-                Ok(Self::direct(snowflake, pretty))
+                Ok(Self::direct(label, snowflake, pretty))
             }
             value => Err(TelemetryError::TypeError {
                 expected: format!("a telemetry {}", TypeExpectation::Table),

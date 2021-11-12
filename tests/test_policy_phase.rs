@@ -12,7 +12,7 @@ use claim::*;
 use once_cell::sync::Lazy;
 use oso::{Oso, PolarClass, ToPolar};
 use pretty_assertions::{assert_eq, assert_ne};
-use pretty_snowflake::{AlphabetCodec, Id, IdPrettifier, PrettyIdGenerator, RealTimeGenerator};
+use pretty_snowflake::{AlphabetCodec, Id, IdPrettifier, MakeLabeling};
 use proctor::elements::telemetry::{TableValue, ToTelemetry};
 use proctor::elements::{
     self, telemetry, Policy, PolicyFilterEvent, PolicyOutcome, PolicyRegistry, PolicySettings, PolicySource,
@@ -26,7 +26,7 @@ use proctor::phases::collection::{
 };
 use proctor::phases::policy_phase::PolicyPhase;
 use proctor::{AppData, SharedString};
-use proctor::{IdGenerator, ProctorContext};
+use proctor::{ProctorContext, ProctorIdGenerator};
 use serde_test::{assert_tokens, Token};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -184,7 +184,11 @@ fn test_context_serde() {
     let _ = main_span.enter();
 
     let now = Timestamp::now();
-    let corr = PrettyIdGenerator::<RealTimeGenerator, AlphabetCodec>::single_node(IdPrettifier::default()).next_id();
+    let corr = ProctorIdGenerator::<TestPolicyPhaseContext>::single_node(
+        MakeLabeling::default(),
+        IdPrettifier::default()
+    )
+        .next_id();
 
     let context = TestPolicyPhaseContext {
         timestamp: now.clone(),
@@ -361,7 +365,7 @@ impl<T: AppData + ToPolar + Clone> QueryPolicy for TestPolicyA<T> {
 
 #[allow(dead_code)]
 struct TestFlow<T, C, D> {
-    pub id_generator: IdGenerator,
+    pub id_generator: ProctorIdGenerator<T>,
     pub graph_handle: JoinHandle<()>,
     pub tx_data_source_api: stage::ActorSourceApi<Telemetry>,
     pub tx_context_source_api: stage::ActorSourceApi<Telemetry>,
@@ -390,7 +394,7 @@ where
 
         let merge = stage::MergeN::new("source_merge", 2);
 
-        let id_generator = IdGenerator::single_node(IdPrettifier::<AlphabetCodec>::default());
+        let id_generator = ProctorIdGenerator::single_node(MakeLabeling::default(), IdPrettifier::<AlphabetCodec>::default());
         let mut clearinghouse = collection::Clearinghouse::new("clearinghouse", id_generator.clone());
         let tx_clearinghouse_api = clearinghouse.tx_api();
 
@@ -1218,7 +1222,7 @@ async fn test_eligibility_replace_policy() -> anyhow::Result<()> {
     context_telemetry.insert(SUBSCRIPTION_TIMESTAMP.to_string(), Timestamp::new(0, 0).into());
     context_telemetry.insert(
         SUBSCRIPTION_CORRELATION.to_string(),
-        Id::direct(0, "".to_string()).into(),
+        Id::direct("EligibilityReplace", 0, "".to_string()).into(),
     );
     let context: TestPolicyPhaseContext = context_telemetry.try_into()?;
     flow.push_context(context_data).await?;
