@@ -1,5 +1,6 @@
 use crate::elements::{FromTelemetry, QueryResult};
 use crate::error::PolicyError;
+use pretty_snowflake::Label;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PolicyOutcome<T, C> {
@@ -19,5 +20,16 @@ impl<T, C> PolicyOutcome<T, C> {
 
     pub fn binding<B: FromTelemetry>(&self, var: impl AsRef<str>) -> Result<Vec<B>, PolicyError> {
         self.policy_results.binding(var)
+    }
+}
+
+impl<T, C> Label for PolicyOutcome<T, C>
+where
+    T: Label,
+{
+    type Labeler = <T as Label>::Labeler;
+
+    fn labeler() -> Self::Labeler {
+        T::labeler()
     }
 }

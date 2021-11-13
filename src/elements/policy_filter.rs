@@ -494,6 +494,7 @@ mod tests {
     use super::*;
     use crate::elements::telemetry;
     use crate::phases::collection::{SubscriptionRequirements, TelemetrySubscription};
+    use pretty_snowflake::{Label, MakeLabeling};
     use prometheus::Registry;
     use std::collections::HashSet;
 
@@ -510,6 +511,14 @@ mod tests {
         #[polar(attribute)]
         #[serde(flatten)]
         pub qualities: telemetry::TableValue,
+    }
+
+    impl Label for TestContext {
+        type Labeler = MakeLabeling<TestContext>;
+
+        fn labeler() -> Self::Labeler {
+            MakeLabeling::default()
+        }
     }
 
     #[async_trait]

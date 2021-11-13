@@ -10,39 +10,40 @@ use serde::de::DeserializeOwned;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use pretty_snowflake::Labeling;
 
 #[derive(Debug)]
-pub struct CollectBuilder<Out, L: Labeling> {
+pub struct CollectBuilder<Out> {
     name: String,
     sources: Vec<Box<dyn SourceStage<Telemetry>>>,
     merge: stage::MergeN<Telemetry>,
-    pub clearinghouse: Clearinghouse<L>,
+    pub clearinghouse: Clearinghouse,
     marker: PhantomData<Out>,
 }
 
-impl<Out, L> CollectBuilder<Out, L>
-where
-    L: Labeling + Debug,
-{
+impl<Out> CollectBuilder<Out> {
     #[tracing::instrument(level = "info", skip(name, sources))]
     pub fn new(
         name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
-        correlation_generator: CorrelationGenerator<L>
+        correlation_generator: CorrelationGenerator,
     ) -> Self {
         let name = name.into();
         let nr_sources = sources.len();
         let merge = stage::MergeN::new(format!("{}_source_merge_{}", name, nr_sources), nr_sources);
         let clearinghouse = Clearinghouse::new(format!("{}_clearinghouse", name), correlation_generator);
 
-        Self { name, sources, merge, clearinghouse, marker: PhantomData }
+        Self {
+            name,
+            sources,
+            merge,
+            clearinghouse,
+            marker: PhantomData,
+        }
     }
 }
 
-impl<Out, L> CollectBuilder<Out, L>
+impl<Out> CollectBuilder<Out>
 where
     Out: AppData + SubscriptionRequirements + DeserializeOwned,
-    L: Labeling + Debug + Send + Sync + 'static,
 {
     #[tracing::instrument(level = "info", skip(), fields(nr_sources = % self.sources.len()))]
     pub async fn build_for_out(self) -> Result<Collect<Out>, CollectionError> {
@@ -66,10 +67,7 @@ where
     }
 }
 
-impl<L> CollectBuilder<Telemetry, L>
-where
-    L: Labeling + Debug + Send + Sync + 'static,
-{
+impl CollectBuilder<Telemetry> {
     #[tracing::instrument(level="info", fields(nr_sources = %self.sources.len()))]
     pub async fn build_for_telemetry_out_subscription(
         mut self, out_subscription: TelemetrySubscription,
@@ -118,10 +116,9 @@ where
     }
 }
 
-impl<Out, L> CollectBuilder<Out, L>
+impl<Out> CollectBuilder<Out>
 where
     Out: AppData + DeserializeOwned,
-    L: Labeling + Debug + Send + Sync + 'static,
 {
     #[tracing::instrument(level="info", fields(nr_sources=%self.sources.len()))]
     pub async fn build_for_out_subscription(
@@ -172,10 +169,9 @@ where
     }
 }
 
-impl<Out, L> CollectBuilder<Out, L>
+impl<Out> CollectBuilder<Out>
 where
     Out: AppData,
-    L: Labeling + Debug + Send + Sync + 'static,
 {
     #[tracing::instrument(level = "info")]
     async fn finish(self, out_channel: SubscriptionChannel<Out>) -> Result<Collect<Out>, CollectionError> {

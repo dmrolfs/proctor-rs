@@ -13,14 +13,14 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use futures::future::FutureExt;
 use once_cell::sync::Lazy;
-use pretty_snowflake::{AlphabetCodec, Labeling, PrettyIdGenerator, RealTimeGenerator};
+use pretty_snowflake::Id;
 use tokio::sync::mpsc;
 
 use crate::elements::{Telemetry, Timestamp};
 use crate::error::{CollectionError, ProctorError};
 use crate::graph::stage::Stage;
 use crate::graph::{stage, Inlet, OutletsShape, Port, SinkShape, UniformFanOutShape};
-use crate::{ProctorResult, SharedString};
+use crate::{ProctorIdGenerator, ProctorResult, SharedString};
 use prometheus::{IntCounterVec, IntGauge, Opts};
 
 pub(crate) static SUBSCRIPTIONS_GAUGE: Lazy<IntGauge> = Lazy::new(|| {
@@ -52,14 +52,15 @@ fn track_publications(subscription: &str) {
 pub const SUBSCRIPTION_TIMESTAMP: &'static str = "timestamp";
 pub const SUBSCRIPTION_CORRELATION: &'static str = "correlation_id";
 
-pub type CorrelationGenerator<L> = PrettyIdGenerator<RealTimeGenerator, L, AlphabetCodec>;
+pub type CorrelationGenerator = ProctorIdGenerator<Telemetry>;
+
 /// Clearinghouse is a sink for collected telemetry data and a subscription-based source for
 /// groups of telemetry fields.
-pub struct Clearinghouse<L: Labeling> {
+pub struct Clearinghouse {
     name: String,
     subscriptions: Vec<TelemetrySubscription>,
     database: Telemetry,
-    correlation_generator: CorrelationGenerator<L>,
+    correlation_generator: CorrelationGenerator,
     inlet: Inlet<Telemetry>,
     tx_api: ClearinghouseApi,
     rx_api: mpsc::UnboundedReceiver<ClearinghouseCmd>,
@@ -67,11 +68,8 @@ pub struct Clearinghouse<L: Labeling> {
 
 const PORT_TELEMETRY: &'static str = "telemetry";
 
-impl<L> Clearinghouse<L>
-where
-    L: Labeling + Debug,
-{
-    pub fn new(name: impl Into<String>, correlation_generator: CorrelationGenerator<L>) -> Self {
+impl Clearinghouse {
+    pub fn new(name: impl Into<String>, correlation_generator: CorrelationGenerator) -> Self {
         let name: SharedString = SharedString::Owned(name.into());
         let (tx_api, rx_api) = mpsc::unbounded_channel();
         let inlet = Inlet::new(name.clone(), PORT_TELEMETRY);
@@ -98,7 +96,7 @@ where
     #[tracing::instrument(level = "trace", skip(subscriptions, database,))]
     async fn handle_telemetry_data(
         stage_name: &SharedString, data: Option<Telemetry>, subscriptions: &Vec<TelemetrySubscription>,
-        database: &mut Telemetry, correlation_generator: &mut CorrelationGenerator<L>,
+        database: &mut Telemetry, correlation_generator: &mut CorrelationGenerator,
     ) -> Result<bool, CollectionError> {
         match data {
             Some(d) => {
@@ -156,7 +154,7 @@ where
     )]
     async fn push_to_subscribers(
         stage_name: &SharedString, database: &Telemetry, subscribers: Vec<&TelemetrySubscription>,
-        correlation_generator: &mut CorrelationGenerator<L>,
+        correlation_generator: &mut CorrelationGenerator,
     ) -> Result<(), CollectionError> {
         if subscribers.is_empty() {
             tracing::info!("not publishing - no subscribers corresponding to field changes.");
@@ -173,7 +171,7 @@ where
             .map(|(s, mut fulfillment)| {
                 // auto-filled properties
                 fulfillment.insert(SUBSCRIPTION_TIMESTAMP.to_string(), now.into());
-                let correlation_id = correlation_generator.next_id();
+                let correlation_id: Id<Telemetry> = correlation_generator.next_id();
                 fulfillment.insert(SUBSCRIPTION_CORRELATION.to_string(), correlation_id.clone().into());
 
                 tracing::info!(subscription=%s.name(), ?correlation_id, "sending subscription data update.");
@@ -200,7 +198,7 @@ where
                 err => {
                     tracing::error!(error=?err, "Unexpected error in clearinghouse");
                     None
-                },
+                }
             }
             .unwrap();
 
@@ -302,7 +300,7 @@ where
     }
 }
 
-impl<L: Labeling> Debug for Clearinghouse<L> {
+impl Debug for Clearinghouse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Clearinghouse")
             .field("name", &self.name)
@@ -312,7 +310,7 @@ impl<L: Labeling> Debug for Clearinghouse<L> {
     }
 }
 
-impl<L: Labeling> SinkShape for Clearinghouse<L> {
+impl SinkShape for Clearinghouse {
     type In = Telemetry;
 
     fn inlet(&self) -> Inlet<Self::In> {
@@ -320,7 +318,7 @@ impl<L: Labeling> SinkShape for Clearinghouse<L> {
     }
 }
 
-impl<L: Labeling> UniformFanOutShape for Clearinghouse<L> {
+impl UniformFanOutShape for Clearinghouse {
     type Out = Telemetry;
 
     fn outlets(&self) -> OutletsShape<Self::Out> {
@@ -330,10 +328,7 @@ impl<L: Labeling> UniformFanOutShape for Clearinghouse<L> {
 
 #[dyn_upcast]
 #[async_trait]
-impl<L> Stage for Clearinghouse<L>
-where
-    L: Labeling + Debug + Send + Sync + 'static,
-{
+impl Stage for Clearinghouse {
     fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -356,10 +351,7 @@ where
     }
 }
 
-impl<L> Clearinghouse<L>
-where
-    L: Labeling + Debug,
-{
+impl Clearinghouse {
     async fn do_check(&self) -> Result<(), CollectionError> {
         self.inlet.check_attachment().await?;
 
@@ -434,7 +426,7 @@ where
     }
 }
 
-impl<L: Labeling> stage::WithApi for Clearinghouse<L> {
+impl stage::WithApi for Clearinghouse {
     type Sender = ClearinghouseApi;
 
     fn tx_api(&self) -> Self::Sender {
@@ -460,18 +452,14 @@ mod tests {
     use crate::elements::telemetry::ToTelemetry;
     use crate::graph::stage::{self, Stage, WithApi};
     use crate::graph::{Connect, Outlet, SinkShape, SourceShape, PORT_DATA};
-    use pretty_snowflake::{AlphabetCodec, CustomLabeling, EmptyLabeling, Id, IdPrettifier, PrettyCustomIdGenerator, RealTimeGenerator};
+    use pretty_snowflake::{Id, IdPrettifier, PrettyIdGenerator};
     use prometheus::{IntCounterVec, IntGaugeVec, Opts, Registry};
     use std::convert::TryFrom;
     use std::convert::TryInto;
     use std::sync::Arc;
 
-    static ID_GENERATOR: Lazy<PrettyCustomIdGenerator<RealTimeGenerator>> = Lazy::new(|| {
-        PrettyCustomIdGenerator::single_node(
-            CustomLabeling::new("clearinghouse_tests"),
-            IdPrettifier::<AlphabetCodec>::default()
-        )
-    });
+    static ID_GENERATOR: Lazy<CorrelationGenerator> =
+        Lazy::new(|| PrettyIdGenerator::single_node(IdPrettifier::default()));
     static CAT_COUNTS: Lazy<IntCounterVec> = Lazy::new(|| {
         IntCounterVec::new(Opts::new("cat_counts", "How many cats were found."), &["subscription"])
             .expect("failed to create cat_counts metric")
@@ -740,15 +728,12 @@ mod tests {
         let main_span = tracing::info_span!("test_find_interested_subscriptions");
         let _main_span_guard = main_span.enter();
 
-        let actual = Clearinghouse::<EmptyLabeling>::find_interested_subscriptions(
-            &SUBSCRIPTIONS,
-            HashSet::default(),
-            HashSet::default()
-        );
+        let actual =
+            Clearinghouse::find_interested_subscriptions(&SUBSCRIPTIONS, HashSet::default(), HashSet::default());
         assert_eq!(actual, Vec::<&TelemetrySubscription>::default());
 
         let available = "extra".to_string();
-        let actual = Clearinghouse::<EmptyLabeling>::find_interested_subscriptions(
+        let actual = Clearinghouse::find_interested_subscriptions(
             &SUBSCRIPTIONS,
             maplit::hashset! {&available},
             maplit::hashset! {"extra".to_string()},
@@ -756,7 +741,7 @@ mod tests {
         assert_eq!(actual, vec![&SUBSCRIPTIONS[1]]);
 
         let available = "nonsense".to_string();
-        let actual = Clearinghouse::<EmptyLabeling>::find_interested_subscriptions(
+        let actual = Clearinghouse::find_interested_subscriptions(
             &SUBSCRIPTIONS,
             maplit::hashset! {&available},
             maplit::hashset! {"nonsense".to_string()},
@@ -764,7 +749,7 @@ mod tests {
         assert_eq!(actual, Vec::<&TelemetrySubscription>::default());
 
         let available = "pos".to_string();
-        let actual = Clearinghouse::<EmptyLabeling>::find_interested_subscriptions(
+        let actual = Clearinghouse::find_interested_subscriptions(
             &SUBSCRIPTIONS,
             maplit::hashset! {&available},
             maplit::hashset! {"pos".to_string()},
@@ -772,7 +757,7 @@ mod tests {
         assert_eq!(actual, vec![&SUBSCRIPTIONS[1], &SUBSCRIPTIONS[2]]);
 
         let available = "value".to_string();
-        let actual = Clearinghouse::<EmptyLabeling>::find_interested_subscriptions(
+        let actual = Clearinghouse::find_interested_subscriptions(
             &SUBSCRIPTIONS,
             maplit::hashset! {&available},
             maplit::hashset! {"value".to_string()},
@@ -781,7 +766,7 @@ mod tests {
 
         let base = maplit::hashset! {"pos".to_string(), "cat".to_string()};
         let available = base.iter().collect::<HashSet<_>>();
-        let actual = Clearinghouse::<EmptyLabeling>::find_interested_subscriptions(
+        let actual = Clearinghouse::find_interested_subscriptions(
             &SUBSCRIPTIONS,
             available,
             maplit::hashset! {"pos".to_string(), "cat".to_string()},
@@ -790,7 +775,7 @@ mod tests {
 
         let base = maplit::hashset! {"pos".to_string(), "value".to_string(), "cat".to_string()};
         let available = base.iter().collect::<HashSet<_>>();
-        let actual = Clearinghouse::<EmptyLabeling>::find_interested_subscriptions(
+        let actual = Clearinghouse::find_interested_subscriptions(
             &SUBSCRIPTIONS,
             available,
             maplit::hashset! {"pos".to_string(), "value".to_string(), "cat".to_string()},
@@ -799,7 +784,7 @@ mod tests {
 
         let base = maplit::hashset! {"pos".to_string(), "value".to_string(), "cat".to_string(), "extra".to_string()};
         let available = base.iter().collect::<HashSet<_>>();
-        let actual = Clearinghouse::<EmptyLabeling>::find_interested_subscriptions(
+        let actual = Clearinghouse::find_interested_subscriptions(
             &SUBSCRIPTIONS,
             available,
             maplit::hashset! {"pos".to_string(), "value".to_string(), "cat".to_string(), "extra".to_string()},
@@ -832,7 +817,7 @@ mod tests {
                     "next test scenario..."
                 );
                 for ((row, data_row), expected_row) in DB_ROWS.iter().enumerate().zip(expected) {
-                    let actual = Clearinghouse::<EmptyLabeling>::fulfill_subscription(
+                    let actual = Clearinghouse::fulfill_subscription(
                         &TelemetrySubscription::new(sub_name)
                             .with_required_fields(sub_required_fields.clone())
                             .with_optional_fields(sub_optional_fields.clone()),
@@ -923,15 +908,18 @@ mod tests {
                             .remove(SUBSCRIPTION_TIMESTAMP)
                             .map(|ts| Timestamp::try_from(ts))
                             .transpose());
-                        let corr = assert_ok!(a.remove(SUBSCRIPTION_CORRELATION).map(|c| {
-                            tracing::warn!("DMR: trying to parse Id from c={:?}", c);
-                            Id::try_from(c)
-                        }).transpose());
+                        let corr = assert_ok!(a
+                            .remove(SUBSCRIPTION_CORRELATION)
+                            .map(|c| {
+                                tracing::warn!("DMR: trying to parse Id from c={:?}", c);
+                                Id::try_from(c)
+                            })
+                            .transpose());
                         let auto = ts.zip(corr);
                         Some(a).zip(auto)
                     });
                     assert_eq!(actuals.is_some(), expected.is_some());
-                    actuals.map(|(a, (_ts, _corr))| {
+                    actuals.map(|(a, _): (Telemetry, (Timestamp, Id<Telemetry>))| {
                         let a = Some(a);
                         assert_eq!((row, &sub_name, &a), (row, &sub_name, expected));
                     });

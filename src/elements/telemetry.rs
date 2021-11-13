@@ -15,6 +15,7 @@ use std::iter::{FromIterator, IntoIterator};
 use flexbuffers;
 use oso::PolarClass;
 use oso::ToPolar;
+use pretty_snowflake::{Label, MakeLabeling};
 use serde::{de as serde_de, Deserialize, Serialize};
 
 use crate::error::{PolicyError, TelemetryError};
@@ -75,6 +76,14 @@ impl Telemetry {
         )?;
 
         Ok(())
+    }
+}
+
+impl Label for Telemetry {
+    type Labeler = MakeLabeling<Telemetry>;
+
+    fn labeler() -> Self::Labeler {
+        MakeLabeling::<Self>::default()
     }
 }
 

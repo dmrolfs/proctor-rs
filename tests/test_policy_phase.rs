@@ -12,7 +12,10 @@ use claim::*;
 use once_cell::sync::Lazy;
 use oso::{Oso, PolarClass, ToPolar};
 use pretty_assertions::{assert_eq, assert_ne};
-use pretty_snowflake::{AlphabetCodec, Id, IdPrettifier, MakeLabeling};
+use pretty_snowflake::{
+    AlphabetCodec, Id, IdPrettifier, Label, LabeledRealtimeIdGenerator, Labeling, MakeLabeling, PrettyIdGenerator,
+    RealTimeGenerator,
+};
 use proctor::elements::telemetry::{TableValue, ToTelemetry};
 use proctor::elements::{
     self, telemetry, Policy, PolicyFilterEvent, PolicyOutcome, PolicyRegistry, PolicySettings, PolicySource,
@@ -22,11 +25,12 @@ use proctor::error::{PolicyError, ProctorError};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape, UniformFanInShape};
 use proctor::phases::collection::{
-    self, SubscriptionRequirements, TelemetrySubscription, SUBSCRIPTION_CORRELATION, SUBSCRIPTION_TIMESTAMP,
+    self, CorrelationGenerator, SubscriptionRequirements, TelemetrySubscription, SUBSCRIPTION_CORRELATION,
+    SUBSCRIPTION_TIMESTAMP,
 };
 use proctor::phases::policy_phase::PolicyPhase;
+use proctor::ProctorContext;
 use proctor::{AppData, SharedString};
-use proctor::{ProctorContext, ProctorIdGenerator};
 use serde_test::{assert_tokens, Token};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -36,8 +40,16 @@ pub struct Data {
     pub input_messages_per_sec: f64,
     #[serde(with = "proctor::serde")]
     pub timestamp: DateTime<Utc>,
-    pub correlation_id: Id,
+    pub correlation_id: Id<Data>,
     pub inbox_lag: i64,
+}
+
+impl Label for Data {
+    type Labeler = MakeLabeling<Self>;
+
+    fn labeler() -> Self::Labeler {
+        MakeLabeling::default()
+    }
 }
 
 impl PartialEq for Data {
@@ -49,7 +61,7 @@ impl PartialEq for Data {
 #[derive(PolarClass, Debug, Clone, Serialize, Deserialize)]
 pub struct TestPolicyPhaseContext {
     pub timestamp: Timestamp,
-    pub correlation_id: Id,
+    pub correlation_id: Id<TestPolicyPhaseContext>,
 
     #[polar(attribute)]
     #[serde(flatten)]
@@ -61,6 +73,14 @@ pub struct TestPolicyPhaseContext {
     #[polar(attribute)]
     #[serde(flatten)]
     pub custom: telemetry::TableValue,
+}
+
+impl Label for TestPolicyPhaseContext {
+    type Labeler = MakeLabeling<Self>;
+
+    fn labeler() -> Self::Labeler {
+        MakeLabeling::default()
+    }
 }
 
 impl PartialEq for TestPolicyPhaseContext {
@@ -184,11 +204,8 @@ fn test_context_serde() {
     let _ = main_span.enter();
 
     let now = Timestamp::now();
-    let corr = ProctorIdGenerator::<TestPolicyPhaseContext>::single_node(
-        MakeLabeling::default(),
-        IdPrettifier::default()
-    )
-        .next_id();
+    let corr: Id<TestPolicyPhaseContext> = LabeledRealtimeIdGenerator::default().next_id();
+    // let corr = LabeledRealtimeIdGenerator<TestPolicyPhaseContext>::single_node(IdPrettifier::default());
 
     let context = TestPolicyPhaseContext {
         timestamp: now.clone(),
@@ -333,14 +350,14 @@ impl<T: AppData + ToPolar + Clone> QueryPolicy for TestPolicyA<T> {
     }
 
     fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
-        oso.register_class(
+        assert_ok!(oso.register_class(
             TestPolicyPhaseContext::get_polar_class_builder()
                 .name("TestEnvironment")
                 .add_method("custom", ProctorContext::custom)
                 .build(),
-        )?;
+        ));
 
-        oso.register_class(
+        assert_ok!(oso.register_class(
             TestTaskStatus::get_polar_class_builder()
                 .name("TestTaskStatus")
                 .add_method(
@@ -348,7 +365,7 @@ impl<T: AppData + ToPolar + Clone> QueryPolicy for TestPolicyA<T> {
                     TestTaskStatus::last_failure_within_seconds,
                 )
                 .build(),
-        )?;
+        ));
 
         Ok(())
     }
@@ -358,14 +375,14 @@ impl<T: AppData + ToPolar + Clone> QueryPolicy for TestPolicyA<T> {
     }
 
     fn query_policy(&self, oso: &Oso, args: Self::Args) -> Result<QueryResult, PolicyError> {
-        let q = oso.query_rule("eligible", args)?;
+        let q = assert_ok!(oso.query_rule("eligible", args));
         QueryResult::from_query(q)
     }
 }
 
 #[allow(dead_code)]
 struct TestFlow<T, C, D> {
-    pub id_generator: ProctorIdGenerator<T>,
+    pub id_generator: CorrelationGenerator,
     pub graph_handle: JoinHandle<()>,
     pub tx_data_source_api: stage::ActorSourceApi<Telemetry>,
     pub tx_context_source_api: stage::ActorSourceApi<Telemetry>,
@@ -378,7 +395,7 @@ struct TestFlow<T, C, D> {
 
 impl<T, C, D> TestFlow<T, C, D>
 where
-    T: AppData + Clone + DeserializeOwned + ToPolar,
+    T: AppData + DeserializeOwned + ToPolar,
     C: ProctorContext,
     D: Debug + Clone + Serialize + Send + Sync + 'static,
 {
@@ -394,15 +411,15 @@ where
 
         let merge = stage::MergeN::new("source_merge", 2);
 
-        let id_generator = ProctorIdGenerator::single_node(MakeLabeling::default(), IdPrettifier::<AlphabetCodec>::default());
+        let id_generator = PrettyIdGenerator::single_node(IdPrettifier::<AlphabetCodec>::default());
         let mut clearinghouse = collection::Clearinghouse::new("clearinghouse", id_generator.clone());
         let tx_clearinghouse_api = clearinghouse.tx_api();
 
         let context_subscription = policy.subscription("eligibility_context");
-        let context_channel = collection::SubscriptionChannel::<C>::new("eligibility_context").await?;
+        let context_channel = assert_ok!(collection::SubscriptionChannel::<C>::new("eligibility_context").await);
 
-        let telemetry_channel = collection::SubscriptionChannel::<T>::new("data_channel").await?;
-        let eligibility = PolicyPhase::carry_policy_outcome("test_eligibility", policy).await?;
+        let telemetry_channel = assert_ok!(collection::SubscriptionChannel::<T>::new("data_channel").await);
+        let eligibility = assert_ok!(PolicyPhase::carry_policy_outcome("test_eligibility", policy).await);
 
         let tx_eligibility_api = eligibility.tx_api();
         let rx_eligibility_monitor = eligibility.rx_monitor();
@@ -583,32 +600,32 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
     let policy = make_test_policy(&PolicySettings {
         required_subscription_fields: HashSet::default(),
         optional_subscription_fields: HashSet::default(),
-        policies: vec![PolicySource::from_template_string(
+        policies: vec![assert_ok!(PolicySource::from_template_string(
             POLICY_A_TEMPLATE_NAME,
             r##"eligible(_item, environment) if environment.location_code == {{location_code}};"##,
-        )?],
+        ))],
         template_data: Some(PolicyData { location_code: 33 }),
     });
     let mut flow: TestFlow<Data, TestPolicyPhaseContext, PolicyData> =
-        TestFlow::new(TelemetrySubscription::new("all_data"), policy).await?;
+        assert_ok!(TestFlow::new(TelemetrySubscription::new("all_data"), policy).await);
     tracing::warn!("test_eligibility_before_context_baseline_B");
     let now_utc = Utc::now();
 
     let data = Data {
         input_messages_per_sec: std::f64::consts::PI,
         timestamp: now_utc,
-        correlation_id: flow.id_generator.next_id(),
+        correlation_id: flow.id_generator.next_id().relabel(),
         inbox_lag: 3,
     };
 
-    let mut data_telemetry = Telemetry::try_from(&data)?;
+    let mut data_telemetry = assert_ok!(Telemetry::try_from(&data));
     data_telemetry.remove(SUBSCRIPTION_TIMESTAMP);
     data_telemetry.remove(SUBSCRIPTION_CORRELATION);
     tracing::warn!(?data_telemetry, "test_eligibility_before_context_baseline_C");
 
-    flow.push_telemetry(data_telemetry).await?;
+    assert_ok!(flow.push_telemetry(data_telemetry).await);
     tracing::warn!("test_eligibility_before_context_baseline_D");
-    let actual = flow.inspect_sink().await?;
+    let actual = assert_ok!(flow.inspect_sink().await);
     tracing::warn!("test_eligibility_before_context_baseline_E");
     assert!(actual.is_empty());
 
@@ -631,7 +648,7 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
         PolicyFilterEvent::ItemPassed(data) => panic!("unexpected data passed policy {:?}", data),
     }
 
-    let actual = flow.close().await?;
+    let actual = assert_ok!(flow.close().await);
     tracing::warn!("final accumulation:{:?}", actual);
 
     assert!(actual.is_empty());
@@ -653,22 +670,24 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     let policy = make_test_policy(&PolicySettings {
         required_subscription_fields: HashSet::default(),
         optional_subscription_fields: HashSet::default(),
-        policies: vec![PolicySource::from_complete_string(
+        policies: vec![assert_ok!(PolicySource::from_complete_string(
             TestPolicyA::<MeasurementData>::base_template_name(),
             r##"eligible(_, context) if context.cluster_status.is_deploying == false;"##,
-        )?],
+        ))],
         template_data: None,
     });
 
-    let mut flow: TestFlow<MeasurementData, TestPolicyPhaseContext, PolicyData> = TestFlow::new(
-        TelemetrySubscription::new("measurements").with_required_fields(maplit::hashset! {"measurement"}),
-        policy,
-    )
-    .await?;
+    let mut flow: TestFlow<MeasurementData, TestPolicyPhaseContext, PolicyData> = assert_ok!(
+        TestFlow::new(
+            TelemetrySubscription::new("measurements").with_required_fields(maplit::hashset! {"measurement"}),
+            policy,
+        )
+        .await
+    );
 
     tracing::warn!("DMR: 01. Make sure empty env...");
 
-    let detail = flow.inspect_policy_context().await?;
+    let detail = assert_ok!(flow.inspect_policy_context().await);
     assert!(detail.context.is_none());
 
     tracing::warn!("DMR: 02. Push environment...");
@@ -685,8 +704,10 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     let mut context_telemetry: Telemetry = context_data.clone().into_iter().collect();
     context_telemetry.insert(SUBSCRIPTION_TIMESTAMP.to_string(), Timestamp::now().into());
     context_telemetry.insert(SUBSCRIPTION_CORRELATION.to_string(), flow.id_generator.next_id().into());
-    let context: TestPolicyPhaseContext = context_telemetry.try_into()?;
-    flow.push_context(context_data).await?;
+    tracing::warn!(?context_telemetry, "DMR: converting context telemetry...");
+    let context: TestPolicyPhaseContext = assert_ok!(context_telemetry.try_into());
+    tracing::warn!(?context, "DMR: pushing context object...");
+    assert_ok!(flow.push_context(context_data).await);
 
     tracing::warn!("DMR: 03. Verify environment set...");
 
@@ -697,7 +718,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
                 ctx,
                 TestPolicyPhaseContext {
                     timestamp: Timestamp::now(),
-                    correlation_id: flow.id_generator.next_id(),
+                    correlation_id: flow.id_generator.next_id().relabel(),
                     task_status: TestTaskStatus { last_failure: None },
                     cluster_status: TestClusterStatus {
                         location_code: 3,
@@ -714,7 +735,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     };
     tracing::warn!("DMR: 04. environment change verified.");
 
-    let detail = flow.inspect_policy_context().await?;
+    let detail = assert_ok!(flow.inspect_policy_context().await);
     tracing::warn!("DMR: policy detail = {:?}", detail);
     assert!(detail.context.is_some());
 
@@ -725,27 +746,33 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
         .collect();
     assert_eq!(
         MeasurementData { measurement: std::f64::consts::PI },
-        t1.try_into::<MeasurementData>()?
+        assert_ok!(t1.try_into::<MeasurementData>())
     );
 
-    flow.push_telemetry(maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_telemetry()}.into())
-        .await?;
+    assert_ok!(
+        flow.push_telemetry(maplit::hashmap! {"measurement".to_string() => std::f64::consts::PI.to_telemetry()}.into())
+            .await
+    );
 
     tracing::warn!("DMR: 06. Look for Item in sink...");
 
-    assert!(
+    assert!(assert_ok!(
         flow.check_sink_accumulation("first", Duration::from_secs(2), |acc| acc.len() == 1)
-            .await?
-    );
+            .await
+    ));
 
     tracing::warn!("DMR: 07. Push another Item...");
 
-    flow.push_telemetry(maplit::hashmap! {"measurement".to_string() => std::f64::consts::TAU.to_telemetry()}.into())
-        .await?;
+    assert_ok!(
+        flow.push_telemetry(
+            maplit::hashmap! {"measurement".to_string() => std::f64::consts::TAU.to_telemetry()}.into()
+        )
+        .await
+    );
 
     tracing::warn!("DMR: 08. Close flow...");
 
-    let actual = flow.close().await?;
+    let actual = assert_ok!(flow.close().await);
 
     tracing::warn!(?actual, "DMR: 09. Verify final accumulation...");
 
@@ -899,21 +926,21 @@ impl QueryPolicy for TestPolicyB {
     }
 
     fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
-        oso.register_class(
+        assert_ok!(oso.register_class(
             TestItem::get_polar_class_builder()
                 .name("TestMetricCatalog")
                 .add_method("lag_duration", TestItem::lag_duration_secs_f64)
                 .add_method("within_seconds", TestItem::within_seconds)
                 .build(),
-        )?;
+        ));
 
-        oso.register_class(
+        assert_ok!(oso.register_class(
             TestPolicyPhaseContext::get_polar_class_builder()
                 .name("PhaseContext")
                 .add_method("custom", ProctorContext::custom)
                 // .add_method("custom", |ctx: &TestPhaseContext| ctx.custom())
                 .build(),
-        )?;
+        ));
 
         Ok(())
     }
@@ -923,7 +950,7 @@ impl QueryPolicy for TestPolicyB {
     }
 
     fn query_policy(&self, oso: &Oso, args: Self::Args) -> Result<QueryResult, PolicyError> {
-        QueryResult::from_query(oso.query_rule("eligible", args)?)
+        QueryResult::from_query(assert_ok!(oso.query_rule("eligible", args)))
     }
 }
 
@@ -1014,7 +1041,7 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
         event,
         elements::PolicyFilterEvent::ContextChanged(Some(TestPolicyPhaseContext {
             timestamp: Timestamp::now(),
-            correlation_id: flow.id_generator.next_id(),
+            correlation_id: flow.id_generator.next_id().relabel(),
             task_status: TestTaskStatus { last_failure: None },
             cluster_status: TestClusterStatus {
                 location_code: 33,
@@ -1222,7 +1249,7 @@ async fn test_eligibility_replace_policy() -> anyhow::Result<()> {
     context_telemetry.insert(SUBSCRIPTION_TIMESTAMP.to_string(), Timestamp::new(0, 0).into());
     context_telemetry.insert(
         SUBSCRIPTION_CORRELATION.to_string(),
-        Id::direct("EligibilityReplace", 0, "".to_string()).into(),
+        Id::<Telemetry>::direct("EligibilityReplace", 0, "".to_string()).into(),
     );
     let context: TestPolicyPhaseContext = context_telemetry.try_into()?;
     flow.push_context(context_data).await?;

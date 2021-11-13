@@ -6,7 +6,7 @@ use std::ops::{Deref, DerefMut};
 
 use config::Value as ConfigValue;
 use oso::{FromPolar, PolarValue, ResultSet, ToPolar};
-use pretty_snowflake::Id;
+use pretty_snowflake::{Id, Label, Labeling};
 use serde::de::{EnumAccess, Error};
 use serde::ser::{SerializeMap, SerializeSeq};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
@@ -240,17 +240,17 @@ impl From<ResultSet> for TelemetryValue {
     }
 }
 
-pub const ID_LABEL: &'static str = "label";
+// pub const ID_LABEL: &'static str = "label";
 pub const ID_SNOWFLAKE: &'static str = "snowflake";
 pub const ID_PRETTY: &'static str = "pretty";
 
-impl From<Id> for TelemetryValue {
-    fn from(that: Id) -> Self {
+impl<T: Label> From<Id<T>> for TelemetryValue {
+    fn from(that: Id<T>) -> Self {
         let pretty = format!("{}", that);
         let snowflake: i64 = that.clone().into();
         TelemetryValue::Table(
             maplit::hashmap! {
-                ID_LABEL.to_string() => that.label.into(),
+                // ID_LABEL.to_string() => that.label.into(),
                 ID_SNOWFLAKE.to_string() => snowflake.into(),
                 ID_PRETTY.to_string() => pretty.into(),
             }
@@ -449,19 +449,27 @@ impl From<PolarValue> for TelemetryValue {
     }
 }
 
-impl TryFrom<TelemetryValue> for Id {
+/// Converting from TelemetryValue into Id does not consider previously labeling, but rather applies
+/// labeling for the deserialized type. So telemetry values coming out of the clearinghouse will
+/// have the original unique identifier relabeled for this type instead.
+impl<T: Label> TryFrom<TelemetryValue> for Id<T> {
     type Error = TelemetryError;
 
+    #[tracing::instrument(level = "info")]
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
-        match telemetry {
+        let label = <T as Label>::labeler().label();
+        let dmr_label = label.clone();
+        tracing::warn!(to_label=%dmr_label, "DMR: converting telemetry into Id<T>");
+
+        let result = match telemetry {
             TelemetryValue::Seq(mut seq) if seq.len() == 2 => {
-                let label = seq.pop().map(String::try_from).transpose()?.unwrap();
+                // let label = seq.pop().map(String::try_from).transpose()?.unwrap();
                 let snowflake = seq.pop().map(i64::try_from).transpose()?.unwrap();
                 let pretty = seq.pop().map(String::try_from).transpose()?.unwrap();
                 Ok(Self::direct(label, snowflake, pretty))
             }
             TelemetryValue::Table(mut table) => {
-                let label = table.remove(ID_LABEL).map(String::try_from).transpose()?.unwrap();
+                // let label = table.remove(ID_LABEL).map(String::try_from).transpose()?.unwrap();
                 let snowflake = table.remove(ID_SNOWFLAKE).map(i64::try_from).transpose()?.unwrap();
                 let pretty = table.remove(ID_PRETTY).map(String::try_from).transpose()?.unwrap();
                 Ok(Self::direct(label, snowflake, pretty))
@@ -470,7 +478,10 @@ impl TryFrom<TelemetryValue> for Id {
                 expected: format!("a telemetry {}", TypeExpectation::Table),
                 actual: Some(format!("{:?}", value)),
             }),
-        }
+        };
+
+        tracing::warn!(to_label=%dmr_label, "DMR: converted telemetry into Id<T>: {:#?}", result);
+        result
     }
 }
 
@@ -1017,9 +1028,12 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
 
 #[cfg(test)]
 mod tests {
+    use crate::elements::Telemetry;
+    use claim::*;
     use fmt::Debug;
     use once_cell::sync::Lazy;
     use pretty_assertions::assert_eq;
+    use pretty_snowflake::{CustomLabeling, MakeLabeling};
     use serde::{Deserialize, Serialize};
     use serde_test::{assert_tokens, Token};
 
@@ -1028,6 +1042,84 @@ mod tests {
     #[derive(Debug, PartialEq, Serialize, Deserialize)]
     struct Foo {
         bar: TelemetryValue,
+    }
+
+    impl Label for Foo {
+        type Labeler = CustomLabeling;
+
+        fn labeler() -> Self::Labeler {
+            CustomLabeling::new("test_foo")
+        }
+    }
+
+    #[test]
+    fn test_id_value_serde() {
+        let id = Id::<Foo>::direct("test_foo", 12345, "abcdef");
+        let actual = format!("{:?}", id);
+        assert_eq!(actual, format!("test_foo::{}", id));
+
+        let telemetry_id: TelemetryValue = id.clone().into();
+
+        let result = std::panic::catch_unwind(|| {
+            assert_tokens(
+                &telemetry_id,
+                &vec![
+                    Token::Map { len: Some(2) },
+                    Token::Str("snowflake"),
+                    Token::I64(12345),
+                    Token::Str("pretty"),
+                    Token::Str("abcdef"),
+                    Token::MapEnd,
+                ],
+            )
+        });
+
+        if result.is_err() {
+            assert_tokens(
+                &telemetry_id,
+                &vec![
+                    Token::Map { len: Some(2) },
+                    Token::Str("pretty"),
+                    Token::Str("abcdef"),
+                    Token::Str("snowflake"),
+                    Token::I64(12345),
+                    Token::MapEnd,
+                ],
+            )
+        }
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    struct Bar {
+        correlation_id: Id<Bar>,
+    }
+
+    impl Label for Bar {
+        type Labeler = MakeLabeling<Bar>;
+
+        fn labeler() -> Self::Labeler {
+            MakeLabeling::default()
+        }
+    }
+
+    #[test]
+    fn test_deser_id_value() {
+        let id = Id::<Foo>::direct("test_foo", 12345, "abcdef");
+        let telemetry_id: TelemetryValue = id.clone().into();
+
+        let telemetry_json = assert_ok!(serde_json::to_string(&telemetry_id));
+        // assert_eq!(telemetry_json, "{\"snowflake\":12345,\"pretty\":\"abcdef\"}");
+        let bar1: Id<Bar> = assert_ok!(serde_json::from_str(&telemetry_json));
+        let bar1_sf: i64 = bar1.clone().into();
+        assert_eq!(bar1_sf, 12345_i64);
+        let bar1_p: String = bar1.clone().into();
+        assert_eq!(bar1_p.as_str(), "abcdef");
+
+        let telemetry: Telemetry = maplit::hashmap! { "correlation_id".to_string() => telemetry_id }.into();
+
+        let bar: Bar = assert_ok!(telemetry.try_into());
+        let actual = format!("{:?}", bar.correlation_id);
+        assert_eq!(actual.as_str(), "Bar::abcdef");
     }
 
     #[test]
@@ -1079,31 +1171,13 @@ mod tests {
     #[test]
     fn test_telemetry_value_boolean_serde() {
         let data = TelemetryValue::Boolean(true);
-        assert_tokens(
-            &data,
-            &vec![
-                // Token::NewtypeVariant {
-                //     name: "TelemetryValue",
-                //     variant: "Boolean",
-                // },
-                Token::Bool(true),
-            ],
-        )
+        assert_tokens(&data, &vec![Token::Bool(true)])
     }
 
     #[test]
     fn test_telemetry_value_text_serde() {
         let data = TelemetryValue::Text("Foo Bar Zed".to_string());
-        assert_tokens(
-            &data,
-            &vec![
-                // Token::NewtypeVariant {
-                //     name: "TelemetryValue",
-                //     variant: "Text",
-                // },
-                Token::Str("Foo Bar Zed"),
-            ],
-        )
+        assert_tokens(&data, &vec![Token::Str("Foo Bar Zed")])
     }
 
     #[test]
@@ -1120,73 +1194,24 @@ mod tests {
             ]
             .into(),
             maplit::btreemap! { "foo" => "bar", }.into(),
-            // TelemetryValue::Unit,
         ]);
         assert_tokens(
             &data,
             &vec![
-                // Token::NewtypeVariant {
-                //     name: "TelemetryValue",
-                //     variant: "List",
-                // },
                 Token::Seq { len: Some(6) },
-                // Token::NewtypeVariant {
-                //     name: "TelemetryValue",
-                //     variant: "Integer",
-                // },
                 Token::I64(12),
-                // Token::NewtypeVariant {
-                //     name: "TelemetryValue",
-                //     variant: "Float",
-                // },
                 Token::F64(std::f64::consts::FRAC_2_SQRT_PI),
-                // Token::NewtypeVariant {
-                //     name: "TelemetryValue",
-                //     variant: "Boolean",
-                // },
                 Token::Bool(false),
-                // Token::NewtypeVariant {
-                //     name: "TelemetryValue",
-                //     variant: "Text",
-                // },
                 Token::Str("2014-11-28T12:45:59.324310806Z"),
-                // Token::NewtypeVariant {
-                //     name: "TelemetryValue",
-                //     variant: "List",
-                // },
                 Token::Seq { len: Some(3) },
-                // Token::NewtypeVariant {
-                //     name: "TelemetryValue",
-                //     variant: "Integer",
-                // },
                 Token::I64(37),
-                // Token::NewtypeVariant {
-                //     name: "TelemetryValue",
-                //     variant: "Float",
-                // },
                 Token::F64(3.14),
-                // Token::NewtypeVariant {
-                //     name: "TelemetryValue",
-                //     variant: "Text",
-                // },
                 Token::Str("Otis"),
                 Token::SeqEnd,
-                // Token::NewtypeVariant {
-                //     name: "TelemetryValue",
-                //     variant: "Map",
-                // },
                 Token::Map { len: Some(1) },
                 Token::Str("foo"),
-                // Token::NewtypeVariant {
-                //     name: "TelemetryValue",
-                //     variant: "Text",
-                // },
                 Token::Str("bar"),
                 Token::MapEnd,
-                // Token::UnitVariant {
-                //     name: "TelemetryValue",
-                //     variant: "Unit",
-                // },
                 Token::SeqEnd,
             ],
         )
@@ -1202,48 +1227,13 @@ mod tests {
             .into(),
         );
 
-        // let expected = vec![
-        //     // Token::NewtypeVariant {
-        //     //     name: "TelemetryValue",
-        //     //     variant: "Map",
-        //     // },
-        //     Token::Map { len: Some(2) },
-        //     Token::Str("foo"),
-        //     // Token::NewtypeVariant {
-        //     //     name: "TelemetryValue",
-        //     //     variant: "Text",
-        //     // },
-        //     Token::Str("bar"),
-        //     // Token::Str("zed"),
-        //     // Token::Str("Unit"),
-        //     // Token::UnitVariant {
-        //     //     name: "TelemetryValue",
-        //     //     variant: "Unit",
-        //     // },
-        //     Token::MapEnd,
-        // ];
-
         // let result = std::panic::catch_unwind(|| {
         assert_tokens(
             &data,
             &vec![
-                // Token::NewtypeVariant {
-                //     name: "TelemetryValue",
-                //     variant: "Map",
-                // },
                 Token::Map { len: Some(1) },
                 Token::Str("foo"),
-                // Token::NewtypeVariant {
-                //     name: "TelemetryValue",
-                //     variant: "Text",
-                // },
                 Token::Str("bar"),
-                // Token::Str("zed"),
-                // Token::Str("Unit"),
-                // Token::UnitVariant {
-                //     name: "TelemetryValue",
-                //     variant: "Unit",
-                // },
                 Token::MapEnd,
             ],
         );

@@ -1797,8 +1797,8 @@ checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
 
 [[package]]
 name = "pretty-snowflake"
-version = "1.3.7"
-source = "git+https://github.com/dmrolfs/pretty-snowflake-rs#7a57c71721d42772dfdfad3ec0b96d19cf30f4b2"
+version = "1.3.8"
+source = "git+https://github.com/dmrolfs/pretty-snowflake-rs#06e26d2296ba1f22caf37a16b89eb84409e1e4b6"
 dependencies = [
  "itertools",
  "once_cell",
@@ -2415,9 +2415,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.69"
+version = "1.0.70"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e466864e431129c7e0d3476b92f20458e5879919a0596c6472738d9fa2d342f8"
+checksum = "e277c495ac6cd1a01a58d0a0c574568b4d1ddf14f59965c6a58b8d96400b54f3"
 dependencies = [
  "itoa",
  "ryu",

@@ -5,7 +5,7 @@ use crate::graph::{Outlet, Port, SourceShape};
 use crate::{AppData, ProctorResult};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
-use pretty_snowflake::{AlphabetCodec, IdPrettifier, Labeling, MachineNode};
+use pretty_snowflake::{AlphabetCodec, IdPrettifier, MachineNode};
 use std::fmt::{self, Debug};
 
 pub use builder::*;
@@ -54,29 +54,18 @@ pub struct Collect<Out> {
 
 impl<Out> Collect<Out> {
     #[tracing::instrument(level = "info", skip(name, sources))]
-    pub fn builder<L>(
-        name: impl Into<String>,
-        sources: Vec<Box<dyn SourceStage<Telemetry>>>,
-        machine_node: MachineNode,
-        labeling: L,
-    ) -> CollectBuilder<Out, L>
-    where
-        L: Labeling + Debug,
-    {
-        let id_generator = CorrelationGenerator::distributed(labeling, machine_node, IdPrettifier::<AlphabetCodec>::default());
+    pub fn builder(
+        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>, machine_node: MachineNode,
+    ) -> CollectBuilder<Out> {
+        let id_generator = CorrelationGenerator::distributed(machine_node, IdPrettifier::<AlphabetCodec>::default());
         CollectBuilder::new(name, sources, id_generator)
     }
 
     #[tracing::instrument(level = "info", skip(name, sources))]
-    pub fn single_node_builder<L>(
-        name: impl Into<String>,
-        sources: Vec<Box<dyn SourceStage<Telemetry>>>,
-        labeling: L
-    ) -> CollectBuilder<Out, L>
-    where
-        L: Labeling + Debug,
-    {
-        Self::builder(name, sources, MachineNode::default(), labeling)
+    pub fn single_node_builder(
+        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
+    ) -> CollectBuilder<Out> {
+        Self::builder(name, sources, MachineNode::default())
     }
 }
 
