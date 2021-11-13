@@ -1,5 +1,14 @@
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::time::Duration;
+
+use futures::future::FutureExt;
+use reqwest_middleware::ClientBuilder;
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::UnboundedSender;
 
 use super::SourceSetting;
 use crate::elements::Telemetry;
@@ -7,14 +16,6 @@ use crate::error::{CollectionError, IncompatibleSourceSettingsError};
 use crate::graph::stage::tick::TickMsg;
 use crate::graph::stage::{CompositeSource, SourceStage, WithApi};
 use crate::graph::{stage, Connect, Graph, SinkShape, SourceShape};
-use futures::future::FutureExt;
-use reqwest_middleware::ClientBuilder;
-use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use std::collections::HashMap;
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::UnboundedSender;
 
 /// Naive CVS source, which loads a `.cvs` file, then publishes via its outlet.
 ///
@@ -47,7 +48,8 @@ where
         for result in reader.deserialize() {
             let record: T = result?;
 
-            //todo: for a source, which is better? config-style conversion via serde (active here) or Into<Telemetry>?
+            // todo: for a source, which is better? config-style conversion via serde (active here) or
+            // Into<Telemetry>?
             let telemetry_record = Telemetry::try_from(&record)?;
 
             records.push(telemetry_record);

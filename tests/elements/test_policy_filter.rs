@@ -1,8 +1,8 @@
-use async_trait::async_trait;
 use std::collections::HashSet;
 use std::f64::consts;
 
 use ::serde::{Deserialize, Serialize};
+use async_trait::async_trait;
 use chrono::*;
 use claim::*;
 use oso::{Oso, PolarClass, PolarValue};
@@ -148,9 +148,9 @@ impl PolicySubscription for TestPolicy {
 }
 
 impl QueryPolicy for TestPolicy {
-    type Item = TestItem;
-    type Context = TestContext;
     type Args = (TestItem, TestContext, PolarValue);
+    type Context = TestContext;
+    type Item = TestItem;
     type TemplateData = PolicyTemplateData;
 
     fn base_template_name() -> &'static str {
@@ -999,37 +999,37 @@ async fn test_reset_policy() -> anyhow::Result<()> {
     //     vec![
     //         PolicyOutcome::new(
     //             TestItem::new(consts::E, ts, 2),
-    //             TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
-    //             QueryResult::passed_without_bindings(),
+    //             TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() =>
+    // "Otis".to_telemetry()}),             QueryResult::passed_without_bindings(),
     //         ),
     //         PolicyOutcome::new(
     //             TestItem::new(consts::TAU, ts, 1),
-    //             TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
-    //             QueryResult {
+    //             TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() =>
+    // "Otis".to_telemetry()}),             QueryResult {
     //                 passed: true,
     //                 bindings: maplit::hashmap! {
     //                     "custom".to_string() => vec![
-    //                         TelemetryValue::Table(maplit::hashmap! { "cat".to_string() => "Otis".to_telemetry(), })
-    //                     ]
+    //                         TelemetryValue::Table(maplit::hashmap! { "cat".to_string() =>
+    // "Otis".to_telemetry(), })                     ]
     //                 }
     //             }
     //         ),
     //         PolicyOutcome::new(
     //             TestItem::new(consts::LN_2, ts, 2),
-    //             TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
-    //             QueryResult {
+    //             TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() =>
+    // "Otis".to_telemetry()}),             QueryResult {
     //                 passed: true,
     //                 bindings: maplit::hashmap! {
     //                     "custom".to_string() => vec![
-    //                         TelemetryValue::Table(maplit::hashmap! { "cat".to_string() => "Otis".to_telemetry(), })
-    //                     ]
+    //                         TelemetryValue::Table(maplit::hashmap! { "cat".to_string() =>
+    // "Otis".to_telemetry(), })                     ]
     //                 }
     //             }
     //         ),
     //         PolicyOutcome::new(
     //             TestItem::new(consts::SQRT_2, ts, 2),
-    //             TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}),
-    //             QueryResult::passed_without_bindings()
+    //             TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() =>
+    // "Otis".to_telemetry()}),             QueryResult::passed_without_bindings()
     //         ),
     //     ]
     // );

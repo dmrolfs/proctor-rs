@@ -189,7 +189,7 @@ where
                     Ok(_) => tracing::info!(accumulation=?resp, "sent accumulation"),
                     Err(resp) => tracing::warn!(accumulation=?resp, "failed to send accumulation"),
                 }
-            }
+            },
 
             FoldCmd::GetAndReset(tx) => {
                 tracing::info!("handling command to reset accumulation...");
@@ -201,7 +201,7 @@ where
                     Ok(_) => tracing::info!(accumulation=?resp, "sent prior accumulation"),
                     Err(resp) => tracing::warn!(accumulation=?resp, "failed to send prior accumulation"),
                 }
-            }
+            },
         }
     }
 

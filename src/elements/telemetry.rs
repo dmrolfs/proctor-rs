@@ -20,7 +20,7 @@ use serde::{de as serde_de, Deserialize, Serialize};
 
 use crate::error::{PolicyError, TelemetryError};
 
-#[derive(PolarClass, Debug, Clone, PartialEq)]
+#[derive(PolarClass, Label, Debug, Clone, PartialEq)]
 pub struct Telemetry(TelemetryValue);
 
 impl Default for Telemetry {
@@ -76,14 +76,6 @@ impl Telemetry {
         )?;
 
         Ok(())
-    }
-}
-
-impl Label for Telemetry {
-    type Labeler = MakeLabeling<Telemetry>;
-
-    fn labeler() -> Self::Labeler {
-        MakeLabeling::<Self>::default()
     }
 }
 
@@ -217,14 +209,15 @@ impl IntoIterator for Telemetry {
 //
 #[cfg(test)]
 mod tests {
-    use crate::elements::TelemetryValue;
+    use std::convert::TryFrom;
+
     use ::serde::{Deserialize, Serialize};
     use chrono::{DateTime, Utc};
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
-    use std::convert::TryFrom;
 
     use super::*;
+    use crate::elements::TelemetryValue;
 
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
     struct Data {

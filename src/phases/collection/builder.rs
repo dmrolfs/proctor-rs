@@ -1,3 +1,10 @@
+use std::collections::HashSet;
+use std::fmt::Debug;
+use std::marker::PhantomData;
+
+use cast_trait_object::DynCastExt;
+use serde::de::DeserializeOwned;
+
 use super::{Clearinghouse, Collect, SubscriptionChannel, SubscriptionRequirements};
 use crate::elements::Telemetry;
 use crate::error::{CollectionError, PortError};
@@ -5,11 +12,6 @@ use crate::graph::stage::{self, SourceStage, Stage, WithApi};
 use crate::graph::{Connect, Graph, SinkShape, SourceShape, UniformFanInShape};
 use crate::phases::collection::{CorrelationGenerator, TelemetrySubscription};
 use crate::{AppData, SharedString};
-use cast_trait_object::DynCastExt;
-use serde::de::DeserializeOwned;
-use std::collections::HashSet;
-use std::fmt::Debug;
-use std::marker::PhantomData;
 
 #[derive(Debug)]
 pub struct CollectBuilder<Out> {
@@ -205,11 +207,11 @@ where
                     tracing::info!(source=%s.name(), ?merge_inlet, "connecting collection source to clearinghouse.");
                     (s.outlet(), merge_inlet).connect().await;
                     g.push_back(s.dyn_upcast()).await;
-                }
+                },
 
                 None => {
                     tracing::warn!(source=%s.name(), "no available clearinghouse port for source - skipping source.");
-                }
+                },
             }
         }
 

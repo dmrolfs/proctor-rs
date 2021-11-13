@@ -19,6 +19,8 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use once_cell::sync::Lazy;
 use oso::{Oso, ToPolar};
+use prometheus::{HistogramOpts, HistogramTimer, HistogramVec, IntCounterVec, Opts};
+use serde::Serialize;
 use tokio::sync::Mutex;
 use tokio::sync::{broadcast, mpsc};
 
@@ -27,8 +29,6 @@ use crate::graph::stage::{self, Stage};
 use crate::graph::{Inlet, Outlet, Port, PORT_CONTEXT, PORT_DATA};
 use crate::graph::{SinkShape, SourceShape};
 use crate::{track_errors, AppData, ProctorContext, ProctorResult, SharedString};
-use prometheus::{HistogramOpts, HistogramTimer, HistogramVec, IntCounterVec, Opts};
-use serde::Serialize;
 
 pub(crate) static POLICY_FILTER_EVAL_TIME: Lazy<HistogramVec> = Lazy::new(|| {
     HistogramVec::new(
@@ -337,21 +337,21 @@ where
                 track_policy_evals(name.as_ref(), PolicyResult::Passed);
                 Self::publish_event(PolicyFilterEvent::ItemPassed(item), tx)?;
                 Ok(())
-            }
+            },
 
             Ok(result) => {
                 tracing::info!(?policy, ?result, "item failed context policy review - skipping.");
                 track_policy_evals(name.as_ref(), PolicyResult::Blocked);
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
                 Ok(())
-            }
+            },
 
             Err(err) => {
                 tracing::warn!(error=?err, ?policy, "error in context policy review - skipping item.");
                 track_policy_evals(name.as_ref(), PolicyResult::Failed);
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
                 Err(err.into())
-            }
+            },
         };
 
         outcome
@@ -396,13 +396,13 @@ where
                 };
                 let _ignore_failure = tx.send(detail);
                 true
-            }
+            },
 
             PolicyFilterCmd::ReplacePolicies { new_policies, new_template_data, tx } => {
                 Self::do_reset_policy_engine(name, policy, new_policies, new_template_data, oso);
                 let _ignore_failure = tx.send(());
                 true
-            }
+            },
 
             PolicyFilterCmd::AppendPolicy { additional_policy, new_template_data, tx } => {
                 let mut sources: Vec<PolicySource> = policy.sources().iter().cloned().collect();
@@ -410,7 +410,7 @@ where
                 Self::do_reset_policy_engine(name, policy, sources, new_template_data, oso);
                 let _ignore_failure = tx.send(());
                 true
-            }
+            },
         }
     }
 
@@ -484,9 +484,13 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use claim::*;
     use oso::PolarClass;
     use pretty_assertions::assert_eq;
+    use pretty_snowflake::{Label, MakeLabeling};
+    use prometheus::Registry;
     use serde::{Deserialize, Serialize};
     use tokio::sync::mpsc;
     use tokio_test::block_on;
@@ -494,9 +498,6 @@ mod tests {
     use super::*;
     use crate::elements::telemetry;
     use crate::phases::collection::{SubscriptionRequirements, TelemetrySubscription};
-    use pretty_snowflake::{Label, MakeLabeling};
-    use prometheus::Registry;
-    use std::collections::HashSet;
 
     #[derive(Debug, PartialEq, Clone, PolarClass)]
     struct User {
@@ -504,21 +505,13 @@ mod tests {
         pub username: String,
     }
 
-    #[derive(PolarClass, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[derive(PolarClass, Label, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     struct TestContext {
         #[polar(attribute)]
         pub location_code: u32,
         #[polar(attribute)]
         #[serde(flatten)]
         pub qualities: telemetry::TableValue,
-    }
-
-    impl Label for TestContext {
-        type Labeler = MakeLabeling<TestContext>;
-
-        fn labeler() -> Self::Labeler {
-            MakeLabeling::default()
-        }
     }
 
     #[async_trait]
@@ -557,9 +550,9 @@ mod tests {
     }
 
     impl QueryPolicy for TestPolicy {
-        type Item = User;
-        type Context = TestContext;
         type Args = (Self::Item, &'static str, &'static str);
+        type Context = TestContext;
+        type Item = User;
         type TemplateData = ();
 
         fn base_template_name() -> &'static str {
@@ -663,7 +656,7 @@ mod tests {
             assert!(rx.recv().await.is_none());
         });
 
-        //todo: this is simple experiment with metrics to eval how it may be used in testing.
+        // todo: this is simple experiment with metrics to eval how it may be used in testing.
         assert_eq!(registry.gather().len(), 2);
 
         Ok(())

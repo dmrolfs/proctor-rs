@@ -1,8 +1,10 @@
-use super::TelemetryValue;
+use std::fmt::{self, Debug};
+
 use approx::{AbsDiffEq, RelativeEq};
 use oso::PolarClass;
 use serde::{Deserialize, Serialize};
-use std::fmt::{self, Debug};
+
+use super::TelemetryValue;
 
 #[derive(PolarClass, Debug, Copy, Clone, Default, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct RecordsPerSecond(f64);

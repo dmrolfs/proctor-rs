@@ -1,12 +1,13 @@
-use crate::elements::Telemetry;
-use crate::error::CollectionError;
-use crate::graph::{Connect, Inlet, Outlet, Port, PORT_DATA};
-use crate::SharedString;
 use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
-//todo: refactor to based on something like Json Schema
+use crate::elements::Telemetry;
+use crate::error::CollectionError;
+use crate::graph::{Connect, Inlet, Outlet, Port, PORT_DATA};
+use crate::SharedString;
+
+// todo: refactor to based on something like Json Schema
 pub trait SubscriptionRequirements {
     fn required_fields() -> HashSet<SharedString>;
 
@@ -20,14 +21,16 @@ pub enum TelemetrySubscription {
     All {
         name: SharedString,
         outlet_to_subscription: Outlet<Telemetry>,
-        update_metrics: Option<Arc<Box<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>>>, // Arc to support Clone
+        update_metrics: Option<Arc<Box<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>>>, /* Arc to support
+                                                                                                   * Clone */
     },
     Explicit {
         name: SharedString,
         required_fields: HashSet<SharedString>,
         optional_fields: HashSet<SharedString>,
         outlet_to_subscription: Outlet<Telemetry>,
-        update_metrics: Option<Arc<Box<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>>>, // Arc to support Clone
+        update_metrics: Option<Arc<Box<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>>>, /* Arc to support
+                                                                                                   * Clone */
     },
 }
 
@@ -96,7 +99,7 @@ impl TelemetrySubscription {
                     outlet_to_subscription,
                     update_metrics,
                 }
-            }
+            },
         }
     }
 
@@ -125,7 +128,7 @@ impl TelemetrySubscription {
                     outlet_to_subscription,
                     update_metrics,
                 }
-            }
+            },
         }
     }
 
@@ -181,7 +184,7 @@ impl TelemetrySubscription {
                     }
                 }
                 interested
-            }
+            },
         }
     }
 
@@ -212,7 +215,7 @@ impl TelemetrySubscription {
                 }
 
                 Ok((db, missing))
-            }
+            },
         }
     }
 
@@ -253,7 +256,7 @@ impl TelemetrySubscription {
                     let ready = ready.into_iter().map(|(k, v)| (k, v.clone())).collect();
                     Some(ready)
                 }
-            }
+            },
         }
     }
 

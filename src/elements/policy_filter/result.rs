@@ -1,7 +1,9 @@
+use std::collections::HashMap;
+
+use oso::Query;
+
 use crate::elements::{FromTelemetry, TelemetryValue};
 use crate::error::PolicyError;
-use oso::Query;
-use std::collections::HashMap;
 
 pub type Bindings = HashMap<String, Vec<TelemetryValue>>;
 
@@ -36,7 +38,7 @@ impl QueryResult {
                     TelemetryValue::Unit => {
                         tracing::debug!("Unit value bound to key[{}] - skipping.", key);
                         ()
-                    }
+                    },
                     val => {
                         if let Some(values) = bindings.get_mut(key) {
                             values.push(val);
@@ -45,7 +47,7 @@ impl QueryResult {
                             tracing::info!("DMR: started binding[{}]: [{:?}]", key, val);
                             bindings.insert(key.to_string(), vec![val]);
                         }
-                    }
+                    },
                 }
             }
         }

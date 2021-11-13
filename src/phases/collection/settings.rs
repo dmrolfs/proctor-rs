@@ -1,11 +1,13 @@
-use crate::error::IncompatibleSourceSettingsError;
-use crate::serde::{deserialize_duration_secs, deserialize_from_str, serialize_duration_secs, serialize_to_str};
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use reqwest::{Method, Url};
-use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
+
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use reqwest::{Method, Url};
+use serde::{Deserialize, Serialize};
+
+use crate::error::IncompatibleSourceSettingsError;
+use crate::serde::{deserialize_duration_secs, deserialize_from_str, serialize_duration_secs, serialize_to_str};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -54,9 +56,10 @@ impl HttpQuery {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use reqwest::header;
     use serde_test::{assert_tokens, Token};
+
+    use super::*;
 
     #[test]
     fn test_serde_http_query() {

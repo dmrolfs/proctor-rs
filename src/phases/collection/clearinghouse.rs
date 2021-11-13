@@ -2,18 +2,18 @@ pub mod magnet;
 pub mod protocol;
 pub mod subscription;
 
-pub use magnet::*;
-pub use protocol::*;
-pub use subscription::*;
-
 use std::collections::HashSet;
 use std::fmt::{self, Debug};
 
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use futures::future::FutureExt;
+pub use magnet::*;
 use once_cell::sync::Lazy;
 use pretty_snowflake::Id;
+use prometheus::{IntCounterVec, IntGauge, Opts};
+pub use protocol::*;
+pub use subscription::*;
 use tokio::sync::mpsc;
 
 use crate::elements::{Telemetry, Timestamp};
@@ -21,7 +21,6 @@ use crate::error::{CollectionError, ProctorError};
 use crate::graph::stage::Stage;
 use crate::graph::{stage, Inlet, OutletsShape, Port, SinkShape, UniformFanOutShape};
 use crate::{ProctorIdGenerator, ProctorResult, SharedString};
-use prometheus::{IntCounterVec, IntGauge, Opts};
 
 pub(crate) static SUBSCRIPTIONS_GAUGE: Lazy<IntGauge> = Lazy::new(|| {
     IntGauge::new(
@@ -107,14 +106,14 @@ impl Clearinghouse {
                 database.extend(d);
                 Self::push_to_subscribers(stage_name, database, interested, correlation_generator).await?;
                 Ok(true)
-            }
+            },
 
             None => {
                 tracing::info!(
                     "telemetry sources dried up - stopping since subscribers have data they're going to get."
                 );
                 Ok(false)
-            }
+            },
         }
     }
 
@@ -188,8 +187,8 @@ impl Clearinghouse {
         let statuses = futures::future::join_all(fulfilled).await;
         let result = if let Some((s, Err(err))) = statuses.into_iter().find(|(_, status)| status.is_err()) {
             tracing::error!(subscription=%s.name(), "failed to send fulfilled subscription.");
-            //todo: change to track *all* errors -- only first found is currently tracked
-            //todo: resolve design to avoid this hack to satisfy track_errors api while not exposing
+            // todo: change to track *all* errors -- only first found is currently tracked
+            // todo: resolve design to avoid this hack to satisfy track_errors api while not exposing
             // collection stage with proctor error.
             let proctor_err = ProctorError::CollectionError(err);
             crate::graph::track_errors(stage_name.as_ref(), &proctor_err);
@@ -198,7 +197,7 @@ impl Clearinghouse {
                 err => {
                     tracing::error!(error=?err, "Unexpected error in clearinghouse");
                     None
-                }
+                },
             }
             .unwrap();
 
@@ -241,7 +240,7 @@ impl Clearinghouse {
                             missing: HashSet::default(),
                             subscriptions: subscriptions.clone(),
                         }
-                    }
+                    },
 
                     Some(name) => match subscriptions.iter().find(|s| s.name() == name.as_str()) {
                         Some(sub) => {
@@ -259,7 +258,7 @@ impl Clearinghouse {
                                 missing,
                                 subscriptions: vec![sub.clone()],
                             }
-                        }
+                        },
 
                         None => {
                             tracing::info!(requested_subscription=%name, "subscription not found - returning clearinghouse snapshot.");
@@ -268,13 +267,13 @@ impl Clearinghouse {
                                 missing: HashSet::default(),
                                 subscriptions: subscriptions.clone(),
                             }
-                        }
+                        },
                     },
                 };
 
                 let _ = tx.send(snapshot);
                 Ok(true)
-            }
+            },
 
             ClearinghouseCmd::Subscribe { subscription, receiver, tx } => {
                 tracing::info!(?subscription, "adding telemetry subscriber.");
@@ -283,7 +282,7 @@ impl Clearinghouse {
                 track_subscriptions(subscriptions.len());
                 let _ = tx.send(());
                 Ok(true)
-            }
+            },
 
             ClearinghouseCmd::Unsubscribe { name, tx } => {
                 // let mut subs = subscriptions.lock().await;
@@ -295,7 +294,7 @@ impl Clearinghouse {
                 tracing::info!(?dropped, "subscription dropped");
                 let _ = tx.send(());
                 Ok(true)
-            }
+            },
         }
     }
 }
@@ -440,10 +439,15 @@ impl stage::WithApi for Clearinghouse {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::convert::TryFrom;
+    use std::convert::TryInto;
+    use std::sync::Arc;
     use std::time::Duration;
 
     use claim::*;
     use pretty_assertions::assert_eq;
+    use pretty_snowflake::{Id, IdPrettifier, PrettyIdGenerator};
+    use prometheus::{IntCounterVec, IntGaugeVec, Opts, Registry};
     use tokio::sync::oneshot;
     use tokio_test::block_on;
     use tracing::Instrument;
@@ -452,11 +456,6 @@ mod tests {
     use crate::elements::telemetry::ToTelemetry;
     use crate::graph::stage::{self, Stage, WithApi};
     use crate::graph::{Connect, Outlet, SinkShape, SourceShape, PORT_DATA};
-    use pretty_snowflake::{Id, IdPrettifier, PrettyIdGenerator};
-    use prometheus::{IntCounterVec, IntGaugeVec, Opts, Registry};
-    use std::convert::TryFrom;
-    use std::convert::TryInto;
-    use std::sync::Arc;
 
     static ID_GENERATOR: Lazy<CorrelationGenerator> =
         Lazy::new(|| PrettyIdGenerator::single_node(IdPrettifier::default()));

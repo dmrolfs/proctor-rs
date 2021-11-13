@@ -11,7 +11,7 @@ use crate::graph::{Inlet, Outlet, Port, SourceShape, PORT_DATA};
 use crate::phases::collection::{ClearinghouseSubscriptionMagnet, TelemetrySubscription};
 use crate::{AppData, ProctorResult, SharedString};
 
-//todo: consider refactor all of these builder functions into a typed subscription channel builder.
+// todo: consider refactor all of these builder functions into a typed subscription channel builder.
 
 /// Subscription Source stage that can be used to adapt subscribed telemetry data into a
 /// typed inlet.
@@ -101,6 +101,7 @@ impl<T: Debug> Debug for SubscriptionChannel<T> {
 
 impl<T> SourceShape for SubscriptionChannel<T> {
     type Out = T;
+
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()
     }
@@ -150,7 +151,7 @@ impl<T: AppData> SubscriptionChannel<T> {
             Some(inner) => {
                 inner.run().await.map_err(|err| CollectionError::StageError(err.into()))?;
                 Ok(())
-            }
+            },
 
             None => Err(CollectionError::ClosedSubscription(self.name.clone())),
         }

@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use super::protocol::{ClearinghouseApi, ClearinghouseCmd};
 use super::subscription::TelemetrySubscription;
 use super::Clearinghouse;
@@ -5,7 +7,6 @@ use crate::elements::Telemetry;
 use crate::error::CollectionError;
 use crate::graph::Inlet;
 use crate::phases::collection::CollectBuilder;
-use std::fmt::Debug;
 
 #[derive(Debug)]
 pub enum ClearinghouseSubscriptionMagnet<'c> {
@@ -24,7 +25,7 @@ impl<'c> ClearinghouseSubscriptionMagnet<'c> {
             Magnet::Direct(clearinghouse) => {
                 clearinghouse.subscribe(subscription, &receiver).await;
                 Ok(())
-            }
+            },
 
             Magnet::Api(tx_clearinghouse_api) => {
                 let (cmd, rx_ack) = ClearinghouseCmd::subscribe(subscription.clone(), receiver.clone());
@@ -42,7 +43,7 @@ impl<'c> ClearinghouseSubscriptionMagnet<'c> {
                     ack.is_ok()
                 );
                 ack
-            }
+            },
         }
     }
 }

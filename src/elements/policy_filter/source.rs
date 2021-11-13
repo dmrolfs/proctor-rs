@@ -1,10 +1,12 @@
-use crate::error::PolicyError;
-use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 use trim_margin::MarginTrimmable;
+
+use crate::error::PolicyError;
 
 #[derive(Debug)]
 pub enum PolicySourcePath {
@@ -111,7 +113,7 @@ impl PolicySource {
             Self::String { name, polar: _, is_template: _ } => name.into(),
             Self::File { path, is_template: _ } => {
                 path.file_stem().expect("policy file needs a filename").to_string_lossy()
-            }
+            },
         }
     }
 
@@ -142,18 +144,20 @@ impl TryInto<String> for &PolicySource {
                 let mut policy = String::new();
                 f.read_to_string(&mut policy)?;
                 Ok(policy)
-            }
+            },
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::path::PathBuf;
+
     use claim::assert_ok;
     use pretty_assertions::assert_eq;
     use serde_test::{assert_tokens, Token};
-    use std::path::PathBuf;
+
+    use super::*;
 
     // assert_impl_all!(PolicyFilterCmd<C>: Sync, Send);
     // assert_impl_all!(PolicyFilterDetail: Sync, Send);

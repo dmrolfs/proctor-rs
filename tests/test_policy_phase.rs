@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -7,6 +6,7 @@ use std::time::Duration;
 use ::serde::de::DeserializeOwned;
 use ::serde::{Deserialize, Serialize};
 use ::serde_with::{serde_as, TimestampSeconds};
+use async_trait::async_trait;
 use chrono::*;
 use claim::*;
 use once_cell::sync::Lazy;
@@ -35,7 +35,7 @@ use serde_test::{assert_tokens, Token};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
-#[derive(PolarClass, Debug, Clone, Serialize, Deserialize)]
+#[derive(PolarClass, Label, Debug, Clone, Serialize, Deserialize)]
 pub struct Data {
     pub input_messages_per_sec: f64,
     #[serde(with = "proctor::serde")]
@@ -44,21 +44,13 @@ pub struct Data {
     pub inbox_lag: i64,
 }
 
-impl Label for Data {
-    type Labeler = MakeLabeling<Self>;
-
-    fn labeler() -> Self::Labeler {
-        MakeLabeling::default()
-    }
-}
-
 impl PartialEq for Data {
     fn eq(&self, other: &Self) -> bool {
         self.input_messages_per_sec.eq(&other.input_messages_per_sec) && self.inbox_lag.eq(&other.inbox_lag)
     }
 }
 
-#[derive(PolarClass, Debug, Clone, Serialize, Deserialize)]
+#[derive(PolarClass, Label, Debug, Clone, Serialize, Deserialize)]
 pub struct TestPolicyPhaseContext {
     pub timestamp: Timestamp,
     pub correlation_id: Id<TestPolicyPhaseContext>,
@@ -75,13 +67,13 @@ pub struct TestPolicyPhaseContext {
     pub custom: telemetry::TableValue,
 }
 
-impl Label for TestPolicyPhaseContext {
-    type Labeler = MakeLabeling<Self>;
-
-    fn labeler() -> Self::Labeler {
-        MakeLabeling::default()
-    }
-}
+// impl Label for TestPolicyPhaseContext {
+//     type Labeler = MakeLabeling<Self>;
+//
+//     fn labeler() -> Self::Labeler {
+//         MakeLabeling::default()
+//     }
+// }
 
 impl PartialEq for TestPolicyPhaseContext {
     fn eq(&self, other: &Self) -> bool {
@@ -205,7 +197,8 @@ fn test_context_serde() {
 
     let now = Timestamp::now();
     let corr: Id<TestPolicyPhaseContext> = LabeledRealtimeIdGenerator::default().next_id();
-    // let corr = LabeledRealtimeIdGenerator<TestPolicyPhaseContext>::single_node(IdPrettifier::default());
+    // let corr =
+    // LabeledRealtimeIdGenerator<TestPolicyPhaseContext>::single_node(IdPrettifier::default());
 
     let context = TestPolicyPhaseContext {
         timestamp: now.clone(),
@@ -324,9 +317,9 @@ impl<T: AppData> PolicySubscription for TestPolicyA<T> {
 }
 
 impl<T: AppData + ToPolar + Clone> QueryPolicy for TestPolicyA<T> {
-    type Item = T;
-    type Context = TestPolicyPhaseContext;
     type Args = (Self::Item, Self::Context);
+    type Context = TestPolicyPhaseContext;
+    type Item = T;
     type TemplateData = PolicyData;
 
     fn base_template_name() -> &'static str {
@@ -641,10 +634,10 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
             assert!(blocked.timestamp > data.timestamp);
             assert_ne!(blocked.correlation_id, data.correlation_id);
             assert_eq!(blocked, data);
-        }
+        },
         PolicyFilterEvent::ContextChanged(ctx) => {
             panic!("unexpected context change:{:?}", ctx);
-        }
+        },
         PolicyFilterEvent::ItemPassed(data) => panic!("unexpected data passed policy {:?}", data),
     }
 
@@ -728,7 +721,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
                     custom: TableValue::new(),
                 }
             );
-        }
+        },
         PolicyFilterEvent::ContextChanged(None) => panic!("did not expect to clear context"),
         PolicyFilterEvent::ItemBlocked(item) => panic!("unexpected item receipt - blocked: {:?}", item),
         PolicyFilterEvent::ItemPassed(data) => panic!("unexpected data passed policy: {:?}", data),
@@ -900,9 +893,9 @@ impl PolicySubscription for TestPolicyB {
 }
 
 impl QueryPolicy for TestPolicyB {
-    type Item = TestItem;
-    type Context = TestPolicyPhaseContext;
     type Args = (Self::Item, Self::Context);
+    type Context = TestPolicyPhaseContext;
+    type Item = TestItem;
     type TemplateData = HashMap<String, String>;
 
     fn base_template_name() -> &'static str {

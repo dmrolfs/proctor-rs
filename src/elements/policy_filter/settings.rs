@@ -1,8 +1,10 @@
-use super::PolicySource;
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt::Debug;
+
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+
+use super::PolicySource;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]

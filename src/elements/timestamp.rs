@@ -1,5 +1,9 @@
-use super::{TelemetryValue, ToTelemetry};
-use crate::error::{TelemetryError, TypeExpectation};
+use std::collections::HashMap;
+use std::convert::TryFrom;
+use std::fmt::{self, Debug};
+use std::str::FromStr;
+use std::time::Duration;
+
 use approx::{AbsDiffEq, RelativeEq};
 use chrono::{DateTime, TimeZone, Utc};
 use num_traits::cast::FromPrimitive;
@@ -8,11 +12,9 @@ use oso::PolarClass;
 use regex::Regex;
 use serde::de::Unexpected;
 use serde::{de, Deserialize, Deserializer, Serialize};
-use std::collections::HashMap;
-use std::convert::TryFrom;
-use std::fmt::{self, Debug};
-use std::str::FromStr;
-use std::time::Duration;
+
+use super::{TelemetryValue, ToTelemetry};
+use crate::error::{TelemetryError, TypeExpectation};
 
 #[derive(PolarClass, Debug, Copy, Clone, Default, PartialEq, PartialOrd, Serialize)]
 pub struct Timestamp(i64, u32);
@@ -112,7 +114,7 @@ impl TryFrom<TelemetryValue> for Timestamp {
                 let nanos = seq.pop().map(u32::try_from).transpose()?.unwrap();
                 let secs = seq.pop().map(i64::try_from).transpose()?.unwrap();
                 Ok(Self::new(secs, nanos))
-            }
+            },
             TelemetryValue::Float(f64) => Ok(f64.into()),
             TelemetryValue::Integer(i64) => Ok(i64.into()),
             TelemetryValue::Table(mut table) => {
@@ -127,13 +129,13 @@ impl TryFrom<TelemetryValue> for Timestamp {
                     .transpose()?
                     .unwrap_or(0);
                 Ok(Self(secs, nanos))
-            }
+            },
             TelemetryValue::Text(rep) => {
                 let dt = DateTime::parse_from_str(rep.as_str(), FORMAT)
                     .map_err(|err| TelemetryError::ValueParseError(err.into()))?
                     .with_timezone(&Utc);
                 Ok(dt.into())
-            }
+            },
             value => Err(TelemetryError::TypeError {
                 expected: format!("a telemetry {}", TypeExpectation::Float),
                 actual: Some(format!("{:?}", value)),
@@ -499,9 +501,10 @@ impl<'de> de::Visitor<'de> for TimestampVisitor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use claim::*;
     use pretty_assertions::assert_eq;
+
+    use super::*;
     //     use approx::assert_relative_eq;
 
     #[test]

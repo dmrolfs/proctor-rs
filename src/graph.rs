@@ -3,10 +3,11 @@ mod port;
 mod shape;
 pub mod stage;
 
-use once_cell::sync::Lazy;
 use std::collections::VecDeque;
 use std::fmt;
 
+use once_cell::sync::Lazy;
+use prometheus::{IntCounterVec, Opts};
 use tracing::Instrument;
 
 use self::node::Node;
@@ -17,7 +18,6 @@ pub use self::shape::*;
 use self::stage::Stage;
 use crate::error::{GraphError, MetricLabel, ProctorError};
 use crate::ProctorResult;
-use prometheus::{IntCounterVec, Opts};
 
 pub static GRAPH_ERRORS: Lazy<IntCounterVec> = Lazy::new(|| {
     IntCounterVec::new(
@@ -128,11 +128,12 @@ impl Graph {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::error::{EligibilityError, GraphError, PortError};
     use claim::*;
     use pretty_assertions::assert_eq;
     use prometheus::Registry;
+
+    use super::*;
+    use crate::error::{EligibilityError, GraphError, PortError};
 
     #[test]
     fn test_track_error_metric() {

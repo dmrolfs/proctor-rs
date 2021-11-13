@@ -1,8 +1,10 @@
+use std::collections::HashSet;
+
+use tokio::sync::{mpsc, oneshot};
+
 use super::{Telemetry, TelemetrySubscription};
 use crate::graph::Inlet;
 use crate::Ack;
-use std::collections::HashSet;
-use tokio::sync::{mpsc, oneshot};
 
 pub type ClearinghouseApi = mpsc::UnboundedSender<ClearinghouseCmd>;
 

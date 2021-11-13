@@ -1,8 +1,8 @@
-use crate::error::ProctorError;
 use tokio::task::JoinHandle;
 use tracing::Instrument;
 
 use super::stage::Stage;
+use crate::error::ProctorError;
 use crate::graph;
 use crate::ProctorResult;
 
@@ -38,15 +38,15 @@ impl Node {
                         Ok(()) => {
                             tracing::info!("{} node completed and stopped", self.name);
                             break Ok(());
-                        }
+                        },
                         Err(ProctorError::GraphError(err)) => {
                             tracing::error!(error=?err, "Graph error in {} node - stopping", self.name);
                             break Err(err.into());
-                        }
+                        },
                         Err(err) => {
                             graph::track_errors(self.stage.name(), &err);
                             tracing::error!(error=?err, "{} node failed on item - skipping", self.name);
-                        }
+                        },
                     }
                 };
 

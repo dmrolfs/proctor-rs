@@ -1798,16 +1798,27 @@ checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
 [[package]]
 name = "pretty-snowflake"
 version = "1.3.8"
-source = "git+https://github.com/dmrolfs/pretty-snowflake-rs#06e26d2296ba1f22caf37a16b89eb84409e1e4b6"
+source = "git+https://github.com/dmrolfs/pretty-snowflake-rs#3c97b291ad2b327cdbbdccb403054c8b5fd9daa3"
 dependencies = [
  "itertools",
  "once_cell",
+ "pretty-snowflake-derive",
  "pretty-type-name",
  "rs-snowflake",
  "serde 1.0.130",
  "tailcall",
  "thiserror",
  "validator",
+]
+
+[[package]]
+name = "pretty-snowflake-derive"
+version = "0.1.0"
+source = "git+https://github.com/dmrolfs/pretty-snowflake-rs#3c97b291ad2b327cdbbdccb403054c8b5fd9daa3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

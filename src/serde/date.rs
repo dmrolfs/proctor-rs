@@ -1,9 +1,9 @@
+use std::collections::HashMap;
 use std::fmt;
 
 use chrono::{DateTime, TimeZone, Utc};
 use serde::de::MapAccess;
 use serde::{self, de, ser::SerializeMap, Serializer};
-use std::collections::HashMap;
 
 pub const FORMAT: &'static str = "%+";
 pub const SECS_KEY: &'static str = crate::elements::SECS_KEY;
@@ -59,8 +59,8 @@ where
     deserializer.deserialize_option(OptionalDateTimeMapVisitor)
 }
 
-// pub fn deserialize_optional_datetime_format<'de, D>(deserializer: D) -> Result<Option<DateTime<Utc>>, D::Error>
-// where
+// pub fn deserialize_optional_datetime_format<'de, D>(deserializer: D) ->
+// Result<Option<DateTime<Utc>>, D::Error> where
 //     D: de::Deserializer<'de>,
 // {
 //     deserializer.deserialize_option(OptionalDateTimeFormatVisitor)
@@ -71,7 +71,7 @@ pub fn serialize<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Err
 where
     S: Serializer,
 {
-    //todo changing DateTime<Utc> serde to match From<TelemetryValue>
+    // todo changing DateTime<Utc> serde to match From<TelemetryValue>
     // let datetime_table = format!("{}", date.format(FORMAT));
     let datetime_table = table_from_datetime(date);
     let mut map = serializer.serialize_map(Some(datetime_table.len()))?;

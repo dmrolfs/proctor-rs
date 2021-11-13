@@ -1,6 +1,7 @@
+use pretty_snowflake::Label;
+
 use crate::elements::{FromTelemetry, QueryResult};
 use crate::error::PolicyError;
-use pretty_snowflake::Label;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PolicyOutcome<T, C> {

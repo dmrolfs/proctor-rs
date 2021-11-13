@@ -1,8 +1,9 @@
+use prometheus::Registry;
+
 use crate::elements::policy_filter;
 use crate::error::ProctorError;
 use crate::graph;
 use crate::phases::collection::clearinghouse;
-use prometheus::Registry;
 
 #[tracing::instrument(level = "info")]
 pub fn register_proctor_metrics(registry: &Registry) -> Result<(), ProctorError> {

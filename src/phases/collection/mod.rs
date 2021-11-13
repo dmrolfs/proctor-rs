@@ -1,18 +1,19 @@
+use std::fmt::{self, Debug};
+
+use async_trait::async_trait;
+pub use builder::*;
+use cast_trait_object::dyn_upcast;
+pub use clearinghouse::*;
+use pretty_snowflake::{AlphabetCodec, IdPrettifier, MachineNode};
+pub use settings::*;
+pub use source::*;
+pub use subscription_channel::*;
+
 use crate::elements::Telemetry;
 use crate::error::CollectionError;
 use crate::graph::stage::{SourceStage, Stage, WithApi};
 use crate::graph::{Outlet, Port, SourceShape};
 use crate::{AppData, ProctorResult};
-use async_trait::async_trait;
-use cast_trait_object::dyn_upcast;
-use pretty_snowflake::{AlphabetCodec, IdPrettifier, MachineNode};
-use std::fmt::{self, Debug};
-
-pub use builder::*;
-pub use clearinghouse::*;
-pub use settings::*;
-pub use source::*;
-pub use subscription_channel::*;
 
 pub mod builder;
 pub mod clearinghouse;
@@ -20,7 +21,7 @@ pub mod settings;
 pub mod source;
 pub mod subscription_channel;
 
-//todo: implement
+// todo: implement
 // pub type CollectApi = mpsc::UnboundedSender<CollectCmd>;
 // pub type CollectApiReceiver = mpsc::UnboundedReceiver<CollectCmd>;
 // pub type CollectMonitor = broadcast::Receiver<CollectEvent>;
@@ -48,8 +49,8 @@ pub struct Collect<Out> {
     inner: Box<dyn SourceStage<Out>>,
     outlet: Outlet<Out>,
     pub tx_clearinghouse_api: ClearinghouseApi,
-    //todo: tx_api: CollectApi,
-    //todo: tx_monitor: CollectMonitor,
+    /* todo: tx_api: CollectApi,
+     * todo: tx_monitor: CollectMonitor, */
 }
 
 impl<Out> Collect<Out> {
@@ -81,6 +82,7 @@ impl<Out> Debug for Collect<Out> {
 
 impl<Out> SourceShape for Collect<Out> {
     type Out = Out;
+
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()
     }

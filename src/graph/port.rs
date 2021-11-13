@@ -1,7 +1,6 @@
 use std::fmt;
 use std::sync::Arc;
 
-use crate::SharedString;
 use async_trait::async_trait;
 use once_cell::sync::Lazy;
 use prometheus::{IntCounterVec, Opts};
@@ -10,6 +9,7 @@ use tokio::sync::Mutex;
 
 use crate::error::PortError;
 use crate::AppData;
+use crate::SharedString;
 
 pub static STAGE_INGRESS_COUNTS: Lazy<IntCounterVec> = Lazy::new(|| {
     IntCounterVec::new(
@@ -154,11 +154,11 @@ impl<T: Send> Port for Inlet<T> {
             Some(r) => {
                 tracing::trace!(stage=%self.stage, inlet=%self.name, "closing Inlet");
                 r.0.close()
-            }
+            },
             None => {
                 tracing::trace!(stage=%self.stage, inlet=%self.name, "Inlet close ignored - not attached");
                 ()
-            }
+            },
         }
     }
 }

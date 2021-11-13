@@ -78,13 +78,13 @@ impl<T: AppData> Stage for ActorSource<T> {
                     let _ = send_span.enter();
                     self.outlet().send(item).await?;
                     let _ignore_failure = tx.send(());
-                }
+                },
 
                 ActorSourceCmd::Stop(tx) => {
                     tracing::info!("stopping actor source.");
                     let _ignore_failure = tx.send(());
                     break;
-                }
+                },
             }
         }
 

@@ -1,9 +1,9 @@
-use either::{Either, Left, Right};
 use std::convert::Infallible;
 use std::fmt;
 use std::fmt::Debug;
 
 use chrono::{DateTime, Utc};
+use either::{Either, Left, Right};
 use thiserror::Error;
 
 use crate::elements::TelemetryValue;
@@ -56,6 +56,7 @@ impl MetricLabel for ProctorError {
     fn slug(&self) -> SharedString {
         "proctor".into()
     }
+
     fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
         match self {
             Self::CollectionError(e) => Right(Box::new(e)),

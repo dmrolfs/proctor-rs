@@ -1,14 +1,16 @@
-use super::QueryResult;
-use crate::elements::{PolicySource, PolicySourcePath};
-use crate::error::PolicyError;
-use crate::phases::collection::{SubscriptionRequirements, TelemetrySubscription};
+use std::fmt::Debug;
+use std::io::Write;
+use std::path::PathBuf;
+
 use either::Either;
 use either::Either::{Left, Right};
 use oso::{ToPolar, ToPolarList};
 use serde::Serialize;
-use std::fmt::Debug;
-use std::io::Write;
-use std::path::PathBuf;
+
+use super::QueryResult;
+use crate::elements::{PolicySource, PolicySourcePath};
+use crate::error::PolicyError;
+use crate::phases::collection::{SubscriptionRequirements, TelemetrySubscription};
 
 pub trait Policy<T, C, A>: PolicySubscription<Requirements = C> + QueryPolicy<Item = T, Context = C, Args = A> {}
 
@@ -136,6 +138,6 @@ fn policy_source_path_for(name: &str, policy: Either<PathBuf, &str>) -> Result<P
             write!(tmp.as_file_mut(), "{}", rep)?;
 
             Ok(PolicySourcePath::String(tmp))
-        }
+        },
     }
 }
