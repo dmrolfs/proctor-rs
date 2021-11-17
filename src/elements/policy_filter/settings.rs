@@ -227,7 +227,7 @@ mod tests {
         #[serde(skip_serializing_if = "Option::is_none")]
         pub max_healthy_lag: Option<f64>,
         pub min_healthy_lag: f64,
-        #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+        #[serde(flatten, skip_serializing_if = "BTreeMap::is_empty")]
         pub custom: BTreeMap<String, String>,
     }
 
@@ -246,7 +246,7 @@ mod tests {
         assert_tokens(
             &data,
             &[
-                Token::Struct { name: "TestTemplateData", len: 3 },
+                Token::Map { len: None },
                 Token::Str("basis"),
                 Token::Str("eligibility_basis"),
                 Token::Str("max_healthy_lag"),
@@ -259,7 +259,7 @@ mod tests {
                 // Token::Str("foo"),
                 // Token::Str("bar"),
                 // Token::MapEnd,
-                Token::StructEnd,
+                Token::MapEnd,
             ],
         )
     }
@@ -301,7 +301,7 @@ mod tests {
                 Token::StructEnd,
                 Token::SeqEnd,
                 Token::Str("template_data"),
-                Token::Struct { name: "TestTemplateData", len: 4 },
+                Token::Map { len: None },
                 Token::Str("basis"),
                 Token::Str("eligibility_basis"),
                 Token::Str("max_healthy_lag"),
@@ -309,12 +309,9 @@ mod tests {
                 Token::F64(133.0),
                 Token::Str("min_healthy_lag"),
                 Token::F64(0.0),
-                Token::Str("custom"),
-                Token::Map { len: Some(1) },
                 Token::Str("foo"),
                 Token::Str("bar"),
                 Token::MapEnd,
-                Token::StructEnd,
                 Token::StructEnd,
             ],
         )
@@ -339,30 +336,33 @@ mod tests {
         };
 
         let rep = assert_ok!(ron::ser::to_string_pretty(&expected, PrettyConfig::default()));
-        let expected_rep = r##"|(
-        |    policies: [
-        |        (
-        |            source: "file",
-        |            policy: (
-        |                path: "../resources/eligibility.polar",
-        |                is_template: true,
-        |            ),
-        |        ),
-        |    ],
-        |    template_data: (
-        |        basis: "eligibility_basis",
-        |        max_healthy_lag: Some(133),
-        |        min_healthy_lag: 0,
-        |        custom: {
-        |            "foo": "bar",
-        |        },
-        |    ),
-        |)"##
+        let mut ron_deser = assert_ok!(ron::Deserializer::from_str(&rep));
+        let mut json_rep = vec![];
+        let mut json_ser = serde_json::Serializer::pretty(json_rep);
+        let _ = assert_ok!(serde_transcode::transcode(&mut ron_deser, &mut json_ser));
+        let json_rep = assert_ok!(String::from_utf8(json_ser.into_inner()));
+        let expected_rep = r##"|{
+        |  "policies": [
+        |    {
+        |      "source": "file",
+        |      "policy": {
+        |        "path": "../resources/eligibility.polar",
+        |        "is_template": true
+        |      }
+        |    }
+        |  ],
+        |  "template_data": {
+        |    "basis": "eligibility_basis",
+        |    "max_healthy_lag": 133,
+        |    "min_healthy_lag": 0,
+        |    "foo": "bar"
+        |  }
+        |}"##
             .trim_margin_with("|")
             .unwrap();
-        assert_eq!(rep, expected_rep);
+        assert_eq!(json_rep, expected_rep);
 
-        let actual: PolicySettings<TestTemplateData> = assert_ok!(ron::de::from_str(&rep));
+        let actual: PolicySettings<TestTemplateData> = assert_ok!(serde_json::from_str(&json_rep));
         assert_eq!(actual, expected)
     }
 }

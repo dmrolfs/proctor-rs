@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::f64::consts;
 
 use ::serde::{Deserialize, Serialize};
@@ -8,7 +8,9 @@ use claim::*;
 use oso::{Oso, PolarClass, PolarValue};
 use pretty_assertions::assert_eq;
 use proctor::elements::telemetry::ToTelemetry;
-use proctor::elements::{self, telemetry, PolicyOutcome, PolicySubscription, QueryPolicy, QueryResult, TelemetryValue};
+use proctor::elements::{
+    self, telemetry, PolicyOutcome, PolicySettings, PolicySubscription, QueryPolicy, QueryResult, TelemetryValue,
+};
 use proctor::elements::{PolicyRegistry, PolicySource};
 use proctor::error::PolicyError;
 use proctor::graph::stage::{self, WithApi, WithMonitor};
@@ -17,6 +19,7 @@ use proctor::phases::collection::SubscriptionRequirements;
 use proctor::{ProctorContext, SharedString};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
+use trim_margin::MarginTrimmable;
 
 #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct TestItem {
@@ -91,13 +94,15 @@ impl SubscriptionRequirements for TestContext {
     }
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Default, Serialize, Clone)]
 struct PolicyTemplateData {
     pub location_code: u32,
     #[serde(default)]
     pub lag: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cat: Option<String>,
+    #[serde(flatten, skip_serializing_if = "BTreeMap::is_empty")]
+    pub custom: BTreeMap<String, String>,
 }
 
 #[derive(Debug)]
@@ -344,6 +349,104 @@ impl TestFlow {
     }
 }
 
+#[test]
+fn test_policy_serde_and_render() {
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    struct TemplateData {
+        pub basis: String,
+        pub health_lag: i64,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub max_healthy_cpu_load: Option<f64>,
+        #[serde(flatten, skip_serializing_if = "BTreeMap::is_empty")]
+        pub custom: BTreeMap<String, String>,
+    }
+
+    impl Default for TemplateData {
+        fn default() -> Self {
+            Self {
+                basis: "policy_basis".to_string(),
+                health_lag: 30_000,
+                max_healthy_cpu_load: None,
+                custom: BTreeMap::default(),
+            }
+        }
+    }
+
+    let settings = PolicySettings {
+        required_subscription_fields: maplit::hashset! { "foo".to_string() },
+        optional_subscription_fields: HashSet::default(),
+        policies: vec![assert_ok!(PolicySource::from_template_string(
+            "policy_basis",
+            r##"eligible(_item, context, _) if context.location_code == {{location_code}};"##
+        ))],
+        template_data: Some(TemplateData {
+            health_lag: 23_333,
+            custom: maplit::btreemap! {"location_code".to_string() => 33.to_string(),},
+            ..TemplateData::default()
+        }),
+    };
+
+    let settings_rep = assert_ok!(ron::ser::to_string_pretty(&settings, ron::ser::PrettyConfig::default()));
+    assert_eq!(
+        settings_rep,
+        r##"|(
+        |    required_subscription_fields: [
+        |        "foo",
+        |    ],
+        |    policies: [
+        |        (
+        |            source: "string",
+        |            policy: (
+        |                name: "policy_basis",
+        |                polar: "eligible(_item, context, _) if context.location_code == {{location_code}};",
+        |                is_template: true,
+        |            ),
+        |        ),
+        |    ],
+        |    template_data: {
+        |        "basis": "policy_basis",
+        |        "health_lag": 23333,
+        |        "location_code": "33",
+        |    },
+        |)"##
+            .trim_margin_with("|")
+            .unwrap()
+    );
+
+    let json_rep = r##"|{
+    |  "required_subscription_fields": [
+    |    "foo"
+    |  ],
+    |  "policies": [
+    |    {
+    |      "source": "string",
+    |      "policy": {
+    |        "name": "policy_basis",
+    |        "polar": "eligible(_item, context, _) if context.location_code == {{location_code}};",
+    |        "is_template": true
+    |      }
+    |    }
+    |  ],
+    |  "template_data": {
+    |    "basis": "policy_basis",
+    |    "health_lag": 23333,
+    |    "location_code": "33"
+    |  }
+    |}"##
+        .trim_margin_with("|")
+        .unwrap();
+
+    let hydrated: PolicySettings<TemplateData> = assert_ok!(serde_json::from_str(&json_rep));
+    assert_eq!(hydrated, settings);
+
+    let mut registry = PolicyRegistry::new();
+    let policy = hydrated.policies.first().unwrap();
+    let policy_name = policy.name();
+    let template: String = assert_ok!(policy.try_into());
+    let actual = assert_ok!(registry.render_template(&template, settings.template_data.as_ref().unwrap()));
+    assert_eq!(actual, "eligible(_item, context, _) if context.location_code == 33;");
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_policy_filter_before_context_baseline() -> anyhow::Result<()> {
     once_cell::sync::Lazy::force(&proctor::tracing::TEST_TRACING);
@@ -352,7 +455,12 @@ async fn test_policy_filter_before_context_baseline() -> anyhow::Result<()> {
 
     let flow = TestFlow::new(
         r##"eligible(_item, context) if context.location_code == {{location_code}};"##,
-        PolicyTemplateData { location_code: 33, lag: None, cat: None },
+        PolicyTemplateData {
+            location_code: 33,
+            lag: None,
+            cat: None,
+            ..PolicyTemplateData::default()
+        },
     )
     .await?;
     let item = TestItem {
@@ -376,7 +484,7 @@ async fn test_policy_filter_happy_context() -> anyhow::Result<()> {
 
     let flow = TestFlow::new(
         r##"eligible(_item, context, _) if context.location_code == {{location_code}};"##,
-        PolicyTemplateData { location_code: 33, lag: None, cat: None },
+        PolicyTemplateData { location_code: 33, ..PolicyTemplateData::default() },
     )
     .await?;
 
@@ -451,7 +559,7 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
 
     let mut flow = TestFlow::new(
         r##"eligible(_item, context, _) if context.location_code == {{location_code}};"##,
-        PolicyTemplateData { location_code: 33, lag: None, cat: None },
+        PolicyTemplateData { location_code: 33, ..PolicyTemplateData::default() },
     )
     .await?;
     flow.push_context(TestContext::new(33)).await?;
@@ -536,6 +644,7 @@ async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
             location_code: 33_333,
             lag: Some(10),
             cat: Some("Otis".to_string()),
+            ..PolicyTemplateData::default()
         },
     )
     .await?;
@@ -610,6 +719,7 @@ async fn test_policy_w_binding() -> anyhow::Result<()> {
             location_code: 1_000,
             lag: Some(13),
             cat: Some("Otis".to_string()),
+            ..PolicyTemplateData::default()
         },
         "eligible",
     )
@@ -692,6 +802,7 @@ async fn test_policy_w_item_n_env() -> anyhow::Result<()> {
             location_code: 33,
             lag: Some(2),
             cat: Some("Otis".to_string()),
+            ..PolicyTemplateData::default()
         },
     )
     .await?;
@@ -740,7 +851,11 @@ async fn test_policy_w_method() -> anyhow::Result<()> {
         |   34 < item.input_messages_per_sec(item.inbox_lag)
         |   and item.input_messages_per_sec(item.inbox_lag) < {{lag}};
         "##,
-        PolicyTemplateData { location_code: 33, lag: Some(36), cat: None },
+        PolicyTemplateData {
+            location_code: 33,
+            lag: Some(36),
+            ..PolicyTemplateData::default()
+        },
     )
     .await?;
 
@@ -787,8 +902,8 @@ async fn test_replace_policy() -> anyhow::Result<()> {
         policy_1,
         PolicyTemplateData {
             location_code: 33,
-            lag: None,
             cat: Some("Otis".to_string()),
+            ..PolicyTemplateData::default()
         },
     )
     .await?;
@@ -869,6 +984,7 @@ async fn test_append_policy() -> anyhow::Result<()> {
             location_code: 33,
             lag: Some(2),
             cat: Some("Otis".to_string()),
+            ..PolicyTemplateData::default()
         },
     )
     .await?;
@@ -953,6 +1069,7 @@ async fn test_reset_policy() -> anyhow::Result<()> {
             location_code: 37,
             lag: Some(2),
             cat: Some("Otis".to_string()),
+            ..PolicyTemplateData::default()
         },
     )
     .await?;
