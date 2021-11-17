@@ -15,7 +15,7 @@ use std::iter::{FromIterator, IntoIterator};
 use flexbuffers;
 use oso::PolarClass;
 use oso::ToPolar;
-use pretty_snowflake::{Label, MakeLabeling};
+use pretty_snowflake::Label;
 use serde::{de as serde_de, Deserialize, Serialize};
 
 use crate::error::{PolicyError, TelemetryError};

@@ -3,7 +3,6 @@ use std::convert::TryFrom;
 use std::path::PathBuf;
 
 use pretty_assertions::assert_eq;
-use pretty_snowflake::MakeLabeling;
 use proctor::elements::Telemetry;
 use proctor::error::TelemetryError;
 use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};

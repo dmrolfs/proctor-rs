@@ -12,10 +12,7 @@ use claim::*;
 use once_cell::sync::Lazy;
 use oso::{Oso, PolarClass, ToPolar};
 use pretty_assertions::{assert_eq, assert_ne};
-use pretty_snowflake::{
-    AlphabetCodec, Id, IdPrettifier, Label, LabeledRealtimeIdGenerator, Labeling, MakeLabeling, PrettyIdGenerator,
-    RealTimeGenerator,
-};
+use pretty_snowflake::{AlphabetCodec, Id, IdPrettifier, Label, LabeledRealtimeIdGenerator, PrettyIdGenerator};
 use proctor::elements::telemetry::{TableValue, ToTelemetry};
 use proctor::elements::{
     self, telemetry, Policy, PolicyFilterEvent, PolicyOutcome, PolicyRegistry, PolicySettings, PolicySource,

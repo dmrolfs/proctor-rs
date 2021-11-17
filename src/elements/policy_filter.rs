@@ -489,7 +489,7 @@ mod tests {
     use claim::*;
     use oso::PolarClass;
     use pretty_assertions::assert_eq;
-    use pretty_snowflake::{Label, MakeLabeling};
+    use pretty_snowflake::Label;
     use prometheus::Registry;
     use serde::{Deserialize, Serialize};
     use tokio::sync::mpsc;

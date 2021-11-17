@@ -1032,7 +1032,7 @@ mod tests {
     use fmt::Debug;
     use once_cell::sync::Lazy;
     use pretty_assertions::assert_eq;
-    use pretty_snowflake::{CustomLabeling, MakeLabeling};
+    use pretty_snowflake::CustomLabeling;
     use serde::{Deserialize, Serialize};
     use serde_test::{assert_tokens, Token};
 

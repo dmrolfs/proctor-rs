@@ -885,9 +885,9 @@ checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
 
 [[package]]
 name = "handlebars"
-version = "4.1.4"
+version = "4.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1874024f4a29f47d609014caec0b1c866f1c1eb0661a09c9733ecc4757f5f88"
+checksum = "8ad84da8f63da982543fc85fcabaee2ad1fdd809d99d64a48887e2e942ddfe46"
 dependencies = [
  "log",
  "pest",
@@ -1043,6 +1043,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "indoc"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5a75aeaaef0ce18b58056d306c27b07436fbb34b8816c53094b76dd81803136"
+dependencies = [
+ "unindent",
+]
+
+[[package]]
 name = "inferno"
 version = "0.10.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1113,7 +1122,6 @@ dependencies = [
  "itertools",
  "lalrpop-util",
  "petgraph",
- "pico-args",
  "regex",
  "regex-syntax",
  "string_cache",
@@ -1127,9 +1135,6 @@ name = "lalrpop-util"
 version = "0.19.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3e58cce361efcc90ba8a0a5f982c741ff86b603495bb15a998412e957dcd278"
-dependencies = [
- "regex",
-]
 
 [[package]]
 name = "lazy_static"
@@ -1543,9 +1548,9 @@ dependencies = [
 
 [[package]]
 name = "oso"
-version = "0.22.1"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd8d3eccbf381198a6d75e1117fb3839a6631f8090dcc6bfc08644bf9849c87c"
+checksum = "4b4a9939d99f534e1fb3da82bafd75700c0448d96c67bbbb2e2f71b98bf6db6b"
 dependencies = [
  "impl-trait-for-tuples",
  "lazy_static",
@@ -1559,9 +1564,9 @@ dependencies = [
 
 [[package]]
 name = "oso-derive"
-version = "0.22.1"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b1258b50a1bec082e92838d1f630f10f501ae80d309b006e79233e6331ff96d"
+checksum = "2f0b65c690950395b643741e081d83b24d6f35954be9483f27619470c1c39d80"
 dependencies = [
  "quote",
  "syn",
@@ -1676,12 +1681,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pico-args"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db8bcd96cb740d03149cbad5518db9fd87126a10ab519c011893b1754134c468"
-
-[[package]]
 name = "pin-project"
 version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1749,17 +1748,16 @@ dependencies = [
 
 [[package]]
 name = "polar-core"
-version = "0.22.1"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f3be8d89fcc2c3bcebc0b5d45eabe5ad9cb8c8ffd77169ded7eb5237eef6191"
+checksum = "f761b5f02567ab5b0f239740d35421cbf7b82b34aa533284f8c3333b42239c8e"
 dependencies = [
+ "indoc",
  "js-sys",
  "lalrpop",
  "lalrpop-util",
- "regex",
  "serde 1.0.130",
  "serde_derive",
- "serde_json",
  "wasm-bindgen",
 ]
 
@@ -1798,7 +1796,7 @@ checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
 [[package]]
 name = "pretty-snowflake"
 version = "1.3.8"
-source = "git+https://github.com/dmrolfs/pretty-snowflake-rs#3c97b291ad2b327cdbbdccb403054c8b5fd9daa3"
+source = "git+https://github.com/dmrolfs/pretty-snowflake-rs#f3bbb2399ab462aa542aec65fc13b3715cbd46c0"
 dependencies = [
  "itertools",
  "once_cell",
@@ -1814,7 +1812,7 @@ dependencies = [
 [[package]]
 name = "pretty-snowflake-derive"
 version = "0.1.0"
-source = "git+https://github.com/dmrolfs/pretty-snowflake-rs#3c97b291ad2b327cdbbdccb403054c8b5fd9daa3"
+source = "git+https://github.com/dmrolfs/pretty-snowflake-rs#f3bbb2399ab462aa542aec65fc13b3715cbd46c0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1919,7 +1917,7 @@ dependencies = [
 
 [[package]]
 name = "proctor"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "anyhow",
  "approx",
@@ -2792,9 +2790,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.13.0"
+version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "588b2d10a336da58d877567cd8fb8a14b463e2104910f8132cd054b4b96e29ee"
+checksum = "70e992e41e0d2fb9f755b37446f20900f64446ef54874f40a60c78f021ac6144"
 dependencies = [
  "autocfg",
  "bytes",
@@ -2812,9 +2810,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-macros"
-version = "1.5.1"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "114383b041aa6212c579467afa0075fbbdd0718de036100bc0ba7961d8cb9095"
+checksum = "c9efc1aba077437943f7515666aa2b882dfabfbfdf89c819ea75a8d6e9eaba5e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3074,6 +3072,12 @@ name = "unicode-xid"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ccb82d61f80a663efe1f787a51b16b5a51e3314d6ac365b08639f52387b33f3"
+
+[[package]]
+name = "unindent"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f14ee04d9415b52b3aeab06258a3f07093182b88ba0f9b8d203f211a7a7d41c7"
 
 [[package]]
 name = "url"
