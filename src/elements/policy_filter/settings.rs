@@ -337,6 +337,11 @@ mod tests {
 
         let rep = assert_ok!(ron::ser::to_string_pretty(&expected, PrettyConfig::default()));
         let mut ron_deser = assert_ok!(ron::Deserializer::from_str(&rep));
+
+        //DMR: Ron gets confused across a full serde-deser round trip (which is only used in
+        // testing or tooling. So, since I really like the flatten approach to custom props, I
+        // am working around the issue in test/tooling with transcoding Obj->Ron->Json->Obj.
+        // longer term Dhal looks interesting.
         let mut json_rep = vec![];
         let mut json_ser = serde_json::Serializer::pretty(json_rep);
         let _ = assert_ok!(serde_transcode::transcode(&mut ron_deser, &mut json_ser));
