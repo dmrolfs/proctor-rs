@@ -216,7 +216,7 @@ where
         let item_inlet = &mut self.inlet;
         let context_inlet = &mut self.context_inlet;
         let policy = &mut self.policy;
-        let context: Arc<Mutex<Option<C>>> = Arc::new(Mutex::new(None));
+        let context: Arc<Mutex<Option<C>>> = Arc::new(Mutex::new(policy.zero_context()));
         let rx_api = &mut self.rx_api;
         let tx_monitor = &self.tx_monitor;
 

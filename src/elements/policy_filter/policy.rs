@@ -48,6 +48,10 @@ pub trait QueryPolicy: Debug + Send + Sync {
     type Args: ToPolarList;
     type TemplateData: Serialize + Debug;
 
+    fn zero_context(&self) -> Option<Self::Context> {
+        None
+    }
+
     #[tracing::instrument(level = "info", skip(engine))]
     fn load_policy_engine(&mut self, engine: &mut oso::Oso) -> Result<(), PolicyError> {
         engine.clear_rules()?;
