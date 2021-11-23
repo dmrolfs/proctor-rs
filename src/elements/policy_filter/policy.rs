@@ -5,9 +5,10 @@ use std::path::PathBuf;
 use either::Either;
 use either::Either::{Left, Right};
 use oso::{ToPolar, ToPolarList};
+use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use super::QueryResult;
+use super::{PolicySettings, QueryResult};
 use crate::elements::{PolicySource, PolicySourcePath};
 use crate::error::PolicyError;
 use crate::phases::collection::{SubscriptionRequirements, TelemetrySubscription};
@@ -19,18 +20,26 @@ impl<P, T, C, A> Policy<T, C, A> for P where
 {
 }
 
-pub trait PolicySubscription {
+pub trait PolicySubscription: QueryPolicy {
     type Requirements: SubscriptionRequirements;
+    // todo: once stable: type TemplateData = <Self as QueryPolicy>::TemplateData;
 
-    fn subscription(&self, name: &str) -> TelemetrySubscription {
+    fn subscription(
+        &self, name: &str, settings: &PolicySettings<<Self as QueryPolicy>::TemplateData>,
+    ) -> TelemetrySubscription {
         tracing::trace!(
             "policy required_fields:{:?}, optional_fields:{:?}",
             Self::Requirements::required_fields(),
             Self::Requirements::optional_fields(),
         );
 
-        let subscription = TelemetrySubscription::new(name).for_requirements::<Self::Requirements>();
+        let subscription = TelemetrySubscription::new(name)
+            .for_requirements::<Self::Requirements>()
+            .with_required_fields(settings.required_subscription_fields.clone())
+            .with_optional_fields(settings.optional_subscription_fields.clone());
+
         let subscription = self.do_extend_subscription(subscription);
+
         tracing::trace!("subscription after extension: {:?}", subscription);
         subscription
     }
@@ -46,7 +55,7 @@ pub trait QueryPolicy: Debug + Send + Sync {
     type Item: ToPolar + Clone;
     type Context: ToPolar + Clone;
     type Args: ToPolarList;
-    type TemplateData: Serialize + Debug;
+    type TemplateData: Debug + Serialize + DeserializeOwned;
 
     fn zero_context(&self) -> Option<Self::Context> {
         None

@@ -1,6 +1,6 @@
 [package]
 name = "proctor"
-version = "0.5.3"
+version = "0.6.0"
 authors = ["Damon Rolfs <drolfs@gmail.com>"]
 edition = "2021"
 
@@ -22,7 +22,7 @@ name = "async-stream"
 path = "examples/async_stream.rs"
 
 [dependencies]
-anyhow = "1.0.45"
+anyhow = "1.0.48"
 approx = "0.5.0"
 async-stream = "0.3.2"
 async-trait = "0.1.51"
@@ -64,7 +64,7 @@ tracing-bunyan-formatter = "0.3.0"
 tracing-flame = "0.1.0"
 tracing-futures = "0.2.5"
 tracing-log = "0.1.2"
-tracing-subscriber = { version = "0.3.1", features = ["env-filter", "json"] }
+tracing-subscriber = { version = "0.3.2", features = ["env-filter", "json"] }
 trim-margin = "0.1.0"
 validator = { version = "0.14.0", features = ["derive"] }
 

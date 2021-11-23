@@ -94,7 +94,7 @@ impl SubscriptionRequirements for TestContext {
     }
 }
 
-#[derive(Debug, Default, Serialize, Clone)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 struct PolicyTemplateData {
     pub location_code: u32,
     #[serde(default)]

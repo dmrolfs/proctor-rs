@@ -292,7 +292,7 @@ impl<T> TestPolicyA<T> {
     }
 }
 
-impl<T: AppData> PolicySubscription for TestPolicyA<T> {
+impl<T: AppData + oso::ToPolar> PolicySubscription for TestPolicyA<T> {
     type Requirements = TestPolicyPhaseContext;
 
     fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
@@ -387,7 +387,7 @@ impl<T, C, D> TestFlow<T, C, D>
 where
     T: AppData + DeserializeOwned + ToPolar,
     C: ProctorContext,
-    D: Debug + Clone + Serialize + Send + Sync + 'static,
+    D: Debug + Clone + Serialize + DeserializeOwned + Send + Sync + 'static,
 {
     pub async fn new<P>(telemetry_subscription: TelemetrySubscription, policy: P) -> anyhow::Result<Self>
     where
@@ -405,7 +405,9 @@ where
         let mut clearinghouse = collection::Clearinghouse::new("clearinghouse", id_generator.clone());
         let tx_clearinghouse_api = clearinghouse.tx_api();
 
-        let context_subscription = policy.subscription("eligibility_context");
+        // todo: expand testing to include settings-based reqd/opt subscription fields
+        let settings: PolicySettings<D> = PolicySettings::default();
+        let context_subscription = policy.subscription("eligibility_context", &settings);
         let context_channel = assert_ok!(collection::SubscriptionChannel::<C>::new("eligibility_context").await);
 
         let telemetry_channel = assert_ok!(collection::SubscriptionChannel::<T>::new("data_channel").await);

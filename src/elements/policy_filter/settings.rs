@@ -8,7 +8,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::PolicySource;
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolicySettings<T>
 where
     T: Debug + Serialize + DeserializeOwned,
@@ -18,6 +18,21 @@ where
     pub policies: Vec<PolicySource>,
     pub template_data: Option<T>,
 }
+
+impl<T> Default for PolicySettings<T>
+where
+    T: Debug + Serialize + DeserializeOwned,
+{
+    fn default() -> Self {
+        Self {
+            required_subscription_fields: HashSet::default(),
+            optional_subscription_fields: HashSet::default(),
+            policies: Vec::default(),
+            template_data: None,
+        }
+    }
+}
+
 
 impl<T> PolicySettings<T>
 where
