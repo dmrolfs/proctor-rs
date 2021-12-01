@@ -1,12 +1,14 @@
 pub use from_telemetry::FromTelemetry;
 pub use to_telemetry::ToTelemetry;
 pub use value::{SeqValue, TableType, TableValue, TelemetryValue};
+pub use value_type::TelemetryValueType;
 
 mod de;
 mod from_telemetry;
 mod ser;
 mod to_telemetry;
 mod value;
+mod value_type;
 
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;

@@ -11,7 +11,8 @@ use serde::de::{EnumAccess, Error};
 use serde::ser::{SerializeMap, SerializeSeq};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::error::{TelemetryError, TypeExpectation};
+use super::TelemetryValueType;
+use crate::error::TelemetryError;
 
 pub type SeqValue = Vec<TelemetryValue>;
 
@@ -475,7 +476,7 @@ impl<T: Label> TryFrom<TelemetryValue> for Id<T> {
                 Ok(Self::direct(label, snowflake, pretty))
             },
             value => Err(TelemetryError::TypeError {
-                expected: format!("a telemetry {}", TypeExpectation::Table),
+                expected: format!("a telemetry {}", TelemetryValueType::Table),
                 actual: Some(format!("{:?}", value)),
             }),
         };
@@ -501,14 +502,14 @@ impl TryFrom<TelemetryValue> for bool {
 
                     // Unexpected string value
                     rep => Err(TelemetryError::TypeError {
-                        expected: format!("{} value", TypeExpectation::Boolean),
+                        expected: format!("{} value", TelemetryValueType::Boolean),
                         actual: Some(rep.to_string()),
                     }),
                 }
             },
 
             value => Err(TelemetryError::TypeError {
-                expected: format!("{} value", TypeExpectation::Boolean),
+                expected: format!("{} value", TelemetryValueType::Boolean),
                 actual: Some(format!("{:?}", value)),
             }),
         }
@@ -516,43 +517,38 @@ impl TryFrom<TelemetryValue> for bool {
 }
 
 macro_rules! try_from_telemetry_into_int {
-    ($i:ty) => {
-        impl TryFrom<TelemetryValue> for $i {
-            type Error = TelemetryError;
+    ($($i:ty)*) => {
+        $(
+            impl TryFrom<TelemetryValue> for $i {
+                type Error = TelemetryError;
 
-            fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
-                match telemetry {
-                    TelemetryValue::Integer(i64) => <$i>::try_from(i64).map_err(|_err| TelemetryError::TypeError {
-                        expected: format!("{}", stringify!($i)),
-                        actual: Some(format!("{:?}", i64)),
-                    }),
-                    TelemetryValue::Float(f64) => Ok(f64.round() as $i),
-                    TelemetryValue::Boolean(b) => Ok(if b { 1 } else { 0 }),
-                    TelemetryValue::Text(ref rep) => match rep.to_lowercase().as_ref() {
-                        "true" | "on" | "yes" => Ok(1),
-                        "false" | "off" | "no" => Ok(0),
-                        _ => rep
-                            .parse()
-                            .map_err(|err: ParseIntError| TelemetryError::ValueParseError(err.into())),
-                    },
-                    value => Err(TelemetryError::TypeError {
-                        expected: format!("a telemetry {}", TypeExpectation::Integer),
-                        actual: Some(value.to_string()),
-                    }),
+                fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
+                    match telemetry {
+                        TelemetryValue::Integer(i64) => <$i>::try_from(i64).map_err(|_err| TelemetryError::TypeError {
+                            expected: format!("{}", stringify!($i)),
+                            actual: Some(format!("{:?}", i64)),
+                        }),
+                        TelemetryValue::Float(f64) => Ok(f64.round() as $i),
+                        TelemetryValue::Boolean(b) => Ok(if b { 1 } else { 0 }),
+                        TelemetryValue::Text(ref rep) => match rep.to_lowercase().as_ref() {
+                            "true" | "on" | "yes" => Ok(1),
+                            "false" | "off" | "no" => Ok(0),
+                            _ => rep
+                                .parse()
+                                .map_err(|err: ParseIntError| TelemetryError::ValueParseError(err.into())),
+                        },
+                        value => Err(TelemetryError::TypeError {
+                            expected: format!("a telemetry {}", TelemetryValueType::Integer),
+                            actual: Some(value.to_string()),
+                        }),
+                    }
                 }
             }
-        }
+        )*
     };
 }
 
-try_from_telemetry_into_int!(usize);
-try_from_telemetry_into_int!(u8);
-try_from_telemetry_into_int!(i8);
-try_from_telemetry_into_int!(u16);
-try_from_telemetry_into_int!(i16);
-try_from_telemetry_into_int!(u32);
-try_from_telemetry_into_int!(i32);
-try_from_telemetry_into_int!(i64);
+try_from_telemetry_into_int!(usize u8 i8 u16 i16 u32 i32 i64);
 
 impl TryFrom<TelemetryValue> for f64 {
     type Error = TelemetryError;
@@ -570,7 +566,7 @@ impl TryFrom<TelemetryValue> for f64 {
                     .map_err(|err: ParseFloatError| TelemetryError::ValueParseError(err.into())),
             },
             value => Err(TelemetryError::TypeError {
-                expected: format!("a telemetry {}", TypeExpectation::Float),
+                expected: format!("a telemetry {}", TelemetryValueType::Float),
                 actual: Some(format!("{:?}", value)),
             }),
         }
@@ -593,7 +589,7 @@ impl TryFrom<TelemetryValue> for f32 {
                     .map_err(|err: ParseFloatError| TelemetryError::ValueParseError(err.into())),
             },
             _ => Err(TelemetryError::TypeError {
-                expected: format!("a telemetry {}", TypeExpectation::Float),
+                expected: format!("a telemetry {}", TelemetryValueType::Float),
                 actual: Some(format!("{:?}", telemetry)),
             }),
         }
@@ -611,7 +607,7 @@ impl TryFrom<TelemetryValue> for String {
             TelemetryValue::Float(value) => Ok(value.to_string()),
 
             value => Err(TelemetryError::TypeError {
-                expected: format!("a telemetry {}", TypeExpectation::Text),
+                expected: format!("a telemetry {}", TelemetryValueType::Text),
                 actual: Some(format!("{:?}", value)),
             }),
         }
@@ -652,7 +648,7 @@ impl<T: From<TelemetryValue>> TryFrom<TelemetryValue> for HashMap<String, T> {
             Ok(value.into_iter().map(|(k, v)| (k, v.into())).collect())
         } else {
             Err(TelemetryError::TypeError {
-                expected: format!("a telemetry {}", TypeExpectation::Table),
+                expected: format!("a telemetry {}", TelemetryValueType::Table),
                 actual: Some(format!("{:?}", telemetry)),
             })
         }
@@ -667,7 +663,7 @@ impl<T: From<TelemetryValue>> TryFrom<TelemetryValue> for BTreeMap<String, T> {
             Ok(value.into_iter().map(|(k, v)| (k, v.into())).collect())
         } else {
             Err(TelemetryError::TypeError {
-                expected: format!("a telemetry {}", TypeExpectation::Table),
+                expected: format!("a telemetry {}", TelemetryValueType::Table),
                 actual: Some(format!("{:?}", telemetry)),
             })
         }
@@ -682,7 +678,7 @@ impl<T: From<TelemetryValue>> TryFrom<TelemetryValue> for Vec<T> {
             Ok(value.into_iter().map(|v| v.into()).collect())
         } else {
             Err(TelemetryError::TypeError {
-                expected: format!("a telemetry {}", TypeExpectation::Seq),
+                expected: format!("a telemetry {}", TelemetryValueType::Seq),
                 actual: Some(format!("{:?}", telemetry)),
             })
         }
@@ -697,7 +693,7 @@ impl<T: From<TelemetryValue>> TryFrom<TelemetryValue> for VecDeque<T> {
             Ok(value.into_iter().map(|v| v.into()).collect())
         } else {
             Err(TelemetryError::TypeError {
-                expected: format!("a telemetry {}", TypeExpectation::Seq),
+                expected: format!("a telemetry {}", TelemetryValueType::Seq),
                 actual: Some(format!("{:?}", telemetry)),
             })
         }
@@ -712,7 +708,7 @@ impl<T: From<TelemetryValue>> TryFrom<TelemetryValue> for LinkedList<T> {
             Ok(value.into_iter().map(|v| v.into()).collect())
         } else {
             Err(TelemetryError::TypeError {
-                expected: format!("a telemetry {}", TypeExpectation::Seq),
+                expected: format!("a telemetry {}", TelemetryValueType::Seq),
                 actual: Some(format!("{:?}", telemetry)),
             })
         }
@@ -727,7 +723,7 @@ impl<T: Eq + std::hash::Hash + From<TelemetryValue>> TryFrom<TelemetryValue> for
             Ok(value.into_iter().map(|v| v.into()).collect())
         } else {
             Err(TelemetryError::TypeError {
-                expected: format!("a telemetry {}", TypeExpectation::Seq),
+                expected: format!("a telemetry {}", TelemetryValueType::Seq),
                 actual: Some(format!("{:?}", telemetry)),
             })
         }
@@ -742,7 +738,7 @@ impl<T: Ord + From<TelemetryValue>> TryFrom<TelemetryValue> for BTreeSet<T> {
             Ok(value.into_iter().map(|v| v.into()).collect())
         } else {
             Err(TelemetryError::TypeError {
-                expected: format!("a telemetry {}", TypeExpectation::Seq),
+                expected: format!("a telemetry {}", TelemetryValueType::Seq),
                 actual: Some(format!("{:?}", telemetry)),
             })
         }
@@ -757,7 +753,7 @@ impl<T: Ord + From<TelemetryValue>> TryFrom<TelemetryValue> for BinaryHeap<T> {
             Ok(value.into_iter().map(|v| v.into()).collect())
         } else {
             Err(TelemetryError::TypeError {
-                expected: format!("a telemetry {}", TypeExpectation::Seq),
+                expected: format!("a telemetry {}", TelemetryValueType::Seq),
                 actual: Some(format!("{:?}", telemetry)),
             })
         }

@@ -479,47 +479,6 @@ impl MetricLabel for TelemetryError {
     }
 }
 
-#[derive(Debug)]
-pub enum TypeExpectation {
-    Boolean,
-    Integer,
-    Float,
-    Text,
-    Seq,
-    Table,
-    Unit,
-}
-
-impl fmt::Display for TypeExpectation {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            TypeExpectation::Boolean => write!(f, "boolean"),
-            TypeExpectation::Integer => write!(f, "integer"),
-            TypeExpectation::Float => write!(f, "floating point"),
-            TypeExpectation::Text => write!(f, "text"),
-            TypeExpectation::Seq => write!(f, "sequence"),
-            TypeExpectation::Table => write!(f, "table"),
-            TypeExpectation::Unit => write!(f, "unit value"),
-        }
-    }
-}
-
-impl From<crate::elements::TelemetryValue> for TypeExpectation {
-    fn from(value: TelemetryValue) -> Self {
-        use crate::elements::TelemetryValue as TV;
-
-        match value {
-            TV::Boolean(_) => TypeExpectation::Boolean,
-            TV::Integer(_) => TypeExpectation::Integer,
-            TV::Float(_) => TypeExpectation::Float,
-            TV::Text(_) => TypeExpectation::Text,
-            TV::Seq(_) => TypeExpectation::Seq,
-            TV::Table(_) => TypeExpectation::Table,
-            TV::Unit => TypeExpectation::Unit,
-        }
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum StageError {
     #[error("failure while materializing graph stage value: {0}")]

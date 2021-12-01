@@ -1,3 +1,5 @@
+#![warn(clippy::all)]
+
 #[cfg(test)]
 #[macro_use]
 extern crate static_assertions;
@@ -14,9 +16,6 @@ pub mod metrics;
 pub mod phases;
 pub mod serde;
 pub mod tracing;
-// pub mod metrics;
-
-use std::borrow::Cow;
 
 pub use app_data::AppData;
 pub use elements::ProctorContext;
@@ -37,4 +36,4 @@ pub type Ack = ();
 ///
 /// `SharedString` can be converted to from either `&'static str` or `String`, with a method,
 /// `const_str`, from constructing `SharedString` from `&'static str` in a `const` fashion.
-pub type SharedString = Cow<'static, str>;
+pub type SharedString = std::borrow::Cow<'static, str>;

@@ -13,8 +13,8 @@ use regex::Regex;
 use serde::de::Unexpected;
 use serde::{de, Deserialize, Deserializer, Serialize};
 
-use super::{TelemetryValue, ToTelemetry};
-use crate::error::{TelemetryError, TypeExpectation};
+use super::{TelemetryValue, TelemetryValueType, ToTelemetry};
+use crate::error::TelemetryError;
 
 #[derive(PolarClass, Debug, Copy, Clone, Default, PartialEq, PartialOrd, Serialize)]
 pub struct Timestamp(i64, u32);
@@ -137,7 +137,7 @@ impl TryFrom<TelemetryValue> for Timestamp {
                 Ok(dt.into())
             },
             value => Err(TelemetryError::TypeError {
-                expected: format!("a telemetry {}", TypeExpectation::Float),
+                expected: format!("a telemetry {}", TelemetryValueType::Float),
                 actual: Some(format!("{:?}", value)),
             }),
         }

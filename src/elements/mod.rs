@@ -20,7 +20,7 @@ pub mod timestamp;
 pub use policy_filter::*;
 pub use records_per_second::RecordsPerSecond;
 pub use signal::*;
-pub use telemetry::{FromTelemetry, Telemetry, TelemetryValue, ToTelemetry};
+pub use telemetry::{FromTelemetry, Telemetry, TelemetryValue, TelemetryValueType, ToTelemetry};
 pub use timestamp::*;
 
 pub type Point = (f64, f64);
