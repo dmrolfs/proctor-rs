@@ -273,35 +273,32 @@ impl From<usize> for TelemetryValue {
 }
 
 macro_rules! from_int_to_telemetry {
-    ($i:ty) => {
-        impl From<$i> for TelemetryValue {
-            fn from(value: $i) -> Self {
-                Self::Integer(value.into())
+    ($($i:ty)*) => {
+        $(
+            impl From<$i> for TelemetryValue {
+                fn from(value: $i) -> Self {
+                    Self::Integer(value.into())
+                }
             }
-        }
+        )*
     };
 }
 
-from_int_to_telemetry!(u8);
-from_int_to_telemetry!(i8);
-from_int_to_telemetry!(u16);
-from_int_to_telemetry!(i16);
-from_int_to_telemetry!(u32);
-from_int_to_telemetry!(i32);
-from_int_to_telemetry!(i64);
+from_int_to_telemetry!(u8 i8 u16 i16 u32 i32 i64);
 
 macro_rules! from_float_to_telemetry {
-    ($f:ty) => {
-        impl From<$f> for TelemetryValue {
-            fn from(value: $f) -> Self {
-                Self::Float(value.into())
+    ($($f:ty)*) => {
+        $(
+            impl From<$f> for TelemetryValue {
+                fn from(value: $f) -> Self {
+                    Self::Float(value.into())
+                }
             }
-        }
+        )*
     };
 }
 
-from_float_to_telemetry!(f32);
-from_float_to_telemetry!(f64);
+from_float_to_telemetry!(f32 f64);
 
 impl From<String> for TelemetryValue {
     fn from(rep: String) -> Self {

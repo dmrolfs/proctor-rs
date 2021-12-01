@@ -439,9 +439,9 @@ fn test_policy_serde_and_render() {
     let hydrated: PolicySettings<TemplateData> = assert_ok!(serde_json::from_str(&json_rep));
     assert_eq!(hydrated, settings);
 
-    let mut registry = PolicyRegistry::new();
+    let registry = PolicyRegistry::new();
     let policy = hydrated.policies.first().unwrap();
-    let policy_name = policy.name();
+    let _policy_name = policy.name();
     let template: String = assert_ok!(policy.try_into());
     let actual = assert_ok!(registry.render_template(&template, settings.template_data.as_ref().unwrap()));
     assert_eq!(actual, "eligible(_item, context, _) if context.location_code == 33;");

@@ -357,7 +357,7 @@ mod tests {
         // testing or tooling. So, since I really like the flatten approach to custom props, I
         // am working around the issue in test/tooling with transcoding Obj->Ron->Json->Obj.
         // longer term Dhal looks interesting.
-        let mut json_rep = vec![];
+        let json_rep = vec![];
         let mut json_ser = serde_json::Serializer::pretty(json_rep);
         let _ = assert_ok!(serde_transcode::transcode(&mut ron_deser, &mut json_ser));
         let json_rep = assert_ok!(String::from_utf8(json_ser.into_inner()));
