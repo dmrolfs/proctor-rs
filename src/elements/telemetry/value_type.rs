@@ -31,6 +31,12 @@ impl fmt::Display for TelemetryValueType {
 
 impl From<TelemetryValue> for TelemetryValueType {
     fn from(value: TelemetryValue) -> Self {
+        (&value).into()
+    }
+}
+
+impl From<&TelemetryValue> for TelemetryValueType {
+    fn from(value: &TelemetryValue) -> Self {
         use crate::elements::TelemetryValue as TV;
 
         match value {
