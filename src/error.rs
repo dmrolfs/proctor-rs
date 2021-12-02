@@ -170,6 +170,10 @@ pub enum CollectionError {
     #[error("{0}")]
     HttpMiddlewareError(#[from] reqwest_middleware::Error),
 
+    /// Error parsing URLs
+    #[error("{0}")]
+    UrlParseError(#[from] url::ParseError),
+
     #[error("Attempt to send via a closed subscription channel: {0}")]
     ClosedSubscription(String),
 
@@ -200,6 +204,7 @@ impl MetricLabel for CollectionError {
             Self::CsvError(_) => Left("csv".into()),
             Self::HttpError(_) => Left("http".into()),
             Self::HttpMiddlewareError(_) => Left("http_middleware".into()),
+            Self::UrlParseError(_) => Left("url_parse".into()),
             Self::ClosedSubscription(_) => Left("closed_subscription".into()),
             Self::DataNotFound(_) => Left("data_not_found".into()),
             Self::DecisionError(_) => Left("decision".into()),

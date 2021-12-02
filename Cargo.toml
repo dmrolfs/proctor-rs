@@ -66,6 +66,7 @@ tracing-futures = "0.2.5"
 tracing-log = "0.1.2"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter", "json"] }
 trim-margin = "0.1.0"
+url = "2.2.2"
 validator = { version = "0.14.0", features = ["derive"] }
 
 [dev-dependencies]
