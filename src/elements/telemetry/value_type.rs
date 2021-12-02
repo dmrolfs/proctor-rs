@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use super::TelemetryValue;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum TelemetryValueType {
+pub enum TelemetryType {
     Boolean,
     Integer,
     Float,
@@ -15,7 +15,7 @@ pub enum TelemetryValueType {
     Unit,
 }
 
-impl fmt::Display for TelemetryValueType {
+impl fmt::Display for TelemetryType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Self::Boolean => write!(f, "boolean"),
@@ -29,13 +29,13 @@ impl fmt::Display for TelemetryValueType {
     }
 }
 
-impl From<TelemetryValue> for TelemetryValueType {
+impl From<TelemetryValue> for TelemetryType {
     fn from(value: TelemetryValue) -> Self {
         (&value).into()
     }
 }
 
-impl From<&TelemetryValue> for TelemetryValueType {
+impl From<&TelemetryValue> for TelemetryType {
     fn from(value: &TelemetryValue) -> Self {
         use crate::elements::TelemetryValue as TV;
 

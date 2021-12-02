@@ -1,7 +1,7 @@
 pub use from_telemetry::FromTelemetry;
 pub use to_telemetry::ToTelemetry;
 pub use value::{SeqValue, TableType, TableValue, TelemetryValue};
-pub use value_type::TelemetryValueType;
+pub use value_type::TelemetryType;
 
 mod de;
 mod from_telemetry;

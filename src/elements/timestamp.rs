@@ -13,7 +13,7 @@ use regex::Regex;
 use serde::de::Unexpected;
 use serde::{de, Deserialize, Deserializer, Serialize};
 
-use super::{TelemetryValue, TelemetryValueType, ToTelemetry};
+use super::{TelemetryValue, TelemetryType, ToTelemetry};
 use crate::error::TelemetryError;
 
 #[derive(PolarClass, Debug, Copy, Clone, Default, PartialEq, PartialOrd, Serialize)]
@@ -137,7 +137,7 @@ impl TryFrom<TelemetryValue> for Timestamp {
                 Ok(dt.into())
             },
             value => Err(TelemetryError::TypeError {
-                expected: format!("a telemetry {}", TelemetryValueType::Float),
+                expected: format!("a telemetry {}", TelemetryType::Float),
                 actual: Some(format!("{:?}", value)),
             }),
         }
