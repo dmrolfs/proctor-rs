@@ -1,8 +1,11 @@
 use std::fmt;
+use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
 use super::TelemetryValue;
+use crate::error::TelemetryError;
+
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TelemetryType {
@@ -25,6 +28,51 @@ impl fmt::Display for TelemetryType {
             Self::Seq => write!(f, "sequence"),
             Self::Table => write!(f, "table"),
             Self::Unit => write!(f, "unit value"),
+        }
+    }
+}
+
+impl TelemetryType {
+    pub fn cast_telemetry<T>(&self, value: T) -> Result<TelemetryValue, TelemetryError>
+    where
+        T: Into<TelemetryValue>,
+    {
+        let telemetry = value.into();
+        if self == &telemetry.as_telemetry_type() {
+            return Ok(telemetry);
+        }
+
+        use self::{TelemetryType as T, TelemetryValue as V};
+
+        match (&telemetry, self) {
+            (V::Integer(from), T::Float) => Ok(V::Float(*from as f64)),
+            (V::Integer(from), T::Text) => Ok(V::Text(from.to_string())),
+
+            (V::Float(from), T::Integer) => Ok(V::Integer(*from as i64)),
+            (V::Float(from), T::Text) => Ok(V::Text(from.to_string())),
+
+            (V::Text(from), T::Unit) if from.is_empty() => Ok(V::Unit),
+            (V::Text(from), T::Boolean) => Ok(V::Boolean(
+                bool::from_str(from.as_str()).map_err(|err| TelemetryError::ValueParseError(err.into()))?,
+            )),
+            (V::Text(from), T::Integer) => Ok(V::Integer(
+                i64::from_str(from.as_str()).map_err(|err| TelemetryError::ValueParseError(err.into()))?,
+            )),
+            (V::Text(from), T::Float) => Ok(V::Float(
+                f64::from_str(from.as_str()).map_err(|err| TelemetryError::ValueParseError(err.into()))?,
+            )),
+
+            // (V::Table(from), T::Seq) => {
+            //     let items: Vec<(String, TelemetryValue)> = (*from).into_iter().collect();
+            //     Ok(V::Seq((*from).into_iter().collect()))
+            // },
+            (tv, T::Seq) if tv.as_telemetry_type() != T::Table => Ok(V::Seq(vec![telemetry])),
+
+            (from, to) => Err(TelemetryError::NotSupported(format!(
+                "telemetry conversion from {} to {} is not supported",
+                from.as_telemetry_type(),
+                to
+            ))),
         }
     }
 }

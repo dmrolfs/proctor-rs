@@ -13,7 +13,7 @@ use regex::Regex;
 use serde::de::Unexpected;
 use serde::{de, Deserialize, Deserializer, Serialize};
 
-use super::{TelemetryValue, TelemetryType, ToTelemetry};
+use super::{TelemetryType, TelemetryValue, ToTelemetry};
 use crate::error::TelemetryError;
 
 #[derive(PolarClass, Debug, Copy, Clone, Default, PartialEq, PartialOrd, Serialize)]

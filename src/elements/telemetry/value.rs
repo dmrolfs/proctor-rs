@@ -147,6 +147,22 @@ impl TelemetryValue {
             (lhs, rhs) => panic!("mismatched telemetry merge types: {:?} + {:?}.", lhs, rhs),
         };
     }
+
+    pub fn as_telemetry_type(&self) -> TelemetryType {
+        match self {
+            Self::Unit => TelemetryType::Unit,
+            Self::Boolean(_) => TelemetryType::Boolean,
+            Self::Integer(_) => TelemetryType::Integer,
+            Self::Float(_) => TelemetryType::Float,
+            Self::Text(_) => TelemetryType::Text,
+            Self::Seq(_) => TelemetryType::Seq,
+            Self::Table(_) => TelemetryType::Table,
+        }
+    }
+
+    pub fn try_cast(self, cast: TelemetryType) -> Result<TelemetryValue, TelemetryError> {
+        cast.cast_telemetry(self)
+    }
 }
 
 impl Default for TelemetryValue {
