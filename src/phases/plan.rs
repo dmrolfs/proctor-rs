@@ -1,4 +1,5 @@
 use std::fmt::{self, Debug};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
@@ -10,7 +11,8 @@ use crate::graph::{Inlet, Outlet, Port, SinkShape, SourceShape, PORT_CONTEXT, PO
 use crate::{AppData, ProctorResult, SharedString};
 
 pub type PlanMonitor<P> =
-    broadcast::Receiver<PlanEvent<<P as Planning>::Observation, <P as Planning>::Decision, <P as Planning>::Out>>;
+    broadcast::Receiver<Arc<PlanEvent<<P as Planning>::Observation, <P as Planning>::Decision, <P as Planning>::Out>>>;
+
 pub type Event<P> = PlanEvent<<P as Planning>::Observation, <P as Planning>::Decision, <P as Planning>::Out>;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -38,7 +40,7 @@ pub struct Plan<P: Planning> {
     inlet: Inlet<P::Observation>,
     decision_inlet: Inlet<P::Decision>,
     outlet: Outlet<P::Out>,
-    pub tx_monitor: broadcast::Sender<Event<P>>,
+    pub tx_monitor: broadcast::Sender<Arc<Event<P>>>,
 }
 
 impl<P: Planning> Plan<P> {
@@ -149,7 +151,7 @@ impl<P: Planning> Plan<P> {
                 Some(data) = rx_data.recv() => {
                     let observation: P::Observation = data.into();
                     planning.add_observation(observation.clone());
-                    Self::emit_event(tx_monitor, PlanEvent::ObservationAdded(observation));
+                    Self::publish_event(tx_monitor, PlanEvent::ObservationAdded(observation));
                 },
 
                 Some(decision) = rx_decision.recv() => {
@@ -160,7 +162,7 @@ impl<P: Planning> Plan<P> {
                         PlanEvent::DecisionIgnored(decision)
                     };
 
-                    Self::emit_event(tx_monitor, event);
+                    Self::publish_event(tx_monitor, event);
                 },
 
                 else => {
@@ -174,8 +176,8 @@ impl<P: Planning> Plan<P> {
     }
 
     #[tracing::instrument(level = "debug", skip(tx_monitor))]
-    fn emit_event(tx_monitor: &broadcast::Sender<Event<P>>, event: Event<P>) {
-        match tx_monitor.send(event) {
+    fn publish_event(tx_monitor: &broadcast::Sender<Arc<Event<P>>>, event: Event<P>) {
+        match tx_monitor.send(Arc::new(event)) {
             Ok(nr_subsribers) => tracing::debug!(%nr_subsribers, "published event to subscribers"),
             Err(err) => {
                 tracing::warn!(error=?err, "failed to publish event - can add subscribers to receive future events.")
