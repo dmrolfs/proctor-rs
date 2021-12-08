@@ -116,6 +116,9 @@ impl MetricLabel for GraphError {
 
 #[derive(Debug, Error)]
 pub enum IncompatibleSourceSettingsError {
+    #[error("{0}")]
+    UrlParseError(#[from] url::ParseError),
+    
     #[error("expected {expected} source settings but got: {settings:?}")]
     ExpectedTypeError { expected: String, settings: SourceSetting },
 
