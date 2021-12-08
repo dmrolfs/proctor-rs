@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashSet};
 use std::f64::consts;
+use std::sync::Arc;
 
 use ::serde::{Deserialize, Serialize};
 use async_trait::async_trait;
@@ -307,7 +308,9 @@ impl TestFlow {
         command_rx.1.await.map_err(|err| err.into())
     }
 
-    pub async fn recv_policy_event(&mut self) -> anyhow::Result<elements::PolicyFilterEvent<TestItem, TestContext>> {
+    pub async fn recv_policy_event(
+        &mut self,
+    ) -> anyhow::Result<Arc<elements::PolicyFilterEvent<TestItem, TestContext>>> {
         self.rx_policy_monitor.recv().await.map_err(|err| err.into())
     }
 
@@ -563,48 +566,48 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     )
     .await?;
     flow.push_context(TestContext::new(33)).await?;
-    let event = flow.recv_policy_event().await?;
-    claim::assert_matches!(event, elements::PolicyFilterEvent::ContextChanged(_));
+    let event = &*flow.recv_policy_event().await?;
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ContextChanged(_));
     tracing::info!(?event, "DMR-A: context changed confirmed");
 
     let ts = Utc::now().into();
     let item = TestItem::new(consts::PI, ts, 1);
     flow.push_item(item).await?;
-    let event = flow.recv_policy_event().await?;
-    claim::assert_matches!(event, elements::PolicyFilterEvent::ItemPassed(_));
+    let event = &*flow.recv_policy_event().await?;
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemPassed(_));
 
     flow.push_context(TestContext::new(19)).await?;
-    let event = flow.recv_policy_event().await?;
-    claim::assert_matches!(event, elements::PolicyFilterEvent::ContextChanged(_));
+    let event = &*flow.recv_policy_event().await?;
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ContextChanged(_));
     tracing::info!(?event, "DMR-B: context changed confirmed");
 
     let item = TestItem::new(consts::E, ts, 2);
     flow.push_item(item).await?;
-    let event = flow.recv_policy_event().await?;
-    claim::assert_matches!(event, elements::PolicyFilterEvent::ItemBlocked(_));
+    let event = &*flow.recv_policy_event().await?;
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_));
     tracing::info!(?event, "DMR-C: item dropped confirmed");
 
     let item = TestItem::new(consts::FRAC_1_PI, ts, 3);
     flow.push_item(item).await?;
-    let event = flow.recv_policy_event().await?;
-    claim::assert_matches!(event, elements::PolicyFilterEvent::ItemBlocked(_));
+    let event = &*flow.recv_policy_event().await?;
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_));
     tracing::info!(?event, "DMR-D: item dropped confirmed");
 
     let item = TestItem::new(consts::FRAC_1_SQRT_2, ts, 4);
     flow.push_item(item).await?;
-    let event = flow.recv_policy_event().await?;
-    claim::assert_matches!(event, elements::PolicyFilterEvent::ItemBlocked(_));
+    let event = &*flow.recv_policy_event().await?;
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_));
     tracing::info!(?event, "DMR-E: item dropped confirmed");
 
     flow.push_context(TestContext::new(33)).await?;
-    let event = flow.recv_policy_event().await?;
-    claim::assert_matches!(event, elements::PolicyFilterEvent::ContextChanged(_));
+    let event = &*flow.recv_policy_event().await?;
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ContextChanged(_));
     tracing::info!(?event, "DMR-F: context changed confirmed");
 
     let item = TestItem::new(consts::LN_2, ts, 5);
     flow.push_item(item).await?;
-    let event = flow.recv_policy_event().await?;
-    claim::assert_matches!(event, elements::PolicyFilterEvent::ItemPassed(_));
+    let event = &*flow.recv_policy_event().await?;
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemPassed(_));
 
     let actual = flow.close().await?;
 
@@ -653,9 +656,9 @@ async fn test_policy_w_custom_fields() -> anyhow::Result<()> {
         TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
     )
     .await?;
-    let event = flow.recv_policy_event().await?;
+    let event = &*flow.recv_policy_event().await?;
     tracing::info!(?event, "verifying context update...");
-    claim::assert_matches!(event, elements::PolicyFilterEvent::ContextChanged(_));
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ContextChanged(_));
 
     let ts = Utc::now().into();
     let item = TestItem::new(consts::PI, ts, 1);
@@ -729,9 +732,9 @@ async fn test_policy_w_binding() -> anyhow::Result<()> {
         TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
     )
     .await?;
-    let event = flow.recv_policy_event().await?;
+    let event = &*flow.recv_policy_event().await?;
     tracing::info!(?event, "verifying context update...");
-    claim::assert_matches!(event, elements::PolicyFilterEvent::ContextChanged(_));
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ContextChanged(_));
 
     let ts = Utc::now().into();
     let item = TestItem::new(consts::PI, ts, 1);

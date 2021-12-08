@@ -1,4 +1,5 @@
 use std::fmt::{self, Debug};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
@@ -21,7 +22,7 @@ pub struct PolicyPhase<In, Out, C, D> {
     inlet: Inlet<In>,
     outlet: Outlet<Out>,
     tx_policy_api: PolicyFilterApi<C, D>,
-    tx_policy_monitor: broadcast::Sender<PolicyFilterEvent<In, C>>,
+    tx_policy_monitor: broadcast::Sender<Arc<PolicyFilterEvent<In, C>>>,
 }
 
 impl<In, C, D> PolicyPhase<In, PolicyOutcome<In, C>, C, D>

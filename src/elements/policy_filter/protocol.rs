@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::sync::Arc;
 
 use tokio::sync::{broadcast, mpsc, oneshot};
 
@@ -7,7 +8,7 @@ use crate::Ack;
 
 pub type PolicyFilterApi<C, D> = mpsc::UnboundedSender<PolicyFilterCmd<C, D>>;
 pub type PolicyFilterApiReceiver<C, D> = mpsc::UnboundedReceiver<PolicyFilterCmd<C, D>>;
-pub type PolicyFilterMonitor<T, C> = broadcast::Receiver<PolicyFilterEvent<T, C>>;
+pub type PolicyFilterMonitor<T, C> = broadcast::Receiver<Arc<PolicyFilterEvent<T, C>>>;
 
 #[derive(Debug)]
 pub enum PolicyFilterCmd<C, D> {

@@ -93,7 +93,7 @@ where
     outlet: Outlet<PolicyOutcome<T, C>>,
     tx_api: PolicyFilterApi<C, D>,
     rx_api: mpsc::UnboundedReceiver<PolicyFilterCmd<C, D>>,
-    pub tx_monitor: broadcast::Sender<PolicyFilterEvent<T, C>>,
+    pub tx_monitor: broadcast::Sender<Arc<PolicyFilterEvent<T, C>>>,
 }
 
 impl<T, C, A, P, D> PolicyFilter<T, C, A, P, D>
@@ -210,7 +210,7 @@ where
 
     #[inline]
     async fn do_run(&mut self) -> Result<(), GraphError> {
-        let name = self.name().to_owned();
+        let name = SharedString::Owned(self.name().to_string());
         let mut oso = self.oso()?;
         let outlet = &self.outlet;
         let item_inlet = &mut self.inlet;
@@ -227,8 +227,8 @@ where
                         tracing::trace!(?item, ?context, "handling next item...");
 
                         match context.lock().await.as_ref() {
-                            Some(ctx) => Self::handle_item(name.as_str(), item, ctx, policy, &oso, outlet, tx_monitor).await?,
-                            None => Self::handle_item_before_context(item, tx_monitor)?,
+                            Some(ctx) => Self::handle_item(&name, item, ctx, policy, &oso, outlet, tx_monitor).await?,
+                            None => Self::handle_item_before_context(&name, item, tx_monitor)?,
                         }
                     },
                     None => {
@@ -237,13 +237,13 @@ where
                     }
                 },
 
-                Some(ctx) = context_inlet.recv() => Self::handle_context(context.clone(), ctx, tx_monitor).await?,
+                Some(ctx) = context_inlet.recv() => Self::handle_context(&name, context.clone(), ctx, tx_monitor).await?,
 
                 Some(command) = rx_api.recv() => {
                     let cont_loop = Self::handle_command(
                         command,
                         &mut oso,
-                        name.as_str(),
+                        &name,
                         policy,
                         Arc::clone(&context),
                     ).await;
@@ -299,12 +299,16 @@ where
 
     #[tracing::instrument(level = "trace", skip(tx))]
     fn publish_event(
-        event: PolicyFilterEvent<T, C>, tx: &broadcast::Sender<PolicyFilterEvent<T, C>>,
+        event: PolicyFilterEvent<T, C>, tx: &broadcast::Sender<Arc<PolicyFilterEvent<T, C>>>,
     ) -> Result<(), PolicyError> {
+        let span = tracing::trace_span!("publish_event", ?event);
+        let _ = span.enter();
+
         let nr_notified = tx
-            .send(event.clone())
+            .send(Arc::new(event))
             .map_err(|err| PolicyError::PublishError(err.into()))?;
-        tracing::trace!(%nr_notified, ?event, "notified subscribers of policy filter event.");
+
+        tracing::trace!(%nr_notified, "notifying subscribers of policy filter event.");
         Ok(())
     }
 
@@ -315,10 +319,9 @@ where
         fields()
     )]
     async fn handle_item(
-        name: &str, item: T, context: &C, policy: &P, oso: &Oso, outlet: &Outlet<PolicyOutcome<T, C>>,
-        tx: &broadcast::Sender<PolicyFilterEvent<T, C>>,
+        name: &SharedString, item: T, context: &C, policy: &P, oso: &Oso, outlet: &Outlet<PolicyOutcome<T, C>>,
+        tx: &broadcast::Sender<Arc<PolicyFilterEvent<T, C>>>,
     ) -> Result<(), PolicyError> {
-        let name: SharedString = name.to_owned().into();
         let _timer = start_policy_timer(name.as_ref());
 
         // query lifetime cannot span across `.await` since it cannot `Send` between threads.
@@ -363,7 +366,9 @@ where
         skip(tx),
         fields()
     )]
-    fn handle_item_before_context(item: T, tx: &broadcast::Sender<PolicyFilterEvent<T, C>>) -> Result<(), PolicyError> {
+    fn handle_item_before_context(
+        name: &SharedString, item: T, tx: &broadcast::Sender<Arc<PolicyFilterEvent<T, C>>>,
+    ) -> Result<(), PolicyError> {
         tracing::info!(?item, "dropping item received before policy context set.");
         Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
         Ok(())
@@ -371,7 +376,8 @@ where
 
     #[tracing::instrument(level = "info", name = "policy_filter handle context", skip(tx), fields())]
     async fn handle_context(
-        context: Arc<Mutex<Option<C>>>, recv_context: C, tx: &broadcast::Sender<PolicyFilterEvent<T, C>>,
+        name: &SharedString, context: Arc<Mutex<Option<C>>>, recv_context: C,
+        tx: &broadcast::Sender<Arc<PolicyFilterEvent<T, C>>>,
     ) -> Result<(), PolicyError> {
         tracing::trace!(recv_context=?recv_context, "handling policy context update...");
         let mut ctx = context.lock().await;
@@ -383,7 +389,8 @@ where
 
     #[tracing::instrument(level = "info", name = "policy_filter handle command", skip(oso, policy,), fields())]
     async fn handle_command(
-        command: PolicyFilterCmd<C, D>, oso: &mut Oso, name: &str, policy: &mut P, context: Arc<Mutex<Option<C>>>,
+        command: PolicyFilterCmd<C, D>, oso: &mut Oso, name: &SharedString, policy: &mut P,
+        context: Arc<Mutex<Option<C>>>,
     ) -> bool {
         tracing::trace!(?command, ?context, "handling policy filter command...");
 
@@ -629,7 +636,7 @@ mod tests {
             };
 
             PolicyFilter::handle_item(
-                "test_stage".into(),
+                &"test_stage".into(),
                 item,
                 &context,
                 &policy_filter.policy,
