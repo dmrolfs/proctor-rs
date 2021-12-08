@@ -85,16 +85,18 @@ use crate::{AppData, ProctorResult, SharedString};
 /// ```
 #[derive(Debug)]
 pub struct CompositeThrough<In, Out> {
-    name: String,
+    name: SharedString,
     graph: Option<Graph>,
     inlet: Inlet<In>,
     outlet: Outlet<Out>,
 }
 
 impl<In: AppData, Out: AppData> CompositeThrough<In, Out> {
-    pub async fn new(name: impl Into<String>, graph: Graph, graph_inlet: Inlet<In>, graph_outlet: Outlet<Out>) -> Self {
+    pub async fn new(
+        name: impl Into<SharedString>, graph: Graph, graph_inlet: Inlet<In>, graph_outlet: Outlet<Out>,
+    ) -> Self {
         let name = name.into();
-        let (graph, inlet, outlet) = Self::extend_graph(name.clone().into(), graph, graph_inlet, graph_outlet).await;
+        let (graph, inlet, outlet) = Self::extend_graph(name.clone(), graph, graph_inlet, graph_outlet).await;
         Self { name, graph: Some(graph), inlet, outlet }
     }
 
@@ -146,8 +148,8 @@ impl<In, Out> SinkShape for CompositeThrough<In, Out> {
 #[dyn_upcast]
 #[async_trait]
 impl<In: AppData, Out: AppData> Stage for CompositeThrough<In, Out> {
-    fn name(&self) -> &str {
-        self.name.as_str()
+    fn name(&self) -> SharedString {
+        self.name.clone()
     }
 
     #[tracing::instrument(level = "info", skip(self))]

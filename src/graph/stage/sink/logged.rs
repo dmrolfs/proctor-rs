@@ -8,15 +8,15 @@ use crate::graph::{Inlet, Port, Stage, PORT_DATA};
 use crate::{AppData, ProctorResult, SharedString};
 
 pub struct LoggedSink<In> {
-    name: String,
+    name: SharedString,
     inlet: Inlet<In>,
 }
 
 impl<In> LoggedSink<In> {
-    pub fn new<S: Into<String>>(name: S) -> Self {
-        let name: SharedString = SharedString::Owned(name.into());
+    pub fn new<S: Into<SharedString>>(name: S) -> Self {
+        let name = name.into();
         let inlet = Inlet::new(name.clone(), PORT_DATA);
-        Self { name: name.into_owned(), inlet }
+        Self { name, inlet }
     }
 }
 
@@ -24,8 +24,8 @@ impl<In> LoggedSink<In> {
 #[async_trait]
 impl<In: AppData> Stage for LoggedSink<In> {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_ref()
+    fn name(&self) -> SharedString {
+        self.name.clone()
     }
 
     #[tracing::instrument(level = "info", skip(self))]

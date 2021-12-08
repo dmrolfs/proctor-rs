@@ -13,7 +13,7 @@ use crate::elements::Telemetry;
 use crate::error::CollectionError;
 use crate::graph::stage::{SourceStage, Stage, WithApi};
 use crate::graph::{Outlet, Port, SourceShape};
-use crate::{AppData, ProctorResult};
+use crate::{AppData, ProctorResult, SharedString};
 
 pub mod builder;
 pub mod clearinghouse;
@@ -45,7 +45,7 @@ pub mod subscription_channel;
 // }
 
 pub struct Collect<Out> {
-    name: String,
+    name: SharedString,
     inner: Box<dyn SourceStage<Out>>,
     outlet: Outlet<Out>,
     pub tx_clearinghouse_api: ClearinghouseApi,
@@ -56,7 +56,7 @@ pub struct Collect<Out> {
 impl<Out> Collect<Out> {
     #[tracing::instrument(level = "info", skip(name, sources))]
     pub fn builder(
-        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>, machine_node: MachineNode,
+        name: impl Into<SharedString>, sources: Vec<Box<dyn SourceStage<Telemetry>>>, machine_node: MachineNode,
     ) -> CollectBuilder<Out> {
         let id_generator = CorrelationGenerator::distributed(machine_node, IdPrettifier::<AlphabetCodec>::default());
         CollectBuilder::new(name, sources, id_generator)
@@ -64,7 +64,7 @@ impl<Out> Collect<Out> {
 
     #[tracing::instrument(level = "info", skip(name, sources))]
     pub fn single_node_builder(
-        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
+        name: impl Into<SharedString>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
     ) -> CollectBuilder<Out> {
         Self::builder(name, sources, MachineNode::default())
     }
@@ -99,8 +99,8 @@ impl<Out> WithApi for Collect<Out> {
 #[dyn_upcast]
 #[async_trait]
 impl<Out: AppData> Stage for Collect<Out> {
-    fn name(&self) -> &str {
-        self.name.as_str()
+    fn name(&self) -> SharedString {
+        self.name.clone()
     }
 
     #[tracing::instrument(level = "info", skip(self))]

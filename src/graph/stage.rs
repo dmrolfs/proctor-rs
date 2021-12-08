@@ -11,7 +11,7 @@ pub use self::sink::*;
 pub use self::source::*;
 pub use self::through::*;
 use super::{SinkShape, SourceShape, ThroughShape};
-use crate::ProctorResult;
+use crate::{ProctorResult, SharedString};
 
 pub trait SourceStage<Out>: Stage + SourceShape<Out = Out> + 'static {}
 impl<Out, T: 'static + Stage + SourceShape<Out = Out>> SourceStage<Out> for T {}
@@ -29,7 +29,7 @@ impl<In, Out, T: 'static + Stage + ThroughShape<In = In, Out = Out>> ThroughStag
 #[dyn_upcast]
 #[async_trait]
 pub trait Stage: fmt::Debug + Send + Sync {
-    fn name(&self) -> &str;
+    fn name(&self) -> SharedString;
     async fn check(&self) -> ProctorResult<()>;
     async fn run(&mut self) -> ProctorResult<()>;
     async fn close(self: Box<Self>) -> ProctorResult<()>;

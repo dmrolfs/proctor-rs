@@ -51,7 +51,7 @@ where
     Fut: Future<Output = Out>,
     Op: FnMut(In) -> Fut,
 {
-    name: String,
+    name: SharedString,
     operation: Op,
     inlet: Inlet<In>,
     outlet: Outlet<Out>,
@@ -76,11 +76,11 @@ where
     Fut: Future<Output = Out>,
     Op: FnMut(In) -> Fut,
 {
-    pub fn new<S: Into<String>>(name: S, operation: Op) -> Self {
-        let name: SharedString = SharedString::Owned(name.into());
+    pub fn new<S: Into<SharedString>>(name: S, operation: Op) -> Self {
+        let name = name.into();
         let inlet = Inlet::new(name.clone(), PORT_DATA);
         let outlet = Outlet::new(name.clone(), PORT_DATA);
-        Self { name: name.into_owned(), operation, inlet, outlet }
+        Self { name, operation, inlet, outlet }
     }
 }
 
@@ -117,8 +117,8 @@ where
     Fut: Future<Output = Out> + Send + 'static,
     Op: FnMut(In) -> Fut + Send + Sync + 'static,
 {
-    fn name(&self) -> &str {
-        self.name.as_str()
+    fn name(&self) -> SharedString {
+        self.name.clone()
     }
 
     #[tracing::instrument(level = "info", skip(self))]

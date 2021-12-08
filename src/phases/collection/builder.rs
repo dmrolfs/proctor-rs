@@ -15,7 +15,7 @@ use crate::{AppData, SharedString};
 
 #[derive(Debug)]
 pub struct CollectBuilder<Out> {
-    name: String,
+    name: SharedString,
     sources: Vec<Box<dyn SourceStage<Telemetry>>>,
     merge: stage::MergeN<Telemetry>,
     pub clearinghouse: Clearinghouse,
@@ -25,7 +25,7 @@ pub struct CollectBuilder<Out> {
 impl<Out> CollectBuilder<Out> {
     #[tracing::instrument(level = "info", skip(name, sources))]
     pub fn new(
-        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
+        name: impl Into<SharedString>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
         correlation_generator: CorrelationGenerator,
     ) -> Self {
         let name = name.into();
@@ -88,7 +88,7 @@ impl CollectBuilder<Telemetry> {
         mut self, out_required_fields: HashSet<impl Into<SharedString>>,
         out_optional_fields: HashSet<impl Into<SharedString>>,
     ) -> Result<Collect<Telemetry>, CollectionError> {
-        let subscription = TelemetrySubscription::new(self.name.as_str())
+        let subscription = TelemetrySubscription::new(self.name.as_ref())
             .with_required_fields(out_required_fields)
             .with_optional_fields(out_optional_fields);
 
@@ -107,7 +107,7 @@ impl CollectBuilder<Telemetry> {
         out_optional_fields: HashSet<impl Into<SharedString>>,
         update_metrics: Box<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>,
     ) -> Result<Collect<Telemetry>, CollectionError> {
-        let subscription = TelemetrySubscription::new(self.name.as_str())
+        let subscription = TelemetrySubscription::new(self.name.as_ref())
             .with_required_fields(out_required_fields)
             .with_optional_fields(out_optional_fields)
             .with_update_metrics_fn(update_metrics);
@@ -139,7 +139,7 @@ where
         mut self, out_required_fields: HashSet<impl Into<SharedString>>,
         out_optional_fields: HashSet<impl Into<SharedString>>,
     ) -> Result<Collect<Out>, CollectionError> {
-        let subscription = TelemetrySubscription::new(self.name.as_str())
+        let subscription = TelemetrySubscription::new(self.name.as_ref())
             .with_required_fields(out_required_fields)
             .with_optional_fields(out_optional_fields);
 
@@ -159,7 +159,7 @@ where
         out_optional_fields: HashSet<impl Into<SharedString>>,
         update_metrics: Box<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>,
     ) -> Result<Collect<Out>, CollectionError> {
-        let subscription = TelemetrySubscription::new(self.name.as_str())
+        let subscription = TelemetrySubscription::new(self.name.as_ref())
             .with_required_fields(out_required_fields)
             .with_optional_fields(out_optional_fields)
             .with_update_metrics_fn(update_metrics);

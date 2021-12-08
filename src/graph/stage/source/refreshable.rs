@@ -17,7 +17,7 @@ where
     A: Fn(Option<Ctrl>) -> F,
     F: Future<Output = Option<Out>>,
 {
-    name: String,
+    name: SharedString,
     action: A,
     rx_control: mpsc::Receiver<Ctrl>,
     outlet: Outlet<Out>,
@@ -28,15 +28,10 @@ where
     A: Fn(Option<Ctrl>) -> F,
     F: Future<Output = Option<Out>>,
 {
-    pub fn new<S: Into<String>>(name: S, action: A, rx_control: mpsc::Receiver<Ctrl>) -> Self {
-        let name: SharedString = SharedString::Owned(name.into());
+    pub fn new<S: Into<SharedString>>(name: S, action: A, rx_control: mpsc::Receiver<Ctrl>) -> Self {
+        let name = name.into();
         let outlet = Outlet::new(name.clone(), PORT_DATA);
-        Self {
-            name: name.into_owned(),
-            action,
-            rx_control,
-            outlet,
-        }
+        Self { name, action, rx_control, outlet }
     }
 }
 
@@ -63,8 +58,8 @@ where
     F: Future<Output = Option<Out>> + Send + 'static,
 {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_ref()
+    fn name(&self) -> SharedString {
+        self.name.clone()
     }
 
     #[tracing::instrument(level = "info", skip(self))]

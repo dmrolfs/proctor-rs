@@ -73,20 +73,20 @@ use crate::{AppData, ProctorResult, SharedString};
 /// }
 /// ```
 pub struct Broadcast<T> {
-    name: String,
+    name: SharedString,
     inlet: Inlet<T>,
     outlets: Vec<Outlet<T>>,
 }
 
 impl<T> Broadcast<T> {
-    pub fn new<S: Into<String>>(name: S, output_ports: usize) -> Self {
-        let name: SharedString = SharedString::Owned(name.into());
+    pub fn new<S: Into<SharedString>>(name: S, output_ports: usize) -> Self {
+        let name = name.into();
         let inlet = Inlet::new(name.clone(), PORT_DATA);
         let outlets = (0..output_ports)
             .map(|pos| Outlet::new(name.clone(), format!("{}_{}", PORT_DATA, pos)))
             .collect();
 
-        Self { name: name.into_owned(), inlet, outlets }
+        Self { name, inlet, outlets }
     }
 }
 
@@ -112,8 +112,8 @@ impl<T> SinkShape for Broadcast<T> {
 #[async_trait]
 impl<T: AppData + Clone> Stage for Broadcast<T> {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_str()
+    fn name(&self) -> SharedString {
+        self.name.clone()
     }
 
     #[tracing::instrument(level = "info", skip(self))]

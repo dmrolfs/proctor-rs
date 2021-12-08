@@ -44,7 +44,7 @@ impl Node {
                             break Err(err.into());
                         },
                         Err(err) => {
-                            graph::track_errors(self.stage.name(), &err);
+                            graph::track_errors(self.stage.name().as_ref(), &err);
                             tracing::error!(error=?err, "{} node failed on item - skipping", self.name);
                         },
                     }

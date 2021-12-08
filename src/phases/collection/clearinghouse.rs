@@ -56,7 +56,7 @@ pub type CorrelationGenerator = ProctorIdGenerator<Telemetry>;
 /// Clearinghouse is a sink for collected telemetry data and a subscription-based source for
 /// groups of telemetry fields.
 pub struct Clearinghouse {
-    name: String,
+    name: SharedString,
     subscriptions: Vec<TelemetrySubscription>,
     database: Telemetry,
     correlation_generator: CorrelationGenerator,
@@ -68,13 +68,13 @@ pub struct Clearinghouse {
 const PORT_TELEMETRY: &'static str = "telemetry";
 
 impl Clearinghouse {
-    pub fn new(name: impl Into<String>, correlation_generator: CorrelationGenerator) -> Self {
-        let name: SharedString = SharedString::Owned(name.into());
+    pub fn new(name: impl Into<SharedString>, correlation_generator: CorrelationGenerator) -> Self {
+        let name = name.into();
         let (tx_api, rx_api) = mpsc::unbounded_channel();
         let inlet = Inlet::new(name.clone(), PORT_TELEMETRY);
 
         Self {
-            name: name.into_owned(),
+            name,
             subscriptions: Vec::default(),
             database: Telemetry::default(),
             correlation_generator,
@@ -328,8 +328,8 @@ impl UniformFanOutShape for Clearinghouse {
 #[dyn_upcast]
 #[async_trait]
 impl Stage for Clearinghouse {
-    fn name(&self) -> &str {
-        self.name.as_str()
+    fn name(&self) -> SharedString {
+        self.name.clone()
     }
 
     #[tracing::instrument(level = "info", skip(self))]
@@ -362,7 +362,7 @@ impl Clearinghouse {
     }
 
     async fn do_run(&mut self) -> Result<(), CollectionError> {
-        let stage_name = SharedString::Owned(self.name.clone());
+        let stage_name = &self.name;
         let mut inlet = self.inlet.clone();
         let rx_api = &mut self.rx_api;
         let database = &mut self.database;
@@ -380,7 +380,7 @@ impl Clearinghouse {
             tokio::select! {
                 data = inlet.recv() => {
                     let cont_loop = Self::handle_telemetry_data(
-                        &stage_name,
+                        stage_name,
                         data,
                         subscriptions,
                         database,

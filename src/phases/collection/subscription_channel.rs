@@ -16,7 +16,7 @@ use crate::{AppData, ProctorResult, SharedString};
 /// Subscription Source stage that can be used to adapt subscribed telemetry data into a
 /// typed inlet.
 pub struct SubscriptionChannel<T> {
-    name: String,
+    name: SharedString,
     pub subscription_receiver: Inlet<Telemetry>,
     inner_stage: Option<FromTelemetryShape<T>>,
     outlet: Outlet<T>,
@@ -57,7 +57,7 @@ impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
         let outlet = inner_stage.outlet();
 
         Ok(Self {
-            name: format!("{}_typed_subscription", name),
+            name,
             subscription_receiver,
             inner_stage: Some(inner_stage),
             outlet,
@@ -80,7 +80,7 @@ impl SubscriptionChannel<Telemetry> {
         let outlet = inner_stage.outlet();
 
         Ok(Self {
-            name: format!("{}_telemetry_subscription", name),
+            name: format!("{}_telemetry_subscription", name).into(),
             subscription_receiver,
             inner_stage: Some(inner_stage),
             outlet,
@@ -110,8 +110,8 @@ impl<T> SourceShape for SubscriptionChannel<T> {
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData> Stage for SubscriptionChannel<T> {
-    fn name(&self) -> &str {
-        self.name.as_str()
+    fn name(&self) -> SharedString {
+        self.name.clone()
     }
 
     #[tracing::instrument(level = "info", skip(self))]
@@ -153,7 +153,7 @@ impl<T: AppData> SubscriptionChannel<T> {
                 Ok(())
             },
 
-            None => Err(CollectionError::ClosedSubscription(self.name.clone())),
+            None => Err(CollectionError::ClosedSubscription(self.name.to_string())),
         }
     }
 

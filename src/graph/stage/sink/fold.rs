@@ -92,7 +92,7 @@ pub struct Fold<F, In, Acc>
 where
     F: FnMut(Acc, In) -> Acc,
 {
-    name: String,
+    name: SharedString,
     acc: Arc<Mutex<Acc>>,
     initial: Acc,
     operation: F,
@@ -109,14 +109,14 @@ where
     In: Debug + Send,
     Acc: Debug + Clone,
 {
-    pub fn new<S: Into<String>>(name: S, initial: Acc, operation: F) -> Self {
-        let name: SharedString = SharedString::Owned(name.into());
+    pub fn new<S: Into<SharedString>>(name: S, initial: Acc, operation: F) -> Self {
+        let name = name.into();
         let inlet = Inlet::new(name.clone(), PORT_DATA);
         let (tx_api, rx_api) = mpsc::unbounded_channel();
         let (tx_final, rx_final) = oneshot::channel();
 
         Self {
-            name: name.into_owned(),
+            name,
             acc: Arc::new(Mutex::new(initial.clone())),
             initial,
             operation,
@@ -242,8 +242,8 @@ where
     Acc: AppData + Clone,
 {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_ref()
+    fn name(&self) -> SharedString {
+        self.name.clone()
     }
 
     #[tracing::instrument(level = "info", skip(self))]

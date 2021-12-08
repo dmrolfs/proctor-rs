@@ -54,7 +54,7 @@ pub struct Filter<P, T>
 where
     P: FnMut(&T) -> bool,
 {
-    name: String,
+    name: SharedString,
     predicate: P,
     inlet: Inlet<T>,
     outlet: Outlet<T>,
@@ -65,17 +65,11 @@ impl<P, T> Filter<P, T>
 where
     P: FnMut(&T) -> bool,
 {
-    pub fn new<S: Into<String>>(name: S, predicate: P) -> Self {
-        let name: SharedString = SharedString::Owned(name.into());
+    pub fn new<S: Into<SharedString>>(name: S, predicate: P) -> Self {
+        let name = name.into();
         let inlet = Inlet::new(name.clone(), PORT_DATA);
         let outlet = Outlet::new(name.clone(), PORT_DATA);
-        Self {
-            name: name.into_owned(),
-            predicate,
-            inlet,
-            outlet,
-            log_blocks: false,
-        }
+        Self { name, predicate, inlet, outlet, log_blocks: false }
     }
 
     pub fn with_block_logging(self) -> Self {
@@ -115,8 +109,8 @@ where
     T: AppData,
 {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_str()
+    fn name(&self) -> SharedString {
+        self.name.clone()
     }
 
     #[tracing::instrument(level = "info", skip(self))]

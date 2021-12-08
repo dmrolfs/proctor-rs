@@ -16,7 +16,7 @@ use crate::graph::{stage, Connect, Graph, Inlet, Outlet, Port, SinkShape, Source
 use crate::{AppData, ProctorContext, ProctorResult, SharedString};
 
 pub struct PolicyPhase<In, Out, C, D> {
-    name: String,
+    name: SharedString,
     policy_transform: Box<dyn ThroughStage<In, Out>>,
     pub context_inlet: Inlet<C>,
     inlet: Inlet<In>,
@@ -101,7 +101,7 @@ where
         let outlet = policy_transform.outlet();
 
         Ok(Self {
-            name: name.to_string(),
+            name,
             policy_transform,
             context_inlet,
             inlet,
@@ -155,8 +155,8 @@ where
     C: ProctorContext,
     D: AppData,
 {
-    fn name(&self) -> &str {
-        self.name.as_str()
+    fn name(&self) -> SharedString {
+        self.name.clone()
     }
 
     #[tracing::instrument(level = "info", skip(self))]

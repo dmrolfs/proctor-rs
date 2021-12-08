@@ -141,7 +141,7 @@ use crate::{AppData, ProctorResult, SharedString};
 /// ```
 #[derive(Debug)]
 pub struct CompositeSource<Out> {
-    name: String,
+    name: SharedString,
     graph: Option<Graph>,
     outlet: Outlet<Out>,
 }
@@ -150,11 +150,7 @@ impl<Out: AppData> CompositeSource<Out> {
     pub async fn new(name: impl Into<SharedString>, graph: Graph, graph_outlet: Outlet<Out>) -> Self {
         let name = name.into();
         let (graph, outlet) = Self::extend_graph(name.clone(), graph, graph_outlet).await;
-        Self {
-            name: name.into_owned(),
-            graph: Some(graph),
-            outlet,
-        }
+        Self { name, graph: Some(graph), outlet }
     }
 
     async fn extend_graph(
@@ -184,8 +180,8 @@ impl<Out> SourceShape for CompositeSource<Out> {
 #[async_trait]
 impl<Out: AppData> Stage for CompositeSource<Out> {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_str()
+    fn name(&self) -> SharedString {
+        self.name.clone()
     }
 
     #[tracing::instrument(level = "info", skip(self))]

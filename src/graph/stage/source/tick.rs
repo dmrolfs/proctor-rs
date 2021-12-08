@@ -133,7 +133,7 @@ impl Constraint {
 /// }
 /// ```
 pub struct Tick<T> {
-    name: String,
+    name: SharedString,
     pub initial_delay: Duration,
     pub interval: Duration,
     tick: T,
@@ -144,20 +144,20 @@ pub struct Tick<T> {
 }
 
 impl<T> Tick<T> {
-    pub fn new<S: Into<String>>(name: S, initial_delay: Duration, interval: Duration, tick: T) -> Self {
+    pub fn new<S: Into<SharedString>>(name: S, initial_delay: Duration, interval: Duration, tick: T) -> Self {
         Self::with_constraint(name, initial_delay, interval, tick, Constraint::None)
     }
 
-    pub fn with_constraint<S: Into<String>>(
+    pub fn with_constraint<S: Into<SharedString>>(
         name: S, initial_delay: Duration, interval: Duration, tick: T, constraint: Constraint,
     ) -> Self {
         assert!(interval > Duration::new(0, 0), "`interval` must be non-zero.");
-        let name: SharedString = SharedString::Owned(name.into());
+        let name = name.into();
         let outlet = Outlet::new(name.clone(), PORT_DATA);
         let (tx_api, rx_api) = mpsc::unbounded_channel();
 
         Self {
-            name: name.into_owned(),
+            name,
             initial_delay,
             interval,
             tick,
@@ -185,8 +185,8 @@ where
     T: AppData + Clone + Unpin + Sync,
 {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_ref()
+    fn name(&self) -> SharedString {
+        self.name.clone()
     }
 
     #[tracing::instrument(level = "info", skip(self))]

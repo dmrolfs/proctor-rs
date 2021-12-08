@@ -33,7 +33,7 @@ pub trait Planning: Debug + Send + Sync {
 }
 
 pub struct Plan<P: Planning> {
-    name: String,
+    name: SharedString,
     planning: P,
     inlet: Inlet<P::Observation>,
     decision_inlet: Inlet<P::Decision>,
@@ -43,8 +43,8 @@ pub struct Plan<P: Planning> {
 
 impl<P: Planning> Plan<P> {
     #[tracing::instrument(level = "info", skip(name))]
-    pub fn new(name: impl Into<String>, mut planning: P) -> Self {
-        let name: SharedString = SharedString::Owned(format!("{}_plan", name.into()));
+    pub fn new(name: impl AsRef<str>, mut planning: P) -> Self {
+        let name = SharedString::Owned(format!("{}_plan", name.as_ref()));
         let inlet = Inlet::new(name.clone(), PORT_DATA);
         let decision_inlet = Inlet::new(name.clone(), PORT_CONTEXT);
         let outlet = Outlet::new(name.clone(), PORT_DATA);
@@ -53,7 +53,7 @@ impl<P: Planning> Plan<P> {
         let (tx_monitor, _) = broadcast::channel(num_cpus::get() * 2);
 
         Self {
-            name: name.into_owned(),
+            name,
             planning,
             inlet,
             decision_inlet,
@@ -106,8 +106,8 @@ impl<P: Planning> WithMonitor for Plan<P> {
 #[dyn_upcast]
 #[async_trait]
 impl<P: 'static + Planning> Stage for Plan<P> {
-    fn name(&self) -> &str {
-        self.name.as_str()
+    fn name(&self) -> SharedString {
+        self.name.clone()
     }
 
     #[tracing::instrument(level = "info", skip(self))]

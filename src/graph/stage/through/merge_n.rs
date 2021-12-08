@@ -132,7 +132,7 @@ pub enum MergeMsg {
 /// }
 /// ```
 pub struct MergeN<T> {
-    name: String,
+    name: SharedString,
     inlets: InletsShape<T>,
     outlet: Outlet<T>,
     tx_api: MergeApi,
@@ -140,8 +140,8 @@ pub struct MergeN<T> {
 }
 
 impl<T: Send> MergeN<T> {
-    pub fn new(name: impl Into<String>, input_ports: usize) -> Self {
-        let name: SharedString = SharedString::Owned(name.into());
+    pub fn new(name: impl Into<SharedString>, input_ports: usize) -> Self {
+        let name = name.into();
         let outlet = Outlet::new(name.clone(), PORT_DATA);
         let (tx_api, rx_api) = mpsc::unbounded_channel();
         let inlets = InletsShape::new(
@@ -150,13 +150,7 @@ impl<T: Send> MergeN<T> {
                 .collect(),
         );
 
-        Self {
-            name: name.into_owned(),
-            inlets,
-            outlet,
-            tx_api,
-            rx_api,
-        }
+        Self { name, inlets, outlet, tx_api, rx_api }
     }
 }
 
@@ -179,8 +173,8 @@ impl<T> SourceShape for MergeN<T> {
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData> Stage for MergeN<T> {
-    fn name(&self) -> &str {
-        self.name.as_str()
+    fn name(&self) -> SharedString {
+        self.name.clone()
     }
 
     #[tracing::instrument(level = "info", skip(self))]

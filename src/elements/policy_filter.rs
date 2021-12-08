@@ -86,7 +86,7 @@ pub struct PolicyFilter<T, C, A, P, D>
 where
     P: QueryPolicy<Item = T, Context = C, Args = A, TemplateData = D>,
 {
-    name: String,
+    name: SharedString,
     policy: P,
     context_inlet: Inlet<C>,
     inlet: Inlet<T>,
@@ -102,10 +102,10 @@ where
     C: Clone,
     P: QueryPolicy<Item = T, Context = C, Args = A, TemplateData = D>,
 {
-    pub fn new<S: AsRef<str>>(name: S, mut policy: P) -> Result<Self, PolicyError> {
+    pub fn new<S: Into<SharedString>>(name: S, mut policy: P) -> Result<Self, PolicyError> {
         Self::check_policy(&mut policy)?;
+        let name = name.into();
 
-        let name: SharedString = SharedString::Owned(name.as_ref().into());
         let context_inlet = Inlet::new(name.clone(), PORT_CONTEXT);
         let inlet = Inlet::new(name.clone(), PORT_DATA);
         let outlet = Outlet::new(name.clone(), PORT_DATA);
@@ -113,7 +113,7 @@ where
         let (tx_monitor, _) = broadcast::channel(num_cpus::get() * 2);
 
         Ok(Self {
-            name: format!("{}_policy_filter_stage", name),
+            name: name + "_policy_filter_stage",
             policy,
             context_inlet,
             inlet,
@@ -171,8 +171,8 @@ where
     D: AppData + Serialize,
 {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_str()
+    fn name(&self) -> SharedString {
+        self.name.clone()
     }
 
     #[tracing::instrument(level = "info", skip(self))]
@@ -228,7 +228,7 @@ where
 
                         match context.lock().await.as_ref() {
                             Some(ctx) => Self::handle_item(&name, item, ctx, policy, &oso, outlet, tx_monitor).await?,
-                            None => Self::handle_item_before_context(&name, item, tx_monitor)?,
+                            None => Self::handle_item_before_context(item, tx_monitor)?,
                         }
                     },
                     None => {
@@ -237,7 +237,7 @@ where
                     }
                 },
 
-                Some(ctx) = context_inlet.recv() => Self::handle_context(&name, context.clone(), ctx, tx_monitor).await?,
+                Some(ctx) = context_inlet.recv() => Self::handle_context(context.clone(), ctx, tx_monitor).await?,
 
                 Some(command) = rx_api.recv() => {
                     let cont_loop = Self::handle_command(
@@ -367,7 +367,7 @@ where
         fields()
     )]
     fn handle_item_before_context(
-        name: &SharedString, item: T, tx: &broadcast::Sender<Arc<PolicyFilterEvent<T, C>>>,
+        item: T, tx: &broadcast::Sender<Arc<PolicyFilterEvent<T, C>>>,
     ) -> Result<(), PolicyError> {
         tracing::info!(?item, "dropping item received before policy context set.");
         Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
@@ -376,8 +376,7 @@ where
 
     #[tracing::instrument(level = "info", name = "policy_filter handle context", skip(tx), fields())]
     async fn handle_context(
-        name: &SharedString, context: Arc<Mutex<Option<C>>>, recv_context: C,
-        tx: &broadcast::Sender<Arc<PolicyFilterEvent<T, C>>>,
+        context: Arc<Mutex<Option<C>>>, recv_context: C, tx: &broadcast::Sender<Arc<PolicyFilterEvent<T, C>>>,
     ) -> Result<(), PolicyError> {
         tracing::trace!(recv_context=?recv_context, "handling policy context update...");
         let mut ctx = context.lock().await;

@@ -209,8 +209,8 @@ impl SinkShape for Collect {
 #[async_trait]
 impl Stage for Collect {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_ref()
+    fn name(&self) -> SharedString {
+        self.name.clone()
     }
 
     #[tracing::instrument(level = "info", skip(self))]

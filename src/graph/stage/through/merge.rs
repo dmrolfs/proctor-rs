@@ -39,19 +39,19 @@ use crate::{AppData, ProctorResult, SharedString};
 /// }
 /// ```
 pub struct Merge<T> {
-    name: String,
+    name: SharedString,
     inlet_0: Inlet<T>,
     inlet_1: Inlet<T>,
     outlet: Outlet<T>,
 }
 
 impl<T> Merge<T> {
-    pub fn new<S: Into<String>>(name: S) -> Self {
-        let name: SharedString = SharedString::Owned(name.into());
+    pub fn new<S: Into<SharedString>>(name: S) -> Self {
+        let name = name.into();
         let inlet_0 = Inlet::new(name.clone(), format!("{}_0", PORT_DATA));
         let inlet_1 = Inlet::new(name.clone(), format!("{}_1", PORT_DATA));
         let outlet = Outlet::new(name.clone(), PORT_DATA);
-        Self { name: name.into_owned(), inlet_0, inlet_1, outlet }
+        Self { name, inlet_0, inlet_1, outlet }
     }
 }
 
@@ -83,8 +83,8 @@ impl<T> SourceShape for Merge<T> {
 #[async_trait]
 impl<T: AppData> Stage for Merge<T> {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_str()
+    fn name(&self) -> SharedString {
+        self.name.clone()
     }
 
     #[tracing::instrument(level = "info", skip(self))]

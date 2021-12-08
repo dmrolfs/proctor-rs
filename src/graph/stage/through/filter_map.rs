@@ -60,7 +60,7 @@ pub struct FilterMap<F, In, Out>
 where
     F: FnMut(In) -> Option<Out>,
 {
-    name: String,
+    name: SharedString,
     filter_map: F,
     inlet: Inlet<In>,
     outlet: Outlet<Out>,
@@ -71,12 +71,12 @@ impl<F, In, Out> FilterMap<F, In, Out>
 where
     F: FnMut(In) -> Option<Out>,
 {
-    pub fn new(name: impl Into<String>, f: F) -> Self {
-        let name: SharedString = SharedString::Owned(name.into());
+    pub fn new(name: impl Into<SharedString>, f: F) -> Self {
+        let name = name.into();
         let inlet = Inlet::new(name.clone(), PORT_DATA);
         let outlet = Outlet::new(name.clone(), PORT_DATA);
         Self {
-            name: name.into_owned(),
+            name,
             filter_map: f,
             inlet,
             outlet,
@@ -119,8 +119,8 @@ where
     In: AppData,
     Out: AppData,
 {
-    fn name(&self) -> &str {
-        self.name.as_str()
+    fn name(&self) -> SharedString {
+        self.name.clone()
     }
 
     #[tracing::instrument(level = "info", skip(self))]

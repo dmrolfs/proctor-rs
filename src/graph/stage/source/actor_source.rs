@@ -32,18 +32,18 @@ impl<T> ActorSourceCmd<T> {
 
 /// Actor-based protocol to source items into a graph flow.
 pub struct ActorSource<T> {
-    name: String,
+    name: SharedString,
     outlet: Outlet<T>,
     tx_api: ActorSourceApi<T>,
     rx_api: mpsc::UnboundedReceiver<ActorSourceCmd<T>>,
 }
 
 impl<T> ActorSource<T> {
-    pub fn new(name: impl Into<String>) -> Self {
-        let name: SharedString = SharedString::Owned(name.into());
+    pub fn new(name: impl Into<SharedString>) -> Self {
+        let name = name.into();
         let outlet = Outlet::new(name.clone(), PORT_DATA);
         let (tx_api, rx_api) = mpsc::unbounded_channel();
-        Self { name: name.into_owned(), outlet, tx_api, rx_api }
+        Self { name, outlet, tx_api, rx_api }
     }
 }
 
@@ -58,8 +58,8 @@ impl<T> SourceShape for ActorSource<T> {
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData> Stage for ActorSource<T> {
-    fn name(&self) -> &str {
-        self.name.as_ref()
+    fn name(&self) -> SharedString {
+        self.name.clone()
     }
 
     #[tracing::instrument(level = "info", skip(self))]

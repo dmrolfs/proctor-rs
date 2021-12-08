@@ -56,7 +56,7 @@ use crate::{AppData, ProctorResult, SharedString};
 /// }
 /// ```
 pub struct Sequence<T, I> {
-    name: String,
+    name: SharedString,
     items: Option<I>,
     outlet: Outlet<T>,
 }
@@ -65,16 +65,12 @@ impl<T, I> Sequence<T, I> {
     pub fn new<I0, S>(name: S, data: I0) -> Self
     where
         I0: IntoIterator<Item = T, IntoIter = I>,
-        S: Into<String>,
+        S: Into<SharedString>,
     {
-        let name: SharedString = SharedString::Owned(name.into());
+        let name = name.into();
         let outlet = Outlet::new(name.clone(), PORT_DATA);
         let items = data.into_iter();
-        Self {
-            name: name.into_owned(),
-            items: Some(items),
-            outlet,
-        }
+        Self { name, items: Some(items), outlet }
     }
 }
 
@@ -86,8 +82,8 @@ where
     I: Iterator<Item = T> + Send + Sync + 'static,
 {
     #[inline]
-    fn name(&self) -> &str {
-        self.name.as_str()
+    fn name(&self) -> SharedString {
+        self.name.clone()
     }
 
     #[tracing::instrument(level = "info", skip(self))]
