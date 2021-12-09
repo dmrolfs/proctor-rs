@@ -28,8 +28,14 @@ impl Timestamp {
         Self::new(datetime.timestamp(), datetime.timestamp_subsec_nanos())
     }
 
-    pub fn new_secs(secs: i64) -> Self {
+    pub fn from_secs(secs: i64) -> Self {
         Self(secs, 0)
+    }
+
+    pub fn from_milliseconds(millis: i64) -> Self {
+        let subsec_nanos = ((millis % 1_000) as u32) * 1_000_000;
+        let secs = millis / 1_000;
+        Self::new(secs, subsec_nanos)
     }
 
     pub fn new(secs: i64, subsec_nanos: u32) -> Self {

@@ -141,7 +141,9 @@ impl MetricLabel for IncompatibleSourceSettingsError {
         match self {
             _e @ Self::ExpectedTypeError { .. } => Left("expected_type".into()),
             Self::InvalidDetailError(_) => Left("invalid_detail".into()),
-            Self::UrlCannotBeBase(_) | Self::UrlParseError(_) | Self::ConfigurationParseError(_) => Left("configuration_parse".into()),
+            Self::UrlCannotBeBase(_) | Self::UrlParseError(_) | Self::ConfigurationParseError(_) => {
+                Left("configuration_parse".into())
+            },
         }
     }
 }
