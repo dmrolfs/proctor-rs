@@ -20,6 +20,10 @@ use crate::error::TelemetryError;
 pub struct Timestamp(i64, u32);
 
 impl Timestamp {
+    const MILLIS_PER_SEC: i64 = 1_000;
+    const NANOS_PER_MILLI: i64 = 1_000_000;
+    const NANOS_PER_SEC: i64 = Self::NANOS_PER_MILLI * Self::MILLIS_PER_SEC;
+
     pub fn now() -> Self {
         Self::from_datetime(&Utc::now())
     }
@@ -33,8 +37,9 @@ impl Timestamp {
     }
 
     pub fn from_milliseconds(millis: i64) -> Self {
-        let subsec_nanos = ((millis % 1_000) as u32) * 1_000_000;
-        let secs = millis / 1_000;
+        let secs: i64 = millis / Self::MILLIS_PER_SEC;
+        let frac_millis: u32 = (millis % Self::MILLIS_PER_SEC) as u32;
+        let subsec_nanos: u32 = frac_millis * (Self::NANOS_PER_MILLI as u32);
         Self::new(secs, subsec_nanos)
     }
 
@@ -51,7 +56,7 @@ impl Timestamp {
     }
 
     pub fn as_f64(&self) -> f64 {
-        (self.0 as f64) + (self.1 as f64) / 10_f64.powi(9)
+        (self.0 as f64) + ((self.1 as f64) / (Self::NANOS_PER_SEC as f64))
     }
 
     pub fn as_secs(&self) -> i64 {
@@ -59,13 +64,13 @@ impl Timestamp {
     }
 
     pub fn as_millis(&self) -> i64 {
-        let sec_millis = self.0 * 1_000;
-        let nsec_millis = (self.1 as i64) / 10_i64.pow(6);
+        let sec_millis = self.0 * Self::MILLIS_PER_SEC;
+        let nsec_millis = (self.1 as i64) / Self::NANOS_PER_MILLI;
         sec_millis + nsec_millis
     }
 
     pub fn as_nanos(&self) -> i64 {
-        self.0 * 10_i64.pow(9) + self.1 as i64
+        self.0 * Self::NANOS_PER_SEC + self.1 as i64
     }
 
     pub fn as_utc(&self) -> DateTime<Utc> {
@@ -519,5 +524,17 @@ mod tests {
         let ts_rep = format!("{:#}", ts);
         let actual = assert_ok!(Timestamp::from_str(&ts_rep));
         assert_eq!(actual, ts);
+    }
+
+    #[test]
+    fn test_timestamp_from_millis() {
+        let millis: i64 = 1_638_989_054_310;
+        let secs = millis / 1_000;
+        assert_eq!(secs, 1_638_989_054);
+        let remaining_millis = millis as u32 - (secs * 1_000) as u32;
+        assert_eq!(remaining_millis, 310);
+
+        let actual = Timestamp::from_milliseconds(millis);
+        assert_eq!(actual, Timestamp::new(1_638_989_054, 310_000_000));
     }
 }
