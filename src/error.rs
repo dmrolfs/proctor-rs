@@ -182,6 +182,10 @@ pub enum CollectionError {
     #[error("{0}")]
     UrlParseError(#[from] url::ParseError),
 
+    /// Error processing JSON
+    #[error("Error processing JSON: {0}")]
+    JsonError(#[from] serde_json::Error),
+
     #[error("Attempt to send via a closed subscription channel: {0}")]
     ClosedSubscription(String),
 
@@ -210,9 +214,10 @@ impl MetricLabel for CollectionError {
         match self {
             Self::IncompatibleSettings(e) => Right(Box::new(e)),
             Self::CsvError(_) => Left("csv".into()),
-            Self::HttpError(_) => Left("http".into()),
-            Self::HttpMiddlewareError(_) => Left("http_middleware".into()),
-            Self::UrlParseError(_) => Left("url_parse".into()),
+            Self::HttpError(_) => Left("http_integration".into()),
+            Self::HttpMiddlewareError(_) => Left("http_integration".into()),
+            Self::UrlParseError(_) => Left("http_integration".into()),
+            Self::JsonError(_) => Left("http_integration".into()),
             Self::ClosedSubscription(_) => Left("closed_subscription".into()),
             Self::DataNotFound(_) => Left("data_not_found".into()),
             Self::DecisionError(_) => Left("decision".into()),
