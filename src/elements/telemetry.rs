@@ -1,10 +1,10 @@
-pub use combine::{First, Max, Min, Sum, TelemetryCombinator};
+pub use combine::TelemetryCombinator;
 pub use from_telemetry::FromTelemetry;
 pub use to_telemetry::ToTelemetry;
 pub use value::{SeqValue, TableType, TableValue, TelemetryValue};
 pub use value_type::TelemetryType;
 
-mod combine;
+pub mod combine;
 mod de;
 mod from_telemetry;
 mod ser;
