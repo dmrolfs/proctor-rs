@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque};
 use std::convert::TryFrom;
 use std::fmt;
@@ -240,6 +241,24 @@ impl PartialEq for TelemetryValue {
 }
 
 impl Eq for TelemetryValue {}
+
+impl PartialOrd for TelemetryValue {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        other
+            .clone()
+            .try_cast(self.as_telemetry_type())
+            .ok()
+            .and_then(|that| match (self, that) {
+                (Self::Unit, Self::Unit) => None,
+                (Self::Integer(lhs), Self::Integer(rhs)) => PartialOrd::partial_cmp(lhs, &rhs),
+                (Self::Float(lhs), Self::Float(rhs)) => PartialOrd::partial_cmp(lhs, &rhs),
+                (Self::Text(lhs), Self::Text(rhs)) => PartialOrd::partial_cmp(lhs, &rhs),
+                (Self::Seq(lhs), Self::Seq(rhs)) => PartialOrd::partial_cmp(lhs, &rhs),
+                (Self::Table(_), Self::Table(_)) => None,
+                _ => None,
+            })
+    }
+}
 
 impl ToPolar for TelemetryValue {
     #[tracing::instrument(level = "trace")]
