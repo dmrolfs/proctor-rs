@@ -23,7 +23,6 @@ impl Timestamp {
     const MILLIS_PER_SEC: i64 = 1_000;
     const NANOS_PER_MILLI: i64 = 1_000_000;
     const NANOS_PER_SEC: i64 = Self::NANOS_PER_MILLI * Self::MILLIS_PER_SEC;
-
     pub const ZERO: Timestamp = Timestamp(0, 0);
 
     pub fn now() -> Self {

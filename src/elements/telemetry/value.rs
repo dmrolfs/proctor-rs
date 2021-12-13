@@ -119,6 +119,21 @@ impl fmt::Display for TelemetryValue {
 }
 
 impl TelemetryValue {
+    #[tracing::instrument(level = "trace", skip(values, combine_fn))]
+    pub fn combine_values(
+        values: impl IntoIterator<Item = TelemetryValue>,
+        combine_fn: impl Fn(&TelemetryValue, &TelemetryValue) -> Result<TelemetryValue, TelemetryError>,
+    ) -> Result<TelemetryValue, TelemetryError> {
+        let mut items: Vec<TelemetryValue> = values.into_iter().collect();
+        if let Some(head) = items.pop() {
+            items
+                .into_iter()
+                .fold(Ok(head), |acc, t| acc.and_then(|a| a.combine(t, &combine_fn)))
+        } else {
+            Ok(TelemetryValue::Unit)
+        }
+    }
+
     #[tracing::instrument(level = "trace")]
     pub fn is_empty(&self) -> bool {
         match self {
@@ -146,6 +161,44 @@ impl TelemetryValue {
             (Self::Table(lhs), Self::Table(rhs)) => lhs.extend(rhs.clone().into_iter()),
             (lhs, rhs) => panic!("mismatched telemetry merge types: {:?} + {:?}.", lhs, rhs),
         };
+    }
+
+    #[tracing::instrument(level = "trace", skip(combine_fn))]
+    pub fn combine(
+        &self, that: TelemetryValue,
+        combine_fn: &impl Fn(&TelemetryValue, &TelemetryValue) -> Result<TelemetryValue, TelemetryError>,
+    ) -> Result<TelemetryValue, TelemetryError> {
+        use self::TelemetryType as TT;
+
+        let lhs_type = self.as_telemetry_type();
+
+        match lhs_type {
+            TT::Unit => Ok(self.clone()),
+            TT::Boolean => {
+                let rhs = that.try_cast(lhs_type)?;
+                combine_fn(self, &rhs)
+            },
+            TT::Integer => {
+                let rhs = that.try_cast(lhs_type)?;
+                combine_fn(self, &rhs)
+            },
+            TT::Float => {
+                let rhs = that.try_cast(lhs_type)?;
+                combine_fn(self, &rhs)
+            },
+            TT::Text => {
+                let rhs = that.try_cast(lhs_type)?;
+                combine_fn(self, &rhs)
+            },
+            TT::Seq => {
+                let rhs = that.try_cast(lhs_type)?;
+                combine_fn(self, &rhs)
+            },
+            TT::Table => {
+                let rhs = that.try_cast(lhs_type)?;
+                combine_fn(self, &rhs)
+            },
+        }
     }
 
     pub fn as_telemetry_type(&self) -> TelemetryType {
