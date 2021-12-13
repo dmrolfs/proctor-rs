@@ -122,6 +122,41 @@ impl TelemetryCombinator for Sum {
     }
 }
 
+pub struct Average;
+
+impl TelemetryCombinator for Average {
+    fn combine(&self, lhs: &TelemetryValue, rhs: &TelemetryValue) -> Result<TelemetryValue, TelemetryError> {
+        use super::TelemetryValue as TV;
+
+        let lhs_type = lhs.as_telemetry_type();
+        let rhs = rhs.clone().try_cast(lhs_type)?;
+        match (lhs, rhs) {
+            (TV::Unit, TV::Unit) => Err(TelemetryError::NotSupported(
+                "combining Unit telemetry values is not supported".to_string(),
+            )),
+            (TV::Boolean(_), TV::Boolean(_)) => Err(TelemetryError::NotSupported(
+                "average combining Boolean telemetry values is not supported".to_string(),
+            )),
+            (TV::Integer(l), TV::Integer(r)) => Ok(TV::Integer((*l + r) / 2)),
+            (TV::Float(l), TV::Float(r)) => Ok(TV::Float((*l + r) / 2.)),
+            (TV::Text(_), TV::Text(_)) => Err(TelemetryError::NotSupported(
+                "average combining text telemetry values is not supported".to_string(),
+            )),
+            (TV::Seq(_), TV::Seq(_)) => Err(TelemetryError::NotSupported(
+                "average combining seq telemetry values is not supported".to_string(),
+            )),
+            (TV::Table(_), TV::Table(_)) => Err(TelemetryError::NotSupported(
+                "average combining Table telemetry values is not supported".to_string(),
+            )),
+            (l, r) => Err(TelemetryError::NotSupported(format!(
+                "average combining mixed types ({}, {}) is not supported and should have been handled",
+                l.as_telemetry_type(),
+                r.as_telemetry_type()
+            ))),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use claim::*;
@@ -296,6 +331,43 @@ mod tests {
         assert_eq!(
             assert_ok!(Sum.combine(&TV::Integer(33), &TV::Float(std::f64::consts::E))),
             TV::Integer(33 + std::f64::consts::E as i64)
+        );
+    }
+
+    #[test]
+    fn test_average_combination() {
+        assert_err!(Average.combine(&TV::Unit, &TV::Unit));
+        assert_eq!(
+            assert_ok!(Average.combine(&TV::Integer(34), &TV::Integer(39))),
+            TV::Integer(36)
+        );
+        assert_eq!(
+            assert_ok!(Average.combine(&TV::Float(2.134), &TV::Float(5.623))),
+            TV::Float(3.8785)
+        );
+        assert_err!(Average.combine(
+            &TV::Seq(vec![TV::Integer(33), TV::Boolean(false)]),
+            &TV::Seq(vec![TV::Float(std::f64::consts::LN_2)])
+        ));
+        assert_err!(Average.combine(
+            &TV::Table(
+                maplit::hashmap! {
+                    "foo".to_string() => TV::Integer(33),
+                    "bar".to_string() => TV::Boolean(false),
+                }
+                .into()
+            ),
+            &TV::Table(
+                maplit::hashmap! {
+                    "zed".to_string() => TV::Float(std::f64::consts::LN_2),
+                }
+                .into()
+            )
+        ));
+
+        assert_eq!(
+            assert_ok!(Average.combine(&TV::Integer(33), &TV::Float(std::f64::consts::E))),
+            TV::Integer(17)
         );
     }
 }
