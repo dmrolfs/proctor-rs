@@ -41,15 +41,15 @@ impl From<f64> for RecordsPerSecond {
     }
 }
 
-impl Into<f64> for RecordsPerSecond {
-    fn into(self) -> f64 {
-        self.0
+impl From<RecordsPerSecond> for f64 {
+    fn from(rate: RecordsPerSecond) -> Self {
+        rate.0
     }
 }
 
-impl Into<f64> for &RecordsPerSecond {
-    fn into(self) -> f64 {
-        self.0
+impl From<&RecordsPerSecond> for f64 {
+    fn from(rate: &RecordsPerSecond) -> Self {
+        rate.0
     }
 }
 

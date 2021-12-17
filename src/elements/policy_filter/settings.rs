@@ -58,10 +58,10 @@ where
     }
 }
 
-const REQ_SUBSCRIPTION_FIELDS: &'static str = "required_subscription_fields";
-const OPT_SUBSCRIPTION_FIELDS: &'static str = "optional_subscription_fields";
-const POLICIES: &'static str = "policies";
-const TEMPLATE_DATA: &'static str = "template_data";
+const REQ_SUBSCRIPTION_FIELDS: &str = "required_subscription_fields";
+const OPT_SUBSCRIPTION_FIELDS: &str = "optional_subscription_fields";
+const POLICIES: &str = "policies";
+const TEMPLATE_DATA: &str = "template_data";
 
 impl<T: Debug + Serialize + DeserializeOwned> Serialize for PolicySettings<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -212,7 +212,7 @@ where
             }
         }
 
-        const FIELDS: &'static [&'static str] = &[
+        const FIELDS: &[&str] = &[
             REQ_SUBSCRIPTION_FIELDS,
             OPT_SUBSCRIPTION_FIELDS,
             POLICIES,

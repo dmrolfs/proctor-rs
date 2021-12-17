@@ -93,9 +93,9 @@ impl fmt::Display for Timestamp {
     }
 }
 
-pub const FORMAT: &'static str = "%+";
-pub const SECS_KEY: &'static str = "secs";
-pub const NANOS_KEY: &'static str = "nanos";
+pub const FORMAT: &str = "%+";
+pub const SECS_KEY: &str = "secs";
+pub const NANOS_KEY: &str = "nanos";
 
 static TUPLE_FORM: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^\((\d+),(\d+)\)$").expect("failed to create tuple timestamp regex"));
@@ -130,16 +130,8 @@ impl TryFrom<TelemetryValue> for Timestamp {
             TelemetryValue::Float(f64) => Ok(f64.into()),
             TelemetryValue::Integer(i64) => Ok(i64.into()),
             TelemetryValue::Table(mut table) => {
-                let secs = table
-                    .remove(SECS_KEY)
-                    .map(|val| i64::try_from(val))
-                    .transpose()?
-                    .unwrap_or(0);
-                let nanos = table
-                    .remove(NANOS_KEY)
-                    .map(|val| u32::try_from(val))
-                    .transpose()?
-                    .unwrap_or(0);
+                let secs = table.remove(SECS_KEY).map(i64::try_from).transpose()?.unwrap_or(0);
+                let nanos = table.remove(NANOS_KEY).map(u32::try_from).transpose()?.unwrap_or(0);
                 Ok(Self(secs, nanos))
             },
             TelemetryValue::Text(rep) => {
@@ -149,7 +141,7 @@ impl TryFrom<TelemetryValue> for Timestamp {
                 Ok(dt.into())
             },
             value => Err(TelemetryError::TypeError {
-                expected: format!("a telemetry {}", TelemetryType::Float),
+                expected: TelemetryType::Float,
                 actual: Some(format!("{:?}", value)),
             }),
         }
@@ -162,15 +154,21 @@ impl TryFrom<TelemetryValue> for Timestamp {
 //     }
 // }
 
-impl Into<DateTime<Utc>> for Timestamp {
-    fn into(self) -> DateTime<Utc> {
-        Utc.timestamp(self.0, self.1)
+impl From<Timestamp> for DateTime<Utc> {
+    fn from(ts: Timestamp) -> Self {
+        Utc.timestamp(ts.0, ts.1)
     }
 }
 
 impl From<DateTime<Utc>> for Timestamp {
     fn from(that: DateTime<Utc>) -> Self {
         Self(that.timestamp(), that.timestamp_subsec_nanos())
+    }
+}
+
+impl From<Timestamp> for f64 {
+    fn from(ts: Timestamp) -> Self {
+        ts.as_f64()
     }
 }
 
@@ -188,52 +186,35 @@ impl From<i64> for Timestamp {
     }
 }
 
-impl Into<f64> for Timestamp {
-    fn into(self) -> f64 {
-        self.as_f64()
+impl From<&Timestamp> for f64 {
+    fn from(ts: &Timestamp) -> Self {
+        ts.as_f64()
     }
 }
 
-impl Into<f64> for &Timestamp {
-    fn into(self) -> f64 {
-        self.as_f64()
+impl From<Timestamp> for i64 {
+    fn from(ts: Timestamp) -> Self {
+        ts.0
     }
 }
 
-impl Into<i64> for Timestamp {
-    fn into(self) -> i64 {
-        self.0
+impl From<&Timestamp> for i64 {
+    fn from(ts: &Timestamp) -> Self {
+        ts.0
     }
 }
 
-impl Into<i64> for &Timestamp {
-    fn into(self) -> i64 {
-        self.0
-    }
-}
-
-impl Into<TelemetryValue> for Timestamp {
-    fn into(self) -> TelemetryValue {
+impl From<Timestamp> for TelemetryValue {
+    fn from(ts: Timestamp) -> Self {
         TelemetryValue::Table(
             maplit::hashmap! {
-                SECS_KEY.to_string() => self.0.to_telemetry(),
-                NANOS_KEY.to_string() => self.1.to_telemetry(),
+                SECS_KEY.to_string() => ts.0.to_telemetry(),
+                NANOS_KEY.to_string() => ts.1.to_telemetry(),
             }
             .into(),
         )
     }
 }
-// impl From<Timestamp> for TelemetryValue {
-//     fn from(that: Timestamp) -> Self {
-//         Self::Table(
-//             maplit::hashmap! {
-//                 SECS_KEY.to_string() => that.0.to_telemetry(),
-//                 NANOS_KEY.to_string() => that.1.to_telemetry(),
-//             }
-//             .into(),
-//         )
-//     }
-// }
 
 impl std::ops::Add<Duration> for Timestamp {
     type Output = Timestamp;
@@ -430,12 +411,6 @@ impl<'de> de::Visitor<'de> for TimestampVisitor {
             Some(val) => self.visit_i64(val),
             None => Err(de::Error::invalid_value(Unexpected::Unsigned(v), &self)),
         }
-        // match i64::from_u64(v) {
-        //
-        // }
-        // i64::from_u64(v)
-        //     .map(|val| self.visit_i64(val))
-        //     .unwrap_or(Err(de::Error::invalid_value(Unexpected::Unsigned(v), &self)))
     }
 
     #[tracing::instrument(level = "debug", skip(self))]

@@ -57,7 +57,7 @@ use crate::{AppData, ProctorResult, SharedString};
 /// ```
 pub struct Foreach<F, In>
 where
-    F: Fn(In) -> (),
+    F: Fn(In),
 {
     name: SharedString,
     operation: F,
@@ -66,7 +66,7 @@ where
 
 impl<F, In> Foreach<F, In>
 where
-    F: Fn(In) -> (),
+    F: Fn(In),
 {
     pub fn new<S: Into<SharedString>>(name: S, operation: F) -> Self {
         let name = name.into();
@@ -77,7 +77,7 @@ where
 
 impl<F, In> SinkShape for Foreach<F, In>
 where
-    F: Fn(In) -> (),
+    F: Fn(In),
 {
     type In = In;
 
@@ -91,7 +91,7 @@ where
 #[async_trait]
 impl<F, In> Stage for Foreach<F, In>
 where
-    F: Fn(In) -> () + Send + Sync + 'static,
+    F: (Fn(In)) + Send + Sync + 'static,
     In: AppData,
 {
     #[inline]
@@ -123,7 +123,7 @@ where
 
 impl<F, In> fmt::Debug for Foreach<F, In>
 where
-    F: Fn(In) -> (),
+    F: Fn(In),
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Foreach").field("inlet", &self.inlet).finish()

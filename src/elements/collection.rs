@@ -114,7 +114,7 @@ pub struct Collect {
 }
 
 impl Collect {
-    #[deprecated(since = "2021/09/15", note = "prefer proctor::phases::collection module.")]
+    #[deprecated(since = "0.3.0", note = "prefer proctor::phases::collection module.")]
     pub async fn new<T, F, U>(name: impl Into<SharedString>, url: U, default_headers: HeaderMap, transform: F) -> Self
     where
         T: AppData + DeserializeOwned + 'static,

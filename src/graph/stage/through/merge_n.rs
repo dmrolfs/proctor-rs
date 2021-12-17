@@ -287,7 +287,7 @@ impl<'a, T: AppData> MergeN<T> {
             let _run_active_guard = run_active_span.enter();
 
             if let Some(inlet) = inlets.get(inlet_idx).await {
-                let rep = Self::replenish_inlet_pull(inlet_idx, inlet.clone()).boxed();
+                let rep = Self::replenish_inlet_pull(inlet_idx, inlet).boxed();
                 remaining_inlets.push(rep);
                 tracing::info!(nr_available_inlets=%remaining_inlets.len(), "4.1.active_inlets replenished.");
             }

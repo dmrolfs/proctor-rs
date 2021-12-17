@@ -149,6 +149,8 @@ pub struct TelemetrySource {
     tx_stop: Option<mpsc::UnboundedSender<TickMsg>>,
 }
 
+pub type TelemetrySourceAndTickApi = (Box<dyn SourceStage<Telemetry>>, Option<UnboundedSender<TickMsg>>);
+
 impl TelemetrySource {
     #[tracing::instrument(level = "info")]
     pub async fn collect_from_settings<T>(
@@ -169,7 +171,7 @@ impl TelemetrySource {
         Ok(sources)
     }
 
-    pub fn take(&mut self) -> Option<(Box<dyn SourceStage<Telemetry>>, Option<UnboundedSender<TickMsg>>)> {
+    pub fn take(&mut self) -> Option<TelemetrySourceAndTickApi> {
         self.stage.take().map(|s| (s, self.tx_stop.take()))
     }
 }

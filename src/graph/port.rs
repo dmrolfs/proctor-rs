@@ -43,8 +43,8 @@ fn track_egress(stage: &str, port_name: &str) {
     STAGE_EGRESS_COUNTS.with_label_values(&[stage, port_name]).inc()
 }
 
-pub const PORT_DATA: &'static str = "data";
-pub const PORT_CONTEXT: &'static str = "context";
+pub const PORT_DATA: &str = "data";
+pub const PORT_CONTEXT: &str = "context";
 
 #[async_trait]
 pub trait Port {
@@ -111,10 +111,12 @@ pub async fn connect_out_to_in<T: AppData>(mut lhs: Outlet<T>, mut rhs: Inlet<T>
     rhs.attach(lhs.full_name(), rx).await;
 }
 
+pub type InletConnection<T> = Arc<Mutex<Option<(mpsc::Receiver<T>, SharedString)>>>;
+
 pub struct Inlet<T> {
     pub stage: SharedString,
     pub name: SharedString,
-    connection: Arc<Mutex<Option<(mpsc::Receiver<T>, SharedString)>>>,
+    connection: InletConnection<T>,
 }
 
 impl<T> Inlet<T> {
@@ -157,7 +159,6 @@ impl<T: Send> Port for Inlet<T> {
             },
             None => {
                 tracing::trace!(stage=%self.stage, inlet=%self.name, "Inlet close ignored - not attached");
-                ()
             },
         }
     }
@@ -187,13 +188,13 @@ impl<T: fmt::Debug + Send> Inlet<T> {
         if self.is_attached().await {
             let sender = self.connection.lock().await.as_ref().map(|s| s.1.clone()).unwrap();
             tracing::trace!("inlet connected: {} -> {}", sender, self.full_name());
-            return Ok(());
+            Ok(())
         } else {
-            return Err(PortError::Detached(format!(
+            Err(PortError::Detached(format!(
                 "{}[{}]",
                 self.full_name(),
                 std::any::type_name::<Self>()
-            )));
+            )))
         }
     }
 
@@ -276,10 +277,12 @@ impl<T> fmt::Debug for Inlet<T> {
     }
 }
 
+pub type OutletConnection<T> = Arc<Mutex<Option<(mpsc::Sender<T>, SharedString)>>>;
+
 pub struct Outlet<T> {
     pub stage: SharedString,
     pub name: SharedString,
-    connection: Arc<Mutex<Option<(mpsc::Sender<T>, SharedString)>>>,
+    connection: OutletConnection<T>,
 }
 
 impl<T> Outlet<T> {
@@ -343,13 +346,13 @@ impl<T: AppData> Outlet<T> {
         if self.is_attached().await {
             let receiver = self.connection.lock().await.as_ref().map(|s| s.1.clone()).unwrap();
             tracing::info!("outlet connected: {} -> {}", self.full_name(), receiver);
-            return Ok(());
+            Ok(())
         } else {
-            return Err(PortError::Detached(format!(
+            Err(PortError::Detached(format!(
                 "{}[{}]",
                 self.full_name(),
                 std::any::type_name::<Self>()
-            )));
+            )))
         }
     }
 

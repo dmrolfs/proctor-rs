@@ -353,7 +353,7 @@ where
                 tracing::warn!(error=?err, ?policy, "error in context policy review - skipping item.");
                 track_policy_evals(name.as_ref(), PolicyResult::Failed);
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
-                Err(err.into())
+                Err(err)
             },
         };
 
@@ -411,7 +411,7 @@ where
             },
 
             PolicyFilterCmd::AppendPolicy { additional_policy, new_template_data, tx } => {
-                let mut sources: Vec<PolicySource> = policy.sources().iter().cloned().collect();
+                let mut sources: Vec<PolicySource> = policy.sources().to_vec();
                 sources.push(additional_policy);
                 Self::do_reset_policy_engine(name, policy, sources, new_template_data, oso);
                 let _ignore_failure = tx.send(());

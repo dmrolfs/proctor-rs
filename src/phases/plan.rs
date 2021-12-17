@@ -149,7 +149,7 @@ impl<P: Planning> Plan<P> {
         loop {
             tokio::select! {
                 Some(data) = rx_data.recv() => {
-                    let observation: P::Observation = data.into();
+                    let observation: P::Observation = data;
                     planning.add_observation(observation.clone());
                     Self::publish_event(tx_monitor, PlanEvent::ObservationAdded(observation));
                 },

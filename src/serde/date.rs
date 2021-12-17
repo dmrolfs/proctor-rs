@@ -5,9 +5,9 @@ use chrono::{DateTime, TimeZone, Utc};
 use serde::de::MapAccess;
 use serde::{self, de, ser::SerializeMap, Serializer};
 
-pub const FORMAT: &'static str = "%+";
-pub const SECS_KEY: &'static str = crate::elements::SECS_KEY;
-pub const NANOS_KEY: &'static str = crate::elements::NANOS_KEY;
+pub const FORMAT: &str = "%+";
+pub const SECS_KEY: &str = crate::elements::SECS_KEY;
+pub const NANOS_KEY: &str = crate::elements::NANOS_KEY;
 
 #[tracing::instrument(level = "debug")]
 fn table_from_datetime(datetime: &DateTime<Utc>) -> HashMap<String, i64> {
@@ -128,10 +128,7 @@ impl<'de> de::Visitor<'de> for DateTimeVisitor {
     where
         M: MapAccess<'de>,
     {
-        let mut table = access
-            .size_hint()
-            .map(HashMap::with_capacity)
-            .unwrap_or(HashMap::default());
+        let mut table = access.size_hint().map(HashMap::with_capacity).unwrap_or_default();
 
         while let Some((k, v)) = access.next_entry()? {
             table.insert(k, v);

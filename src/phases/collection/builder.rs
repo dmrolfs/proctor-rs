@@ -6,6 +6,7 @@ use cast_trait_object::DynCastExt;
 use serde::de::DeserializeOwned;
 
 use super::{Clearinghouse, Collect, SubscriptionChannel, SubscriptionRequirements};
+use crate::elements::telemetry::UpdateMetricsFn;
 use crate::elements::Telemetry;
 use crate::error::{CollectionError, PortError};
 use crate::graph::stage::{self, SourceStage, Stage, WithApi};
@@ -58,7 +59,7 @@ where
 
     #[tracing::instrument(level = "info", skip(update_metrics), fields(nr_sources = % self.sources.len()))]
     pub async fn build_for_out_w_metrics(
-        self, update_metrics: Box<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>,
+        self, update_metrics: Box<dyn (Fn(&str, &Telemetry)) + Send + Sync + 'static>,
     ) -> Result<Collect<Out>, CollectionError> {
         self.build_for_out_requirements_w_metrics(
             <Out as SubscriptionRequirements>::required_fields(),
@@ -105,7 +106,7 @@ impl CollectBuilder<Telemetry> {
     pub async fn build_for_telemetry_out_w_metrics(
         mut self, out_required_fields: HashSet<impl Into<SharedString>>,
         out_optional_fields: HashSet<impl Into<SharedString>>,
-        update_metrics: Box<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>,
+        update_metrics: Box<dyn (Fn(&str, &Telemetry)) + Send + Sync + 'static>,
     ) -> Result<Collect<Telemetry>, CollectionError> {
         let subscription = TelemetrySubscription::new(self.name.as_ref())
             .with_required_fields(out_required_fields)
@@ -156,8 +157,7 @@ where
     )]
     pub async fn build_for_out_requirements_w_metrics(
         mut self, out_required_fields: HashSet<impl Into<SharedString>>,
-        out_optional_fields: HashSet<impl Into<SharedString>>,
-        update_metrics: Box<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>,
+        out_optional_fields: HashSet<impl Into<SharedString>>, update_metrics: UpdateMetricsFn,
     ) -> Result<Collect<Out>, CollectionError> {
         let subscription = TelemetrySubscription::new(self.name.as_ref())
             .with_required_fields(out_required_fields)

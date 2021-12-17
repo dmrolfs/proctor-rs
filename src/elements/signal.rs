@@ -152,7 +152,7 @@ where
     type Item = (I::Item, Anomaly);
 
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some(item) = self.source.next() {
+        for item in self.source.by_ref() {
             let value = (self.signal)(&item);
             let peak = self.detector.signal(value);
 

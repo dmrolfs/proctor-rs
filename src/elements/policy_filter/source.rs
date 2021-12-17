@@ -73,12 +73,15 @@ impl PolicySource {
         S0: Into<String>,
         S1: AsRef<str>,
     {
+        #[allow(clippy::needless_collect)]
         let lines: Vec<&str> = polar.as_ref().lines().take(2).collect();
         let multi_line = 1 < lines.len();
         let polar_rep = if multi_line {
-            polar.trim_margin_with("|").ok_or(PolicyError::StringPolicyError(
-                "Multi-line policy strings must begin each line with the '|' margin character.".to_string(),
-            ))
+            polar.trim_margin_with("|").ok_or_else(|| {
+                PolicyError::StringPolicyError(
+                    "Multi-line policy strings must begin each line with the '|' margin character.".to_string(),
+                )
+            })
         } else {
             Ok(polar.as_ref().to_string())
         };

@@ -117,7 +117,7 @@ impl Graph {
         let results: Vec<ProctorResult<()>> = futures::future::try_join_all(tasks)
             .instrument(tracing::info_span!("graph_run_join_all"))
             .await
-            .map_err(|err| GraphError::JoinError(err))?;
+            .map_err(GraphError::JoinError)?;
 
         let results: ProctorResult<Vec<()>> = results.into_iter().collect();
         let _ = results?;

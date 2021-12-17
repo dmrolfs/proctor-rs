@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
+use crate::elements::telemetry::UpdateMetricsFn;
 use crate::elements::Telemetry;
 use crate::error::CollectionError;
 use crate::graph::{Connect, Inlet, Outlet, Port, PORT_DATA};
@@ -21,16 +22,14 @@ pub enum TelemetrySubscription {
     All {
         name: SharedString,
         outlet_to_subscription: Outlet<Telemetry>,
-        update_metrics: Option<Arc<Box<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>>>, /* Arc to support
-                                                                                                   * Clone */
+        update_metrics: Option<Arc<UpdateMetricsFn>>,
     },
     Explicit {
         name: SharedString,
         required_fields: HashSet<SharedString>,
         optional_fields: HashSet<SharedString>,
         outlet_to_subscription: Outlet<Telemetry>,
-        update_metrics: Option<Arc<Box<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>>>, /* Arc to support
-                                                                                                   * Clone */
+        update_metrics: Option<Arc<UpdateMetricsFn>>,
     },
 }
 
@@ -133,7 +132,7 @@ impl TelemetrySubscription {
     }
 
     pub fn with_update_metrics_fn(
-        self, update_metrics: Box<dyn Fn(&str, &Telemetry) -> () + Send + Sync + 'static>,
+        self, update_metrics: Box<dyn (Fn(&str, &Telemetry)) + Send + Sync + 'static>,
     ) -> Self {
         match self {
             Self::All { name, outlet_to_subscription, .. } => Self::All {

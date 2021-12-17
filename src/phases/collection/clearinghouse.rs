@@ -48,8 +48,8 @@ fn track_publications(subscription: &str) {
     PUBLICATIONS.with_label_values(&[subscription]).inc();
 }
 
-pub const SUBSCRIPTION_TIMESTAMP: &'static str = "timestamp";
-pub const SUBSCRIPTION_CORRELATION: &'static str = "correlation_id";
+pub const SUBSCRIPTION_TIMESTAMP: &str = "timestamp";
+pub const SUBSCRIPTION_CORRELATION: &str = "correlation_id";
 
 pub type CorrelationGenerator = ProctorIdGenerator<Telemetry>;
 
@@ -65,7 +65,7 @@ pub struct Clearinghouse {
     rx_api: mpsc::UnboundedReceiver<ClearinghouseCmd>,
 }
 
-const PORT_TELEMETRY: &'static str = "telemetry";
+const PORT_TELEMETRY: &str = "telemetry";
 
 impl Clearinghouse {
     pub fn new(name: impl Into<SharedString>, correlation_generator: CorrelationGenerator) -> Self {
@@ -94,7 +94,7 @@ impl Clearinghouse {
 
     #[tracing::instrument(level = "trace", skip(subscriptions, database,))]
     async fn handle_telemetry_data(
-        stage_name: &SharedString, data: Option<Telemetry>, subscriptions: &Vec<TelemetrySubscription>,
+        stage_name: &SharedString, data: Option<Telemetry>, subscriptions: &[TelemetrySubscription],
         database: &mut Telemetry, correlation_generator: &mut CorrelationGenerator,
     ) -> Result<bool, CollectionError> {
         match data {
@@ -118,9 +118,9 @@ impl Clearinghouse {
     }
 
     #[tracing::instrument(level = "trace", skip(subscriptions,))]
-    fn find_interested_subscriptions<'a>(
-        subscriptions: &'a Vec<TelemetrySubscription>, available: HashSet<&String>, changed: HashSet<String>,
-    ) -> Vec<&'a TelemetrySubscription> {
+    fn find_interested_subscriptions<'s>(
+        subscriptions: &'s [TelemetrySubscription], available: HashSet<&String>, changed: HashSet<String>,
+    ) -> Vec<&'s TelemetrySubscription> {
         let interested = subscriptions
             .iter()
             .filter(|s| {
@@ -165,7 +165,7 @@ impl Clearinghouse {
 
         let fulfilled = subscribers
             .into_iter()
-            .map(|s| Self::fulfill_subscription(&s, database).map(|fulfillment| (s, fulfillment)))
+            .map(|s| Self::fulfill_subscription(s, database).map(|fulfillment| (s, fulfillment)))
             .flatten()
             .map(|(s, mut fulfillment)| {
                 // auto-filled properties
@@ -244,7 +244,7 @@ impl Clearinghouse {
 
                     Some(name) => match subscriptions.iter().find(|s| s.name() == name.as_str()) {
                         Some(sub) => {
-                            let (db, missing) = sub.trim_to_subscription(&database)?;
+                            let (db, missing) = sub.trim_to_subscription(database)?;
 
                             tracing::info!(
                                 requested_subscription=%name,
@@ -278,7 +278,7 @@ impl Clearinghouse {
             ClearinghouseCmd::Subscribe { subscription, receiver, tx } => {
                 tracing::info!(?subscription, "adding telemetry subscriber.");
                 subscription.connect_to_receiver(&receiver).await;
-                subscriptions.push(subscription);
+                subscriptions.push(*subscription);
                 track_subscriptions(subscriptions.len());
                 let _ = tx.send(());
                 Ok(true)

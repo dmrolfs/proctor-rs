@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use either::{Either, Left, Right};
 use thiserror::Error;
 
-use crate::elements::TelemetryValue;
+use crate::elements::{TelemetryType, TelemetryValue};
 use crate::phases::collection::SourceSetting;
 use crate::SharedString;
 
@@ -85,6 +85,7 @@ impl From<StageError> for ProctorError {
 }
 
 #[derive(Debug, Error)]
+#[allow(clippy::large_enum_variant)]
 pub enum GraphError {
     #[error("{0}")]
     PolicyError(#[from] PolicyError),
@@ -453,11 +454,14 @@ impl From<PortError> for PolicyError {
 #[derive(Debug, Error)]
 pub enum TelemetryError {
     /// Invalid Type used in application
-    #[error("invalid type used, expected {expected} type but was: {actual:?}")]
-    TypeError { expected: String, actual: Option<String> },
+    #[error("invalid type used, expected {expected} value but was: {actual:?}")]
+    TypeError {
+        expected: TelemetryType,
+        actual: Option<String>,
+    },
 
     #[error("Invalid type used, expected {0}: {1}")]
-    ExpectedTypeError(String, #[source] anyhow::Error),
+    ExpectedTypeError(TelemetryType, #[source] anyhow::Error),
 
     #[error("{0}")]
     SerializationError(#[from] flexbuffers::SerializationError),

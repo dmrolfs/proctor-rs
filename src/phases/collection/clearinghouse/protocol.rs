@@ -11,7 +11,7 @@ pub type ClearinghouseApi = mpsc::UnboundedSender<ClearinghouseCmd>;
 #[derive(Debug)]
 pub enum ClearinghouseCmd {
     Subscribe {
-        subscription: TelemetrySubscription,
+        subscription: Box<TelemetrySubscription>,
         receiver: Inlet<Telemetry>,
         tx: oneshot::Sender<Ack>,
     },
@@ -31,7 +31,10 @@ impl ClearinghouseCmd {
         subscription: TelemetrySubscription, receiver: Inlet<Telemetry>,
     ) -> (Self, oneshot::Receiver<Ack>) {
         let (tx, rx) = oneshot::channel();
-        (Self::Subscribe { subscription, receiver, tx }, rx)
+        (
+            Self::Subscribe { subscription: Box::new(subscription), receiver, tx },
+            rx,
+        )
     }
 
     #[inline]

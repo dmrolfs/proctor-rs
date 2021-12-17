@@ -24,6 +24,9 @@ use serde::{de as serde_de, Deserialize, Serialize};
 
 use crate::error::{PolicyError, TelemetryError};
 
+// Arc to support Clone
+pub type UpdateMetricsFn = Box<dyn (Fn(&str, &Telemetry)) + Send + Sync + 'static>;
+
 #[derive(PolarClass, Label, Debug, Clone, PartialEq)]
 pub struct Telemetry(TelemetryValue);
 
@@ -92,9 +95,9 @@ impl From<TelemetryValue> for Telemetry {
     }
 }
 
-impl Into<TelemetryValue> for Telemetry {
-    fn into(self) -> TelemetryValue {
-        self.0
+impl From<Telemetry> for TelemetryValue {
+    fn from(telemetry: Telemetry) -> Self {
+        telemetry.0
     }
 }
 
@@ -120,17 +123,15 @@ impl std::ops::DerefMut for Telemetry {
     }
 }
 
-impl Into<Telemetry> for HashMap<String, TelemetryValue> {
-    #[tracing::instrument(level = "trace", skip())]
-    fn into(self) -> Telemetry {
-        Telemetry(TelemetryValue::Table(self.into()))
+impl From<HashMap<String, TelemetryValue>> for Telemetry {
+    fn from(that: HashMap<String, TelemetryValue>) -> Self {
+        Self(TelemetryValue::Table(that.into()))
     }
 }
 
-impl Into<Telemetry> for BTreeMap<String, TelemetryValue> {
-    #[tracing::instrument(level = "trace", skip())]
-    fn into(self) -> Telemetry {
-        self.into_iter().collect::<HashMap<_, _>>().into()
+impl From<BTreeMap<String, TelemetryValue>> for Telemetry {
+    fn from(that: BTreeMap<String, TelemetryValue>) -> Self {
+        Self(TelemetryValue::Table(that.into()))
     }
 }
 
