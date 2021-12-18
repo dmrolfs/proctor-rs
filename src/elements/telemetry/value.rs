@@ -141,10 +141,10 @@ impl TelemetryValue {
     #[tracing::instrument(level = "trace", skip(values))]
     pub fn combine<I, C>(values: I, combinator: &mut C) -> Result<Option<TelemetryValue>, TelemetryError>
     where
-        I: IntoIterator<Item = TelemetryValue>,
+        I: IntoIterator<Item = TelemetryValue> + 'static,
         C: TelemetryCombinator + fmt::Debug,
     {
-        combinator.combine(values)
+        combinator.combine(values.into_iter().collect())
     }
 
     #[tracing::instrument(level = "trace")]

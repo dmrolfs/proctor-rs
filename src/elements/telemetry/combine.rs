@@ -5,9 +5,7 @@ use super::{TelemetryType as TT, TelemetryValue as TV};
 use crate::error::TelemetryError;
 
 pub trait TelemetryCombinator {
-    fn combine<I>(&self, items: I) -> Result<Option<TelemetryValue>, TelemetryError>
-    where
-        I: IntoIterator<Item = TelemetryValue>;
+    fn combine(&self, items: Vec<TelemetryValue>) -> Result<Option<TelemetryValue>, TelemetryError>;
 }
 
 fn type_error_for(expected: TelemetryType, actual: TelemetryValue) -> TelemetryError {
@@ -18,10 +16,7 @@ fn type_error_for(expected: TelemetryType, actual: TelemetryValue) -> TelemetryE
 pub struct First;
 
 impl TelemetryCombinator for First {
-    fn combine<I>(&self, items: I) -> Result<Option<TelemetryValue>, TelemetryError>
-    where
-        I: IntoIterator<Item = TelemetryValue>,
-    {
+    fn combine(&self, items: Vec<TelemetryValue>) -> Result<Option<TelemetryValue>, TelemetryError> {
         Ok(items.into_iter().next())
     }
 }
@@ -30,10 +25,7 @@ impl TelemetryCombinator for First {
 pub struct Max;
 
 impl TelemetryCombinator for Max {
-    fn combine<I>(&self, items: I) -> Result<Option<TelemetryValue>, TelemetryError>
-    where
-        I: IntoIterator<Item = TelemetryValue>,
-    {
+    fn combine(&self, items: Vec<TelemetryValue>) -> Result<Option<TelemetryValue>, TelemetryError> {
         self.do_combine(items)
     }
 }
@@ -83,10 +75,7 @@ impl DoTelemetryCombination for Max {
 pub struct Min;
 
 impl TelemetryCombinator for Min {
-    fn combine<I>(&self, items: I) -> Result<Option<TelemetryValue>, TelemetryError>
-    where
-        I: IntoIterator<Item = TelemetryValue>,
-    {
+    fn combine(&self, items: Vec<TelemetryValue>) -> Result<Option<TelemetryValue>, TelemetryError> {
         self.do_combine(items)
     }
 }
@@ -136,10 +125,7 @@ impl DoTelemetryCombination for Min {
 pub struct Sum;
 
 impl TelemetryCombinator for Sum {
-    fn combine<I>(&self, items: I) -> Result<Option<TelemetryValue>, TelemetryError>
-    where
-        I: IntoIterator<Item = TelemetryValue>,
-    {
+    fn combine(&self, items: Vec<TelemetryValue>) -> Result<Option<TelemetryValue>, TelemetryError> {
         self.do_combine(items)
     }
 }
@@ -178,10 +164,7 @@ impl DoTelemetryCombination for Sum {
 pub struct Average;
 
 impl TelemetryCombinator for Average {
-    fn combine<I>(&self, items: I) -> Result<Option<TelemetryValue>, TelemetryError>
-    where
-        I: IntoIterator<Item = TelemetryValue>,
-    {
+    fn combine(&self, items: Vec<TelemetryValue>) -> Result<Option<TelemetryValue>, TelemetryError> {
         self.do_combine(items)
     }
 }
@@ -442,7 +425,10 @@ mod tests {
 
     #[test]
     fn test_max_combination() {
-        assert_eq!(assert_some!(assert_ok!(Max.combine([TV::Unit, TV::Unit]))), TV::Unit);
+        assert_eq!(
+            assert_some!(assert_ok!(Max.combine(vec![TV::Unit, TV::Unit]))),
+            TV::Unit
+        );
         assert_eq!(
             assert_some!(assert_ok!(Max.combine(vec![TV::Integer(33), TV::Integer(39)]))),
             TV::Integer(39)
@@ -587,22 +573,22 @@ mod tests {
         let _main_span_guard = main_span.enter();
 
         assert_eq!(
-            assert_some!(assert_ok!(Average.combine([TV::Unit, TV::Unit]))),
+            assert_some!(assert_ok!(Average.combine(vec![TV::Unit, TV::Unit]))),
             TV::Unit
         );
         assert_eq!(
-            assert_some!(assert_ok!(Average.combine([TV::Integer(34), TV::Integer(39)]))),
+            assert_some!(assert_ok!(Average.combine(vec![TV::Integer(34), TV::Integer(39)]))),
             TV::Integer(36)
         );
         assert_eq!(
-            assert_some!(assert_ok!(Average.combine([TV::Float(2.134), TV::Float(5.623)]))),
+            assert_some!(assert_ok!(Average.combine(vec![TV::Float(2.134), TV::Float(5.623)]))),
             TV::Float(3.8785)
         );
-        assert_err!(Average.combine([
+        assert_err!(Average.combine(vec![
             TV::Seq(vec![TV::Integer(33), TV::Boolean(false)]),
             TV::Seq(vec![TV::Float(std::f64::consts::LN_2)]),
         ]));
-        assert_err!(Average.combine([
+        assert_err!(Average.combine(vec![
             TV::Table(
                 maplit::hashmap! {
                     "foo".to_string() => TV::Integer(33),
@@ -620,7 +606,7 @@ mod tests {
 
         assert_eq!(
             assert_some!(assert_ok!(
-                Average.combine([TV::Integer(33), TV::Float(std::f64::consts::E)])
+                Average.combine(vec![TV::Integer(33), TV::Float(std::f64::consts::E)])
             )),
             TV::Integer(17)
         );
