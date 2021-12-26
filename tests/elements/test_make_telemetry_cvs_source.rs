@@ -151,7 +151,7 @@ async fn test_make_telemetry_cvs_source() -> Result<()> {
 
     let rx_acc = assert_some!(sink.take_final_rx());
 
-    let source_stage = assert_some!(source.take()).0;
+    let source_stage = assert_some!(source.stage.take());
     (source_stage.outlet(), sink.inlet()).connect().await;
 
     let mut g = Graph::default();

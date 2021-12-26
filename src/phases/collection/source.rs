@@ -145,11 +145,9 @@ where
 
 pub struct TelemetrySource {
     pub name: String,
-    stage: Option<Box<dyn SourceStage<Telemetry>>>,
-    tx_stop: Option<mpsc::UnboundedSender<TickMsg>>,
+    pub stage: Option<Box<dyn SourceStage<Telemetry>>>,
+    pub tx_stop: Option<mpsc::UnboundedSender<TickMsg>>,
 }
-
-pub type TelemetrySourceAndTickApi = (Box<dyn SourceStage<Telemetry>>, Option<UnboundedSender<TickMsg>>);
 
 impl TelemetrySource {
     #[tracing::instrument(level = "info")]
@@ -169,9 +167,5 @@ impl TelemetrySource {
         }
 
         Ok(sources)
-    }
-
-    pub fn take(&mut self) -> Option<TelemetrySourceAndTickApi> {
-        self.stage.take().map(|s| (s, self.tx_stop.take()))
     }
 }

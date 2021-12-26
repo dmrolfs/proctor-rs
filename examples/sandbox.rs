@@ -67,7 +67,7 @@ async fn main() -> Result<()> {
     let cvs_path = base_path.join(PathBuf::from("tests/data/cats.csv"));
     let cvs_setting = SourceSetting::Csv { path: cvs_path };
     let mut cvs_source = collection::make_telemetry_cvs_source::<Data, _>("cvs", &cvs_setting)?;
-    let cvs_stage = cvs_source.take().unwrap().0;
+    let cvs_stage = cvs_source.stage.take().unwrap();
 
     let pos_stats_fields = maplit::hashset! { POS_FIELD.to_string() };
     let collect = Collect::single_node_builder("collect", vec![cvs_stage])

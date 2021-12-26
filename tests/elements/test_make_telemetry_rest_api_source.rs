@@ -117,7 +117,8 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
 
     let rx_acc = assert_some!(sink.take_final_rx());
 
-    let (source_stage, tx_source_api) = assert_some!(source.take());
+    let source_stage = assert_some!(source.stage.take());
+    let tx_source_api = assert_some!(source.tx_stop.take());
     (source_stage.outlet(), sink.inlet()).connect().await;
 
     let mut g = Graph::default();
@@ -132,7 +133,6 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
         tracing::info!("tick-stop: stopping tick source...");
         let (stop, rx_stop_ack) = TickMsg::stop();
         tx_source_api
-            .unwrap()
             .send(stop)
             .map_err(|err| CollectionError::StageError(err.into()))?;
         rx_stop_ack

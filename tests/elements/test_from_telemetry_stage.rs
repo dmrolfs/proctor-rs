@@ -143,7 +143,7 @@ async fn test_make_from_telemetry_stage() -> Result<()> {
 
     let rx_acc = assert_some!(sink.take_final_rx());
 
-    let source_stage = assert_some!(source.take()).0;
+    let source_stage = assert_some!(source.stage.take());
     (source_stage.outlet(), convert.inlet()).connect().await;
     (convert.outlet(), sink.inlet()).connect().await;
 
