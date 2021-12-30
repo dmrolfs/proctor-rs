@@ -8,7 +8,6 @@ use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::UnboundedSender;
 
 use super::SourceSetting;
 use crate::elements::Telemetry;

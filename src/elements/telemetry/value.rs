@@ -577,6 +577,36 @@ impl TryFrom<TelemetryValue> for bool {
     }
 }
 
+impl TryFrom<&TelemetryValue> for bool {
+    type Error = TelemetryError;
+
+    fn try_from(telemetry: &TelemetryValue) -> Result<Self, Self::Error> {
+        match telemetry {
+            TelemetryValue::Boolean(value) => Ok(*value),
+            TelemetryValue::Integer(value) => Ok(*value != 0),
+            TelemetryValue::Float(value) => Ok(*value != 0.0),
+
+            TelemetryValue::Text(value) => {
+                match value.to_lowercase().as_ref() {
+                    "1" | "true" | "on" | "yes" => Ok(true),
+                    "0" | "false" | "off" | "no" => Ok(false),
+
+                    // Unexpected string value
+                    _ => Err(TelemetryError::TypeError {
+                        expected: TelemetryType::Boolean,
+                        actual: Some(value.clone()),
+                    }),
+                }
+            },
+
+            value => Err(TelemetryError::TypeError {
+                expected: TelemetryType::Boolean,
+                actual: Some(format!("{:?}", value)),
+            }),
+        }
+    }
+}
+
 macro_rules! try_from_telemetry_into_int {
     ($($i:ty)*) => {
         $(
@@ -591,6 +621,32 @@ macro_rules! try_from_telemetry_into_int {
                         }),
                         TelemetryValue::Float(f64) => Ok(f64.round() as $i),
                         TelemetryValue::Boolean(b) => Ok(if b { 1 } else { 0 }),
+                        TelemetryValue::Text(ref rep) => match rep.to_lowercase().as_ref() {
+                            "true" | "on" | "yes" => Ok(1),
+                            "false" | "off" | "no" => Ok(0),
+                            _ => rep
+                                .parse()
+                                .map_err(|err: ParseIntError| TelemetryError::ValueParseError(err.into())),
+                        },
+                        value => Err(TelemetryError::TypeError {
+                            expected: TelemetryType::Integer,
+                            actual: Some(value.to_string()),
+                        }),
+                    }
+                }
+            }
+
+            impl TryFrom<&TelemetryValue> for $i {
+                type Error = TelemetryError;
+
+                fn try_from(telemetry: &TelemetryValue) -> Result<Self, Self::Error> {
+                    match telemetry {
+                        TelemetryValue::Integer(i64) => <$i>::try_from(*i64).map_err(|_err| TelemetryError::TypeError {
+                            expected: TelemetryType::Integer,
+                            actual: Some(format!("{:?}", i64)),
+                        }),
+                        TelemetryValue::Float(f64) => Ok(f64.round() as $i),
+                        TelemetryValue::Boolean(b) => Ok(if *b { 1 } else { 0 }),
                         TelemetryValue::Text(ref rep) => match rep.to_lowercase().as_ref() {
                             "true" | "on" | "yes" => Ok(1),
                             "false" | "off" | "no" => Ok(0),
@@ -634,6 +690,29 @@ impl TryFrom<TelemetryValue> for f64 {
     }
 }
 
+impl TryFrom<&TelemetryValue> for f64 {
+    type Error = TelemetryError;
+
+    fn try_from(telemetry: &TelemetryValue) -> Result<Self, Self::Error> {
+        match telemetry {
+            TelemetryValue::Float(f64) => Ok(*f64),
+            TelemetryValue::Integer(i64) => Ok(*i64 as f64),
+            TelemetryValue::Boolean(b) => Ok(if *b { 1.0 } else { 0.0 }),
+            TelemetryValue::Text(ref rep) => match rep.to_lowercase().as_ref() {
+                "true" | "on" | "yes" => Ok(1.0),
+                "false" | "off" | "no" => Ok(0.0),
+                rep => rep
+                    .parse()
+                    .map_err(|err: ParseFloatError| TelemetryError::ValueParseError(err.into())),
+            },
+            value => Err(TelemetryError::TypeError {
+                expected: TelemetryType::Float,
+                actual: Some(format!("{:?}", value)),
+            }),
+        }
+    }
+}
+
 impl TryFrom<TelemetryValue> for f32 {
     type Error = TelemetryError;
 
@@ -657,12 +736,53 @@ impl TryFrom<TelemetryValue> for f32 {
     }
 }
 
+impl TryFrom<&TelemetryValue> for f32 {
+    type Error = TelemetryError;
+
+    fn try_from(telemetry: &TelemetryValue) -> Result<Self, Self::Error> {
+        match telemetry {
+            TelemetryValue::Float(f64) => Ok(*f64 as f32),
+            TelemetryValue::Integer(i64) => Ok(*i64 as f32),
+            TelemetryValue::Boolean(b) => Ok(if *b { 1.0 } else { 0.0 }),
+            TelemetryValue::Text(ref rep) => match rep.to_lowercase().as_ref() {
+                "true" | "on" | "yes" => Ok(1.0),
+                "false" | "off" | "no" => Ok(0.0),
+                rep => rep
+                    .parse()
+                    .map_err(|err: ParseFloatError| TelemetryError::ValueParseError(err.into())),
+            },
+            _ => Err(TelemetryError::TypeError {
+                expected: TelemetryType::Float,
+                actual: Some(format!("{:?}", telemetry)),
+            }),
+        }
+    }
+}
+
 impl TryFrom<TelemetryValue> for String {
     type Error = TelemetryError;
 
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         match telemetry {
             TelemetryValue::Text(value) => Ok(value),
+            TelemetryValue::Boolean(value) => Ok(value.to_string()),
+            TelemetryValue::Integer(value) => Ok(value.to_string()),
+            TelemetryValue::Float(value) => Ok(value.to_string()),
+
+            value => Err(TelemetryError::TypeError {
+                expected: TelemetryType::Text,
+                actual: Some(format!("{:?}", value)),
+            }),
+        }
+    }
+}
+
+impl TryFrom<&TelemetryValue> for String {
+    type Error = TelemetryError;
+
+    fn try_from(telemetry: &TelemetryValue) -> Result<Self, Self::Error> {
+        match telemetry {
+            TelemetryValue::Text(value) => Ok(value.clone()),
             TelemetryValue::Boolean(value) => Ok(value.to_string()),
             TelemetryValue::Integer(value) => Ok(value.to_string()),
             TelemetryValue::Float(value) => Ok(value.to_string()),
@@ -716,12 +836,42 @@ impl<T: From<TelemetryValue>> TryFrom<TelemetryValue> for HashMap<String, T> {
     }
 }
 
+impl<T: From<TelemetryValue>> TryFrom<&TelemetryValue> for HashMap<String, T> {
+    type Error = TelemetryError;
+
+    fn try_from(telemetry: &TelemetryValue) -> Result<Self, Self::Error> {
+        if let TelemetryValue::Table(value) = telemetry {
+            Ok(value.clone().into_iter().map(|(k, v)| (k, v.into())).collect())
+        } else {
+            Err(TelemetryError::TypeError {
+                expected: TelemetryType::Table,
+                actual: Some(format!("{:?}", telemetry)),
+            })
+        }
+    }
+}
+
 impl<T: From<TelemetryValue>> TryFrom<TelemetryValue> for BTreeMap<String, T> {
     type Error = TelemetryError;
 
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         if let TelemetryValue::Table(value) = telemetry {
             Ok(value.into_iter().map(|(k, v)| (k, v.into())).collect())
+        } else {
+            Err(TelemetryError::TypeError {
+                expected: TelemetryType::Table,
+                actual: Some(format!("{:?}", telemetry)),
+            })
+        }
+    }
+}
+
+impl<T: From<TelemetryValue>> TryFrom<&TelemetryValue> for BTreeMap<String, T> {
+    type Error = TelemetryError;
+
+    fn try_from(telemetry: &TelemetryValue) -> Result<Self, Self::Error> {
+        if let TelemetryValue::Table(value) = telemetry {
+            Ok(value.clone().into_iter().map(|(k, v)| (k, v.into())).collect())
         } else {
             Err(TelemetryError::TypeError {
                 expected: TelemetryType::Table,
@@ -746,12 +896,42 @@ impl<T: From<TelemetryValue>> TryFrom<TelemetryValue> for Vec<T> {
     }
 }
 
+impl<T: From<TelemetryValue>> TryFrom<&TelemetryValue> for Vec<T> {
+    type Error = TelemetryError;
+
+    fn try_from(telemetry: &TelemetryValue) -> Result<Self, Self::Error> {
+        if let TelemetryValue::Seq(value) = telemetry {
+            Ok(value.clone().into_iter().map(|v| v.into()).collect())
+        } else {
+            Err(TelemetryError::TypeError {
+                expected: TelemetryType::Seq,
+                actual: Some(format!("{:?}", telemetry)),
+            })
+        }
+    }
+}
+
 impl<T: From<TelemetryValue>> TryFrom<TelemetryValue> for VecDeque<T> {
     type Error = TelemetryError;
 
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         if let TelemetryValue::Seq(value) = telemetry {
             Ok(value.into_iter().map(|v| v.into()).collect())
+        } else {
+            Err(TelemetryError::TypeError {
+                expected: TelemetryType::Seq,
+                actual: Some(format!("{:?}", telemetry)),
+            })
+        }
+    }
+}
+
+impl<T: From<TelemetryValue>> TryFrom<&TelemetryValue> for VecDeque<T> {
+    type Error = TelemetryError;
+
+    fn try_from(telemetry: &TelemetryValue) -> Result<Self, Self::Error> {
+        if let TelemetryValue::Seq(value) = telemetry {
+            Ok(value.clone().into_iter().map(|v| v.into()).collect())
         } else {
             Err(TelemetryError::TypeError {
                 expected: TelemetryType::Seq,
@@ -776,12 +956,42 @@ impl<T: From<TelemetryValue>> TryFrom<TelemetryValue> for LinkedList<T> {
     }
 }
 
+impl<T: From<TelemetryValue>> TryFrom<&TelemetryValue> for LinkedList<T> {
+    type Error = TelemetryError;
+
+    fn try_from(telemetry: &TelemetryValue) -> Result<Self, Self::Error> {
+        if let TelemetryValue::Seq(value) = telemetry {
+            Ok(value.clone().into_iter().map(|v| v.into()).collect())
+        } else {
+            Err(TelemetryError::TypeError {
+                expected: TelemetryType::Seq,
+                actual: Some(format!("{:?}", telemetry)),
+            })
+        }
+    }
+}
+
 impl<T: Eq + std::hash::Hash + From<TelemetryValue>> TryFrom<TelemetryValue> for HashSet<T> {
     type Error = TelemetryError;
 
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         if let TelemetryValue::Seq(value) = telemetry {
             Ok(value.into_iter().map(|v| v.into()).collect())
+        } else {
+            Err(TelemetryError::TypeError {
+                expected: TelemetryType::Seq,
+                actual: Some(format!("{:?}", telemetry)),
+            })
+        }
+    }
+}
+
+impl<T: Eq + std::hash::Hash + From<TelemetryValue>> TryFrom<&TelemetryValue> for HashSet<T> {
+    type Error = TelemetryError;
+
+    fn try_from(telemetry: &TelemetryValue) -> Result<Self, Self::Error> {
+        if let TelemetryValue::Seq(value) = telemetry {
+            Ok(value.clone().into_iter().map(|v| v.into()).collect())
         } else {
             Err(TelemetryError::TypeError {
                 expected: TelemetryType::Seq,
@@ -806,12 +1016,42 @@ impl<T: Ord + From<TelemetryValue>> TryFrom<TelemetryValue> for BTreeSet<T> {
     }
 }
 
+impl<T: Ord + From<TelemetryValue>> TryFrom<&TelemetryValue> for BTreeSet<T> {
+    type Error = TelemetryError;
+
+    fn try_from(telemetry: &TelemetryValue) -> Result<Self, Self::Error> {
+        if let TelemetryValue::Seq(value) = telemetry {
+            Ok(value.clone().into_iter().map(|v| v.into()).collect())
+        } else {
+            Err(TelemetryError::TypeError {
+                expected: TelemetryType::Seq,
+                actual: Some(format!("{:?}", telemetry)),
+            })
+        }
+    }
+}
+
 impl<T: Ord + From<TelemetryValue>> TryFrom<TelemetryValue> for BinaryHeap<T> {
     type Error = TelemetryError;
 
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         if let TelemetryValue::Seq(value) = telemetry {
             Ok(value.into_iter().map(|v| v.into()).collect())
+        } else {
+            Err(TelemetryError::TypeError {
+                expected: TelemetryType::Seq,
+                actual: Some(format!("{:?}", telemetry)),
+            })
+        }
+    }
+}
+
+impl<T: Ord + From<TelemetryValue>> TryFrom<&TelemetryValue> for BinaryHeap<T> {
+    type Error = TelemetryError;
+
+    fn try_from(telemetry: &TelemetryValue) -> Result<Self, Self::Error> {
+        if let TelemetryValue::Seq(value) = telemetry {
+            Ok(value.clone().into_iter().map(|v| v.into()).collect())
         } else {
             Err(TelemetryError::TypeError {
                 expected: TelemetryType::Seq,
