@@ -62,3 +62,33 @@ pub struct ClearinghouseSnapshot {
     pub missing: HashSet<String>,
     pub subscriptions: Vec<TelemetrySubscription>,
 }
+
+impl serde::Serialize for ClearinghouseSnapshot {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+
+        let mut state = serializer.serialize_struct("ClearinghouseSnapshot", 3)?;
+
+        let telemetry = (&self.database).iter().collect::<std::collections::HashMap<_, _>>();
+        state.serialize_field("telemetry", &telemetry)?;
+
+        state.serialize_field("missing", &self.missing)?;
+
+        let subscriptions = self
+            .subscriptions
+            .iter()
+            .map(|subscription| match subscription {
+                TelemetrySubscription::All { name, .. } => (name, None, None),
+                TelemetrySubscription::Explicit { name, required_fields, optional_fields, .. } => {
+                    (name, Some(required_fields), Some(optional_fields))
+                },
+            })
+            .collect::<Vec<_>>();
+        state.serialize_field("subscriptions", &subscriptions)?;
+
+        state.end()
+    }
+}

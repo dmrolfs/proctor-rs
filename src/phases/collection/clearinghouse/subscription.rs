@@ -2,6 +2,8 @@ use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
+use serde::Serialize;
+
 use crate::elements::telemetry::UpdateMetricsFn;
 use crate::elements::Telemetry;
 use crate::error::CollectionError;
@@ -17,18 +19,22 @@ pub trait SubscriptionRequirements {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub enum TelemetrySubscription {
     All {
         name: SharedString,
+        #[serde(skip)]
         outlet_to_subscription: Outlet<Telemetry>,
+        #[serde(skip)]
         update_metrics: Option<Arc<UpdateMetricsFn>>,
     },
     Explicit {
         name: SharedString,
         required_fields: HashSet<SharedString>,
         optional_fields: HashSet<SharedString>,
+        #[serde(skip)]
         outlet_to_subscription: Outlet<Telemetry>,
+        #[serde(skip)]
         update_metrics: Option<Arc<UpdateMetricsFn>>,
     },
 }
