@@ -203,6 +203,9 @@ pub enum CollectionError {
     PortError(#[from] PortError),
 
     #[error("{0}")]
+    TaskError(#[from] tokio::task::JoinError),
+
+    #[error("{0}")]
     StageError(#[from] anyhow::Error),
 }
 
@@ -224,6 +227,7 @@ impl MetricLabel for CollectionError {
             Self::DecisionError(_) => Left("decision".into()),
             Self::TelemetryError(e) => Right(Box::new(e)),
             Self::PortError(e) => Right(Box::new(e)),
+            Self::TaskError(_) => Left("task".into()),
             Self::StageError(_) => Left("stage".into()),
         }
     }
