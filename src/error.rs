@@ -168,15 +168,15 @@ pub enum CollectionError {
     IncompatibleSettings(#[from] IncompatibleSourceSettingsError),
 
     /// An error related to collecting from a CVS file.
-    #[error("{0}")]
+    #[error("Could not properly load CSV source: {0}")]
     CsvError(#[from] csv::Error),
 
     /// An error related to collection via an HTTP source.
-    #[error("{0}")]
+    #[error("Could not properly load HTTP source: {0}")]
     HttpError(#[from] reqwest::Error),
 
     /// An error related to collection via an HTTP middleware.
-    #[error("{0}")]
+    #[error("Error occurred in HTTP middleware during HTTP source load: {0}")]
     HttpMiddlewareError(#[from] reqwest_middleware::Error),
 
     /// Error parsing URLs
@@ -184,7 +184,7 @@ pub enum CollectionError {
     UrlParseError(#[from] url::ParseError),
 
     /// Error processing JSON
-    #[error("Error processing JSON: {0}")]
+    #[error("Error processing source JSON: {0}")]
     JsonError(#[from] serde_json::Error),
 
     #[error("Attempt to send via a closed subscription channel: {0}")]
