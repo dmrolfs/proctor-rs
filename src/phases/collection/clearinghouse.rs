@@ -186,7 +186,7 @@ impl Clearinghouse {
 
         let statuses = futures::future::join_all(fulfilled).await;
         let result = if let Some((s, Err(err))) = statuses.into_iter().find(|(_, status)| status.is_err()) {
-            tracing::error!(subscription=%s.name(), "failed to send fulfilled subscription.");
+            tracing::error!(error=?err, subscription=%s.name(), "failed to send fulfilled subscription.");
             // todo: change to track *all* errors -- only first found is currently tracked
             // todo: resolve design to avoid this hack to satisfy track_errors api while not exposing
             // collection stage with proctor error.

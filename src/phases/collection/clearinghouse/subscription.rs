@@ -300,32 +300,19 @@ impl PartialEq for TelemetrySubscription {
         use TelemetrySubscription::*;
 
         match (self, other) {
-            (
-                All {
-                    name: lhs_name,
-                    outlet_to_subscription: _,
-                    update_metrics: _,
-                },
-                All {
-                    name: rhs_name,
-                    outlet_to_subscription: _,
-                    update_metrics: _,
-                },
-            ) => lhs_name == rhs_name,
+            (All { name: lhs_name, .. }, All { name: rhs_name, .. }) => lhs_name == rhs_name,
             (
                 Explicit {
                     name: lhs_name,
                     required_fields: lhs_required,
                     optional_fields: lhs_optional,
-                    outlet_to_subscription: _,
-                    update_metrics: _,
+                    ..
                 },
                 Explicit {
                     name: rhs_name,
                     required_fields: rhs_required,
                     optional_fields: rhs_optional,
-                    outlet_to_subscription: _,
-                    update_metrics: _,
+                    ..
                 },
             ) => (lhs_name == rhs_name) && (lhs_required == rhs_required) && (lhs_optional == rhs_optional),
             _ => false,

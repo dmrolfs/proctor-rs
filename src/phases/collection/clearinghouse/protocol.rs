@@ -4,7 +4,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use super::{Telemetry, TelemetrySubscription};
 use crate::graph::Inlet;
-use crate::Ack;
+use crate::{Ack, SharedString};
 
 pub type ClearinghouseApi = mpsc::UnboundedSender<ClearinghouseCmd>;
 
@@ -68,6 +68,13 @@ impl serde::Serialize for ClearinghouseSnapshot {
     where
         S: serde::Serializer,
     {
+        #[derive(serde::Serialize)]
+        struct Subscription<'n> {
+            name: &'n str,
+            required: Option<HashSet<SharedString>>,
+            optional: Option<HashSet<SharedString>>,
+        }
+
         use serde::ser::SerializeStruct;
 
         let mut state = serializer.serialize_struct("ClearinghouseSnapshot", 3)?;
@@ -81,9 +88,18 @@ impl serde::Serialize for ClearinghouseSnapshot {
             .subscriptions
             .iter()
             .map(|subscription| match subscription {
-                TelemetrySubscription::All { name, .. } => (name, None, None),
+                TelemetrySubscription::All { name, .. } => Subscription {
+                    name: name.as_ref(),
+                    required: None,
+                    optional: None,
+                }, // (name, None, None),
                 TelemetrySubscription::Explicit { name, required_fields, optional_fields, .. } => {
-                    (name, Some(required_fields), Some(optional_fields))
+                    Subscription {
+                        name: name.as_ref(),
+                        required: Some(required_fields.clone()),
+                        optional: Some(optional_fields.clone()),
+                    }
+                    //(name, Some(required_fields), Some(optional_fields))
                 },
             })
             .collect::<Vec<_>>();

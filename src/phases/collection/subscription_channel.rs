@@ -22,6 +22,12 @@ pub struct SubscriptionChannel<T> {
     outlet: Outlet<T>,
 }
 
+impl<T> Drop for SubscriptionChannel<T> {
+    fn drop(&mut self) {
+        tracing::error!(subscription_name=%self.name, subscription_outlet=?self.outlet, "DROPPING SUBSCRIPTION CHANNEL");
+    }
+}
+
 impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
     #[tracing::instrument(level = "info")]
     pub async fn connect_subscription(

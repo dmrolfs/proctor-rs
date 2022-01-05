@@ -319,9 +319,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.0.1"
+version = "3.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1121e32687f7f90b905d4775273305baa4f32cd418923e9b0fa726533221857"
+checksum = "f6f34b09b9ee8c7c7b400fe2f8df39cafc9538b03d6ba7f4ae13e4cb90bfbb7d"
 dependencies = [
  "atty",
  "bitflags",
@@ -853,9 +853,9 @@ checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
 
 [[package]]
 name = "handlebars"
-version = "4.1.6"
+version = "4.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "167fa173496c9eadd8749cca6f8339ac88e248f3ad2442791d0b743318a94fc0"
+checksum = "2483bce82dd3ed52509d0117e4a30a488bd608be250ed7a0185301314239ed31"
 dependencies = [
  "log",
  "pest",
@@ -1870,7 +1870,7 @@ dependencies = [
 
 [[package]]
 name = "proctor"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "approx",
@@ -1879,7 +1879,7 @@ dependencies = [
  "cast_trait_object",
  "chrono",
  "claim",
- "clap 3.0.1",
+ "clap 3.0.5",
  "config",
  "criterion",
  "csv",

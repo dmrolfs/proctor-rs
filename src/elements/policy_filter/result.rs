@@ -27,13 +27,11 @@ impl QueryResult {
             let result_set = result_set?;
 
             if passed.is_none() {
-                tracing::info!(?result_set, "DMR: item passes policy review!");
                 passed = Some(true);
             }
 
             for key in result_set.keys() {
                 let value = result_set.get_typed(key);
-                tracing::info!(?result_set, "DMR: pulling binding: binding[{}]={:?}", key, value);
                 match value? {
                     TelemetryValue::Unit => {
                         tracing::debug!("Unit value bound to key[{}] - skipping.", key);
@@ -41,9 +39,7 @@ impl QueryResult {
                     val => {
                         if let Some(values) = bindings.get_mut(key) {
                             values.push(val);
-                            tracing::info!("DMR: push binding[{}]: {:?}", key, values);
                         } else {
-                            tracing::info!("DMR: started binding[{}]: [{:?}]", key, val);
                             bindings.insert(key.to_string(), vec![val]);
                         }
                     },
