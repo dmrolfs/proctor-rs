@@ -126,20 +126,20 @@ impl TryFrom<TelemetryValue> for Timestamp {
                 let nanos = seq.pop().map(u32::try_from).transpose()?.unwrap();
                 let secs = seq.pop().map(i64::try_from).transpose()?.unwrap();
                 Ok(Self::new(secs, nanos))
-            },
+            }
             TelemetryValue::Float(f64) => Ok(f64.into()),
             TelemetryValue::Integer(i64) => Ok(i64.into()),
             TelemetryValue::Table(mut table) => {
                 let secs = table.remove(SECS_KEY).map(i64::try_from).transpose()?.unwrap_or(0);
                 let nanos = table.remove(NANOS_KEY).map(u32::try_from).transpose()?.unwrap_or(0);
                 Ok(Self(secs, nanos))
-            },
+            }
             TelemetryValue::Text(rep) => {
                 let dt = DateTime::parse_from_str(rep.as_str(), FORMAT)
                     .map_err(|err| TelemetryError::ValueParseError(err.into()))?
                     .with_timezone(&Utc);
                 Ok(dt.into())
-            },
+            }
             value => Err(TelemetryError::TypeError {
                 expected: TelemetryType::Float,
                 actual: Some(format!("{:?}", value)),

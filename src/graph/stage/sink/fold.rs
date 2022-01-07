@@ -141,6 +141,8 @@ where
         let initial = &self.initial;
 
         loop {
+            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+
             tracing::trace!("handling next item..");
             tokio::select! {
                 input = inlet.recv() => match input {
@@ -158,17 +160,6 @@ where
                 },
 
                 Some(cmd) = rx_api.recv() => Self::handle_command(cmd, Arc::clone(&acc), initial).await,
-                // match cmd {
-                //     FoldCmd::GetAcc(tx) => {
-                //         tracing::info!("handling request for current accumulation...");
-                //         let resp = acc.lock().await;
-                //         tracing::info!(accumulation=?resp,"sending accumulation to sender...");
-                //         match tx.send(resp.clone()) {
-                //             Ok(_) => tracing::info!(accumulation=?resp, "sent accumulation"),
-                //             Err(resp) => tracing::warn!(accumulation=?resp, "failed to send accumulation"),
-                //         }
-                //     },
-                // },
 
                 else => {
                     tracing::trace!("fold done");
@@ -189,7 +180,7 @@ where
                     Ok(_) => tracing::info!(accumulation=?resp, "sent accumulation"),
                     Err(resp) => tracing::warn!(accumulation=?resp, "failed to send accumulation"),
                 }
-            },
+            }
 
             FoldCmd::GetAndReset(tx) => {
                 tracing::info!("handling command to reset accumulation...");
@@ -201,7 +192,7 @@ where
                     Ok(_) => tracing::info!(accumulation=?resp, "sent prior accumulation"),
                     Err(resp) => tracing::warn!(accumulation=?resp, "failed to send prior accumulation"),
                 }
-            },
+            }
         }
     }
 

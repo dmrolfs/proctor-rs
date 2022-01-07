@@ -207,11 +207,11 @@ where
                     tracing::info!(source=%s.name(), ?merge_inlet, "connecting collection source to clearinghouse.");
                     (s.outlet(), merge_inlet).connect().await;
                     g.push_back(s.dyn_upcast()).await;
-                },
+                }
 
                 None => {
                     tracing::warn!(source=%s.name(), "no available clearinghouse port for source - skipping source.");
-                },
+                }
             }
         }
 

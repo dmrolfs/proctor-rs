@@ -70,7 +70,6 @@ impl DoTelemetryCombination for Max {
     }
 }
 
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Min;
 
@@ -120,7 +119,6 @@ impl DoTelemetryCombination for Min {
     }
 }
 
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Sum;
 
@@ -158,7 +156,6 @@ impl DoTelemetryCombination for Sum {
         })
     }
 }
-
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Average;
@@ -240,7 +237,6 @@ impl DoTelemetryCombination for Average {
         })
     }
 }
-
 
 trait DoTelemetryCombination {
     fn label(&self) -> String;

@@ -6,6 +6,8 @@ use std::fmt;
 
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
+use once_cell::sync::Lazy;
+use prometheus::{HistogramOpts, HistogramTimer, HistogramVec};
 
 pub use self::sink::*;
 pub use self::source::*;
@@ -21,6 +23,22 @@ impl<In, T: 'static + Stage + SinkShape<In = In>> SinkStage<In> for T {}
 
 pub trait ThroughStage<In, Out>: Stage + ThroughShape<In = In, Out = Out> + 'static {}
 impl<In, Out, T: 'static + Stage + ThroughShape<In = In, Out = Out>> ThroughStage<In, Out> for T {}
+
+pub static STAGE_EVAL_TIME: Lazy<HistogramVec> = Lazy::new(|| {
+    HistogramVec::new(
+        HistogramOpts::new(
+            "stage_eval_time",
+            "Time spent in a stage's event evaluation cycle in seconds",
+        ),
+        &["stage"],
+    )
+    .expect("failed creating stage_eval_time metric")
+});
+
+#[inline]
+pub fn start_stage_eval_time(stage: &str) -> HistogramTimer {
+    STAGE_EVAL_TIME.with_label_values(&[stage]).start_timer()
+}
 
 /// Behavior driving graph stage lifecycle.
 ///

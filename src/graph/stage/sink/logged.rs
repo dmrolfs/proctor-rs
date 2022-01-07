@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 
 use crate::graph::shape::SinkShape;
-use crate::graph::{Inlet, Port, Stage, PORT_DATA};
+use crate::graph::{stage, Inlet, Port, Stage, PORT_DATA};
 use crate::{AppData, ProctorResult, SharedString};
 
 pub struct LoggedSink<In> {
@@ -37,6 +37,7 @@ impl<In: AppData> Stage for LoggedSink<In> {
     #[tracing::instrument(level = "info", name = "run logging sink", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         while let Some(input) = self.inlet.recv().await {
+            let _timer = stage::start_stage_eval_time(self.name.as_ref());
             tracing::warn!("in graph sink: {:?}", input);
         }
         Ok(())

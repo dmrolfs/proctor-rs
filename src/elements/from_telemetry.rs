@@ -28,7 +28,7 @@ where
                 Ok(converted) => {
                     tracing::trace!(?converted, "data item derived from telemetry.");
                     Some(converted)
-                },
+                }
                 Err(err) => {
                     if log_conversion_failure {
                         tracing::error!(error=?err, "failed to convert an entity from telemetry data");
@@ -36,7 +36,7 @@ where
 
                     graph::track_errors(stage_name.as_ref(), &ProctorError::CollectionError(err.into()));
                     None
-                },
+                }
             }
         });
 

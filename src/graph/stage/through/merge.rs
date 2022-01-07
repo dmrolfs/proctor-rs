@@ -3,7 +3,7 @@ use std::fmt::{self, Debug};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 
-use crate::graph::{FanInShape2, Inlet, Outlet, Port, SourceShape, Stage, PORT_DATA};
+use crate::graph::{stage, FanInShape2, Inlet, Outlet, Port, SourceShape, Stage, PORT_DATA};
 use crate::{AppData, ProctorResult, SharedString};
 
 /// Merge multiple sources. Picks elements randomly if all sources has elements ready.
@@ -102,6 +102,8 @@ impl<T: AppData> Stage for Merge<T> {
         let rx_1 = &mut self.inlet_1;
         // let noop = future::ok(());
         loop {
+            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+
             tokio::select! {
                 Some(t) = rx_0.recv() => {
                     tracing::info!(item=?t, "inlet_0 receiving");

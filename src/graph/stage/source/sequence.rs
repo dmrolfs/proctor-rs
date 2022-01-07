@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 
 use crate::graph::shape::SourceShape;
-use crate::graph::{Outlet, Port, Stage, PORT_DATA};
+use crate::graph::{stage, Outlet, Port, Stage, PORT_DATA};
 use crate::{AppData, ProctorResult, SharedString};
 
 /// Helper to create Source from Iterable. Example usage: Slice::new(vec![1,2,3]).
@@ -96,6 +96,7 @@ where
     async fn run(&mut self) -> ProctorResult<()> {
         if let Some(items) = self.items.take() {
             for (count, item) in items.enumerate() {
+                let _timer = stage::start_stage_eval_time(self.name.as_ref());
                 tracing::trace!(?item, %count, "sending item");
                 self.outlet.send(item).await?
             }

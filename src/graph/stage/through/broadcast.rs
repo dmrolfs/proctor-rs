@@ -3,7 +3,7 @@ use std::fmt::{self, Debug};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 
-use crate::graph::{Inlet, Outlet, OutletsShape, Port, SinkShape, Stage, UniformFanOutShape, PORT_DATA};
+use crate::graph::{stage, Inlet, Outlet, OutletsShape, Port, SinkShape, Stage, UniformFanOutShape, PORT_DATA};
 use crate::{AppData, ProctorResult, SharedString};
 
 /// Fan-out the stream to several streams emitting each incoming upstream element to all downstream
@@ -129,6 +129,8 @@ impl<T: AppData + Clone> Stage for Broadcast<T> {
     async fn run(&mut self) -> ProctorResult<()> {
         let outlets = &self.outlets;
         while let Some(item) = self.inlet.recv().await {
+            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+
             for o in outlets.iter() {
                 o.send(item.clone()).await?;
             }

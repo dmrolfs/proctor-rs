@@ -71,6 +71,8 @@ impl<T: AppData> Stage for ActorSource<T> {
     #[tracing::instrument(level = "info", name = "run actor source", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         while let Some(command) = self.rx_api.recv().await {
+            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+
             tracing::info!(?command, "handling command");
             match command {
                 ActorSourceCmd::Push { item, tx } => {
@@ -78,13 +80,13 @@ impl<T: AppData> Stage for ActorSource<T> {
                     let _ = send_span.enter();
                     self.outlet().send(item).await?;
                     let _ignore_failure = tx.send(());
-                },
+                }
 
                 ActorSourceCmd::Stop(tx) => {
                     tracing::info!("stopping actor source.");
                     let _ignore_failure = tx.send(());
                     break;
-                },
+                }
             }
         }
 

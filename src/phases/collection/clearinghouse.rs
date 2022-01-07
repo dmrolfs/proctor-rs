@@ -106,14 +106,14 @@ impl Clearinghouse {
                 database.extend(d);
                 Self::push_to_subscribers(stage_name, database, interested, correlation_generator).await?;
                 Ok(true)
-            },
+            }
 
             None => {
                 tracing::info!(
                     "telemetry sources dried up - stopping since subscribers have data they're going to get."
                 );
                 Ok(false)
-            },
+            }
         }
     }
 
@@ -197,7 +197,7 @@ impl Clearinghouse {
                 err => {
                     tracing::error!(error=?err, "Unexpected error in clearinghouse");
                     None
-                },
+                }
             }
             .unwrap();
 
@@ -240,7 +240,7 @@ impl Clearinghouse {
                             missing: HashSet::default(),
                             subscriptions: subscriptions.clone(),
                         }
-                    },
+                    }
 
                     Some(name) => match subscriptions.iter().find(|s| s.name() == name.as_str()) {
                         Some(sub) => {
@@ -258,7 +258,7 @@ impl Clearinghouse {
                                 missing,
                                 subscriptions: vec![sub.clone()],
                             }
-                        },
+                        }
 
                         None => {
                             tracing::info!(requested_subscription=%name, "subscription not found - returning clearinghouse snapshot.");
@@ -267,13 +267,13 @@ impl Clearinghouse {
                                 missing: HashSet::default(),
                                 subscriptions: subscriptions.clone(),
                             }
-                        },
+                        }
                     },
                 };
 
                 let _ = tx.send(snapshot);
                 Ok(true)
-            },
+            }
 
             ClearinghouseCmd::Subscribe { subscription, receiver, tx } => {
                 tracing::info!(?subscription, "adding telemetry subscriber.");
@@ -282,7 +282,7 @@ impl Clearinghouse {
                 track_subscriptions(subscriptions.len());
                 let _ = tx.send(());
                 Ok(true)
-            },
+            }
 
             ClearinghouseCmd::Unsubscribe { name, tx } => {
                 // let mut subs = subscriptions.lock().await;
@@ -294,7 +294,7 @@ impl Clearinghouse {
                 tracing::info!(?dropped, "subscription dropped");
                 let _ = tx.send(());
                 Ok(true)
-            },
+            }
         }
     }
 }
@@ -370,6 +370,8 @@ impl Clearinghouse {
         let subscriptions = &mut self.subscriptions;
 
         loop {
+            let _timer = stage::start_stage_eval_time(stage_name.as_ref());
+
             tracing::trace!(
                 nr_subscriptions=%subscriptions.len(),
                 subscriptions=?subscriptions,

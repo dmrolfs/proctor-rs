@@ -7,7 +7,7 @@ use tokio::sync::broadcast;
 
 use crate::error::PlanError;
 use crate::graph::stage::{Stage, WithMonitor};
-use crate::graph::{Inlet, Outlet, Port, SinkShape, SourceShape, PORT_CONTEXT, PORT_DATA};
+use crate::graph::{stage, Inlet, Outlet, Port, SinkShape, SourceShape, PORT_CONTEXT, PORT_DATA};
 use crate::{AppData, ProctorResult, SharedString};
 
 pub type PlanMonitor<P> =
@@ -147,6 +147,8 @@ impl<P: Planning> Plan<P> {
         let planning = &mut self.planning;
 
         loop {
+            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+
             tokio::select! {
                 Some(data) = rx_data.recv() => {
                     let observation: P::Observation = data;
@@ -181,7 +183,7 @@ impl<P: Planning> Plan<P> {
             Ok(nr_subsribers) => tracing::debug!(%nr_subsribers, "published event to subscribers"),
             Err(err) => {
                 tracing::warn!(error=?err, "failed to publish event - can add subscribers to receive future events.")
-            },
+            }
         }
     }
 

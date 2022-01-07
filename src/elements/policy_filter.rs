@@ -19,7 +19,7 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use once_cell::sync::Lazy;
 use oso::{Oso, ToPolar};
-use prometheus::{HistogramOpts, HistogramTimer, HistogramVec, IntCounterVec, Opts};
+use prometheus::{HistogramOpts, HistogramTimer, HistogramVec};
 use serde::Serialize;
 use tokio::sync::Mutex;
 use tokio::sync::{broadcast, mpsc};
@@ -40,24 +40,6 @@ pub(crate) static POLICY_FILTER_EVAL_TIME: Lazy<HistogramVec> = Lazy::new(|| {
     )
     .expect("failed creating policy_filter_eval_time metric")
 });
-
-pub(crate) static POLICY_FILTER_EVAL_COUNTS: Lazy<IntCounterVec> = Lazy::new(|| {
-    IntCounterVec::new(
-        Opts::new(
-            "policy_filter_eval_counts",
-            "Number of items PolicyFilter has evaluated.",
-        ),
-        &["stage", "outcome"],
-    )
-    .expect("failed creating policy_filter_eval_counts metric")
-});
-
-#[inline]
-fn track_policy_evals(stage: &str, outcome: PolicyResult) {
-    POLICY_FILTER_EVAL_COUNTS
-        .with_label_values(&[stage, &format!("{}", outcome)])
-        .inc();
-}
 
 #[inline]
 fn start_policy_timer(stage: &str) -> HistogramTimer {
@@ -221,6 +203,8 @@ where
         let tx_monitor = &self.tx_monitor;
 
         loop {
+            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+
             tokio::select! {
                 item = item_inlet.recv() => match item {
                     Some(item) => {
@@ -337,24 +321,21 @@ where
                 outlet
                     .send(PolicyOutcome::new(item.clone(), context.clone(), result))
                     .await?;
-                track_policy_evals(name.as_ref(), PolicyResult::Passed);
                 Self::publish_event(PolicyFilterEvent::ItemPassed(item), tx)?;
                 Ok(())
-            },
+            }
 
             Ok(result) => {
                 tracing::info!(?policy, ?result, "item failed context policy review - skipping.");
-                track_policy_evals(name.as_ref(), PolicyResult::Blocked);
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
                 Ok(())
-            },
+            }
 
             Err(err) => {
                 tracing::warn!(error=?err, ?policy, "error in context policy review - skipping item.");
-                track_policy_evals(name.as_ref(), PolicyResult::Failed);
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
                 Err(err)
-            },
+            }
         };
 
         outcome
@@ -402,13 +383,13 @@ where
                 };
                 let _ignore_failure = tx.send(detail);
                 true
-            },
+            }
 
             PolicyFilterCmd::ReplacePolicies { new_policies, new_template_data, tx } => {
                 Self::do_reset_policy_engine(name, policy, new_policies, new_template_data, oso);
                 let _ignore_failure = tx.send(());
                 true
-            },
+            }
 
             PolicyFilterCmd::AppendPolicy { additional_policy, new_template_data, tx } => {
                 let mut sources: Vec<PolicySource> = policy.sources().to_vec();
@@ -416,7 +397,7 @@ where
                 Self::do_reset_policy_engine(name, policy, sources, new_template_data, oso);
                 let _ignore_failure = tx.send(());
                 true
-            },
+            }
         }
     }
 
@@ -603,7 +584,6 @@ mod tests {
     fn test_handle_item() -> anyhow::Result<()> {
         Lazy::force(&crate::tracing::TEST_TRACING);
         let registry = assert_ok!(Registry::new_custom(Some("test_handle_item".to_string()), None));
-        assert_ok!(registry.register(Box::new(POLICY_FILTER_EVAL_COUNTS.clone())));
         assert_ok!(registry.register(Box::new(POLICY_FILTER_EVAL_TIME.clone())));
 
         let main_span = tracing::info_span!("policy_filter::test_handle_item");
@@ -663,7 +643,7 @@ mod tests {
         });
 
         // todo: this is simple experiment with metrics to eval how it may be used in testing.
-        assert_eq!(registry.gather().len(), 2);
+        assert_eq!(registry.gather().len(), 1);
 
         Ok(())
     }

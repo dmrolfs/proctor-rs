@@ -5,7 +5,7 @@ use cast_trait_object::dyn_upcast;
 use futures::future::Future;
 
 use crate::graph::shape::{SinkShape, SourceShape};
-use crate::graph::{Inlet, Outlet, Port, Stage, PORT_DATA};
+use crate::graph::{stage, Inlet, Outlet, Port, Stage, PORT_DATA};
 use crate::{AppData, ProctorResult, SharedString};
 
 /// Transform this stream by applying the given function to each of the elements as they pass
@@ -133,6 +133,7 @@ where
         let outlet = &self.outlet;
 
         while let Some(input) = self.inlet.recv().await {
+            let _timer = stage::start_stage_eval_time(self.name.as_ref());
             let value = (self.operation)(input).await;
             outlet.send(value).await?;
         }

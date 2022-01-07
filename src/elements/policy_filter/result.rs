@@ -35,14 +35,14 @@ impl QueryResult {
                 match value? {
                     TelemetryValue::Unit => {
                         tracing::debug!("Unit value bound to key[{}] - skipping.", key);
-                    },
+                    }
                     val => {
                         if let Some(values) = bindings.get_mut(key) {
                             values.push(val);
                         } else {
                             bindings.insert(key.to_string(), vec![val]);
                         }
-                    },
+                    }
                 }
             }
         }

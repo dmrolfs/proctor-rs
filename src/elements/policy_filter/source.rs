@@ -116,7 +116,7 @@ impl PolicySource {
             Self::String { name, polar: _, is_template: _ } => name.into(),
             Self::File { path, is_template: _ } => {
                 path.file_stem().expect("policy file needs a filename").to_string_lossy()
-            },
+            }
         }
     }
 
@@ -147,7 +147,7 @@ impl TryInto<String> for &PolicySource {
                 let mut policy = String::new();
                 f.read_to_string(&mut policy)?;
                 Ok(policy)
-            },
+            }
         }
     }
 }

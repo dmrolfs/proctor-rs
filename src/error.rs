@@ -144,7 +144,7 @@ impl MetricLabel for IncompatibleSourceSettingsError {
             Self::InvalidDetailError(_) => Left("invalid_detail".into()),
             Self::UrlCannotBeBase(_) | Self::UrlParseError(_) | Self::ConfigurationParseError(_) => {
                 Left("configuration_parse".into())
-            },
+            }
         }
     }
 }

@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 
 use crate::graph::shape::SinkShape;
-use crate::graph::{Inlet, Port, Stage, PORT_DATA};
+use crate::graph::{stage, Inlet, Port, Stage, PORT_DATA};
 use crate::{AppData, ProctorResult, SharedString};
 
 /// A Sink that will invoke the given procedure for each received element.
@@ -109,6 +109,7 @@ where
     async fn run(&mut self) -> ProctorResult<()> {
         let op = &self.operation;
         while let Some(input) = self.inlet.recv().await {
+            let _timer = stage::start_stage_eval_time(self.name.as_ref());
             op(input);
         }
         Ok(())

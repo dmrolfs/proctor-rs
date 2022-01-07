@@ -34,13 +34,13 @@ where
 {
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(env_filter));
 
-    // let (flame_subscriber, _guard) = FlameLayer::with_file("./tracing.folded").unwrap();
+    let (flame_subscriber, _guard) = FlameLayer::with_file("./tracing.folded").unwrap();
 
     let formatting_layer = BunyanFormattingLayer::new(name.into(), sink);
 
     Registry::default()
         .with(env_filter)
-        // .with(flame_subscriber)
+        .with(flame_subscriber)
         .with(JsonStorageLayer)
         .with(formatting_layer)
 }

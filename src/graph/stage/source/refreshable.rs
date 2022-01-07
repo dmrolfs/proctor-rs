@@ -6,7 +6,7 @@ use cast_trait_object::dyn_upcast;
 use tokio::sync::mpsc;
 
 use crate::graph::shape::SourceShape;
-use crate::graph::{Outlet, Port, Stage, PORT_DATA};
+use crate::graph::{stage, Outlet, Port, Stage, PORT_DATA};
 use crate::{AppData, ProctorResult, SharedString};
 
 /// A source that produces a single outcome, which may be restarted or cancelled via a control
@@ -80,6 +80,8 @@ where
         let rx = &mut self.rx_control;
 
         loop {
+            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+
             tokio::select! {
                 result = &mut operation, if !done => {
                     let op_span = tracing::info_span!("evaluate operation", ?result);

@@ -151,6 +151,6 @@ fn policy_source_path_for(name: &str, policy: Either<PathBuf, &str>) -> Result<P
             write!(tmp.as_file_mut(), "{}", rep)?;
 
             Ok(PolicySourcePath::String(tmp))
-        },
+        }
     }
 }

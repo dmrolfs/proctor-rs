@@ -1,6 +1,6 @@
 [package]
 name = "proctor"
-version = "0.9.0"
+version = "0.9.1"
 authors = ["Damon Rolfs <drolfs@gmail.com>"]
 edition = "2021"
 
@@ -82,6 +82,7 @@ serde-transcode = "1.1.1"
 serde_with = { version = "1.11.0", features = ["chrono", "json", "macros"] }
 static_assertions = "1.1.0"
 tokio-test = "0.4.2"
+wiremock = "0.5.9"
 
 [[bench]]
 name = "bench_main"

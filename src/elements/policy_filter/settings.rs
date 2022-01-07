@@ -33,7 +33,6 @@ where
     }
 }
 
-
 impl<T> PolicySettings<T>
 where
     T: Debug + Serialize + DeserializeOwned,
@@ -182,25 +181,25 @@ where
                                 return Err(de::Error::duplicate_field(REQ_SUBSCRIPTION_FIELDS));
                             }
                             required_subscription_fields = map.next_value()?;
-                        },
+                        }
                         Field::OptSubscriptionFields => {
                             if !optional_subscription_fields.is_empty() {
                                 return Err(de::Error::duplicate_field(OPT_SUBSCRIPTION_FIELDS));
                             }
                             optional_subscription_fields = map.next_value()?;
-                        },
+                        }
                         Field::Policies => {
                             if !policies.is_empty() {
                                 return Err(de::Error::duplicate_field(POLICIES));
                             }
                             policies = map.next_value()?;
-                        },
+                        }
                         Field::TemplateData => {
                             if template_data.is_some() {
                                 return Err(de::Error::duplicate_field(TEMPLATE_DATA));
                             }
                             template_data = Some(map.next_value()?);
-                        },
+                        }
                     }
                 }
                 Ok(PolicySettings {

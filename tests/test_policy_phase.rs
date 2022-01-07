@@ -634,10 +634,10 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
             assert!(blocked.timestamp > data.timestamp);
             assert_ne!(blocked.correlation_id, data.correlation_id);
             assert_eq!(blocked, &data);
-        },
+        }
         PolicyFilterEvent::ContextChanged(ctx) => {
             panic!("unexpected context change:{:?}", ctx);
-        },
+        }
         PolicyFilterEvent::ItemPassed(data) => panic!("unexpected data passed policy {:?}", data),
     }
 
@@ -721,7 +721,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
                     custom: TableValue::new(),
                 }
             );
-        },
+        }
         PolicyFilterEvent::ContextChanged(None) => panic!("did not expect to clear context"),
         PolicyFilterEvent::ItemBlocked(item) => panic!("unexpected item receipt - blocked: {:?}", item),
         PolicyFilterEvent::ItemPassed(data) => panic!("unexpected data passed policy: {:?}", data),

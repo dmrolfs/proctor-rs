@@ -54,14 +54,14 @@ impl ContinueTicking for Constraint {
             Constraint::ByCount { count, limit } => {
                 *count += 1;
                 count <= limit
-            },
+            }
 
             Constraint::ByTime { stop, limit } => match stop {
                 None => {
                     *stop = Some(tokio::time::Instant::now() + *limit);
                     tracing::warn!(?stop, ?limit, "set tick time constraint");
                     true
-                },
+                }
 
                 Some(stop) => {
                     let now = tokio::time::Instant::now();
@@ -69,7 +69,7 @@ impl ContinueTicking for Constraint {
                     let diff = if do_next { Ok(*stop - now) } else { Err(now - *stop) };
                     tracing::warn!(?diff, %do_next, "eval tick time constraint.");
                     do_next
-                },
+                }
             },
         }
     }
@@ -218,6 +218,8 @@ where
         let outlet = &self.outlet;
 
         loop {
+            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+
             tokio::select! {
                 next_tick = ticks.next() => match next_tick {
                     Some(tick) => {
@@ -310,7 +312,7 @@ mod tests {
                 tick.run().await.expect("failed to run tick source");
             });
 
-            tokio::time::sleep(Duration::from_millis(95)).await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
             let (stop_tx, stop_rx) = oneshot::channel();
             let foo: anyhow::Result<()> = tx_api.send(TickMsg::Stop { tx: stop_tx }).map_err(|err| err.into());
             let _ = foo?;

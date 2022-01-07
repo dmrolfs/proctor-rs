@@ -3,7 +3,7 @@ use std::fmt::{self, Debug};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 
-use crate::graph::{Inlet, Outlet, Port, Stage, PORT_DATA};
+use crate::graph::{stage, Inlet, Outlet, Port, Stage, PORT_DATA};
 use crate::graph::{SinkShape, SourceShape};
 use crate::{AppData, ProctorResult, SharedString};
 
@@ -136,6 +136,8 @@ where
         while let Some(item) = self.inlet.recv().await {
             let filter_span = tracing::info_span!("filter on item", ?item);
             let _filter_span_guard = filter_span.enter();
+            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+
             if let Some(value) = (self.filter_map)(item) {
                 outlet.send(value).await?;
             } else if self.log_blocks {

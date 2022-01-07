@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 
 use crate::graph::shape::{SinkShape, SourceShape};
-use crate::graph::{Inlet, Outlet, Port, Stage};
+use crate::graph::{stage, Inlet, Outlet, Port, Stage};
 use crate::{AppData, ProctorResult, SharedString};
 
 pub struct Identity<T> {
@@ -52,6 +52,7 @@ impl<T: AppData> Stage for Identity<T> {
     #[tracing::instrument(level = "info", name = "run identity through", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         while let Some(value) = self.inlet.recv().await {
+            let _timer = stage::start_stage_eval_time(self.name.as_ref());
             self.outlet.send(value).await?;
         }
 

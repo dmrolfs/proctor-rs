@@ -194,6 +194,7 @@ impl<T: AppData> Stage for MergeN<T> {
         let rx_api = &mut self.rx_api;
 
         while !active_inlets.is_empty() {
+            let _timer = stage::start_stage_eval_time(self.name.as_ref());
             let available_inlets = active_inlets;
             tracing::info!(nr_available_inlets=%available_inlets.len(), "selecting from active inlets");
 
