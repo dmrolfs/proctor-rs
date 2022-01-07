@@ -14,6 +14,9 @@ use proctor::graph::stage::tick::TickMsg;
 use proctor::graph::{Connect, Graph, SinkShape};
 use proctor::phases::collection::{make_telemetry_rest_api_source, HttpQuery, SourceSetting};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
+use wiremock::matchers::{method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HttpBinResponse {
@@ -47,11 +50,40 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
     let main_span = tracing::info_span!("main");
     let _main_span_guard = main_span.enter();
 
+    let mock_server = MockServer::start().await;
+    let body = json!({
+        "args": {
+            "is_deploying": "false",
+            "last_deployment": "1979-05-27T07:32:00Z"
+        },
+        "headers": {
+            "Authorization": "Basic Zm9vOmJhcg==",
+            "Host": "httpbin.org",
+            "Postman-Token": "70e168ae-62aa-466e-96ff-834493ef0c0e",
+            "X-Amzn-Trace-Id": "Root=1-61d76ded-276a7d290776c81626824ef9"
+        },
+        "origin": "73.109.135.44",
+        "url": "https://httpbin.org/get?is_deploying=false&last_deployment=1979-05-27T07%3A32%3A00Z"
+    });
+    let response = ResponseTemplate::new(200).set_body_json(body);
+
+    Mock::given(method("GET"))
+        .and(path("/get"))
+        // need to figure out query params to dup in response
+        .respond_with(response)
+        .expect(3)
+        .mount(&mock_server)
+        .await;
+
     let setting = SourceSetting::RestApi(HttpQuery {
         interval: Duration::from_millis(25),
         method: reqwest::Method::GET,
         url: reqwest::Url::parse(
-            "https://httpbin.org/get?is_deploying=false&last_deployment=1979-05-27T07%3A32%3A00Z",
+            format!(
+                "{}/get?is_deploying=false&last_deployment=1979-05-27T07%3A32%3A00Z",
+                &mock_server.uri()
+            )
+            .as_str(),
         )?,
         headers: vec![
             ("authorization".to_string(), "Basic Zm9vOmJhcg==".to_string()),
@@ -126,7 +158,7 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
     g.push_back(Box::new(sink)).await;
 
     let stop_handle = tokio::spawn(async move {
-        let run_duration = Duration::from_millis(60);
+        let run_duration = Duration::from_millis(65);
         tracing::info!("tick-stop: waiting {:?} to stop...", run_duration);
         tokio::time::sleep(run_duration).await;
 
