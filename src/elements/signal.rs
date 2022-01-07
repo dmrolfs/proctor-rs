@@ -52,6 +52,7 @@ pub enum Anomaly {
 /// (version: 2020-11-08).
 #[derive(Debug, Clone, PartialEq)]
 pub struct SignalDetector {
+    lag: usize,
     threshold: f64,
     influence: f64,
     window: VecDeque<f64>,
@@ -76,6 +77,7 @@ impl SignalDetector {
     /// For non-stationary data, the influence option should be set somewhere between 0 and 1.
     pub fn new(lag: usize, threshold: f64, influence: f64) -> Self {
         Self {
+            lag,
             threshold,
             influence,
             window: VecDeque::with_capacity(lag),
@@ -87,7 +89,7 @@ impl SignalDetector {
     }
 
     pub fn signal(&mut self, value: f64) -> Option<Anomaly> {
-        if self.window.len() < self.window.capacity() {
+        if self.window.len() < self.lag {
             self.window.push_back(value);
             return None;
         }
@@ -116,8 +118,8 @@ impl SignalDetector {
         if self.window.is_empty() {
             None
         } else {
-            let mean = self.window.clone().mean();
-            let std_dev = self.window.clone().std_dev();
+            let mean = self.window.iter().mean();
+            let std_dev = self.window.iter().std_dev();
             Some((mean, std_dev))
         }
     }
@@ -225,10 +227,47 @@ mod tests {
         let output: Vec<_> = input
             .into_iter()
             .enumerate()
-            .peaks(SignalDetector::new(5, 5.0, 0.0), |e| e.1)
+            .peaks(SignalDetector::new(5, 5.0, 0.3), |e| e.1)
             .map(|((i, _), p)| (i, p))
             .collect();
 
-        assert_eq!(output, vec![(45, Anomaly::High),]);
+        assert_eq!(
+            output, vec![
+                (28, Anomaly::Low),
+                (29, Anomaly::Low),
+                (30, Anomaly::Low),
+                (31, Anomaly::Low),
+                (32, Anomaly::Low),
+                (45, Anomaly::High),
+                (78, Anomaly::High),
+                (79, Anomaly::High),
+                (80, Anomaly::High),
+                (81, Anomaly::High),
+                (82, Anomaly::High),
+            ]
+        );
+    }
+
+    #[test]
+    fn verify_window_size_is_capped() {
+        let detector = SignalDetector::new(5, 5., 0.75);
+
+        let input: Vec<f64> = vec![
+            50, 53, 56, 59, 62, 65, 68, 71, 74, 77, 79, 82, 84, 86, 89, 90, 92, 94, 95, 96, 98, 98, 99, 100, 100, 100,
+            100, 100, 99, 98, 98, 96, 95, 94, 92, 90, 89, 86, 84, 82, 79, 77, 74, 71, 68, 650, 62, 59, 56, 53, 50, 47,
+            44, 41, 38, 35, 32, 29, 26, 23, 21, 18, 16, 14, 11, 10, 8, 6, 5, 4, 2, 2, 1, 0, 0, 0, 0, 0, 1, 2, 2, 4, 5,
+            6, 8, 10, 11, 14, 16, 18, 21, 23, 26, 29, 32, 35, 38, 41, 44, 47, 50,
+        ]
+        .into_iter()
+        .map(|v| v as f64)
+        .collect();
+
+        let used_detector = input.into_iter().fold(detector, |mut acc, val| {
+            acc.signal(val);
+
+            acc
+        });
+
+        assert_eq!(used_detector.window.len(), 5);
     }
 }

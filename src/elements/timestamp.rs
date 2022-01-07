@@ -88,7 +88,7 @@ impl fmt::Display for Timestamp {
         if f.alternate() {
             write!(f, "({},{})", self.0, self.1)
         } else {
-            write!(f, "{}_s", self.0)
+            write!(f, "{}", self.as_utc())
         }
     }
 }
