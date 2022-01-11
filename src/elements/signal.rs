@@ -232,7 +232,8 @@ mod tests {
             .collect();
 
         assert_eq!(
-            output, vec![
+            output,
+            vec![
                 (28, Anomaly::Low),
                 (29, Anomaly::Low),
                 (30, Anomaly::Low),
