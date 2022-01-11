@@ -48,7 +48,7 @@ fn track_publications(subscription: &str) {
     PUBLICATIONS.with_label_values(&[subscription]).inc();
 }
 
-pub const SUBSCRIPTION_TIMESTAMP: &str = "timestamp";
+pub const SUBSCRIPTION_TIMESTAMP: &str = "recv_timestamp";
 pub const SUBSCRIPTION_CORRELATION: &str = "correlation_id";
 
 pub type CorrelationGenerator = ProctorIdGenerator<Telemetry>;
