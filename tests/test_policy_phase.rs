@@ -37,7 +37,7 @@ use tokio::task::JoinHandle;
 pub struct Data {
     pub input_messages_per_sec: f64,
     #[serde(with = "proctor::serde")]
-    pub timestamp: DateTime<Utc>,
+    pub recv_timestamp: DateTime<Utc>,
     pub correlation_id: Id<Data>,
     pub inbox_lag: i64,
 }
@@ -50,7 +50,7 @@ impl PartialEq for Data {
 
 #[derive(PolarClass, Label, Debug, Clone, Serialize, Deserialize)]
 pub struct TestPolicyPhaseContext {
-    pub timestamp: Timestamp,
+    pub recv_timestamp: Timestamp,
     pub correlation_id: Id<TestPolicyPhaseContext>,
 
     #[polar(attribute)]
@@ -199,7 +199,7 @@ fn test_context_serde() {
     // LabeledRealtimeIdGenerator<TestPolicyPhaseContext>::single_node(IdPrettifier::default());
 
     let context = TestPolicyPhaseContext {
-        timestamp: now.clone(),
+        recv_timestamp: now.clone(),
         correlation_id: corr.clone(),
         task_status: TestTaskStatus { last_failure: None },
         cluster_status: TestClusterStatus {
@@ -606,7 +606,7 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
 
     let data = Data {
         input_messages_per_sec: std::f64::consts::PI,
-        timestamp: now_utc,
+        recv_timestamp: now_utc,
         correlation_id: flow.id_generator.next_id().relabel(),
         inbox_lag: 3,
     };
@@ -627,11 +627,11 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
     match &*assert_ok!(flow.rx_eligibility_monitor.recv().await) {
         PolicyFilterEvent::ItemBlocked(blocked) => {
             tracing::warn!(
-                blocked_ts=%blocked.timestamp, data_ts=%data.timestamp,
+                blocked_ts=%blocked.recv_timestamp, data_ts=%data.recv_timestamp,
                 blocked_corr=?blocked.correlation_id, data_corr=?data.correlation_id,
                 "receive item blocked notification re: {:?}", blocked
             );
-            assert!(blocked.timestamp > data.timestamp);
+            assert!(blocked.recv_timestamp > data.recv_timestamp);
             assert_ne!(blocked.correlation_id, data.correlation_id);
             assert_eq!(blocked, &data);
         }
@@ -710,7 +710,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
             assert_eq!(
                 ctx,
                 &TestPolicyPhaseContext {
-                    timestamp: Timestamp::now(),
+                    recv_timestamp: Timestamp::now(),
                     correlation_id: flow.id_generator.next_id().relabel(),
                     task_status: TestTaskStatus { last_failure: None },
                     cluster_status: TestClusterStatus {
@@ -1033,7 +1033,7 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
     assert_eq!(
         event,
         &elements::PolicyFilterEvent::ContextChanged(Some(TestPolicyPhaseContext {
-            timestamp: Timestamp::now(),
+            recv_timestamp: Timestamp::now(),
             correlation_id: flow.id_generator.next_id().relabel(),
             task_status: TestTaskStatus { last_failure: None },
             cluster_status: TestClusterStatus {
