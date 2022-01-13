@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use tokio::sync::{broadcast, mpsc, oneshot};
 
-use crate::elements::PolicySource;
+use crate::elements::{PolicySource, QueryResult};
 use crate::Ack;
 
 pub type PolicyFilterApi<C, D> = mpsc::UnboundedSender<PolicyFilterCmd<C, D>>;
@@ -57,6 +57,6 @@ pub struct PolicyFilterDetail<C, D> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum PolicyFilterEvent<T, C> {
     ContextChanged(Option<C>),
-    ItemPassed(T),
-    ItemBlocked(T),
+    ItemPassed(T, QueryResult),
+    ItemBlocked(T, Option<QueryResult>),
 }

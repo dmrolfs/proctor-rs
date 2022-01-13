@@ -29,7 +29,8 @@ pub static STAGE_EVAL_TIME: Lazy<HistogramVec> = Lazy::new(|| {
         HistogramOpts::new(
             "stage_eval_time",
             "Time spent in a stage's event evaluation cycle in seconds",
-        ),
+        )
+            .buckets(vec![ 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, ]),
         &["stage"],
     )
     .expect("failed creating stage_eval_time metric")

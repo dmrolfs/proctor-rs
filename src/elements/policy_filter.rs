@@ -319,21 +319,21 @@ where
                     "item passed context policy review - sending via outlet."
                 );
                 outlet
-                    .send(PolicyOutcome::new(item.clone(), context.clone(), result))
+                    .send(PolicyOutcome::new(item.clone(), context.clone(), result.clone()))
                     .await?;
-                Self::publish_event(PolicyFilterEvent::ItemPassed(item), tx)?;
+                Self::publish_event(PolicyFilterEvent::ItemPassed(item, result), tx)?;
                 Ok(())
             }
 
             Ok(result) => {
                 tracing::info!(?policy, ?result, "item failed context policy review - skipping.");
-                Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
+                Self::publish_event(PolicyFilterEvent::ItemBlocked(item, Some(result)), tx)?;
                 Ok(())
             }
 
             Err(err) => {
                 tracing::warn!(error=?err, ?policy, "error in context policy review - skipping item.");
-                Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
+                Self::publish_event(PolicyFilterEvent::ItemBlocked(item, None), tx)?;
                 Err(err)
             }
         };
@@ -351,7 +351,7 @@ where
         item: T, tx: &broadcast::Sender<Arc<PolicyFilterEvent<T, C>>>,
     ) -> Result<(), PolicyError> {
         tracing::info!(?item, "dropping item received before policy context set.");
-        Self::publish_event(PolicyFilterEvent::ItemBlocked(item), tx)?;
+        Self::publish_event(PolicyFilterEvent::ItemBlocked(item, None), tx)?;
         Ok(())
     }
 

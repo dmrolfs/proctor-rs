@@ -625,7 +625,7 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
     tracing::warn!("test_eligibility_before_context_baseline_F");
 
     match &*assert_ok!(flow.rx_eligibility_monitor.recv().await) {
-        PolicyFilterEvent::ItemBlocked(blocked) => {
+        PolicyFilterEvent::ItemBlocked(blocked, _) => {
             tracing::warn!(
                 blocked_ts=%blocked.recv_timestamp, data_ts=%data.recv_timestamp,
                 blocked_corr=?blocked.correlation_id, data_corr=?data.correlation_id,
@@ -638,7 +638,7 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
         PolicyFilterEvent::ContextChanged(ctx) => {
             panic!("unexpected context change:{:?}", ctx);
         }
-        PolicyFilterEvent::ItemPassed(data) => panic!("unexpected data passed policy {:?}", data),
+        PolicyFilterEvent::ItemPassed(data, _) => panic!("unexpected data passed policy {:?}", data),
     }
 
     let actual = assert_ok!(flow.close().await);
@@ -723,8 +723,8 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
             );
         }
         PolicyFilterEvent::ContextChanged(None) => panic!("did not expect to clear context"),
-        PolicyFilterEvent::ItemBlocked(item) => panic!("unexpected item receipt - blocked: {:?}", item),
-        PolicyFilterEvent::ItemPassed(data) => panic!("unexpected data passed policy: {:?}", data),
+        PolicyFilterEvent::ItemBlocked(item, _) => panic!("unexpected item receipt - blocked: {:?}", item),
+        PolicyFilterEvent::ItemPassed(data, _) => panic!("unexpected data passed policy: {:?}", data),
     };
     tracing::warn!("DMR: 04. environment change verified.");
 
@@ -984,7 +984,7 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
     tracing::warn!(?item, ?telemetry, "DMR-A.2: converted item to telemetry and pushing...");
     flow.push_telemetry(telemetry?).await?;
     let event = &*flow.recv_policy_event().await?;
-    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemPassed(_));
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemPassed(_,_));
 
     tracing::info!("waiting for item to reach sink...");
     assert!(
@@ -1008,21 +1008,21 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
     let telemetry = Telemetry::try_from(&item);
     flow.push_telemetry(telemetry?).await?;
     let event = &*flow.recv_policy_event().await?;
-    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_));
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_,_));
     tracing::warn!(?event, "DMR-C: item dropped confirmed");
 
     let item = TestItem::new(std::f64::consts::FRAC_1_PI, 3, ts);
     let telemetry = Telemetry::try_from(&item)?;
     flow.push_telemetry(telemetry).await?;
     let event = &*flow.recv_policy_event().await?;
-    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_));
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_,_));
     tracing::warn!(?event, "DMR-D: item dropped confirmed");
 
     let item = TestItem::new(std::f64::consts::FRAC_1_SQRT_2, 4, ts);
     let telemetry = Telemetry::try_from(&item)?;
     flow.push_telemetry(telemetry).await?;
     let event = &*flow.recv_policy_event().await?;
-    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_));
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_,_));
     tracing::warn!(?event, "DMR-E: item dropped confirmed");
 
     flow.push_context(maplit::hashmap! { "cluster.location_code" => 33.to_telemetry(), })
