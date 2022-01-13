@@ -147,8 +147,6 @@ impl<P: Planning> Plan<P> {
         let planning = &mut self.planning;
 
         loop {
-            let _timer = stage::start_stage_eval_time(self.name.as_ref());
-
             tokio::select! {
                 Some(data) = rx_data.recv() => {
                     let observation: P::Observation = data;
@@ -157,11 +155,11 @@ impl<P: Planning> Plan<P> {
                 },
 
                 Some(decision) = rx_decision.recv() => {
-                    let out = planning.handle_decision(decision.clone()).await?;
-                    let event = if let Some(out) = out {
-                        PlanEvent::DecisionPlanned(decision, out)
-                    } else {
-                        PlanEvent::DecisionIgnored(decision)
+                    let _timer = stage::start_stage_eval_time(self.name.as_ref());
+
+                    let event = match planning.handle_decision(decision.clone()).await? {
+                        Some(out) => PlanEvent::DecisionPlanned(decision, out),
+                        None => PlanEvent::DecisionIgnored(decision),
                     };
 
                     Self::publish_event(tx_monitor, event);
