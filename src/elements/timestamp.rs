@@ -56,6 +56,7 @@ impl Timestamp {
         Self(secs, subsec_nanos)
     }
 
+    /// Returns seconds timestamp (including partial) as a floating point.
     pub fn as_f64(&self) -> f64 {
         (self.0 as f64) + ((self.1 as f64) / (Self::NANOS_PER_SEC as f64))
     }
