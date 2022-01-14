@@ -1174,6 +1174,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "inspect_prometheus"
+version = "0.1.0"
+source = "git+https://github.com/dmrolfs/inspect_prometheus#537d78ee2a2aa3f4ee22170261e568d13a13bcfb"
+dependencies = [
+ "prometheus",
+ "tracing",
+]
+
+[[package]]
 name = "instant"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2041,6 +2050,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "handlebars",
+ "inspect_prometheus",
  "itertools",
  "maplit",
  "num-traits 0.2.14",

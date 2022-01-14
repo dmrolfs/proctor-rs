@@ -83,6 +83,7 @@ serde_with = { version = "1.11.0", features = ["chrono", "json", "macros"] }
 static_assertions = "1.1.0"
 tokio-test = "0.4.2"
 wiremock = "0.5.10"
+inspect_prometheus = { git = "https://github.com/dmrolfs/inspect_prometheus" }
 
 [[bench]]
 name = "bench_main"
