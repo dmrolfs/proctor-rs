@@ -417,11 +417,14 @@ impl<T: AppData> Outlet<T> {
     pub async fn reserve_send<F, E>(&self, task: F) -> Result<(), E>
     where
         F: futures::future::Future<Output = Result<T, E>>,
-        E: From<PortError> + From<mpsc::error::SendError<()>> + std::fmt::Debug,
+        E: From<PortError> + std::fmt::Debug,
     {
         self.check_attachment().await?;
         let tx = self.connection.lock().await;
-        let permit = (*tx).as_ref().unwrap().0.reserve().await?;
+        let permit = (*tx).as_ref().unwrap().0
+            .reserve()
+            .await
+            .map_err(|err| PortError::ChannelError(err.into()))?;
 
         let span = tracing::info_span!(
             "port reserved to send with task result",
