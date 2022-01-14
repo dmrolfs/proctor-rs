@@ -25,7 +25,7 @@ impl<'c> ClearinghouseSubscriptionMagnet<'c> {
             Magnet::Direct(clearinghouse) => {
                 clearinghouse.subscribe(subscription, &receiver).await;
                 Ok(())
-            }
+            },
 
             Magnet::Api(tx_clearinghouse_api) => {
                 let (cmd, rx_ack) = ClearinghouseCmd::subscribe(subscription.clone(), receiver.clone());
@@ -43,7 +43,7 @@ impl<'c> ClearinghouseSubscriptionMagnet<'c> {
                     ack.is_ok()
                 );
                 ack
-            }
+            },
         }
     }
 }

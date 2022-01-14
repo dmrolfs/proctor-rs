@@ -100,7 +100,7 @@ impl serde::Serialize for ClearinghouseSnapshot {
                         optional: Some(optional_fields.clone()),
                     }
                     //(name, Some(required_fields), Some(optional_fields))
-                }
+                },
             })
             .collect::<Vec<_>>();
         state.serialize_field("subscriptions", &subscriptions)?;

@@ -181,7 +181,7 @@ impl<P: Planning> Plan<P> {
             Ok(nr_subsribers) => tracing::debug!(%nr_subsribers, "published event to subscribers"),
             Err(err) => {
                 tracing::warn!(error=?err, "failed to publish event - can add subscribers to receive future events.")
-            }
+            },
         }
     }
 

@@ -130,7 +130,7 @@ impl fmt::Display for TelemetryValue {
                     }
                 }
                 write!(f, "]")
-            }
+            },
             Self::Table(vs) => write!(f, "{}", vs),
             Self::Unit => write!(f, "()"),
         }
@@ -166,7 +166,7 @@ impl TelemetryValue {
             (Self::Unit, Self::Unit) => (),
             (Self::Boolean(ref mut lhs), Self::Boolean(rhs)) => {
                 *lhs = lhs.bitor(rhs);
-            }
+            },
             (Self::Integer(ref mut lhs), Self::Integer(rhs)) => *lhs += *rhs,
             (Self::Float(ref mut lhs), Self::Float(rhs)) => *lhs += *rhs,
             (Self::Text(ref mut lhs), Self::Text(rhs)) => lhs.push_str(rhs),
@@ -246,11 +246,11 @@ impl ToPolar for TelemetryValue {
             Self::Seq(values) => {
                 let vs = values.into_iter().map(|v| v.to_polar()).collect();
                 PolarValue::List(vs)
-            }
+            },
             Self::Table(table) => {
                 let vs = table.into_iter().map(|(k, v)| (k, v.to_polar())).collect();
                 PolarValue::Map(vs)
-            }
+            },
             Self::Unit => PolarValue::Boolean(false),
         }
     }
@@ -275,12 +275,12 @@ impl From<TelemetryValue> for ConfigValue {
             TV::Seq(values) => {
                 let vs: Vec<ConfigValue> = values.into_iter().map(|v| v.into()).collect();
                 ConfigValue::new(None, vs)
-            }
+            },
             TV::Table(table) => {
                 let tbl: HashMap<String, ConfigValue> =
                     table.into_iter().map(|(k, v)| (k, v.into())).collect::<HashMap<_, _>>();
                 ConfigValue::new(None, tbl)
-            }
+            },
             TV::Unit => ConfigValue::new(None, Option::<String>::None),
         }
     }
@@ -297,7 +297,7 @@ impl From<ResultSet> for TelemetryValue {
                 TelemetryValue::Unit => (),
                 value => {
                     let _ = table.insert(key.to_string(), value);
-                }
+                },
             }
         }
 
@@ -486,7 +486,7 @@ impl From<PolarValue> for TelemetryValue {
             PolarValue::List(values) => {
                 let vs = values.into_iter().map(|v| v.into()).collect();
                 Self::Seq(vs)
-            }
+            },
             PolarValue::Map(table) => {
                 let vs = table
                     .into_iter()
@@ -494,19 +494,19 @@ impl From<PolarValue> for TelemetryValue {
                     .collect::<HashMap<_, _>>()
                     .into();
                 Self::Table(vs)
-            }
+            },
             PolarValue::Instance(_) => {
                 Self::Unit
                 // maybe Unit?
                 // Err(StageError::TypeError("PolarValue::Instance is not a supported telemetry
                 // type.".to_string()))
-            }
+            },
             PolarValue::Variable(_) => {
                 Self::Unit
                 // maybe Unit?
                 // Err(StageError::TypeError("PolarValue::Variable is not a supported telemetry
                 // type.".to_string()))
-            }
+            },
         }
     }
 }
@@ -529,13 +529,13 @@ impl<T: Label> TryFrom<TelemetryValue> for Id<T> {
                 let snowflake = seq.pop().map(i64::try_from).transpose()?.unwrap();
                 let pretty = seq.pop().map(String::try_from).transpose()?.unwrap();
                 Ok(Self::direct(label, snowflake, pretty))
-            }
+            },
             TelemetryValue::Table(mut table) => {
                 // let label = table.remove(ID_LABEL).map(String::try_from).transpose()?.unwrap();
                 let snowflake = table.remove(ID_SNOWFLAKE).map(i64::try_from).transpose()?.unwrap();
                 let pretty = table.remove(ID_PRETTY).map(String::try_from).transpose()?.unwrap();
                 Ok(Self::direct(label, snowflake, pretty))
-            }
+            },
             value => Err(TelemetryError::TypeError {
                 expected: TelemetryType::Table,
                 actual: Some(format!("{:?}", value)),
@@ -567,7 +567,7 @@ impl TryFrom<TelemetryValue> for bool {
                         actual: Some(value),
                     }),
                 }
-            }
+            },
 
             value => Err(TelemetryError::TypeError {
                 expected: TelemetryType::Boolean,
@@ -597,7 +597,7 @@ impl TryFrom<&TelemetryValue> for bool {
                         actual: Some(value.clone()),
                     }),
                 }
-            }
+            },
 
             value => Err(TelemetryError::TypeError {
                 expected: TelemetryType::Boolean,
@@ -1076,14 +1076,14 @@ impl<'de> Serialize for TelemetryValue {
                     seq.serialize_element(element)?;
                 }
                 seq.end()
-            }
+            },
             Self::Table(table) => {
                 let mut map = serializer.serialize_map(Some(table.len()))?;
                 for (k, v) in table.iter() {
                     map.serialize_entry(k, v)?;
                 }
                 map.end()
-            }
+            },
         }
     }
 }
@@ -1303,7 +1303,7 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
                         val => {
                             tracing::trace!(?key, value=?val, "adding deserialized entry.");
                             table.insert(key, val);
-                        }
+                        },
                     }
                 }
 

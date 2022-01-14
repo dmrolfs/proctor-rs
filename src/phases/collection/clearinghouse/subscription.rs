@@ -104,7 +104,7 @@ impl TelemetrySubscription {
                     outlet_to_subscription,
                     update_metrics,
                 }
-            }
+            },
         }
     }
 
@@ -133,7 +133,7 @@ impl TelemetrySubscription {
                     outlet_to_subscription,
                     update_metrics,
                 }
-            }
+            },
         }
     }
 
@@ -189,7 +189,7 @@ impl TelemetrySubscription {
                     }
                 }
                 interested
-            }
+            },
         }
     }
 
@@ -220,7 +220,7 @@ impl TelemetrySubscription {
                 }
 
                 Ok((db, missing))
-            }
+            },
         }
     }
 
@@ -261,7 +261,7 @@ impl TelemetrySubscription {
                     let ready = ready.into_iter().map(|(k, v)| (k, v.clone())).collect();
                     Some(ready)
                 }
-            }
+            },
         }
     }
 

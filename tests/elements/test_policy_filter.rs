@@ -574,7 +574,7 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     let item = TestItem::new(consts::PI, ts, 1);
     flow.push_item(item).await?;
     let event = &*flow.recv_policy_event().await?;
-    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemPassed(_,_));
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemPassed(_, _));
 
     flow.push_context(TestContext::new(19)).await?;
     let event = &*flow.recv_policy_event().await?;
@@ -584,19 +584,19 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     let item = TestItem::new(consts::E, ts, 2);
     flow.push_item(item).await?;
     let event = &*flow.recv_policy_event().await?;
-    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_,_));
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_, _));
     tracing::info!(?event, "DMR-C: item dropped confirmed");
 
     let item = TestItem::new(consts::FRAC_1_PI, ts, 3);
     flow.push_item(item).await?;
     let event = &*flow.recv_policy_event().await?;
-    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_,_));
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_, _));
     tracing::info!(?event, "DMR-D: item dropped confirmed");
 
     let item = TestItem::new(consts::FRAC_1_SQRT_2, ts, 4);
     flow.push_item(item).await?;
     let event = &*flow.recv_policy_event().await?;
-    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_,_));
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_, _));
     tracing::info!(?event, "DMR-E: item dropped confirmed");
 
     flow.push_context(TestContext::new(33)).await?;
@@ -607,7 +607,7 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     let item = TestItem::new(consts::LN_2, ts, 5);
     flow.push_item(item).await?;
     let event = &*flow.recv_policy_event().await?;
-    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemPassed(_,_));
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemPassed(_, _));
 
     let actual = flow.close().await?;
 

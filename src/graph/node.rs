@@ -38,15 +38,15 @@ impl Node {
                         Ok(()) => {
                             tracing::info!("{} node completed and stopped", self.name);
                             break Ok(());
-                        }
+                        },
                         Err(ProctorError::GraphError(err)) => {
                             tracing::error!(error=?err, "Graph error in {} node - stopping", self.name);
                             break Err(err.into());
-                        }
+                        },
                         Err(err) => {
                             graph::track_errors(self.stage.name().as_ref(), &err);
                             tracing::error!(error=?err, "{} node failed on item - skipping", self.name);
-                        }
+                        },
                     }
                 };
 

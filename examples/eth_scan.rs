@@ -148,53 +148,53 @@ impl<'de> de::Deserialize<'de> for ExchangeRate {
                             }
                             from_currency_code = Some(map.next_value()?);
                             // tracing::trace!(?from_currency_code, "element-str");
-                        }
+                        },
                         Field::FromCurrencyName => {
                             if from_currency_name.is_some() {
                                 return Err(de::Error::duplicate_field("from_currency_name"));
                             }
                             from_currency_name = Some(map.next_value()?);
                             // tracing::trace!(?from_currency_name, "element");
-                        }
+                        },
                         Field::ToCurrencyCode => {
                             if to_currency_code.is_some() {
                                 return Err(de::Error::duplicate_field("to_currency_code"));
                             }
                             to_currency_code = Some(map.next_value()?);
                             // tracing::trace!(?to_currency_code, "element-str");
-                        }
+                        },
                         Field::ToCurrencyName => {
                             if to_currency_name.is_some() {
                                 return Err(de::Error::duplicate_field("to_currency_name"));
                             }
                             to_currency_name = Some(map.next_value()?);
                             // tracing::trace!(?to_currency_name, "element");
-                        }
+                        },
                         Field::ExchangeRate => {
                             if rate.is_some() {
                                 return Err(de::Error::duplicate_field("rate"));
                             }
                             rate = Some(map.next_value()?);
                             // tracing::trace!(?rate, "element-str");
-                        }
+                        },
                         Field::DateTime => {
                             if datetime.is_some() {
                                 return Err(de::Error::duplicate_field("datetime"));
                             }
                             datetime = Some(map.next_value()?);
                             // tracing::trace!(?datetime, "element-str");
-                        }
+                        },
                         Field::TimeZone => {
                             if timezone.is_some() {
                                 return Err(de::Error::duplicate_field("timezone"));
                             }
                             timezone = Some(map.next_value()?);
                             // tracing::trace!(?timezone, "element-str");
-                        }
+                        },
                         Field::Ignored => {
                             let _ignored: &str = map.next_value()?;
                             // tracing::trace!("ignoring element-str");
-                        }
+                        },
                     }
                 }
 

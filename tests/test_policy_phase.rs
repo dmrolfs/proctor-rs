@@ -634,10 +634,10 @@ async fn test_eligibility_before_context_baseline() -> anyhow::Result<()> {
             assert!(blocked.recv_timestamp > data.recv_timestamp);
             assert_ne!(blocked.correlation_id, data.correlation_id);
             assert_eq!(blocked, &data);
-        }
+        },
         PolicyFilterEvent::ContextChanged(ctx) => {
             panic!("unexpected context change:{:?}", ctx);
-        }
+        },
         PolicyFilterEvent::ItemPassed(data, _) => panic!("unexpected data passed policy {:?}", data),
     }
 
@@ -721,7 +721,7 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
                     custom: TableValue::new(),
                 }
             );
-        }
+        },
         PolicyFilterEvent::ContextChanged(None) => panic!("did not expect to clear context"),
         PolicyFilterEvent::ItemBlocked(item, _) => panic!("unexpected item receipt - blocked: {:?}", item),
         PolicyFilterEvent::ItemPassed(data, _) => panic!("unexpected data passed policy: {:?}", data),
@@ -984,7 +984,7 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
     tracing::warn!(?item, ?telemetry, "DMR-A.2: converted item to telemetry and pushing...");
     flow.push_telemetry(telemetry?).await?;
     let event = &*flow.recv_policy_event().await?;
-    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemPassed(_,_));
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemPassed(_, _));
 
     tracing::info!("waiting for item to reach sink...");
     assert!(
@@ -1008,21 +1008,21 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
     let telemetry = Telemetry::try_from(&item);
     flow.push_telemetry(telemetry?).await?;
     let event = &*flow.recv_policy_event().await?;
-    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_,_));
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_, _));
     tracing::warn!(?event, "DMR-C: item dropped confirmed");
 
     let item = TestItem::new(std::f64::consts::FRAC_1_PI, 3, ts);
     let telemetry = Telemetry::try_from(&item)?;
     flow.push_telemetry(telemetry).await?;
     let event = &*flow.recv_policy_event().await?;
-    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_,_));
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_, _));
     tracing::warn!(?event, "DMR-D: item dropped confirmed");
 
     let item = TestItem::new(std::f64::consts::FRAC_1_SQRT_2, 4, ts);
     let telemetry = Telemetry::try_from(&item)?;
     flow.push_telemetry(telemetry).await?;
     let event = &*flow.recv_policy_event().await?;
-    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_,_));
+    claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_, _));
     tracing::warn!(?event, "DMR-E: item dropped confirmed");
 
     flow.push_context(maplit::hashmap! { "cluster.location_code" => 33.to_telemetry(), })

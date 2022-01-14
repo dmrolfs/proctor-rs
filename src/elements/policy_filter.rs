@@ -323,19 +323,19 @@ where
                     .await?;
                 Self::publish_event(PolicyFilterEvent::ItemPassed(item, result), tx)?;
                 Ok(())
-            }
+            },
 
             Ok(result) => {
                 tracing::info!(?policy, ?result, "item failed context policy review - skipping.");
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item, Some(result)), tx)?;
                 Ok(())
-            }
+            },
 
             Err(err) => {
                 tracing::warn!(error=?err, ?policy, "error in context policy review - skipping item.");
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item, None), tx)?;
                 Err(err)
-            }
+            },
         };
 
         outcome
@@ -383,13 +383,13 @@ where
                 };
                 let _ignore_failure = tx.send(detail);
                 true
-            }
+            },
 
             PolicyFilterCmd::ReplacePolicies { new_policies, new_template_data, tx } => {
                 Self::do_reset_policy_engine(name, policy, new_policies, new_template_data, oso);
                 let _ignore_failure = tx.send(());
                 true
-            }
+            },
 
             PolicyFilterCmd::AppendPolicy { additional_policy, new_template_data, tx } => {
                 let mut sources: Vec<PolicySource> = policy.sources().to_vec();
@@ -397,7 +397,7 @@ where
                 Self::do_reset_policy_engine(name, policy, sources, new_template_data, oso);
                 let _ignore_failure = tx.send(());
                 true
-            }
+            },
         }
     }
 
