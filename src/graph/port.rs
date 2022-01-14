@@ -421,15 +421,15 @@ impl<T: AppData> Outlet<T> {
     {
         self.check_attachment().await?;
         let tx = self.connection.lock().await;
-        let permit = (*tx).as_ref().unwrap().0
+        let permit = (*tx)
+            .as_ref()
+            .unwrap()
+            .0
             .reserve()
             .await
             .map_err(|err| PortError::ChannelError(err.into()))?;
 
-        let span = tracing::info_span!(
-            "port reserved to send with task result",
-            stage=%self.stage, port_name=%self.name
-        );
+        let span = tracing::info_span!("task in output port reserve_send", stage=%self.stage, port_name=%self.name);
 
         match task.instrument(span).await {
             Ok(data) => {
