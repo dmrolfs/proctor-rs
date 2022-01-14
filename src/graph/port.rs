@@ -6,6 +6,7 @@ use once_cell::sync::Lazy;
 use prometheus::{IntCounterVec, Opts};
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
+use tracing::Instrument;
 
 use crate::error::PortError;
 use crate::AppData;
@@ -156,10 +157,10 @@ impl<T: Send> Port for Inlet<T> {
             Some(r) => {
                 tracing::trace!(stage=%self.stage, inlet=%self.name, "closing Inlet");
                 r.0.close()
-            }
+            },
             None => {
                 tracing::trace!(stage=%self.stage, inlet=%self.name, "Inlet close ignored - not attached");
-            }
+            },
         }
     }
 }
@@ -411,6 +412,32 @@ impl<T: AppData> Outlet<T> {
         (*tx).as_ref().unwrap().0.send(value).await?;
         track_egress(self.stage.as_ref(), self.name.as_ref());
         Ok(())
+    }
+
+    pub async fn reserve_send<F, E>(&self, task: F) -> Result<(), E>
+    where
+        F: futures::future::Future<Output = Result<T, E>>,
+        E: From<PortError> + From<mpsc::error::SendError<()>> + std::fmt::Debug,
+    {
+        self.check_attachment().await?;
+        let tx = self.connection.lock().await;
+        let permit = (*tx).as_ref().unwrap().0.reserve().await?;
+
+        let span = tracing::info_span!(
+            "port reserved to send with task result",
+            stage=%self.stage, port_name=%self.name
+        );
+
+        match task.instrument(span).await {
+            Ok(data) => {
+                permit.send(data);
+                Ok(())
+            },
+            Err(err) => {
+                tracing::error!(error=?err, "task future failed");
+                Err(err)
+            },
+        }
     }
 }
 
