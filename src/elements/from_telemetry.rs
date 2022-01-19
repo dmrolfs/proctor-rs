@@ -13,11 +13,10 @@ pub trait FromTelemetryStage<Out>: Stage + ThroughShape<In = Telemetry, Out = Ou
 impl<Out, T> FromTelemetryStage<Out> for T where T: Stage + ThroughShape<In = Telemetry, Out = Out> + 'static {}
 
 #[tracing::instrument(level = "info", skip(name))]
-pub async fn make_from_telemetry<Out>(name: impl Into<String>, log_conversion_failure: bool) -> FromTelemetryShape<Out>
+pub async fn make_from_telemetry<Out>(name: SharedString, log_conversion_failure: bool) -> FromTelemetryShape<Out>
 where
     Out: AppData + DeserializeOwned,
 {
-    let name: SharedString = SharedString::Owned(name.into());
     let stage_name = name.clone();
     let from_telemetry =
         stage::FilterMap::<_, Telemetry, Out>::new(format!("{}_from_telemetry", name), move |telemetry| {
@@ -45,5 +44,5 @@ where
     let mut cg = Graph::default();
     cg.push_back(Box::new(from_telemetry)).await;
 
-    Box::new(stage::CompositeThrough::new(name.into_owned(), cg, cg_inlet, cg_outlet).await)
+    Box::new(stage::CompositeThrough::new(name, cg, cg_inlet, cg_outlet).await)
 }

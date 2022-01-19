@@ -23,7 +23,7 @@ impl Timestamp {
     const MILLIS_PER_SEC: i64 = 1_000;
     const NANOS_PER_MILLI: i64 = 1_000_000;
     const NANOS_PER_SEC: i64 = Self::NANOS_PER_MILLI * Self::MILLIS_PER_SEC;
-    pub const ZERO: Timestamp = Timestamp(0, 0);
+    pub const ZERO: Self = Self(0, 0);
 
     pub fn now() -> Self {
         Self::from_datetime(&Utc::now())
@@ -33,7 +33,7 @@ impl Timestamp {
         Self::new(datetime.timestamp(), datetime.timestamp_subsec_nanos())
     }
 
-    pub fn from_secs(secs: i64) -> Self {
+    pub const fn from_secs(secs: i64) -> Self {
         Self(secs, 0)
     }
 
@@ -61,17 +61,17 @@ impl Timestamp {
         (self.0 as f64) + ((self.1 as f64) / (Self::NANOS_PER_SEC as f64))
     }
 
-    pub fn as_secs(&self) -> i64 {
+    pub const fn as_secs(&self) -> i64 {
         self.0
     }
 
-    pub fn as_millis(&self) -> i64 {
+    pub const fn as_millis(&self) -> i64 {
         let sec_millis = self.0 * Self::MILLIS_PER_SEC;
         let nsec_millis = (self.1 as i64) / Self::NANOS_PER_MILLI;
         sec_millis + nsec_millis
     }
 
-    pub fn as_nanos(&self) -> i64 {
+    pub const fn as_nanos(&self) -> i64 {
         self.0 * Self::NANOS_PER_SEC + self.1 as i64
     }
 
@@ -79,7 +79,7 @@ impl Timestamp {
         Utc.timestamp(self.0, self.1)
     }
 
-    pub fn as_pair(&self) -> (i64, u32) {
+    pub const fn as_pair(&self) -> (i64, u32) {
         (self.0, self.1)
     }
 }
@@ -207,7 +207,7 @@ impl From<&Timestamp> for i64 {
 
 impl From<Timestamp> for TelemetryValue {
     fn from(ts: Timestamp) -> Self {
-        TelemetryValue::Table(
+        Self::Table(
             maplit::hashmap! {
                 SECS_KEY.to_string() => ts.0.to_telemetry(),
                 NANOS_KEY.to_string() => ts.1.to_telemetry(),
@@ -218,7 +218,7 @@ impl From<Timestamp> for TelemetryValue {
 }
 
 impl std::ops::Add<Duration> for Timestamp {
-    type Output = Timestamp;
+    type Output = Self;
 
     fn add(self, rhs: Duration) -> Self::Output {
         let total = self.as_f64() + rhs.as_secs_f64();
@@ -253,7 +253,7 @@ impl std::ops::Add<Duration> for Timestamp {
 // }
 
 impl std::ops::Sub<Duration> for Timestamp {
-    type Output = Timestamp;
+    type Output = Self;
 
     fn sub(self, rhs: Duration) -> Self::Output {
         (self.as_f64() - rhs.as_secs_f64()).into()
@@ -343,7 +343,7 @@ struct TimestampVisitor;
 impl<'de> de::Visitor<'de> for TimestampVisitor {
     type Value = Timestamp;
 
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("a timestamp value in integer, float, sequence, map or string form")
     }
 

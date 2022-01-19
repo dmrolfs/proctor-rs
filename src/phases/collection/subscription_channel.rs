@@ -32,8 +32,8 @@ impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
     #[tracing::instrument(level = "info")]
     pub async fn connect_subscription(
         subscription: TelemetrySubscription, mut magnet: ClearinghouseSubscriptionMagnet<'_>,
-    ) -> Result<SubscriptionChannel<T>, CollectionError> {
-        let channel = Self::new(format!("{}_channel", subscription.name())).await?;
+    ) -> Result<Self, CollectionError> {
+        let channel = Self::new(format!("{}_channel", subscription.name()).into()).await?;
         magnet
             .subscribe(subscription, channel.subscription_receiver.clone())
             .await?;
@@ -45,8 +45,8 @@ impl SubscriptionChannel<Telemetry> {
     #[tracing::instrument(level = "info")]
     pub async fn connect_telemetry_subscription(
         subscription: TelemetrySubscription, mut magnet: ClearinghouseSubscriptionMagnet<'_>,
-    ) -> Result<SubscriptionChannel<Telemetry>, CollectionError> {
-        let channel = Self::telemetry(format!("{}_telemetry_channel", subscription.name())).await?;
+    ) -> Result<Self, CollectionError> {
+        let channel = Self::telemetry(format!("{}_telemetry_channel", subscription.name()).into()).await?;
         magnet
             .subscribe(subscription, channel.subscription_receiver.clone())
             .await?;
@@ -56,9 +56,8 @@ impl SubscriptionChannel<Telemetry> {
 
 impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
     #[tracing::instrument(level = "info", name = "subscription_channel_new", skip(name))]
-    pub async fn new(name: impl Into<SharedString>) -> Result<Self, CollectionError> {
-        let name = name.into();
-        let inner_stage = elements::make_from_telemetry(name.to_string(), true).await;
+    pub async fn new(name: SharedString) -> Result<Self, CollectionError> {
+        let inner_stage = elements::make_from_telemetry(name.clone(), true).await;
         let subscription_receiver = inner_stage.inlet();
         let outlet = inner_stage.outlet();
 
@@ -74,8 +73,7 @@ impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
 impl SubscriptionChannel<Telemetry> {
     /// Create a subscription channel for direct telemetry data; i.e., no schema conversion.
     #[tracing::instrument(level = "info", name = "subscription_channel_telemetry", skip(name))]
-    pub async fn telemetry(name: impl Into<SharedString>) -> Result<Self, CollectionError> {
-        let name = name.into();
+    pub async fn telemetry(name: SharedString) -> Result<Self, CollectionError> {
         let identity = crate::graph::stage::Identity::new(
             name.to_string(),
             Inlet::new(name.clone(), PORT_DATA),

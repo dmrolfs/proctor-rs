@@ -18,7 +18,7 @@ pub enum TelemetryType {
 }
 
 impl fmt::Display for TelemetryType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Self::Boolean => write!(f, "boolean"),
             Self::Integer => write!(f, "integer"),
@@ -65,7 +65,7 @@ impl TelemetryType {
             //     let items: Vec<(String, TelemetryValue)> = (*from).into_iter().collect();
             //     Ok(V::Seq((*from).into_iter().collect()))
             // },
-            (tv, T::Seq) if tv.as_telemetry_type() != T::Table => Ok(V::Seq(vec![telemetry])),
+            (tv, T::Seq) if tv.as_telemetry_type() != Self::Table => Ok(V::Seq(vec![telemetry])),
 
             (from, to) => Err(TelemetryError::NotSupported(format!(
                 "telemetry conversion from {} to {} is not supported",

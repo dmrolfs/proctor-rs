@@ -32,12 +32,11 @@ where
     D: AppData + Serialize,
 {
     #[tracing::instrument(level = "info", skip(name))]
-    pub async fn carry_policy_outcome<P, S>(name: S, policy: P) -> Result<Self, PolicyError>
+    pub async fn carry_policy_outcome<P>(name: &str, policy: P) -> Result<Self, PolicyError>
     where
         P: 'static + QueryPolicy<Item = In, Context = C, TemplateData = D>,
-        S: AsRef<str>,
     {
-        let name = SharedString::Owned(format!("{}_carry_policy_outcome", name.as_ref()));
+        let name = SharedString::Owned(format!("{}_carry_policy_outcome", name));
         let identity: stage::Identity<PolicyOutcome<In, C>> = stage::Identity::new(
             name.to_string(),
             Inlet::new(name.clone(), PORT_DATA),
@@ -54,12 +53,11 @@ where
     D: AppData + Serialize,
 {
     #[tracing::instrument(level = "info", skip(name))]
-    pub async fn strip_policy_outcome<P, S>(name: S, policy: P) -> Result<Self, PolicyError>
+    pub async fn strip_policy_outcome<P>(name: &str, policy: P) -> Result<Self, PolicyError>
     where
         P: 'static + QueryPolicy<Item = T, Context = C, TemplateData = D>,
-        S: AsRef<str>,
     {
-        let name = SharedString::Owned(format!("{}_strip_policy_outcome", name.as_ref()));
+        let name = SharedString::Owned(format!("{}_strip_policy_outcome", name));
         let strip = stage::Map::new(name.to_string(), |outcome: PolicyOutcome<T, C>| outcome.item);
         Self::with_transform(name, policy, strip).await
     }
@@ -73,13 +71,11 @@ where
     D: AppData + Serialize,
 {
     #[tracing::instrument(level = "info", skip(name))]
-    pub async fn with_transform<P, T, S>(name: S, policy: P, transform: T) -> Result<Self, PolicyError>
+    pub async fn with_transform<P, T>(name: SharedString, policy: P, transform: T) -> Result<Self, PolicyError>
     where
         P: 'static + QueryPolicy<Item = In, Context = C, TemplateData = D>,
         T: 'static + ThroughStage<PolicyOutcome<In, C>, Out>,
-        S: Into<SharedString>,
     {
-        let name = name.into();
         let policy_filter = PolicyFilter::new(format!("{}_filter", name), policy)?;
         let context_inlet = policy_filter.context_inlet();
         let tx_policy_api = policy_filter.tx_api();
@@ -94,7 +90,7 @@ where
         graph.push_back(Box::new(transform)).await;
 
         let policy_transform = Box::new(
-            stage::CompositeThrough::new(format!("{}_composite", name), graph, graph_inlet, graph_outlet).await,
+            stage::CompositeThrough::new(format!("{}_composite", name).into(), graph, graph_inlet, graph_outlet).await,
         );
 
         let inlet = policy_transform.inlet();
@@ -185,6 +181,7 @@ where
     Out: AppData,
     C: ProctorContext,
     C::Error: From<anyhow::Error>,
+    D: Send,
 {
     async fn do_check(&self) -> Result<(), C::Error> {
         self.inlet.check_attachment().await.map_err(|err| err.into())?;

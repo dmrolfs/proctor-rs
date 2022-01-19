@@ -27,7 +27,7 @@ use crate::{AppData, ProctorResult, SharedString};
 ///     let mut fold = stage::Fold::new("sum values", 0, |acc, x| acc + x);
 ///     let mut rx_sum_sq = fold.take_final_rx().unwrap();
 ///
-///     sq.inlet().attach("test_channel", rx).await;
+///     sq.inlet().attach("test_channel".into(), rx).await;
 ///     (sq.outlet(), fold.inlet()).connect().await;
 ///
 ///     let sq_handle = tokio::spawn(async move {
@@ -172,8 +172,8 @@ mod tests {
         let mut actual = Vec::with_capacity(3);
 
         block_on(async {
-            map.inlet.attach("test_channel", rx_in).await;
-            map.outlet.attach("test_channel", tx_out).await;
+            map.inlet.attach("test_channel".into(), rx_in).await;
+            map.outlet.attach("test_channel".into(), tx_out).await;
 
             let map_handle = tokio::spawn(async move {
                 map.run().await.expect("failed on map run");

@@ -10,15 +10,15 @@ use super::TelemetryValue;
 pub struct RecordsPerSecond(f64);
 
 impl RecordsPerSecond {
-    pub fn new(recs_per_sec: f64) -> Self {
+    pub const fn new(recs_per_sec: f64) -> Self {
         Self(recs_per_sec)
     }
 
-    pub fn max(lhs: RecordsPerSecond, rhs: RecordsPerSecond) -> RecordsPerSecond {
+    pub fn max(lhs: Self, rhs: Self) -> Self {
         f64::max(lhs.0, rhs.0).into()
     }
 
-    pub fn min(lhs: RecordsPerSecond, rhs: RecordsPerSecond) -> RecordsPerSecond {
+    pub fn min(lhs: Self, rhs: Self) -> Self {
         f64::min(lhs.0, rhs.0).into()
     }
 }

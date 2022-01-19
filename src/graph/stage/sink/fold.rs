@@ -20,12 +20,12 @@ pub enum FoldCmd<Acc> {
 }
 
 impl<Acc> FoldCmd<Acc> {
-    pub fn get_accumulation() -> (FoldCmd<Acc>, oneshot::Receiver<Acc>) {
+    pub fn get_accumulation() -> (Self, oneshot::Receiver<Acc>) {
         let (tx, rx) = oneshot::channel();
         (Self::GetAcc(tx), rx)
     }
 
-    pub fn get_and_reset_accumulation() -> (FoldCmd<Acc>, oneshot::Receiver<Acc>) {
+    pub fn get_and_reset_accumulation() -> (Self, oneshot::Receiver<Acc>) {
         let (tx, rx) = oneshot::channel();
         (Self::GetAndReset(tx), rx)
     }
@@ -61,7 +61,7 @@ impl<Acc> FoldCmd<Acc> {
 ///     });
 ///     let mut rx_sum = fold.take_final_rx().unwrap();
 ///
-///     fold.inlet().attach("test_channel", rx).await;
+///     fold.inlet().attach("test_channel".into(), rx).await;
 ///
 ///     let sink_handle = tokio::spawn(async move {
 ///         fold.run().await;
@@ -105,9 +105,9 @@ where
 
 impl<F, In, Acc> Fold<F, In, Acc>
 where
-    F: FnMut(Acc, In) -> Acc,
+    F: FnMut(Acc, In) -> Acc + Send,
     In: Debug + Send,
-    Acc: Debug + Clone,
+    Acc: Debug + Clone + Send + Sync,
 {
     pub fn new<S: Into<SharedString>>(name: S, initial: Acc, operation: F) -> Self {
         let name = name.into();

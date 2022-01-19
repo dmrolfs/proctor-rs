@@ -108,8 +108,8 @@ impl<T: AppData> Connect<T> for (&Inlet<T>, &Outlet<T>) {
 
 pub async fn connect_out_to_in<T: AppData>(mut lhs: Outlet<T>, mut rhs: Inlet<T>) {
     let (tx, rx) = mpsc::channel(num_cpus::get());
-    lhs.attach(rhs.full_name(), tx).await;
-    rhs.attach(lhs.full_name(), rx).await;
+    lhs.attach(rhs.full_name().into(), tx).await;
+    rhs.attach(lhs.full_name().into(), rx).await;
 }
 
 pub type InletConnection<T> = Arc<Mutex<Option<(mpsc::Receiver<T>, SharedString)>>>;
@@ -176,9 +176,9 @@ impl<T> Clone for Inlet<T> {
 }
 
 impl<T: fmt::Debug + Send> Inlet<T> {
-    pub async fn attach<S: Into<SharedString>>(&mut self, sender_name: S, rx: mpsc::Receiver<T>) {
+    pub async fn attach(&mut self, sender_name: SharedString, rx: mpsc::Receiver<T>) {
         let mut port = self.connection.lock().await;
-        *port = Some((rx, sender_name.into()));
+        *port = Some((rx, sender_name));
     }
 
     pub async fn is_attached(&self) -> bool {
@@ -218,7 +218,7 @@ impl<T: fmt::Debug + Send> Inlet<T> {
     /// async fn main() {
     ///     let (tx, mut rx) = mpsc::channel(100);
     ///     let mut port = Inlet::new("port", "data");
-    ///     port.attach("test_channel", rx).await;
+    ///     port.attach("test_channel".into(), rx).await;
     ///
     ///     tokio::spawn(async move {
     ///         tx.send("hello").await.unwrap();
@@ -239,7 +239,7 @@ impl<T: fmt::Debug + Send> Inlet<T> {
     /// async fn main() {
     ///     let (tx, mut rx) = mpsc::channel(100);
     ///     let mut port = Inlet::new("port", "data");
-    ///     port.attach("test_channel", rx).await;
+    ///     port.attach("test_channel".into(), rx).await;
     ///
     ///     tx.send("hello").await.unwrap();
     ///     tx.send("world").await.unwrap();
@@ -298,7 +298,7 @@ impl<T> Outlet<T> {
     pub fn with_receiver(
         stage: impl Into<SharedString>, port_name: impl Into<SharedString>, receiver_name: impl Into<SharedString>,
         tx: mpsc::Sender<T>,
-    ) -> Outlet<T> {
+    ) -> Self {
         Self {
             stage: stage.into(),
             name: port_name.into(),
@@ -334,9 +334,9 @@ impl<T> Clone for Outlet<T> {
 }
 
 impl<T: AppData> Outlet<T> {
-    pub async fn attach<S: Into<SharedString>>(&mut self, sender_name: S, tx: mpsc::Sender<T>) {
+    pub async fn attach(&mut self, sender_name: SharedString, tx: mpsc::Sender<T>) {
         let mut port = self.connection.lock().await;
-        *port = Some((tx, sender_name.into()));
+        *port = Some((tx, sender_name));
     }
 
     pub async fn is_attached(&self) -> bool {
@@ -389,7 +389,7 @@ impl<T: AppData> Outlet<T> {
     /// async fn main() {
     ///     let (tx, mut rx) = mpsc::channel(1);
     ///     let mut port = Outlet::new("port", "data");
-    ///     port.attach("test_channel", tx).await;
+    ///     port.attach("test_channel".into(), tx).await;
     ///
     ///     tokio::spawn(async move {
     ///         for i in 0..10 {
@@ -416,7 +416,7 @@ impl<T: AppData> Outlet<T> {
 
     pub async fn reserve_send<F, E>(&self, task: F) -> Result<(), E>
     where
-        F: futures::future::Future<Output = Result<T, E>>,
+        F: futures::future::Future<Output = Result<T, E>> + Send,
         E: From<PortError> + std::fmt::Debug,
     {
         self.check_attachment().await?;
@@ -469,7 +469,7 @@ mod tests {
         let mut port_1 = Outlet::new("port_1", PORT_DATA);
 
         block_on(async move {
-            port_1.attach("test_tx", tx).await;
+            port_1.attach("test_tx".into(), tx).await;
             let port_2 = port_1.clone();
 
             tokio::spawn(async move {

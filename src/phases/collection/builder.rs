@@ -86,8 +86,7 @@ impl CollectBuilder<Telemetry> {
         fields(nr_sources = %self.sources.len())
     )]
     pub async fn build_for_telemetry_out(
-        mut self, out_required_fields: HashSet<impl Into<SharedString>>,
-        out_optional_fields: HashSet<impl Into<SharedString>>,
+        mut self, out_required_fields: HashSet<String>, out_optional_fields: HashSet<String>,
     ) -> Result<Collect<Telemetry>, CollectionError> {
         let subscription = TelemetrySubscription::new(self.name.as_ref())
             .with_required_fields(out_required_fields)
@@ -104,8 +103,7 @@ impl CollectBuilder<Telemetry> {
         fields(nr_sources = %self.sources.len())
     )]
     pub async fn build_for_telemetry_out_w_metrics(
-        mut self, out_required_fields: HashSet<impl Into<SharedString>>,
-        out_optional_fields: HashSet<impl Into<SharedString>>,
+        mut self, out_required_fields: HashSet<String>, out_optional_fields: HashSet<String>,
         update_metrics: Box<dyn (Fn(&str, &Telemetry)) + Send + Sync + 'static>,
     ) -> Result<Collect<Telemetry>, CollectionError> {
         let subscription = TelemetrySubscription::new(self.name.as_ref())
@@ -137,8 +135,7 @@ where
         fields(nr_sources = % self.sources.len())
     )]
     pub async fn build_for_out_requirements(
-        mut self, out_required_fields: HashSet<impl Into<SharedString>>,
-        out_optional_fields: HashSet<impl Into<SharedString>>,
+        mut self, out_required_fields: HashSet<SharedString>, out_optional_fields: HashSet<SharedString>,
     ) -> Result<Collect<Out>, CollectionError> {
         let subscription = TelemetrySubscription::new(self.name.as_ref())
             .with_required_fields(out_required_fields)
@@ -156,8 +153,8 @@ where
         fields(nr_sources = % self.sources.len())
     )]
     pub async fn build_for_out_requirements_w_metrics(
-        mut self, out_required_fields: HashSet<impl Into<SharedString>>,
-        out_optional_fields: HashSet<impl Into<SharedString>>, update_metrics: UpdateMetricsFn,
+        mut self, out_required_fields: HashSet<SharedString>, out_optional_fields: HashSet<SharedString>,
+        update_metrics: UpdateMetricsFn,
     ) -> Result<Collect<Out>, CollectionError> {
         let subscription = TelemetrySubscription::new(self.name.as_ref())
             .with_required_fields(out_required_fields)
@@ -218,7 +215,7 @@ where
         g.push_back(Box::new(self.merge)).await;
         g.push_back(Box::new(self.clearinghouse)).await;
         g.push_back(Box::new(out_channel)).await;
-        let composite = stage::CompositeSource::new(format!("{}_composite_source", self.name), g, outlet).await;
+        let composite = stage::CompositeSource::new(format!("{}_composite_source", self.name).into(), g, outlet).await;
 
         let inner: Box<dyn SourceStage<Out>> = Box::new(composite);
         let outlet = inner.outlet();

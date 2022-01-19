@@ -301,7 +301,7 @@ async fn main() -> anyhow::Result<()> {
         data.into_iter().collect()
     };
 
-    let collect = Collect::new("collect", url, default_headers, to_metric_group).await;
+    let collect = Collect::new("collect".into(), url, default_headers, to_metric_group).await;
 
     let sink = stage::LoggedSink::new("log");
 

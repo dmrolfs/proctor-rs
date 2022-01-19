@@ -106,7 +106,7 @@ use crate::{AppData, ProctorResult, SharedString};
 ///     let mut cg = Graph::default();
 ///     cg.push_back(Box::new(tick)).await;
 ///     cg.push_back(Box::new(generator)).await;
-///     let mut composite = stage::CompositeSource::new("composite_source", cg, composite_outlet).await;
+///     let mut composite = stage::CompositeSource::new("composite_source".into(), cg, composite_outlet).await;
 ///
 ///     let mut fold = stage::Fold::<_, Telemetry, _>::new("gather latest", Telemetry::new(), |mut acc, mg| {
 ///         acc.extend(mg);
@@ -147,16 +147,12 @@ pub struct CompositeSource<Out> {
 }
 
 impl<Out: AppData> CompositeSource<Out> {
-    pub async fn new(name: impl Into<SharedString>, graph: Graph, graph_outlet: Outlet<Out>) -> Self {
-        let name = name.into();
+    pub async fn new(name: SharedString, graph: Graph, graph_outlet: Outlet<Out>) -> Self {
         let (graph, outlet) = Self::extend_graph(name.clone(), graph, graph_outlet).await;
         Self { name, graph: Some(graph), outlet }
     }
 
-    async fn extend_graph(
-        name: impl Into<SharedString>, mut graph: Graph, graph_outlet: Outlet<Out>,
-    ) -> (Graph, Outlet<Out>) {
-        let name = name.into();
+    async fn extend_graph(name: SharedString, mut graph: Graph, graph_outlet: Outlet<Out>) -> (Graph, Outlet<Out>) {
         let from_graph = Inlet::new(name.clone(), "from_graph");
         (&graph_outlet, &from_graph).connect().await;
         let composite_outlet = Outlet::new(name.clone(), PORT_DATA);

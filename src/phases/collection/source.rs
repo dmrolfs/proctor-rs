@@ -69,16 +69,13 @@ where
 }
 
 #[tracing::instrument(level = "info", skip(name))]
-pub async fn make_telemetry_rest_api_source<T, S>(
-    name: S, setting: &SourceSetting,
+pub async fn make_telemetry_rest_api_source<T>(
+    name: String, setting: &SourceSetting,
 ) -> Result<TelemetrySource, CollectionError>
 where
     T: Serialize + DeserializeOwned + Debug,
-    S: Into<String>,
 {
     if let SourceSetting::RestApi(query) = setting {
-        let name = name.into();
-
         // scheduler
         let tick = stage::Tick::new(
             format!("telemetry_{}_tick", name),
@@ -129,7 +126,7 @@ where
         cg.push_back(Box::new(tick)).await;
         cg.push_back(Box::new(collect_telemetry)).await;
         let composite: CompositeSource<Telemetry> =
-            stage::CompositeSource::new(format!("telemetry_{}", name), cg, composite_outlet).await;
+            stage::CompositeSource::new(format!("telemetry_{}", name).into(), cg, composite_outlet).await;
         let stage: Option<Box<dyn SourceStage<Telemetry>>> = Some(Box::new(composite));
 
         Ok(TelemetrySource { name, stage, tx_stop: Some(tx_tick_api) })
@@ -159,7 +156,9 @@ impl TelemetrySource {
         let mut sources = Vec::with_capacity(settings.len());
         for (name, source_setting) in settings {
             let src = match source_setting {
-                SourceSetting::RestApi(_query) => make_telemetry_rest_api_source::<T, _>(name, source_setting).await?,
+                SourceSetting::RestApi(_query) => {
+                    make_telemetry_rest_api_source::<T>(name.clone(), source_setting).await?
+                },
                 SourceSetting::Csv { path: _ } => make_telemetry_cvs_source::<T, _>(name, source_setting)?,
             };
             sources.push(src);

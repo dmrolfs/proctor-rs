@@ -53,7 +53,7 @@ use crate::{AppData, ProctorResult, SharedString};
 ///     let mut cg = Graph::default();
 ///     cg.push_back(Box::new(sq_plus)).await;
 ///     cg.push_back(Box::new(add_five)).await;
-///     let mut composite = stage::CompositeThrough::new("II. CompositeThrough-middle", cg, cg_inlet.clone(), cg_outlet.clone()).await;
+///     let mut composite = stage::CompositeThrough::new("II. CompositeThrough-middle".into(), cg, cg_inlet.clone(), cg_outlet.clone()).await;
 ///
 ///     let mut fold = stage::Fold::<_, i32, i32>::new("III. Fold-sum", 0, |acc, x| {
 ///         tracing::info!(%acc, ?x, "folding received value.");
@@ -92,10 +92,7 @@ pub struct CompositeThrough<In, Out> {
 }
 
 impl<In: AppData, Out: AppData> CompositeThrough<In, Out> {
-    pub async fn new(
-        name: impl Into<SharedString>, graph: Graph, graph_inlet: Inlet<In>, graph_outlet: Outlet<Out>,
-    ) -> Self {
-        let name = name.into();
+    pub async fn new(name: SharedString, graph: Graph, graph_inlet: Inlet<In>, graph_outlet: Outlet<Out>) -> Self {
         let (graph, inlet, outlet) = Self::extend_graph(name.clone(), graph, graph_inlet, graph_outlet).await;
         Self { name, graph: Some(graph), inlet, outlet }
     }

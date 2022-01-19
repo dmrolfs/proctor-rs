@@ -52,13 +52,13 @@ pub enum MergeMsg {
 ///     for idx in 0..merge_inlets.len() {
 ///         if let Some(rx_inlet) = merge_inlets.pop() {
 ///             if let Some(mut inlet) = merge.inlets().get(idx).await {
-///                 inlet.attach("src_channel", rx_inlet).await;
+///                 inlet.attach("src_channel".into(), rx_inlet).await;
 ///             }
 ///         }
 ///     }
 ///
 ///     let (tx_merge, mut rx_merge) = mpsc::channel(8);
-///     merge.outlet().attach("merge_channel", tx_merge).await;
+///     merge.outlet().attach("merge_channel".into(), tx_merge).await;
 ///
 ///     let m = tokio::spawn(async move {
 ///         merge.run().await;

@@ -74,13 +74,13 @@ impl MetricLabel for ProctorError {
 
 impl From<PortError> for ProctorError {
     fn from(that: PortError) -> Self {
-        ProctorError::GraphError(that.into())
+        Self::GraphError(that.into())
     }
 }
 
 impl From<StageError> for ProctorError {
     fn from(that: StageError) -> Self {
-        ProctorError::GraphError(that.into())
+        Self::GraphError(that.into())
     }
 }
 
@@ -151,13 +151,13 @@ impl MetricLabel for IncompatibleSourceSettingsError {
 
 impl From<reqwest::header::InvalidHeaderName> for IncompatibleSourceSettingsError {
     fn from(that: reqwest::header::InvalidHeaderName) -> Self {
-        IncompatibleSourceSettingsError::InvalidDetailError(that.into())
+        Self::InvalidDetailError(that.into())
     }
 }
 
 impl From<reqwest::header::InvalidHeaderValue> for IncompatibleSourceSettingsError {
     fn from(that: reqwest::header::InvalidHeaderValue) -> Self {
-        IncompatibleSourceSettingsError::InvalidDetailError(that.into())
+        Self::InvalidDetailError(that.into())
     }
 }
 
@@ -202,12 +202,17 @@ pub enum CollectionError {
     #[error("{0}")]
     PortError(#[from] PortError),
 
+    #[error("supplied collection url cannot be a base to query: {0}")]
+    NotABaseUrl(url::Url),
+
     #[error("{0}")]
     TaskError(#[from] tokio::task::JoinError),
 
     #[error("{0}")]
     StageError(#[from] anyhow::Error),
 }
+
+const HTTP_INTEGRATION: &str = "http_integration";
 
 impl MetricLabel for CollectionError {
     fn slug(&self) -> SharedString {
@@ -218,15 +223,16 @@ impl MetricLabel for CollectionError {
         match self {
             Self::IncompatibleSettings(e) => Right(Box::new(e)),
             Self::CsvError(_) => Left("csv".into()),
-            Self::HttpError(_) => Left("http_integration".into()),
-            Self::HttpMiddlewareError(_) => Left("http_integration".into()),
-            Self::UrlParseError(_) => Left("http_integration".into()),
-            Self::JsonError(_) => Left("http_integration".into()),
+            Self::HttpError(_) => Left(HTTP_INTEGRATION.into()),
+            Self::HttpMiddlewareError(_) => Left(HTTP_INTEGRATION.into()),
+            Self::UrlParseError(_) => Left(HTTP_INTEGRATION.into()),
+            Self::JsonError(_) => Left(HTTP_INTEGRATION.into()),
             Self::ClosedSubscription(_) => Left("closed_subscription".into()),
             Self::DataNotFound(_) => Left("data_not_found".into()),
             Self::DecisionError(_) => Left("decision".into()),
             Self::TelemetryError(e) => Right(Box::new(e)),
             Self::PortError(e) => Right(Box::new(e)),
+            Self::NotABaseUrl(_) => Left(HTTP_INTEGRATION.into()),
             Self::TaskError(_) => Left("task".into()),
             Self::StageError(_) => Left("stage".into()),
         }
@@ -450,7 +456,7 @@ impl MetricLabel for PolicyError {
 
 impl From<PortError> for PolicyError {
     fn from(that: PortError) -> Self {
-        PolicyError::PublishError(that.into())
+        Self::PublishError(that.into())
     }
 }
 
@@ -552,7 +558,7 @@ impl MetricLabel for PortError {
 
 impl<T: 'static + Debug + Send + Sync> From<tokio::sync::mpsc::error::SendError<T>> for PortError {
     fn from(that: tokio::sync::mpsc::error::SendError<T>) -> Self {
-        PortError::ChannelError(that.into())
+        Self::ChannelError(that.into())
     }
 }
 
@@ -568,7 +574,7 @@ pub enum UnexpectedType {
 }
 
 impl fmt::Display for UnexpectedType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             UnexpectedType::Boolean(b) => write!(f, "boolean `{}`", b),
             UnexpectedType::Integer(i) => write!(f, "integer `{}`", i),
@@ -586,13 +592,13 @@ impl From<crate::elements::TelemetryValue> for UnexpectedType {
         use crate::elements::TelemetryValue as TV;
 
         match value {
-            TV::Boolean(b) => UnexpectedType::Boolean(b),
-            TV::Integer(i64) => UnexpectedType::Integer(i64),
-            TV::Float(f64) => UnexpectedType::Float(f64),
-            TV::Text(rep) => UnexpectedType::Text(rep),
-            TV::Unit => UnexpectedType::Unit,
-            TV::Seq(_) => UnexpectedType::Seq,
-            TV::Table(_) => UnexpectedType::Table,
+            TV::Boolean(b) => Self::Boolean(b),
+            TV::Integer(i64) => Self::Integer(i64),
+            TV::Float(f64) => Self::Float(f64),
+            TV::Text(rep) => Self::Text(rep),
+            TV::Unit => Self::Unit,
+            TV::Seq(_) => Self::Seq,
+            TV::Table(_) => Self::Table,
         }
     }
 }

@@ -3,8 +3,8 @@ use std::fmt::{self, Debug};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use reqwest::header::HeaderMap;
-use reqwest::{IntoUrl, Url};
 use serde::de::DeserializeOwned;
+use url::Url;
 
 use super::Telemetry;
 use crate::error::CollectionError;
@@ -44,7 +44,7 @@ use crate::{AppData, ProctorResult, SharedString};
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
-///     let url = "https://httpbin.org/get?f=foo&b=bar";
+///     let url = url::Url::parse("https://httpbin.org/get?f=foo&b=bar")?;
 ///     let mut default_headers = HeaderMap::new();
 ///     default_headers.insert(
 ///         "x-api-key",
@@ -72,7 +72,7 @@ use crate::{AppData, ProctorResult, SharedString};
 ///         elements::Telemetry::try_from(&data).unwrap()
 ///     };
 ///
-///     let mut collect = elements::Collect::new("collect-args", url, default_headers, to_metric_catalog).await;
+///     let mut collect = elements::Collect::new("collect-args".into(), url, default_headers, to_metric_catalog).await;
 ///
 ///     let mut fold = stage::Fold::<_, elements::Telemetry, _>::new(
 ///         "gather latest",
@@ -115,18 +115,21 @@ pub struct Collect {
 
 impl Collect {
     #[deprecated(since = "0.3.0", note = "prefer proctor::phases::collection module.")]
-    pub async fn new<T, F, U>(name: impl Into<SharedString>, url: U, default_headers: HeaderMap, transform: F) -> Self
+    pub async fn new<T, F>(name: SharedString, url: Url, default_headers: HeaderMap, transform: F) -> Self
     where
         T: AppData + DeserializeOwned + 'static,
         F: FnMut(T) -> Telemetry + Send + Sync + 'static,
-        U: IntoUrl,
     {
-        let name = name.into();
-        let target = url.into_url().expect("failed to parse url");
         let (graph, trigger, outlet) =
-            Self::make_graph::<T, _>(name.clone(), target.clone(), default_headers, transform).await;
+            Self::make_graph::<T, _>(name.clone(), url.clone(), default_headers, transform).await;
 
-        Self { name, target, graph: Some(graph), trigger, outlet }
+        Self {
+            name,
+            target: url,
+            graph: Some(graph),
+            trigger,
+            outlet,
+        }
     }
 
     async fn make_graph<T, F>(

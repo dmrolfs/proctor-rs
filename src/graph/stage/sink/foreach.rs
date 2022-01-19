@@ -35,7 +35,7 @@ use crate::{AppData, ProctorResult, SharedString};
 ///         }
 ///     });
 ///
-///     foreach.inlet().attach("test_channel", rx).await;
+///     foreach.inlet().attach("test_channel".into(), rx).await;
 ///
 ///     let sink_handle = tokio::spawn(async move {
 ///         foreach.run().await;

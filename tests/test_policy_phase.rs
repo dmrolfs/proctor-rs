@@ -409,9 +409,9 @@ where
         // todo: expand testing to include settings-based reqd/opt subscription fields
         let settings: PolicySettings<D> = PolicySettings::default();
         let context_subscription = policy.subscription("eligibility_context", &settings);
-        let context_channel = assert_ok!(collection::SubscriptionChannel::<C>::new("eligibility_context").await);
+        let context_channel = assert_ok!(collection::SubscriptionChannel::<C>::new("eligibility_context".into()).await);
 
-        let telemetry_channel = assert_ok!(collection::SubscriptionChannel::<T>::new("data_channel").await);
+        let telemetry_channel = assert_ok!(collection::SubscriptionChannel::<T>::new("data_channel".into()).await);
         let eligibility = assert_ok!(PolicyPhase::carry_policy_outcome("test_eligibility", policy).await);
 
         let tx_eligibility_api = eligibility.tx_api();

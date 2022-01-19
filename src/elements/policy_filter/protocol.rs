@@ -28,7 +28,7 @@ pub enum PolicyFilterCmd<C, D> {
 impl<C, D> PolicyFilterCmd<C, D> {
     pub fn replace_policies(
         new_policies: impl IntoIterator<Item = PolicySource>, new_template_data: Option<D>,
-    ) -> (PolicyFilterCmd<C, D>, oneshot::Receiver<Ack>) {
+    ) -> (Self, oneshot::Receiver<Ack>) {
         let (tx, rx) = oneshot::channel();
         let new_policies = new_policies.into_iter().collect();
         (Self::ReplacePolicies { new_policies, new_template_data, tx }, rx)
@@ -36,12 +36,12 @@ impl<C, D> PolicyFilterCmd<C, D> {
 
     pub fn append_policy(
         additional_policy: PolicySource, new_template_data: Option<D>,
-    ) -> (PolicyFilterCmd<C, D>, oneshot::Receiver<Ack>) {
+    ) -> (Self, oneshot::Receiver<Ack>) {
         let (tx, rx) = oneshot::channel();
         (Self::AppendPolicy { additional_policy, new_template_data, tx }, rx)
     }
 
-    pub fn inspect() -> (PolicyFilterCmd<C, D>, oneshot::Receiver<PolicyFilterDetail<C, D>>) {
+    pub fn inspect() -> (Self, oneshot::Receiver<PolicyFilterDetail<C, D>>) {
         let (tx, rx) = oneshot::channel();
         (Self::Inspect(tx), rx)
     }

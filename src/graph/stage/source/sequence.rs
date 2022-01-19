@@ -152,7 +152,7 @@ mod tests {
 
         let recv_actual = Arc::clone(&actual);
         block_on(async move {
-            src.outlet.attach("test_tx", tx).await;
+            src.outlet.attach("test_tx".into(), tx).await;
             let src_handle = tokio::spawn(async move { src.run().await });
 
             let actual_handle = tokio::spawn(async move {

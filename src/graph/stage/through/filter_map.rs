@@ -32,7 +32,7 @@ use crate::{AppData, ProctorResult, SharedString};
 ///     let mut fold = stage::Fold::new("sum even sq values", 0, |acc, x| acc + x);
 ///     let mut rx_sum_sq = fold.take_final_rx().unwrap();
 ///
-///     filter_map.inlet().attach("test_channel", rx).await;
+///     filter_map.inlet().attach("test_channel".into(), rx).await;
 ///     (filter_map.outlet(), fold.inlet()).connect().await;
 ///
 ///     let filter_handle = tokio::spawn(async move {
@@ -160,7 +160,7 @@ impl<F, In, Out> Debug for FilterMap<F, In, Out>
 where
     F: FnMut(In) -> Option<Out>,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("FilterMap")
             .field("name", &self.name)
             .field("inlet", &self.inlet)
@@ -191,8 +191,8 @@ mod tests {
         let mut actual = Vec::with_capacity(3);
 
         block_on(async {
-            filter_map.inlet.attach("test_channel", rx_in).await;
-            filter_map.outlet.attach("test_channel", tx_out).await;
+            filter_map.inlet.attach("test_channel".into(), rx_in).await;
+            filter_map.outlet.attach("test_channel".into(), tx_out).await;
 
             let filter_handle = tokio::spawn(async move {
                 filter_map.run().await.expect("failed on filter_map run");

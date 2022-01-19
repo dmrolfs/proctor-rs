@@ -120,7 +120,7 @@ impl PolicySource {
         }
     }
 
-    pub fn is_template(&self) -> bool {
+    pub const fn is_template(&self) -> bool {
         match self {
             Self::File { path: _, is_template } => *is_template,
             Self::String { name: _, polar: _, is_template } => *is_template,

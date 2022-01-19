@@ -1,8 +1,16 @@
 [package]
 name = "proctor"
-version = "0.9.2"
+version = "0.10.0"
 authors = ["Damon Rolfs <drolfs@gmail.com>"]
 edition = "2021"
+repository = "https://github.com/dmrolfs/proctor-rs"
+description = """\
+Asynchronous Rust crate to support the continuous assessment and business rule based direction for \
+capabilities. This reactive crate is built directly on Tokio asynhronous library. \
+"""
+license = "MIT"
+keywords = ["decsion", "assessment", "policy"]
+categories = ["Policy", "Development tools"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -28,7 +36,7 @@ async-stream = "0.3.2"
 async-trait = "0.1.52"
 cast_trait_object = "0.1.3"
 chrono = "0.4.19"
-clap = { version = "3.0.7", features = ["yaml"] }
+clap = { version = "3.0.10", features = ["yaml"] }
 config = "0.11.0"
 #config = { git = "https://github.com/dmrolfs/config-rs" }
 csv = "1.1.6"
@@ -37,7 +45,7 @@ enum-display-derive = "0.1.1"
 flexbuffers = "2.0.0"
 futures = "0.3.19"
 futures-util = "0.3.19"
-handlebars = "4.2.0"
+handlebars = "4.2.1"
 maplit = "1.0.2"
 num_cpus = "1.13.1"
 num-traits = "0.2.14"
@@ -54,17 +62,17 @@ reqwest-middleware = "0.1.3"
 reqwest-retry = "0.1.3"
 ron = "0.7.0"
 serde = "1.0.133"
-serde_json = "1.0.74"
+serde_json = "1.0.75"
 statrs = "0.15.0"
 tempfile = "3.3.0"
 thiserror = "1.0.30"
 tokio = { version = "1.15.0", features = ["full"] }
 tracing = "0.1.29"
-tracing-bunyan-formatter = "0.3.1"
+tracing-bunyan-formatter = "0.3.2"
 tracing-flame = "0.2.0"
 tracing-futures = "0.2.5"
 tracing-log = "0.1.2"
-tracing-subscriber = { version = "0.3.5", features = ["env-filter", "json"] }
+tracing-subscriber = { version = "0.3.6", features = ["env-filter", "json"] }
 trim-margin = "0.1.0"
 url = "2.2.2"
 validator = { version = "0.14.0", features = ["derive"] }

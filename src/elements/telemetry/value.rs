@@ -139,9 +139,9 @@ impl fmt::Display for TelemetryValue {
 
 impl TelemetryValue {
     #[tracing::instrument(level = "trace", skip(values))]
-    pub fn combine<I, C>(values: I, combinator: &mut C) -> Result<Option<TelemetryValue>, TelemetryError>
+    pub fn combine<I, C>(values: I, combinator: &mut C) -> Result<Option<Self>, TelemetryError>
     where
-        I: IntoIterator<Item = TelemetryValue> + 'static,
+        I: IntoIterator<Item = Self> + 'static,
         C: TelemetryCombinator + fmt::Debug,
     {
         combinator.combine(values.into_iter().collect())
@@ -159,7 +159,7 @@ impl TelemetryValue {
     }
 
     #[tracing::instrument(level = "trace")]
-    pub fn extend(&mut self, that: &TelemetryValue) {
+    pub fn extend(&mut self, that: &Self) {
         use std::ops::BitOr;
 
         match (self, that) {
@@ -176,7 +176,7 @@ impl TelemetryValue {
         };
     }
 
-    pub fn as_telemetry_type(&self) -> TelemetryType {
+    pub const fn as_telemetry_type(&self) -> TelemetryType {
         match self {
             Self::Unit => TelemetryType::Unit,
             Self::Boolean(_) => TelemetryType::Boolean,
@@ -188,7 +188,7 @@ impl TelemetryValue {
         }
     }
 
-    pub fn try_cast(self, cast: TelemetryType) -> Result<TelemetryValue, TelemetryError> {
+    pub fn try_cast(self, cast: TelemetryType) -> Result<Self, TelemetryError> {
         cast.cast_telemetry(self)
     }
 }
@@ -259,7 +259,7 @@ impl ToPolar for TelemetryValue {
 impl FromPolar for TelemetryValue {
     #[tracing::instrument(level = "trace")]
     fn from_polar(polar: PolarValue) -> oso::Result<Self> {
-        TelemetryValue::try_from(polar).map_err(|_| oso::errors::OsoError::FromPolar)
+        Self::try_from(polar).map_err(|_| oso::errors::OsoError::FromPolar)
     }
 }
 
@@ -268,20 +268,20 @@ impl From<TelemetryValue> for ConfigValue {
         use self::TelemetryValue as TV;
 
         match telemetry {
-            TV::Integer(value) => ConfigValue::new(None, value),
-            TV::Float(value) => ConfigValue::new(None, value),
-            TV::Boolean(value) => ConfigValue::new(None, value),
-            TV::Text(rep) => ConfigValue::new(None, rep),
+            TV::Integer(value) => Self::new(None, value),
+            TV::Float(value) => Self::new(None, value),
+            TV::Boolean(value) => Self::new(None, value),
+            TV::Text(rep) => Self::new(None, rep),
             TV::Seq(values) => {
-                let vs: Vec<ConfigValue> = values.into_iter().map(|v| v.into()).collect();
-                ConfigValue::new(None, vs)
+                let vs: Vec<Self> = values.into_iter().map(|v| v.into()).collect();
+                Self::new(None, vs)
             },
             TV::Table(table) => {
-                let tbl: HashMap<String, ConfigValue> =
+                let tbl: HashMap<String, Self> =
                     table.into_iter().map(|(k, v)| (k, v.into())).collect::<HashMap<_, _>>();
-                ConfigValue::new(None, tbl)
+                Self::new(None, tbl)
             },
-            TV::Unit => ConfigValue::new(None, Option::<String>::None),
+            TV::Unit => Self::new(None, Option::<String>::None),
         }
     }
 }
@@ -301,7 +301,7 @@ impl From<ResultSet> for TelemetryValue {
             }
         }
 
-        TelemetryValue::Table(table)
+        Self::Table(table)
     }
 }
 
@@ -313,7 +313,7 @@ impl<T: Label> From<Id<T>> for TelemetryValue {
     fn from(that: Id<T>) -> Self {
         let pretty = format!("{}", that);
         let snowflake: i64 = that.into();
-        TelemetryValue::Table(
+        Self::Table(
             maplit::hashmap! {
                 // ID_LABEL.to_string() => that.label.into(),
                 ID_SNOWFLAKE.to_string() => snowflake.into(),
@@ -326,13 +326,13 @@ impl<T: Label> From<Id<T>> for TelemetryValue {
 
 impl From<bool> for TelemetryValue {
     fn from(value: bool) -> Self {
-        TelemetryValue::Boolean(value)
+        Self::Boolean(value)
     }
 }
 
 impl From<usize> for TelemetryValue {
     fn from(value: usize) -> Self {
-        TelemetryValue::Integer(value as i64)
+        Self::Integer(value as i64)
     }
 }
 
@@ -376,49 +376,49 @@ impl<'a> From<&'a str> for TelemetryValue {
     }
 }
 
-impl<T: Into<TelemetryValue>> From<Vec<T>> for TelemetryValue {
+impl<T: Into<Self>> From<Vec<T>> for TelemetryValue {
     fn from(values: Vec<T>) -> Self {
         Self::Seq(values.into_iter().map(|v| v.into()).collect())
     }
 }
 
-impl<T: Into<TelemetryValue>> From<VecDeque<T>> for TelemetryValue {
+impl<T: Into<Self>> From<VecDeque<T>> for TelemetryValue {
     fn from(values: VecDeque<T>) -> Self {
         Self::Seq(values.into_iter().map(|v| v.into()).collect())
     }
 }
 
-impl<T: Into<TelemetryValue>> From<LinkedList<T>> for TelemetryValue {
+impl<T: Into<Self>> From<LinkedList<T>> for TelemetryValue {
     fn from(values: LinkedList<T>) -> Self {
         Self::Seq(values.into_iter().map(|v| v.into()).collect())
     }
 }
 
-impl<T: Into<TelemetryValue>> From<HashSet<T>> for TelemetryValue {
+impl<T: Into<Self>> From<HashSet<T>> for TelemetryValue {
     fn from(values: HashSet<T>) -> Self {
         Self::Seq(values.into_iter().map(|v| v.into()).collect())
     }
 }
 
-impl<T: Into<TelemetryValue>> From<BTreeSet<T>> for TelemetryValue {
+impl<T: Into<Self>> From<BTreeSet<T>> for TelemetryValue {
     fn from(values: BTreeSet<T>) -> Self {
         Self::Seq(values.into_iter().map(|v| v.into()).collect())
     }
 }
 
-impl<T: Into<TelemetryValue>> From<BinaryHeap<T>> for TelemetryValue {
+impl<T: Into<Self>> From<BinaryHeap<T>> for TelemetryValue {
     fn from(values: BinaryHeap<T>) -> Self {
         Self::Seq(values.into_iter().map(|v| v.into()).collect())
     }
 }
 
-impl<'a, T: Clone + Into<TelemetryValue>> From<&'a [T]> for TelemetryValue {
+impl<'a, T: Clone + Into<Self>> From<&'a [T]> for TelemetryValue {
     fn from(values: &'a [T]) -> Self {
         Self::Seq(values.iter().cloned().map(|v| v.into()).collect())
     }
 }
 
-impl<T: Into<TelemetryValue>> From<HashMap<String, T>> for TelemetryValue {
+impl<T: Into<Self>> From<HashMap<String, T>> for TelemetryValue {
     fn from(table: HashMap<String, T>) -> Self {
         Self::Table(
             table
@@ -430,7 +430,7 @@ impl<T: Into<TelemetryValue>> From<HashMap<String, T>> for TelemetryValue {
     }
 }
 
-impl<T: Into<TelemetryValue>> From<HashMap<&str, T>> for TelemetryValue {
+impl<T: Into<Self>> From<HashMap<&str, T>> for TelemetryValue {
     fn from(table: HashMap<&str, T>) -> Self {
         Self::Table(
             table
@@ -442,7 +442,7 @@ impl<T: Into<TelemetryValue>> From<HashMap<&str, T>> for TelemetryValue {
     }
 }
 
-impl<T: Into<TelemetryValue>> From<BTreeMap<String, T>> for TelemetryValue {
+impl<T: Into<Self>> From<BTreeMap<String, T>> for TelemetryValue {
     fn from(table: BTreeMap<String, T>) -> Self {
         Self::Table(
             table
@@ -454,7 +454,7 @@ impl<T: Into<TelemetryValue>> From<BTreeMap<String, T>> for TelemetryValue {
     }
 }
 
-impl<T: Into<TelemetryValue>> From<BTreeMap<&str, T>> for TelemetryValue {
+impl<T: Into<Self>> From<BTreeMap<&str, T>> for TelemetryValue {
     fn from(table: BTreeMap<&str, T>) -> Self {
         Self::Table(
             table
@@ -466,11 +466,11 @@ impl<T: Into<TelemetryValue>> From<BTreeMap<&str, T>> for TelemetryValue {
     }
 }
 
-impl<T: Into<TelemetryValue>> From<Option<T>> for TelemetryValue {
+impl<T: Into<Self>> From<Option<T>> for TelemetryValue {
     fn from(value: Option<T>) -> Self {
         match value {
             Some(v) => v.into(),
-            None => TelemetryValue::Unit,
+            None => Self::Unit,
         }
     }
 }
@@ -673,7 +673,7 @@ impl TryFrom<TelemetryValue> for f64 {
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         match telemetry {
             TelemetryValue::Float(f64) => Ok(f64),
-            TelemetryValue::Integer(i64) => Ok(i64 as f64),
+            TelemetryValue::Integer(i64) => Ok(i64 as Self),
             TelemetryValue::Boolean(b) => Ok(if b { 1.0 } else { 0.0 }),
             TelemetryValue::Text(ref rep) => match rep.to_lowercase().as_ref() {
                 "true" | "on" | "yes" => Ok(1.0),
@@ -696,7 +696,7 @@ impl TryFrom<&TelemetryValue> for f64 {
     fn try_from(telemetry: &TelemetryValue) -> Result<Self, Self::Error> {
         match telemetry {
             TelemetryValue::Float(f64) => Ok(*f64),
-            TelemetryValue::Integer(i64) => Ok(*i64 as f64),
+            TelemetryValue::Integer(i64) => Ok(*i64 as Self),
             TelemetryValue::Boolean(b) => Ok(if *b { 1.0 } else { 0.0 }),
             TelemetryValue::Text(ref rep) => match rep.to_lowercase().as_ref() {
                 "true" | "on" | "yes" => Ok(1.0),
@@ -718,8 +718,8 @@ impl TryFrom<TelemetryValue> for f32 {
 
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         match telemetry {
-            TelemetryValue::Float(f64) => Ok(f64 as f32),
-            TelemetryValue::Integer(i64) => Ok(i64 as f32),
+            TelemetryValue::Float(f64) => Ok(f64 as Self),
+            TelemetryValue::Integer(i64) => Ok(i64 as Self),
             TelemetryValue::Boolean(b) => Ok(if b { 1.0 } else { 0.0 }),
             TelemetryValue::Text(ref rep) => match rep.to_lowercase().as_ref() {
                 "true" | "on" | "yes" => Ok(1.0),
@@ -741,8 +741,8 @@ impl TryFrom<&TelemetryValue> for f32 {
 
     fn try_from(telemetry: &TelemetryValue) -> Result<Self, Self::Error> {
         match telemetry {
-            TelemetryValue::Float(f64) => Ok(*f64 as f32),
-            TelemetryValue::Integer(i64) => Ok(*i64 as f32),
+            TelemetryValue::Float(f64) => Ok(*f64 as Self),
+            TelemetryValue::Integer(i64) => Ok(*i64 as Self),
             TelemetryValue::Boolean(b) => Ok(if *b { 1.0 } else { 0.0 }),
             TelemetryValue::Text(ref rep) => match rep.to_lowercase().as_ref() {
                 "true" | "on" | "yes" => Ok(1.0),
@@ -1091,7 +1091,7 @@ impl<'de> Serialize for TelemetryValue {
 impl<'de> de::Deserialize<'de> for TelemetryValue {
     #[inline]
     #[tracing::instrument(level = "trace", skip(deserializer))]
-    fn deserialize<D>(deserializer: D) -> ::std::result::Result<TelemetryValue, D::Error>
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
     where
         D: de::Deserializer<'de>,
     {

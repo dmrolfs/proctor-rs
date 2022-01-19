@@ -11,7 +11,7 @@ pub struct PolicyOutcome<T, C> {
 }
 
 impl<T, C> PolicyOutcome<T, C> {
-    pub fn new(item: T, context: C, results: QueryResult) -> Self {
+    pub const fn new(item: T, context: C, results: QueryResult) -> Self {
         Self { item, context, policy_results: results }
     }
 

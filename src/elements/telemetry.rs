@@ -64,7 +64,7 @@ impl Telemetry {
         let data = serializer.take_buffer();
         let reader = flexbuffers::Reader::get_root(&*data)?;
         let root = TelemetryValue::deserialize(reader)?;
-        Ok(Telemetry(root))
+        Ok(Self(root))
     }
 
     #[inline]
@@ -74,7 +74,7 @@ impl Telemetry {
 
     #[tracing::instrument(level = "trace", skip(oso))]
     pub fn initialize_policy_engine(oso: &mut oso::Oso) -> Result<(), PolicyError> {
-        oso.register_class(Telemetry::get_polar_class())?;
+        oso.register_class(Self::get_polar_class())?;
 
         oso.register_class(
             oso::ClassBuilder::<TelemetryValue>::with_default()
@@ -147,7 +147,7 @@ impl std::ops::Add for Telemetry {
 
 impl FromIterator<(String, TelemetryValue)> for Telemetry {
     fn from_iter<T: IntoIterator<Item = (String, TelemetryValue)>>(iter: T) -> Self {
-        Telemetry(TelemetryValue::Table(
+        Self(TelemetryValue::Table(
             iter.into_iter().collect::<HashMap<_, _>>().into(),
         ))
     }
@@ -155,7 +155,7 @@ impl FromIterator<(String, TelemetryValue)> for Telemetry {
 
 impl<'a> FromIterator<(&'a str, TelemetryValue)> for Telemetry {
     fn from_iter<T: IntoIterator<Item = (&'a str, TelemetryValue)>>(iter: T) -> Self {
-        Telemetry(TelemetryValue::Table(
+        Self(TelemetryValue::Table(
             iter.into_iter()
                 .map(|(k, v)| (k.to_string(), v))
                 .collect::<HashMap<_, _>>()

@@ -79,20 +79,20 @@ impl Constraint {
     /// By default, Tick has no constraint and will produce ticks ongoing until it is stopped by
     /// either dropping the Tick source or sending it the [TickMsg::Stop] message.
     #[inline]
-    pub fn none() -> Constraint {
-        Constraint::None
+    pub const fn none() -> Self {
+        Self::None
     }
 
     /// Tick can be set to stop after a predefined count of ticks.
     #[inline]
-    pub fn by_count(limit: usize) -> Constraint {
-        Constraint::ByCount { count: 0, limit }
+    pub const fn by_count(limit: usize) -> Self {
+        Self::ByCount { count: 0, limit }
     }
 
     /// Tick can be set to stop after a predefined duration.
     #[inline]
-    pub fn by_time(limit: Duration) -> Constraint {
-        Constraint::ByTime { stop: None, limit }
+    pub const fn by_time(limit: Duration) -> Self {
+        Self::ByTime { stop: None, limit }
     }
 }
 
@@ -120,7 +120,7 @@ impl Constraint {
 ///         17,
 ///         tick::Constraint::by_count(limit),
 ///     );
-///     tick.outlet().attach("test_channel", tx).await;
+///     tick.outlet().attach("test_channel".into(), tx).await;
 ///
 ///     tokio::spawn(async move {
 ///         tick.run().await;
@@ -306,7 +306,7 @@ mod tests {
         let tx_api = tick.tx_api();
 
         block_on(async {
-            tick.outlet().attach("test_tx", tx).await;
+            tick.outlet().attach("test_tx".into(), tx).await;
 
             tokio::spawn(async move {
                 tick.run().await.expect("failed to run tick source");

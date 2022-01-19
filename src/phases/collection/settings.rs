@@ -39,7 +39,7 @@ pub struct HttpQuery {
 }
 
 impl HttpQuery {
-    pub fn default_max_retries() -> u32 {
+    pub const fn default_max_retries() -> u32 {
         3
     }
 

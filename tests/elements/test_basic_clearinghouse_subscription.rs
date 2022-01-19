@@ -7,6 +7,7 @@ use proctor::elements::Telemetry;
 use proctor::error::TelemetryError;
 use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use proctor::phases::collection::{self, Collect, SourceSetting};
+use proctor::SharedString;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -73,7 +74,7 @@ async fn test_basic_1_clearinghouse_subscription() -> anyhow::Result<()> {
     let t = Telemetry::try_from(&d);
     tracing::info!(?d, ?t, "telemetry try_from data result.");
 
-    let test_focus = maplit::hashset! { POS_FIELD.to_string() };
+    let test_focus = maplit::hashset! { POS_FIELD.into() };
     let (actual_count, actual_sum) = test_scenario(test_focus).await?;
     tracing::info!(%actual_count, %actual_sum, "Results are in!");
     assert_eq!(actual_count, 3);
@@ -90,7 +91,7 @@ async fn test_basic_2_clearinghouse_subscription() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_basic_2_clearinghouse_subscription");
     let _main_span_guard = main_span.enter();
 
-    let test_focus = maplit::hashset! { POS_FIELD.to_string(), CAT_FIELD.to_string() };
+    let test_focus = maplit::hashset! { POS_FIELD.into(), CAT_FIELD.into() };
     let (actual_count, actual_sum) = test_scenario(test_focus).await?;
     assert_eq!(actual_count, 4);
     assert_eq!(actual_sum, 9);
@@ -99,7 +100,7 @@ async fn test_basic_2_clearinghouse_subscription() -> anyhow::Result<()> {
 
 /// returns pos field (count, sum)
 #[tracing::instrument(level = "info")]
-async fn test_scenario(focus: HashSet<String>) -> anyhow::Result<(i64, i64)> {
+async fn test_scenario(focus: HashSet<SharedString>) -> anyhow::Result<(i64, i64)> {
     let base_path = std::env::current_dir()?;
     let cvs_path = base_path.join(PathBuf::from("./tests/data/cats.csv"));
     let cvs_setting = SourceSetting::Csv { path: cvs_path };
@@ -107,7 +108,7 @@ async fn test_scenario(focus: HashSet<String>) -> anyhow::Result<(i64, i64)> {
     let cvs_stage = cvs_source.stage.take().unwrap();
 
     let collect = Collect::single_node_builder("collect", vec![cvs_stage])
-        .build_for_out_requirements(focus, HashSet::<String>::default())
+        .build_for_out_requirements(focus, HashSet::default())
         .await?;
 
     let mut pos_stats = stage::Fold::<_, Data, (i64, i64)>::new("pos_stats", (0, 0), move |(count, sum), data| {

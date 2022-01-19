@@ -92,7 +92,8 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
         max_retries: 3,
     });
 
-    let mut source = assert_ok!(make_telemetry_rest_api_source::<HttpBinResponse, _>("httpbin", &setting).await);
+    let mut source =
+        assert_ok!(make_telemetry_rest_api_source::<HttpBinResponse>("httpbin".to_string(), &setting).await);
 
     let mut sink = stage::Fold::<_, Telemetry, (Data, usize)>::new(
         "sink",

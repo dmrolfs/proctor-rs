@@ -26,7 +26,7 @@ use crate::{AppData, ProctorResult, SharedString};
 ///     let mut fold = stage::Fold::new("sum even values", 0, |acc, x| acc + x);
 ///     let mut rx_sum_sq = fold.take_final_rx().unwrap();
 ///
-///     filter.inlet().attach("test_channel", rx).await;
+///     filter.inlet().attach("test_channel".into(), rx).await;
 ///     (filter.outlet(), fold.inlet()).connect().await;
 ///
 ///     let filter_handle = tokio::spawn(async move {
@@ -150,7 +150,7 @@ impl<P, T> Debug for Filter<P, T>
 where
     P: FnMut(&T) -> bool,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Filter")
             .field("name", &self.name)
             .field("inlet", &self.inlet)
@@ -181,8 +181,8 @@ mod tests {
         let mut actual = Vec::with_capacity(3);
 
         block_on(async {
-            filter.inlet.attach("test_channel", rx_in).await;
-            filter.outlet.attach("test_channel", tx_out).await;
+            filter.inlet.attach("test_channel".into(), rx_in).await;
+            filter.outlet.attach("test_channel".into(), tx_out).await;
 
             let filter_handle = tokio::spawn(async move {
                 filter.run().await.expect("failed on filter run");

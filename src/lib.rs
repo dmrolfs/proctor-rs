@@ -1,12 +1,17 @@
 #![warn(clippy::all)]
+#![forbid(unsafe_code)]
+#![warn(
+clippy::cargo,
+// missing_docs,
+clippy::nursery,
+// clippy::pedantic,
+future_incompatible,
+rust_2018_idioms
+)]
 
 #[cfg(test)]
 #[macro_use]
 extern crate static_assertions;
-
-extern crate either;
-extern crate enum_display_derive;
-extern crate proctor_derive;
 
 pub mod app_data;
 pub mod elements;

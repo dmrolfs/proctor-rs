@@ -111,7 +111,7 @@ struct DateTimeVisitor;
 impl<'de> de::Visitor<'de> for DateTimeVisitor {
     type Value = DateTime<Utc>;
 
-    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "a datetime table")
     }
 
@@ -161,7 +161,7 @@ struct OptionalDateTimeMapVisitor;
 impl<'de> de::Visitor<'de> for OptionalDateTimeMapVisitor {
     type Value = Option<DateTime<Utc>>;
 
-    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "null or a datetime serialized value")
     }
 

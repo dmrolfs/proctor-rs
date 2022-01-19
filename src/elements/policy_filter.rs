@@ -54,7 +54,7 @@ pub enum PolicyResult {
 }
 
 impl fmt::Display for PolicyResult {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let label = match *self {
             Self::Passed => "passed",
             Self::Blocked => "blocked",
@@ -355,7 +355,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "policy_filter handle context", skip(tx), fields())]
+    #[tracing::instrument(level = "info", name = "policy_filter handle context", skip(context, tx), fields())]
     async fn handle_context(
         context: Arc<Mutex<Option<C>>>, recv_context: C, tx: &broadcast::Sender<Arc<PolicyFilterEvent<T, C>>>,
     ) -> Result<(), PolicyError> {
@@ -601,7 +601,7 @@ mod tests {
         block_on(async move {
             let (tx, mut rx) = mpsc::channel(4);
             let mut outlet = Outlet::new("test", PORT_DATA);
-            outlet.attach("test_tx", tx).await;
+            outlet.attach("test_tx".into(), tx).await;
 
             let (tx_monitor, _rx_monitor) = broadcast::channel(4);
 
