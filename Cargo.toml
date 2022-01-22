@@ -1,6 +1,6 @@
 [package]
 name = "proctor"
-version = "0.10.0"
+version = "0.10.1"
 authors = ["Damon Rolfs <drolfs@gmail.com>"]
 edition = "2021"
 repository = "https://github.com/dmrolfs/proctor-rs"
@@ -43,6 +43,7 @@ csv = "1.1.6"
 either = { version = "1.6.1", features = ["serde"] }
 enum-display-derive = "0.1.1"
 flexbuffers = "2.0.0"
+frunk = "0.4.0"
 futures = "0.3.19"
 futures-util = "0.3.19"
 handlebars = "4.2.1"

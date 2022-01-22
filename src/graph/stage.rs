@@ -2,6 +2,10 @@ mod sink;
 mod source;
 mod through;
 
+pub use self::sink::*;
+pub use self::source::*;
+pub use self::through::*;
+
 use std::fmt;
 
 use async_trait::async_trait;
@@ -9,9 +13,6 @@ use cast_trait_object::dyn_upcast;
 use once_cell::sync::Lazy;
 use prometheus::{HistogramOpts, HistogramTimer, HistogramVec};
 
-pub use self::sink::*;
-pub use self::source::*;
-pub use self::through::*;
 use super::{SinkShape, SourceShape, ThroughShape};
 use crate::{ProctorResult, SharedString};
 
