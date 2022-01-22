@@ -30,7 +30,7 @@ name = "async-stream"
 path = "examples/async_stream.rs"
 
 [dependencies]
-anyhow = "1.0.52"
+anyhow = "1.0.53"
 approx = "0.5.0"
 async-stream = "0.3.2"
 async-trait = "0.1.52"
@@ -62,7 +62,7 @@ reqwest = { version = "0.11.9", features = ["blocking", "json"] }
 reqwest-middleware = "0.1.3"
 reqwest-retry = "0.1.3"
 ron = "0.7.0"
-serde = "1.0.133"
+serde = "1.0.134"
 serde_json = "1.0.75"
 statrs = "0.15.0"
 tempfile = "3.3.0"
@@ -86,7 +86,7 @@ itertools = "0.10.3"
 pprof = { version = "0.6.2", features = ["flamegraph"] }
 pretty_assertions = "1.0.0"
 rand = "0.8.4"
-serde_test = "1.0.133"
+serde_test = "1.0.134"
 serde-transcode = "1.1.1"
 serde_with = { version = "1.11.0", features = ["chrono", "json", "macros"] }
 static_assertions = "1.1.0"
