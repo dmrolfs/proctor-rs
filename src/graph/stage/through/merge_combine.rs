@@ -52,6 +52,7 @@ type ActivePull<'a, T> = BoxFuture<'a, SourceItem<T>>;
 impl<T> Stage for MergeCombine<T>
 where
     T: AppData + Monoid,
+// T: AppData + Default + Add<Output = T>,// std::ops::Add not implemented for Option<T: Add>!?
 {
     fn name(&self) -> SharedString {
         self.name.clone()
@@ -95,6 +96,7 @@ where
 impl<'a, T> MergeCombine<T>
 where
     T: AppData + Monoid,
+    // T: AppData + Default + Add<Output = T>,// std::ops::Add not implemented for Option<T: Add>!?
 {
     #[tracing::instrument(level = "trace", skip(self))]
     async fn start_batch(&self) -> Vec<ActivePull<'a, T>> {
@@ -126,6 +128,7 @@ where
         while !active.is_empty() {
             let ((item_source, batch_item), pos, remaining) = future::select_all(active).await;
             acc = acc.combine(&batch_item);
+            // acc = acc + batch_item; // std::ops::Add not implemented for Option<T: Add>!?
 
             tracing::info!(
                 ?acc, ?batch_item,

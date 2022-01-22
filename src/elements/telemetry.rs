@@ -145,6 +145,18 @@ impl std::ops::Add for Telemetry {
     }
 }
 
+impl frunk::Semigroup for Telemetry {
+    fn combine(&self, other: &Self) -> Self {
+        self.clone() + other.clone()
+    }
+}
+
+impl frunk::Monoid for Telemetry {
+    fn empty() -> Self {
+        Self::default()
+    }
+}
+
 impl FromIterator<(String, TelemetryValue)> for Telemetry {
     fn from_iter<T: IntoIterator<Item = (String, TelemetryValue)>>(iter: T) -> Self {
         Self(TelemetryValue::Table(
