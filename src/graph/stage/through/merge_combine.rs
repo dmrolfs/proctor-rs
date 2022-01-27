@@ -134,7 +134,7 @@ where
                 ?acc, ?batch_item,
                 %item_source,
                 remaining_pos=%pos,
-                nr_remaining=%format!("{}/{nr_pulls}", remaining.len()),
+                nr_remaining=%format!("{} of {nr_pulls}", remaining.len()),
                 "combine pulled item into batch."
             );
 
