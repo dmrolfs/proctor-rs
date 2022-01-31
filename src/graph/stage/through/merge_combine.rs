@@ -52,7 +52,7 @@ type ActivePull<'a, T> = BoxFuture<'a, SourceItem<T>>;
 impl<T> Stage for MergeCombine<T>
 where
     T: AppData + Monoid,
-// T: AppData + Default + Add<Output = T>,// std::ops::Add not implemented for Option<T: Add>!?
+    // T: AppData + Default + Add<Output = T>,// std::ops::Add not implemented for Option<T: Add>!?
 {
     fn name(&self) -> SharedString {
         self.name.clone()

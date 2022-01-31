@@ -1,9 +1,11 @@
+use std::ffi::OsStr;
 use std::fmt::Debug;
 use std::io::Write;
 use std::path::PathBuf;
 
 use either::Either;
 use either::Either::{Left, Right};
+use once_cell::sync::Lazy;
 use oso::{ToPolar, ToPolarList};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -133,20 +135,31 @@ where
     Ok(policy)
 }
 
+static APP_TEMPDIR: Lazy<tempfile::TempDir> = Lazy::new(|| {
+    let current_exe = std::env::current_exe().unwrap_or_else(|_| "proctor".into());
+    let app_name = current_exe.file_stem().unwrap_or_else(|| OsStr::new("proctor"));
+    tempfile::Builder::new().prefix(app_name).tempdir().unwrap_or_else(|err| {
+        panic!(
+            "failed to create {app_name:?} temp dir under {:?}: {:?}",
+            std::env::temp_dir(),
+            err
+        )
+    })
+});
+
 #[tracing::instrument(level = "info", skip())]
 fn policy_source_path_for(name: &str, policy: Either<PathBuf, &str>) -> Result<PolicySourcePath, PolicyError> {
     match policy {
         Either::Left(path) => Ok(PolicySourcePath::File(path)),
         Either::Right(rep) => {
-            let tempdir = std::env::current_dir()?;
-
+            // let tpath = TEMPDIR.path()
             let mut tmp = tempfile::Builder::new()
                 .prefix(format!("policy_{}_", name).as_str())
                 .rand_bytes(4)
                 .suffix(".polar")
-                .tempfile_in(tempdir)?;
+                .tempfile_in(APP_TEMPDIR.path())?;
 
-            tracing::info!("rendered {} policy file for loading: {:?}", name, tmp);
+            tracing::info!("rendered {} policy file for loading at {:?}", name, tmp);
 
             write!(tmp.as_file_mut(), "{}", rep)?;
 
