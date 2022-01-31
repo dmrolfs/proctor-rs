@@ -1,4 +1,3 @@
-use std::ffi::OsStr;
 use std::fmt::Debug;
 use std::io::Write;
 use std::path::PathBuf;
@@ -137,8 +136,15 @@ where
 
 static APP_TEMPDIR: Lazy<tempfile::TempDir> = Lazy::new(|| {
     let current_exe = std::env::current_exe().unwrap_or_else(|_| "proctor".into());
-    let app_name = current_exe.file_stem().unwrap_or_else(|| OsStr::new("proctor"));
-    tempfile::Builder::new().prefix(app_name).tempdir().unwrap_or_else(|err| {
+    let app_name: std::ffi::OsString = current_exe.file_stem()
+        .map(|name| {
+            let mut n: std::ffi::OsString = name.into();
+            n.push("_");
+            n
+        })
+        .unwrap_or_else(|| "proctor_".into());
+
+    tempfile::Builder::new().prefix(app_name.as_os_str()).tempdir().unwrap_or_else(|err| {
         panic!(
             "failed to create {app_name:?} temp dir under {:?}: {:?}",
             std::env::temp_dir(),
@@ -152,7 +158,6 @@ fn policy_source_path_for(name: &str, policy: Either<PathBuf, &str>) -> Result<P
     match policy {
         Either::Left(path) => Ok(PolicySourcePath::File(path)),
         Either::Right(rep) => {
-            // let tpath = TEMPDIR.path()
             let mut tmp = tempfile::Builder::new()
                 .prefix(format!("policy_{}_", name).as_str())
                 .rand_bytes(4)
