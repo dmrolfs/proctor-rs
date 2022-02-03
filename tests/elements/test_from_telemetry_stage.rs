@@ -8,7 +8,7 @@ use once_cell::sync::Lazy;
 use pretty_assertions::assert_eq;
 use proctor::elements;
 use proctor::graph::{stage, Connect, Graph, SinkShape};
-use proctor::phases::collection::{make_telemetry_cvs_source, SourceSetting};
+use proctor::phases::sense::{make_telemetry_cvs_sensor, SensorSetting};
 use serde::{Deserialize, Serialize};
 use serde_test::{assert_tokens, Token};
 
@@ -131,9 +131,9 @@ async fn test_make_from_telemetry_stage() -> Result<()> {
 
     let base_path = assert_ok!(std::env::current_dir());
     let path = base_path.join(PathBuf::from("./tests/data/eligibility.csv"));
-    let setting = SourceSetting::Csv { path };
+    let setting = SensorSetting::Csv { path };
 
-    let mut source = assert_ok!(make_telemetry_cvs_source::<Data, _>("local", &setting));
+    let mut source = assert_ok!(make_telemetry_cvs_sensor::<Data, _>("local", &setting));
     let convert = elements::make_from_telemetry("convert".into(), true).await;
 
     let mut sink = stage::Fold::<_, Data, Vec<Data>>::new("sink", Vec::default(), |mut acc, item| {

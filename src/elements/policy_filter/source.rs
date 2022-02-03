@@ -78,7 +78,7 @@ impl PolicySource {
         let multi_line = 1 < lines.len();
         let polar_rep = if multi_line {
             polar.trim_margin_with("|").ok_or_else(|| {
-                PolicyError::StringPolicyError(
+                PolicyError::StringPolicy(
                     "Multi-line policy strings must begin each line with the '|' margin character.".to_string(),
                 )
             })

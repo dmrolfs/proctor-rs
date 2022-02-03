@@ -7,7 +7,7 @@ use anyhow::Result;
 use proctor::elements::{self, Telemetry};
 use proctor::error::TelemetryError;
 use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
-use proctor::phases::collection::{self, Collect, SourceSetting};
+use proctor::phases::sense::{self, Sense, SensorSetting};
 use proctor::tracing::{get_subscriber, init_subscriber};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -65,12 +65,12 @@ async fn main() -> Result<()> {
 
     let base_path = std::env::current_dir()?;
     let cvs_path = base_path.join(PathBuf::from("tests/data/cats.csv"));
-    let cvs_setting = SourceSetting::Csv { path: cvs_path };
-    let mut cvs_source = collection::make_telemetry_cvs_source::<Data, _>("cvs", &cvs_setting)?;
+    let cvs_setting = SensorSetting::Csv { path: cvs_path };
+    let mut cvs_source = sense::make_telemetry_cvs_sensor::<Data, _>("cvs", &cvs_setting)?;
     let cvs_stage = cvs_source.stage.take().unwrap();
 
     let pos_stats_fields = maplit::hashset! { POS_FIELD.to_string() };
-    let collect = Collect::single_node_builder("collect", vec![cvs_stage])
+    let collect = Sense::single_node_builder("collect", vec![cvs_stage])
         .build_for_telemetry_out(pos_stats_fields.clone(), HashSet::<String>::default())
         .await?;
 

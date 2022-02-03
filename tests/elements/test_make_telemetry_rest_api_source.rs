@@ -8,11 +8,11 @@ use chrono::{DateTime, TimeZone, Utc};
 use claim::*;
 use pretty_assertions::assert_eq;
 use proctor::elements::Telemetry;
-use proctor::error::CollectionError;
+use proctor::error::SenseError;
 use proctor::graph::stage;
 use proctor::graph::stage::tick::TickMsg;
 use proctor::graph::{Connect, Graph, SinkShape};
-use proctor::phases::collection::{make_telemetry_rest_api_source, HttpQuery, SourceSetting};
+use proctor::phases::sense::{make_telemetry_rest_api_sensor, HttpQuery, SensorSetting};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use wiremock::matchers::{method, path};
@@ -75,7 +75,7 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
         .mount(&mock_server)
         .await;
 
-    let setting = SourceSetting::RestApi(HttpQuery {
+    let setting = SensorSetting::RestApi(HttpQuery {
         interval: Duration::from_millis(25),
         method: reqwest::Method::GET,
         url: reqwest::Url::parse(
@@ -93,7 +93,7 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
     });
 
     let mut source =
-        assert_ok!(make_telemetry_rest_api_source::<HttpBinResponse>("httpbin".to_string(), &setting).await);
+        assert_ok!(make_telemetry_rest_api_sensor::<HttpBinResponse>("httpbin".to_string(), &setting).await);
 
     let mut sink = stage::Fold::<_, Telemetry, (Data, usize)>::new(
         "sink",
@@ -165,15 +165,13 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
 
         tracing::info!("tick-stop: stopping tick source...");
         let (stop, rx_stop_ack) = TickMsg::stop();
-        tx_source_api
-            .send(stop)
-            .map_err(|err| CollectionError::StageError(err.into()))?;
+        tx_source_api.send(stop).map_err(|err| SenseError::Stage(err.into()))?;
         rx_stop_ack
             .await
-            .map_err(|err| CollectionError::StageError(err.into()))?
-            .map_err(|err| CollectionError::StageError(err.into()))?;
+            .map_err(|err| SenseError::Stage(err.into()))?
+            .map_err(|err| SenseError::Stage(err.into()))?;
 
-        Result::<(), CollectionError>::Ok(())
+        Result::<(), SenseError>::Ok(())
     });
 
     assert_ok!(g.run().await);

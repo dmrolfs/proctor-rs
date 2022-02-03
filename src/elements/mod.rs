@@ -4,7 +4,7 @@ pub use from_telemetry::*;
 use oso::PolarClass;
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::phases::collection::{
+use crate::phases::sense::{
     ClearinghouseApi, ClearinghouseCmd, SubscriptionChannel, SubscriptionRequirements, TelemetrySubscription,
 };
 use crate::AppData;

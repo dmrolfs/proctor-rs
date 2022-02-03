@@ -7,7 +7,7 @@ use claim::*;
 use pretty_assertions::assert_eq;
 use proctor::elements::Telemetry;
 use proctor::graph::{stage, Connect, Graph, SinkShape};
-use proctor::phases::collection::{make_telemetry_cvs_source, SourceSetting};
+use proctor::phases::sense::{make_telemetry_cvs_sensor, SensorSetting};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Data {
@@ -83,9 +83,9 @@ async fn test_make_telemetry_cvs_source() -> Result<()> {
 
     let base_path = std::env::current_dir()?;
     let path = base_path.join(PathBuf::from("./tests/data/eligibility.csv"));
-    let setting = SourceSetting::Csv { path };
+    let setting = SensorSetting::Csv { path };
 
-    let mut source = assert_ok!(make_telemetry_cvs_source::<Data, _>("local", &setting));
+    let mut source = assert_ok!(make_telemetry_cvs_sensor::<Data, _>("local", &setting));
 
     let mut sink = stage::Fold::<_, Telemetry, (Data, bool)>::new(
         "sink",

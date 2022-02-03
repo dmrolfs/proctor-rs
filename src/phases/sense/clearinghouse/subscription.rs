@@ -6,7 +6,7 @@ use serde::Serialize;
 
 use crate::elements::telemetry::UpdateMetricsFn;
 use crate::elements::Telemetry;
-use crate::error::CollectionError;
+use crate::error::SenseError;
 use crate::graph::{Connect, Inlet, Outlet, Port, PORT_DATA};
 use crate::SharedString;
 
@@ -193,7 +193,7 @@ impl TelemetrySubscription {
         }
     }
 
-    pub fn trim_to_subscription(&self, database: &Telemetry) -> Result<(Telemetry, HashSet<String>), CollectionError> {
+    pub fn trim_to_subscription(&self, database: &Telemetry) -> Result<(Telemetry, HashSet<String>), SenseError> {
         let mut db = database.clone();
 
         match self {
@@ -282,7 +282,7 @@ impl TelemetrySubscription {
         (&outlet, receiver).connect().await;
     }
 
-    pub async fn send(&self, telemetry: Telemetry) -> Result<(), CollectionError> {
+    pub async fn send(&self, telemetry: Telemetry) -> Result<(), SenseError> {
         self.outlet_to_subscription().send(telemetry).await?;
         Ok(())
     }

@@ -5,10 +5,10 @@ use cast_trait_object::dyn_upcast;
 use serde::de::DeserializeOwned;
 
 use crate::elements::{self, FromTelemetryShape, Telemetry};
-use crate::error::CollectionError;
+use crate::error::SenseError;
 use crate::graph::stage::Stage;
 use crate::graph::{Inlet, Outlet, Port, SourceShape, PORT_DATA};
-use crate::phases::collection::{ClearinghouseSubscriptionMagnet, TelemetrySubscription};
+use crate::phases::sense::{ClearinghouseSubscriptionMagnet, TelemetrySubscription};
 use crate::{AppData, ProctorResult, SharedString};
 
 // todo: consider refactor all of these builder functions into a typed subscription channel builder.
@@ -32,7 +32,7 @@ impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
     #[tracing::instrument(level = "info")]
     pub async fn connect_subscription(
         subscription: TelemetrySubscription, mut magnet: ClearinghouseSubscriptionMagnet<'_>,
-    ) -> Result<Self, CollectionError> {
+    ) -> Result<Self, SenseError> {
         let channel = Self::new(format!("{}_channel", subscription.name()).into()).await?;
         magnet
             .subscribe(subscription, channel.subscription_receiver.clone())
@@ -45,7 +45,7 @@ impl SubscriptionChannel<Telemetry> {
     #[tracing::instrument(level = "info")]
     pub async fn connect_telemetry_subscription(
         subscription: TelemetrySubscription, mut magnet: ClearinghouseSubscriptionMagnet<'_>,
-    ) -> Result<Self, CollectionError> {
+    ) -> Result<Self, SenseError> {
         let channel = Self::telemetry(format!("{}_telemetry_channel", subscription.name()).into()).await?;
         magnet
             .subscribe(subscription, channel.subscription_receiver.clone())
@@ -56,7 +56,7 @@ impl SubscriptionChannel<Telemetry> {
 
 impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
     #[tracing::instrument(level = "info", name = "subscription_channel_new", skip(name))]
-    pub async fn new(name: SharedString) -> Result<Self, CollectionError> {
+    pub async fn new(name: SharedString) -> Result<Self, SenseError> {
         let inner_stage = elements::make_from_telemetry(name.clone(), true).await;
         let subscription_receiver = inner_stage.inlet();
         let outlet = inner_stage.outlet();
@@ -73,7 +73,7 @@ impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
 impl SubscriptionChannel<Telemetry> {
     /// Create a subscription channel for direct telemetry data; i.e., no schema conversion.
     #[tracing::instrument(level = "info", name = "subscription_channel_telemetry", skip(name))]
-    pub async fn telemetry(name: SharedString) -> Result<Self, CollectionError> {
+    pub async fn telemetry(name: SharedString) -> Result<Self, SenseError> {
         let identity = crate::graph::stage::Identity::new(
             name.to_string(),
             Inlet::new(name.clone(), PORT_DATA),
@@ -138,37 +138,31 @@ impl<T: AppData> Stage for SubscriptionChannel<T> {
 }
 
 impl<T: AppData> SubscriptionChannel<T> {
-    async fn do_check(&self) -> Result<(), CollectionError> {
+    async fn do_check(&self) -> Result<(), SenseError> {
         self.subscription_receiver.check_attachment().await?;
         self.outlet.check_attachment().await?;
         if let Some(ref inner) = self.inner_stage {
-            inner
-                .check()
-                .await
-                .map_err(|err| CollectionError::StageError(err.into()))?;
+            inner.check().await.map_err(|err| SenseError::Stage(err.into()))?;
         }
         Ok(())
     }
 
-    async fn do_run(&mut self) -> Result<(), CollectionError> {
+    async fn do_run(&mut self) -> Result<(), SenseError> {
         match self.inner_stage.as_mut() {
             Some(inner) => {
-                inner.run().await.map_err(|err| CollectionError::StageError(err.into()))?;
+                inner.run().await.map_err(|err| SenseError::Stage(err.into()))?;
                 Ok(())
             },
 
-            None => Err(CollectionError::ClosedSubscription(self.name.to_string())),
+            None => Err(SenseError::ClosedSubscription(self.name.to_string())),
         }
     }
 
-    async fn do_close(mut self: Box<Self>) -> Result<(), CollectionError> {
+    async fn do_close(mut self: Box<Self>) -> Result<(), SenseError> {
         tracing::info!("closing subscription_channel.");
         self.subscription_receiver.close().await;
         if let Some(inner) = self.inner_stage.take() {
-            inner
-                .close()
-                .await
-                .map_err(|err| CollectionError::StageError(err.into()))?;
+            inner.close().await.map_err(|err| SenseError::Stage(err.into()))?;
         }
         self.outlet.close().await;
         Ok(())

@@ -24,7 +24,7 @@ use serde::Serialize;
 use tokio::sync::Mutex;
 use tokio::sync::{broadcast, mpsc};
 
-use crate::error::{GraphError, PolicyError};
+use crate::error::{PolicyError, PortError};
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Inlet, Outlet, Port, PORT_CONTEXT, PORT_DATA};
 use crate::graph::{SinkShape, SourceShape};
@@ -184,14 +184,14 @@ where
     D: AppData + Serialize,
 {
     #[inline]
-    async fn do_check(&self) -> Result<(), GraphError> {
+    async fn do_check(&self) -> Result<(), PortError> {
         self.inlet.check_attachment().await?;
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
     #[inline]
-    async fn do_run(&mut self) -> Result<(), GraphError> {
+    async fn do_run(&mut self) -> Result<(), PolicyError> {
         let name = SharedString::Owned(self.name().to_string());
         let mut oso = self.oso()?;
         let outlet = &self.outlet;
@@ -249,7 +249,7 @@ where
     }
 
     #[inline]
-    async fn do_close(mut self: Box<Self>) -> Result<(), GraphError> {
+    async fn do_close(mut self: Box<Self>) -> Result<(), PortError> {
         tracing::info!("closing policy_filter ports");
         self.inlet.close().await;
         self.outlet.close().await;
@@ -288,9 +288,7 @@ where
         let span = tracing::trace_span!("publish_event", ?event);
         let _ = span.enter();
 
-        let nr_notified = tx
-            .send(Arc::new(event))
-            .map_err(|err| PolicyError::PublishError(err.into()))?;
+        let nr_notified = tx.send(Arc::new(event)).map_err(|err| PolicyError::Publish(err.into()))?;
 
         tracing::trace!(%nr_notified, "notifying subscribers of policy filter event.");
         Ok(())
@@ -484,7 +482,7 @@ mod tests {
 
     use super::*;
     use crate::elements::telemetry;
-    use crate::phases::collection::{SubscriptionRequirements, TelemetrySubscription};
+    use crate::phases::sense::{SubscriptionRequirements, TelemetrySubscription};
 
     #[derive(Debug, PartialEq, Clone, PolarClass)]
     struct User {

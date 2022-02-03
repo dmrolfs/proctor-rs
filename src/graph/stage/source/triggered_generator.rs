@@ -1,6 +1,6 @@
-// todo: collect once every minute for scaling metrics
+// todo: sense once every minute for scaling metrics
 
-/// Tailorable collection source: plugin mechanism to pull metrics from various sources.
+/// Tailorable sense source: plugin mechanism to pull metrics from various sources.
 ///
 /// # Examples
 ///
@@ -82,19 +82,19 @@
 ///         }
 ///     };
 ///
-///     let mut httpbin_collection = stage::TriggeredGenerator::new("httpbin_collection", gen);
+///     let mut httpbin_sensor = stage::TriggeredGenerator::new("httpbin_sensor", gen);
 ///
 ///     let mut fold = stage::Fold::new("gather latest", None, |acc: Option<Telemetry>, data: Telemetry| {
 ///         acc.map_or(Some(data.clone()), move |a| Some(a + data.clone()))
 ///     });
 ///     let rx_gather = fold.take_final_rx().unwrap();
 ///
-///     (tick.outlet(), httpbin_collection.inlet()).connect().await;
-///     (httpbin_collection.outlet(), fold.inlet()).connect().await;
+///     (tick.outlet(), httpbin_sensor.inlet()).connect().await;
+///     (httpbin_sensor.outlet(), fold.inlet()).connect().await;
 ///
 ///     let mut g = Graph::default();
 ///     g.push_back(Box::new(tick)).await;
-///     g.push_back(Box::new(httpbin_collection)).await;
+///     g.push_back(Box::new(httpbin_sensor)).await;
 ///     g.push_back(Box::new(fold)).await;
 ///     g.run().await?;
 ///

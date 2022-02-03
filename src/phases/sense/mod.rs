@@ -5,20 +5,20 @@ pub use builder::*;
 use cast_trait_object::dyn_upcast;
 pub use clearinghouse::*;
 use pretty_snowflake::{AlphabetCodec, IdPrettifier, MachineNode};
+pub use sensor::*;
 pub use settings::*;
-pub use source::*;
 pub use subscription_channel::*;
 
 use crate::elements::Telemetry;
-use crate::error::CollectionError;
+use crate::error::SenseError;
 use crate::graph::stage::{SourceStage, Stage, WithApi};
 use crate::graph::{Outlet, Port, SourceShape};
 use crate::{AppData, ProctorResult, SharedString};
 
 pub mod builder;
 pub mod clearinghouse;
+pub mod sensor;
 pub mod settings;
-pub mod source;
 pub mod subscription_channel;
 
 // todo: implement
@@ -44,7 +44,7 @@ pub mod subscription_channel;
 //     DataPublished,
 // }
 
-pub struct Collect<Out> {
+pub struct Sense<Out> {
     name: SharedString,
     inner: Box<dyn SourceStage<Out>>,
     outlet: Outlet<Out>,
@@ -53,24 +53,24 @@ pub struct Collect<Out> {
      * todo: tx_monitor: CollectMonitor, */
 }
 
-impl<Out> Collect<Out> {
+impl<Out> Sense<Out> {
     #[tracing::instrument(level = "info", skip(name, sources))]
     pub fn builder(
         name: impl Into<SharedString>, sources: Vec<Box<dyn SourceStage<Telemetry>>>, machine_node: MachineNode,
-    ) -> CollectBuilder<Out> {
+    ) -> SenseBuilder<Out> {
         let id_generator = CorrelationGenerator::distributed(machine_node, IdPrettifier::<AlphabetCodec>::default());
-        CollectBuilder::new(name, sources, id_generator)
+        SenseBuilder::new(name, sources, id_generator)
     }
 
     #[tracing::instrument(level = "info", skip(name, sources))]
     pub fn single_node_builder(
         name: impl Into<SharedString>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
-    ) -> CollectBuilder<Out> {
+    ) -> SenseBuilder<Out> {
         Self::builder(name, sources, MachineNode::default())
     }
 }
 
-impl<Out> Debug for Collect<Out> {
+impl<Out> Debug for Sense<Out> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Collect")
             .field("name", &self.name)
@@ -80,7 +80,7 @@ impl<Out> Debug for Collect<Out> {
     }
 }
 
-impl<Out> SourceShape for Collect<Out> {
+impl<Out> SourceShape for Sense<Out> {
     type Out = Out;
 
     fn outlet(&self) -> Outlet<Self::Out> {
@@ -88,7 +88,7 @@ impl<Out> SourceShape for Collect<Out> {
     }
 }
 
-impl<Out> WithApi for Collect<Out> {
+impl<Out> WithApi for Sense<Out> {
     type Sender = ClearinghouseApi;
 
     fn tx_api(&self) -> Self::Sender {
@@ -98,7 +98,7 @@ impl<Out> WithApi for Collect<Out> {
 
 #[dyn_upcast]
 #[async_trait]
-impl<Out: AppData> Stage for Collect<Out> {
+impl<Out: AppData> Stage for Sense<Out> {
     fn name(&self) -> SharedString {
         self.name.clone()
     }
@@ -109,7 +109,7 @@ impl<Out: AppData> Stage for Collect<Out> {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run collect phase", skip(self))]
+    #[tracing::instrument(level = "info", name = "run sense phase", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         self.do_run().await?;
         Ok(())
@@ -122,30 +122,21 @@ impl<Out: AppData> Stage for Collect<Out> {
     }
 }
 
-impl<Out: AppData> Collect<Out> {
-    async fn do_check(&self) -> Result<(), CollectionError> {
-        self.inner
-            .check()
-            .await
-            .map_err(|err| CollectionError::StageError(err.into()))?;
+impl<Out: AppData> Sense<Out> {
+    async fn do_check(&self) -> Result<(), SenseError> {
+        self.inner.check().await.map_err(|err| SenseError::Stage(err.into()))?;
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
-    async fn do_run(&mut self) -> Result<(), CollectionError> {
-        self.inner
-            .run()
-            .await
-            .map_err(|err| CollectionError::StageError(err.into()))?;
+    async fn do_run(&mut self) -> Result<(), SenseError> {
+        self.inner.run().await.map_err(|err| SenseError::Stage(err.into()))?;
         Ok(())
     }
 
-    async fn do_close(mut self: Box<Self>) -> Result<(), CollectionError> {
-        tracing::trace!("closing collect phase ports.");
-        self.inner
-            .close()
-            .await
-            .map_err(|err| CollectionError::StageError(err.into()))?;
+    async fn do_close(mut self: Box<Self>) -> Result<(), SenseError> {
+        tracing::trace!("closing sense phase ports.");
+        self.inner.close().await.map_err(|err| SenseError::Stage(err.into()))?;
         self.outlet.close().await;
         Ok(())
     }

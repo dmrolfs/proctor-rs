@@ -4,9 +4,9 @@ use super::protocol::{ClearinghouseApi, ClearinghouseCmd};
 use super::subscription::TelemetrySubscription;
 use super::Clearinghouse;
 use crate::elements::Telemetry;
-use crate::error::CollectionError;
+use crate::error::SenseError;
 use crate::graph::Inlet;
-use crate::phases::collection::CollectBuilder;
+use crate::phases::sense::SenseBuilder;
 
 #[derive(Debug)]
 pub enum ClearinghouseSubscriptionMagnet<'c> {
@@ -20,7 +20,7 @@ impl<'c> ClearinghouseSubscriptionMagnet<'c> {
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn subscribe(
         &mut self, subscription: TelemetrySubscription, receiver: Inlet<Telemetry>,
-    ) -> Result<(), CollectionError> {
+    ) -> Result<(), SenseError> {
         match self {
             Magnet::Direct(clearinghouse) => {
                 clearinghouse.subscribe(subscription, &receiver).await;
@@ -32,9 +32,9 @@ impl<'c> ClearinghouseSubscriptionMagnet<'c> {
                 tracing::info!(?subscription, ?receiver, "requesting clearinghouse subscription...");
                 tx_clearinghouse_api
                     .send(cmd)
-                    .map_err(|err| CollectionError::StageError(err.into()))?;
+                    .map_err(|err| SenseError::Stage(err.into()))?;
 
-                let ack = rx_ack.await.map_err(|err| CollectionError::StageError(err.into()));
+                let ack = rx_ack.await.map_err(|err| SenseError::Stage(err.into()));
                 tracing::warn!(
                     ?ack,
                     ?subscription,
@@ -63,8 +63,8 @@ where
     }
 }
 
-impl<'c, Out> From<&'c mut CollectBuilder<Out>> for ClearinghouseSubscriptionMagnet<'c> {
-    fn from(that: &'c mut CollectBuilder<Out>) -> Self {
+impl<'c, Out> From<&'c mut SenseBuilder<Out>> for ClearinghouseSubscriptionMagnet<'c> {
+    fn from(that: &'c mut SenseBuilder<Out>) -> Self {
         ClearinghouseSubscriptionMagnet::Direct(&mut that.clearinghouse)
     }
 }

@@ -118,7 +118,7 @@ impl Graph {
         let results: Vec<ProctorResult<()>> = futures::future::try_join_all(tasks)
             .instrument(tracing::info_span!("graph_run_join_all"))
             .await
-            .map_err(GraphError::JoinError)?;
+            .map_err(GraphError::Join)?;
 
         let results: ProctorResult<Vec<()>> = results.into_iter().collect();
         let _ = results?;
@@ -143,10 +143,12 @@ mod tests {
         assert_ok!(registry.register(Box::new(GRAPH_ERRORS.clone())));
         track_errors(
             "foo",
-            &GraphError::PortError(PortError::Detached("detached foo".to_string())).into(),
+            &GraphError::Port(PortError::Detached("detached foo".to_string())).into(),
         );
         track_errors("foo", &EligibilityError::DataNotFound("no foo".to_string()).into());
-        track_errors("bar", &EligibilityError::ParseError("bad smell".to_string()).into());
+        if let Err(err) = i32::from_str_radix("A", 10) {
+            track_errors("bar", &EligibilityError::Stage(err.into()).into());
+        }
 
         let metric_family = registry.gather();
         assert_eq!(metric_family.len(), 1);
@@ -170,7 +172,7 @@ mod tests {
             error_types,
             vec![
                 "proctor::eligibility::data_not_found",
-                "proctor::eligibility::parse",
+                "proctor::eligibility::stage",
                 "proctor::graph::port::detached",
             ]
         );

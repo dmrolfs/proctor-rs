@@ -427,7 +427,7 @@ impl<T: AppData> Outlet<T> {
             .0
             .reserve()
             .await
-            .map_err(|err| PortError::ChannelError(err.into()))?;
+            .map_err(|err| PortError::Channel(err.into()))?;
 
         let span = tracing::info_span!("task in output port reserve_send", stage=%self.stage, port_name=%self.name);
 

@@ -106,13 +106,13 @@ impl FromStr for Timestamp {
 
     fn from_str(ts_rep: &str) -> Result<Self, Self::Err> {
         if let Some(cap) = TUPLE_FORM.captures(ts_rep) {
-            let secs = i64::from_str(&cap[1]).map_err(|err| TelemetryError::ValueParseError(err.into()))?;
-            let nanos = u32::from_str(&cap[2]).map_err(|err| TelemetryError::ValueParseError(err.into()))?;
+            let secs = i64::from_str(&cap[1]).map_err(|err| TelemetryError::ValueParse(err.into()))?;
+            let nanos = u32::from_str(&cap[2]).map_err(|err| TelemetryError::ValueParse(err.into()))?;
             return Ok(Self(secs, nanos));
         }
 
         let dt = DateTime::parse_from_str(ts_rep, FORMAT)
-            .map_err(|err| TelemetryError::ValueParseError(err.into()))?
+            .map_err(|err| TelemetryError::ValueParse(err.into()))?
             .with_timezone(&Utc);
         Ok(dt.into())
     }
@@ -137,7 +137,7 @@ impl TryFrom<TelemetryValue> for Timestamp {
             },
             TelemetryValue::Text(rep) => {
                 let dt = DateTime::parse_from_str(rep.as_str(), FORMAT)
-                    .map_err(|err| TelemetryError::ValueParseError(err.into()))?
+                    .map_err(|err| TelemetryError::ValueParse(err.into()))?
                     .with_timezone(&Utc);
                 Ok(dt.into())
             },

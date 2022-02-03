@@ -6,12 +6,12 @@ use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::{Method, Url};
 use serde::{Deserialize, Serialize};
 
-use crate::error::IncompatibleSourceSettingsError;
+use crate::error::IncompatibleSensorSettings;
 use crate::serde::{deserialize_duration_secs, deserialize_from_str, serialize_duration_secs, serialize_to_str};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum SourceSetting {
+pub enum SensorSetting {
     RestApi(HttpQuery),
     Csv { path: PathBuf },
 }
@@ -43,7 +43,7 @@ impl HttpQuery {
         3
     }
 
-    pub fn header_map(&self) -> Result<HeaderMap, IncompatibleSourceSettingsError> {
+    pub fn header_map(&self) -> Result<HeaderMap, IncompatibleSensorSettings> {
         let mut map = HeaderMap::with_capacity(self.headers.len());
         for (k, v) in self.headers.iter() {
             let name = HeaderName::from_str(k.as_str()); //.map_err::<IncompatibleSourceSettingsError, _>(|err| err.into());
@@ -113,14 +113,14 @@ mod tests {
     #[test]
     fn test_serde_local_source_settings() {
         let path = PathBuf::from("tests/resources/base.csv");
-        let local = SourceSetting::Csv { path: path.clone() };
+        let local = SensorSetting::Csv { path: path.clone() };
 
         assert_tokens(&path, &[Token::Str("tests/resources/base.csv")]);
 
         assert_tokens(
             &local,
             &[
-                Token::Struct { name: "SourceSetting", len: 2 },
+                Token::Struct { name: "SensorSetting", len: 2 },
                 Token::Str("type"),
                 Token::Str("csv"),
                 Token::Str("path"),
@@ -132,7 +132,7 @@ mod tests {
 
     #[test]
     fn test_serde_rest_api_source_setting() {
-        let cluster = SourceSetting::RestApi(HttpQuery {
+        let cluster = SensorSetting::RestApi(HttpQuery {
             interval: Duration::from_secs(37),
             method: Method::POST,
             url: Url::parse(
@@ -175,7 +175,7 @@ mod tests {
             .collect();
 
         let settings = maplit::btreemap! {
-            "httpbin".to_string() => SourceSetting::RestApi(HttpQuery {
+            "httpbin".to_string() => SensorSetting::RestApi(HttpQuery {
                 interval: Duration::from_secs(10),
                 method: Method::HEAD,
                 url: Url::parse("https://httpbin.org/head?is_redeploying=false?last_deployment%3D1979-05-27%2007%3A32%3A00Z").unwrap(),
@@ -185,7 +185,7 @@ mod tests {
                 ],
                 max_retries: 3,
             }),
-            "local".to_string() => SourceSetting::Csv{path: PathBuf::from("examples/data/eligibility.csv")},
+            "local".to_string() => SensorSetting::Csv{path: PathBuf::from("examples/data/eligibility.csv")},
         };
 
         assert_tokens(
@@ -220,7 +220,7 @@ mod tests {
                 Token::StructEnd,
                 // "local" => Csv
                 Token::Str("local"),
-                Token::Struct { name: "SourceSetting", len: 2 },
+                Token::Struct { name: "SensorSetting", len: 2 },
                 Token::Str("type"),
                 Token::Str("csv"),
                 Token::Str("path"),

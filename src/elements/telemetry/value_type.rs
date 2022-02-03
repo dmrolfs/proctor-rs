@@ -52,13 +52,13 @@ impl TelemetryType {
 
             (V::Text(from), T::Unit) if from.is_empty() => Ok(V::Unit),
             (V::Text(from), T::Boolean) => Ok(V::Boolean(
-                bool::from_str(from.as_str()).map_err(|err| TelemetryError::ValueParseError(err.into()))?,
+                bool::from_str(from.as_str()).map_err(|err| TelemetryError::ValueParse(err.into()))?,
             )),
             (V::Text(from), T::Integer) => Ok(V::Integer(
-                i64::from_str(from.as_str()).map_err(|err| TelemetryError::ValueParseError(err.into()))?,
+                i64::from_str(from.as_str()).map_err(|err| TelemetryError::ValueParse(err.into()))?,
             )),
             (V::Text(from), T::Float) => Ok(V::Float(
-                f64::from_str(from.as_str()).map_err(|err| TelemetryError::ValueParseError(err.into()))?,
+                f64::from_str(from.as_str()).map_err(|err| TelemetryError::ValueParse(err.into()))?,
             )),
 
             // (V::Table(from), T::Seq) => {

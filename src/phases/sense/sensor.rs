@@ -9,24 +9,24 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tokio::sync::mpsc;
 
-use super::SourceSetting;
+use super::SensorSetting;
 use crate::elements::Telemetry;
-use crate::error::{CollectionError, IncompatibleSourceSettingsError};
+use crate::error::{IncompatibleSensorSettings, SenseError};
 use crate::graph::stage::tick::TickMsg;
 use crate::graph::stage::{CompositeSource, SourceStage, WithApi};
 use crate::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 
-/// Naive CVS source, which loads a `.cvs` file, then publishes via its outlet.
+/// Naive CVS sensor, which loads a `.cvs` file, then publishes via its outlet.
 ///
 /// An improvement to consider is to behave lazily and iterate through the source file(s)
 /// upon downstream demand.
 #[tracing::instrument(level = "info", skip(name))]
-pub fn make_telemetry_cvs_source<T, S>(name: S, setting: &SourceSetting) -> Result<TelemetrySource, CollectionError>
+pub fn make_telemetry_cvs_sensor<T, S>(name: S, setting: &SensorSetting) -> Result<TelemetrySensor, SenseError>
 where
     T: Serialize + DeserializeOwned + Debug,
     S: Into<String>,
 {
-    if let SourceSetting::Csv { path } = setting {
+    if let SensorSetting::Csv { path } = setting {
         let name = name.into();
         let mut telemetry_name = format!("telemetry_{}", name.as_str());
 
@@ -47,7 +47,7 @@ where
         for result in reader.deserialize() {
             let record: T = result?;
 
-            // todo: for a source, which is better? config-style conversion via serde (active here) or
+            // todo: for a sensor, which is better? config-style conversion via serde (active here) or
             // Into<Telemetry>?
             let telemetry_record = Telemetry::try_from(&record)?;
 
@@ -58,9 +58,9 @@ where
         let source = stage::Sequence::new(telemetry_name, records);
         let stage: Option<Box<dyn SourceStage<Telemetry>>> = Some(Box::new(source));
 
-        Ok(TelemetrySource { name, stage, tx_stop: None })
+        Ok(TelemetrySensor { name, stage, tx_stop: None })
     } else {
-        Err(IncompatibleSourceSettingsError::ExpectedTypeError {
+        Err(IncompatibleSensorSettings::ExpectedTypeError {
             expected: "cvs".to_string(),
             settings: setting.clone(),
         }
@@ -69,13 +69,13 @@ where
 }
 
 #[tracing::instrument(level = "info", skip(name))]
-pub async fn make_telemetry_rest_api_source<T>(
-    name: String, setting: &SourceSetting,
-) -> Result<TelemetrySource, CollectionError>
+pub async fn make_telemetry_rest_api_sensor<T>(
+    name: String, setting: &SensorSetting,
+) -> Result<TelemetrySensor, SenseError>
 where
     T: Serialize + DeserializeOwned + Debug,
 {
-    if let SourceSetting::RestApi(query) = setting {
+    if let SensorSetting::RestApi(query) = setting {
         // scheduler
         let tick = stage::Tick::new(
             format!("telemetry_{}_tick", name),
@@ -110,7 +110,7 @@ where
                     .await?;
 
                 let telemetry_record = Telemetry::try_from(&record)?;
-                std::result::Result::<Telemetry, CollectionError>::Ok(telemetry_record)
+                std::result::Result::<Telemetry, SenseError>::Ok(telemetry_record)
             }
             .map(|d| d.unwrap())
         };
@@ -129,9 +129,9 @@ where
             stage::CompositeSource::new(format!("telemetry_{}", name).into(), cg, composite_outlet).await;
         let stage: Option<Box<dyn SourceStage<Telemetry>>> = Some(Box::new(composite));
 
-        Ok(TelemetrySource { name, stage, tx_stop: Some(tx_tick_api) })
+        Ok(TelemetrySensor { name, stage, tx_stop: Some(tx_tick_api) })
     } else {
-        Err(IncompatibleSourceSettingsError::ExpectedTypeError {
+        Err(IncompatibleSensorSettings::ExpectedTypeError {
             expected: "HTTP query".to_string(),
             settings: setting.clone(),
         }
@@ -139,31 +139,29 @@ where
     }
 }
 
-pub struct TelemetrySource {
+pub struct TelemetrySensor {
     pub name: String,
     pub stage: Option<Box<dyn SourceStage<Telemetry>>>,
     pub tx_stop: Option<mpsc::UnboundedSender<TickMsg>>,
 }
 
-impl TelemetrySource {
+impl TelemetrySensor {
     #[tracing::instrument(level = "info")]
-    pub async fn collect_from_settings<T>(
-        settings: &HashMap<String, SourceSetting>,
-    ) -> Result<Vec<Self>, CollectionError>
+    pub async fn from_settings<T>(settings: &HashMap<String, SensorSetting>) -> Result<Vec<Self>, SenseError>
     where
         T: Serialize + DeserializeOwned + Debug,
     {
-        let mut sources = Vec::with_capacity(settings.len());
-        for (name, source_setting) in settings {
-            let src = match source_setting {
-                SourceSetting::RestApi(_query) => {
-                    make_telemetry_rest_api_source::<T>(name.clone(), source_setting).await?
+        let mut sensors = Vec::with_capacity(settings.len());
+        for (name, sensor_setting) in settings {
+            let src = match sensor_setting {
+                SensorSetting::RestApi(_query) => {
+                    make_telemetry_rest_api_sensor::<T>(name.clone(), sensor_setting).await?
                 },
-                SourceSetting::Csv { path: _ } => make_telemetry_cvs_source::<T, _>(name, source_setting)?,
+                SensorSetting::Csv { path: _ } => make_telemetry_cvs_sensor::<T, _>(name, sensor_setting)?,
             };
-            sources.push(src);
+            sensors.push(src);
         }
 
-        Ok(sources)
+        Ok(sensors)
     }
 }

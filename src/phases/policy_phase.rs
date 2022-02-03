@@ -157,19 +157,23 @@ where
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
-        self.do_check().await.map_err(|err| ProctorError::PhaseError(err.into()))?;
+        self.do_check()
+            .await
+            .map_err(|err| ProctorError::Phase(err.into()))?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", name = "run policy phase", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
-        self.do_run().await.map_err(|err| ProctorError::PhaseError(err.into()))?;
+        self.do_run().await.map_err(|err| ProctorError::Phase(err.into()))?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn close(mut self: Box<Self>) -> ProctorResult<()> {
-        self.do_close().await.map_err(|err| ProctorError::PhaseError(err.into()))?;
+        self.do_close()
+            .await
+            .map_err(|err| ProctorError::Phase(err.into()))?;
         Ok(())
     }
 }

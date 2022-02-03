@@ -346,9 +346,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.0.13"
+version = "3.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08799f92c961c7a1cf0cc398a9073da99e21ce388b46372c37f3191f2f3eed3e"
+checksum = "b63edc3f163b3c71ec8aa23f9bd6070f77edbf3d1d198b164afa90ff00e4ec62"
 dependencies = [
  "atty",
  "bitflags",
@@ -1349,9 +1349,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.116"
+version = "0.2.117"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "565dbd88872dbe4cc8a46e527f26483c1d1f7afa6b884a3bd6cd893d4f98da74"
+checksum = "e74d72e0f9b65b5b4ca49a346af3976df0f9c61d550727f349ecd559f251a26c"
 
 [[package]]
 name = "libm"
@@ -2035,9 +2035,9 @@ checksum = "a8815d101cfb4cb491154896bdab292a395a7ac9ab185a9941a2f5be0135900d"
 
 [[package]]
 name = "pretty_assertions"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec0cfe1b2403f172ba0f234e500906ee0a3e493fb81092dac23ebefe129301cc"
+checksum = "76d5b548b725018ab5496482b45cb8bef21e9fed1858a6d674e3a8a0f0bb5d50"
 dependencies = [
  "ansi_term",
  "ctor",
@@ -2119,7 +2119,7 @@ dependencies = [
 
 [[package]]
 name = "proctor"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "approx",
@@ -2128,7 +2128,7 @@ dependencies = [
  "cast_trait_object",
  "chrono",
  "claim",
- "clap 3.0.13",
+ "clap 3.0.14",
  "config 0.11.0",
  "criterion",
  "csv",
@@ -2222,9 +2222,9 @@ dependencies = [
 
 [[package]]
 name = "protobuf"
-version = "2.26.0"
+version = "2.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d613b4fd96c0182e187734b4f8fc5cbc8c940bbf781819f7a52d42dc5922d25"
+checksum = "315b4773dbbe8eda7cc9c15a178b7a5c354030d0ffad360cff41cc748d97eeed"
 
 [[package]]
 name = "quick-error"

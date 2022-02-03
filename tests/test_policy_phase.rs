@@ -22,11 +22,11 @@ use proctor::elements::{
 use proctor::error::{PolicyError, ProctorError};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape, UniformFanInShape};
-use proctor::phases::collection::{
+use proctor::phases::policy_phase::PolicyPhase;
+use proctor::phases::sense::{
     self, CorrelationGenerator, SubscriptionRequirements, TelemetrySubscription, SUBSCRIPTION_CORRELATION,
     SUBSCRIPTION_TIMESTAMP,
 };
-use proctor::phases::policy_phase::PolicyPhase;
 use proctor::ProctorContext;
 use proctor::{AppData, SharedString};
 use serde_test::{assert_tokens, Token};
@@ -377,7 +377,7 @@ struct TestFlow<T, C, D> {
     pub graph_handle: JoinHandle<()>,
     pub tx_data_source_api: stage::ActorSourceApi<Telemetry>,
     pub tx_context_source_api: stage::ActorSourceApi<Telemetry>,
-    pub tx_clearinghouse_api: collection::ClearinghouseApi,
+    pub tx_clearinghouse_api: sense::ClearinghouseApi,
     pub tx_eligibility_api: elements::PolicyFilterApi<C, D>,
     pub rx_eligibility_monitor: elements::PolicyFilterMonitor<T, C>,
     pub tx_sink_api: stage::FoldApi<Vec<PolicyOutcome<T, C>>>,
@@ -403,15 +403,15 @@ where
         let merge = stage::MergeN::new("source_merge", 2);
 
         let id_generator = PrettyIdGenerator::single_node(IdPrettifier::<AlphabetCodec>::default());
-        let mut clearinghouse = collection::Clearinghouse::new("clearinghouse", id_generator.clone());
+        let mut clearinghouse = sense::Clearinghouse::new("clearinghouse", id_generator.clone());
         let tx_clearinghouse_api = clearinghouse.tx_api();
 
         // todo: expand testing to include settings-based reqd/opt subscription fields
         let settings: PolicySettings<D> = PolicySettings::default();
         let context_subscription = policy.subscription("eligibility_context", &settings);
-        let context_channel = assert_ok!(collection::SubscriptionChannel::<C>::new("eligibility_context".into()).await);
+        let context_channel = assert_ok!(sense::SubscriptionChannel::<C>::new("eligibility_context".into()).await);
 
-        let telemetry_channel = assert_ok!(collection::SubscriptionChannel::<T>::new("data_channel".into()).await);
+        let telemetry_channel = assert_ok!(sense::SubscriptionChannel::<T>::new("data_channel".into()).await);
         let eligibility = assert_ok!(PolicyPhase::carry_policy_outcome("test_eligibility", policy).await);
 
         let tx_eligibility_api = eligibility.tx_api();

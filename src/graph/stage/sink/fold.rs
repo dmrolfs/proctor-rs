@@ -200,7 +200,7 @@ where
     async fn complete_fold(&mut self) -> Result<(), StageError> {
         if let Some(tx_final) = self.tx_final.take() {
             tx_final.send(self.acc.lock().await.clone()).map_err(|acc| {
-                StageError::MaterializationError(format!(
+                StageError::Materialization(format!(
                     "Fold sink final receiver detached. Failed to send accumulation: {:?}",
                     acc
                 ))

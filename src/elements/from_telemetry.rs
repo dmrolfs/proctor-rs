@@ -33,7 +33,7 @@ where
                         tracing::error!(error=?err, "failed to convert an entity from telemetry data");
                     }
 
-                    graph::track_errors(stage_name.as_ref(), &ProctorError::CollectionError(err.into()));
+                    graph::track_errors(stage_name.as_ref(), &ProctorError::SensePhase(err.into()));
                     None
                 },
             }

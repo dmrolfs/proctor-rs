@@ -17,7 +17,7 @@ pub use subscription::*;
 use tokio::sync::mpsc;
 
 use crate::elements::{Telemetry, Timestamp};
-use crate::error::{CollectionError, ProctorError};
+use crate::error::{ProctorError, SenseError};
 use crate::graph::stage::Stage;
 use crate::graph::{stage, Inlet, OutletsShape, Port, SinkShape, UniformFanOutShape};
 use crate::{ProctorIdGenerator, ProctorResult, SharedString};
@@ -96,7 +96,7 @@ impl Clearinghouse {
     async fn handle_telemetry_data(
         stage_name: &SharedString, data: Option<Telemetry>, subscriptions: &[TelemetrySubscription],
         database: &mut Telemetry, correlation_generator: &mut CorrelationGenerator,
-    ) -> Result<bool, CollectionError> {
+    ) -> Result<bool, SenseError> {
         match data {
             Some(d) => {
                 let updated_fields = d.keys().cloned().collect::<HashSet<_>>();
@@ -154,7 +154,7 @@ impl Clearinghouse {
     async fn push_to_subscribers(
         stage_name: &SharedString, database: &Telemetry, subscribers: Vec<&TelemetrySubscription>,
         correlation_generator: &mut CorrelationGenerator,
-    ) -> Result<(), CollectionError> {
+    ) -> Result<(), SenseError> {
         if subscribers.is_empty() {
             tracing::info!("not publishing - no subscribers corresponding to field changes.");
             return Ok(());
@@ -189,11 +189,11 @@ impl Clearinghouse {
             tracing::error!(error=?err, subscription=%s.name(), "failed to send fulfilled subscription.");
             // todo: change to track *all* errors -- only first found is currently tracked
             // todo: resolve design to avoid this hack to satisfy track_errors api while not exposing
-            // collection stage with proctor error.
-            let proctor_err = ProctorError::CollectionError(err);
+            // sense stage with proctor error.
+            let proctor_err = ProctorError::SensePhase(err);
             crate::graph::track_errors(stage_name.as_ref(), &proctor_err);
             let err = match proctor_err {
-                ProctorError::CollectionError(err) => Some(err),
+                ProctorError::SensePhase(err) => Some(err),
                 err => {
                     tracing::error!(error=?err, "Unexpected error in clearinghouse");
                     None
@@ -229,7 +229,7 @@ impl Clearinghouse {
     #[tracing::instrument(level = "trace", skip(subscriptions, database))]
     async fn handle_command(
         command: ClearinghouseCmd, subscriptions: &mut Vec<TelemetrySubscription>, database: &Telemetry,
-    ) -> Result<bool, CollectionError> {
+    ) -> Result<bool, SenseError> {
         match command {
             ClearinghouseCmd::GetSnapshot { name, tx } => {
                 let snapshot = match name {
@@ -351,7 +351,7 @@ impl Stage for Clearinghouse {
 }
 
 impl Clearinghouse {
-    async fn do_check(&self) -> Result<(), CollectionError> {
+    async fn do_check(&self) -> Result<(), SenseError> {
         self.inlet.check_attachment().await?;
 
         for s in self.subscriptions.iter() {
@@ -361,7 +361,7 @@ impl Clearinghouse {
         Ok(())
     }
 
-    async fn do_run(&mut self) -> Result<(), CollectionError> {
+    async fn do_run(&mut self) -> Result<(), SenseError> {
         let stage_name = &self.name;
         let mut inlet = self.inlet.clone();
         let rx_api = &mut self.rx_api;
@@ -417,7 +417,7 @@ impl Clearinghouse {
         Ok(())
     }
 
-    async fn do_close(mut self: Box<Self>) -> Result<(), CollectionError> {
+    async fn do_close(mut self: Box<Self>) -> Result<(), SenseError> {
         self.inlet.close().await;
         for s in self.subscriptions {
             s.close().await;

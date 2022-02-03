@@ -16,7 +16,7 @@ use proctor::elements::{PolicyRegistry, PolicySource};
 use proctor::error::PolicyError;
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape};
-use proctor::phases::collection::SubscriptionRequirements;
+use proctor::phases::sense::SubscriptionRequirements;
 use proctor::{ProctorContext, SharedString};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;

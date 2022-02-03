@@ -626,7 +626,7 @@ macro_rules! try_from_telemetry_into_int {
                             "false" | "off" | "no" => Ok(0),
                             _ => rep
                                 .parse()
-                                .map_err(|err: ParseIntError| TelemetryError::ValueParseError(err.into())),
+                                .map_err(|err: ParseIntError| TelemetryError::ValueParse(err.into())),
                         },
                         value => Err(TelemetryError::TypeError {
                             expected: TelemetryType::Integer,
@@ -652,7 +652,7 @@ macro_rules! try_from_telemetry_into_int {
                             "false" | "off" | "no" => Ok(0),
                             _ => rep
                                 .parse()
-                                .map_err(|err: ParseIntError| TelemetryError::ValueParseError(err.into())),
+                                .map_err(|err: ParseIntError| TelemetryError::ValueParse(err.into())),
                         },
                         value => Err(TelemetryError::TypeError {
                             expected: TelemetryType::Integer,
@@ -680,7 +680,7 @@ impl TryFrom<TelemetryValue> for f64 {
                 "false" | "off" | "no" => Ok(0.0),
                 rep => rep
                     .parse()
-                    .map_err(|err: ParseFloatError| TelemetryError::ValueParseError(err.into())),
+                    .map_err(|err: ParseFloatError| TelemetryError::ValueParse(err.into())),
             },
             value => Err(TelemetryError::TypeError {
                 expected: TelemetryType::Float,
@@ -703,7 +703,7 @@ impl TryFrom<&TelemetryValue> for f64 {
                 "false" | "off" | "no" => Ok(0.0),
                 rep => rep
                     .parse()
-                    .map_err(|err: ParseFloatError| TelemetryError::ValueParseError(err.into())),
+                    .map_err(|err: ParseFloatError| TelemetryError::ValueParse(err.into())),
             },
             value => Err(TelemetryError::TypeError {
                 expected: TelemetryType::Float,
@@ -726,7 +726,7 @@ impl TryFrom<TelemetryValue> for f32 {
                 "false" | "off" | "no" => Ok(0.0),
                 rep => rep
                     .parse()
-                    .map_err(|err: ParseFloatError| TelemetryError::ValueParseError(err.into())),
+                    .map_err(|err: ParseFloatError| TelemetryError::ValueParse(err.into())),
             },
             _ => Err(TelemetryError::TypeError {
                 expected: TelemetryType::Float,
@@ -749,7 +749,7 @@ impl TryFrom<&TelemetryValue> for f32 {
                 "false" | "off" | "no" => Ok(0.0),
                 rep => rep
                     .parse()
-                    .map_err(|err: ParseFloatError| TelemetryError::ValueParseError(err.into())),
+                    .map_err(|err: ParseFloatError| TelemetryError::ValueParse(err.into())),
             },
             _ => Err(TelemetryError::TypeError {
                 expected: TelemetryType::Float,

@@ -39,7 +39,7 @@ impl Node {
                             tracing::info!("{} node completed and stopped", self.name);
                             break Ok(());
                         },
-                        Err(ProctorError::GraphError(err)) => {
+                        Err(ProctorError::Graph(err)) => {
                             tracing::error!(error=?err, "Graph error in {} node - stopping", self.name);
                             break Err(err.into());
                         },

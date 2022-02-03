@@ -7,14 +7,14 @@ use serde::de::DeserializeOwned;
 use url::Url;
 
 use super::Telemetry;
-use crate::error::CollectionError;
+use crate::error::SenseError;
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Connect, Graph, Inlet, Outlet, Port, SinkShape, SourceShape};
 use crate::{AppData, ProctorResult, SharedString};
 
 // todo: collect once every minute for scaling metrics
 
-/// Tailorable collection source: plugin mechanism to pull metrics from various sources.
+/// Tailorable sense sensor: plugin mechanism to pull metrics from various sources.
 ///
 /// # Examples
 ///
@@ -105,6 +105,7 @@ use crate::{AppData, ProctorResult, SharedString};
 ///     Ok(())
 /// }
 /// ```
+///
 pub struct Collect {
     name: SharedString,
     target: Url,
@@ -114,7 +115,7 @@ pub struct Collect {
 }
 
 impl Collect {
-    #[deprecated(since = "0.3.0", note = "prefer proctor::phases::collection module.")]
+    #[deprecated(since = "0.3.0", note = "prefer proctor::phases::sense module.")]
     pub async fn new<T, F>(name: SharedString, url: Url, default_headers: HeaderMap, transform: F) -> Self
     where
         T: AppData + DeserializeOwned + 'static,
@@ -149,7 +150,7 @@ impl Collect {
         });
         let transform = stage::Map::<_, T, Telemetry>::new(format!("{}-transform", name), transform);
 
-        let bridge_inlet = Inlet::new(name.clone(), "collection");
+        let bridge_inlet = Inlet::new(name.clone(), "sense");
 
         let in_bridge = stage::Identity::new(
             format!("{}-trigger-bridge", name),
@@ -157,7 +158,7 @@ impl Collect {
             Outlet::new(name.clone(), "from_collection_graph"),
         );
 
-        let bridge_outlet = Outlet::new(name.clone(), "collection");
+        let bridge_outlet = Outlet::new(name.clone(), "sense");
         let out_bridge = stage::Identity::new(
             format!("{}-output-bridge", name),
             Inlet::new(name.clone(), "from_collection_graph"),
@@ -182,7 +183,7 @@ impl Collect {
         name="query url",
         fields(%url),
     )]
-    async fn do_query<T>(client: &reqwest::Client, url: Url) -> Result<T, CollectionError>
+    async fn do_query<T>(client: &reqwest::Client, url: Url) -> Result<T, SenseError>
     where
         T: DeserializeOwned + fmt::Debug,
     {
@@ -236,26 +237,26 @@ impl Stage for Collect {
 
 impl Collect {
     #[inline]
-    async fn do_check(&self) -> Result<(), CollectionError> {
+    async fn do_check(&self) -> Result<(), SenseError> {
         self.trigger.check_attachment().await?;
         self.outlet.check_attachment().await?;
         if let Some(ref g) = self.graph {
-            g.check().await.map_err(|err| CollectionError::StageError(err.into()))?;
+            g.check().await.map_err(|err| SenseError::Stage(err.into()))?;
         }
         Ok(())
     }
 
     #[inline]
-    async fn do_run(&mut self) -> Result<(), CollectionError> {
+    async fn do_run(&mut self) -> Result<(), SenseError> {
         if let Some(g) = self.graph.take() {
-            g.run().await.map_err(|err| CollectionError::StageError(err.into()))?;
+            g.run().await.map_err(|err| SenseError::Stage(err.into()))?;
         }
 
         Ok(())
     }
 
     #[inline]
-    async fn do_close(mut self: Box<Self>) -> Result<(), CollectionError> {
+    async fn do_close(mut self: Box<Self>) -> Result<(), SenseError> {
         tracing::trace!("closing collect inner graph and outlet.");
         self.outlet.close().await;
         Ok(())

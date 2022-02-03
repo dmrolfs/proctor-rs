@@ -12,7 +12,7 @@ use serde::Serialize;
 use super::{PolicySettings, QueryResult};
 use crate::elements::{PolicySource, PolicySourcePath};
 use crate::error::PolicyError;
-use crate::phases::collection::{SubscriptionRequirements, TelemetrySubscription};
+use crate::phases::sense::{SubscriptionRequirements, TelemetrySubscription};
 
 pub trait Policy<T, C, A>: PolicySubscription<Requirements = C> + QueryPolicy<Item = T, Context = C, Args = A> {}
 
@@ -136,7 +136,8 @@ where
 
 static APP_TEMPDIR: Lazy<tempfile::TempDir> = Lazy::new(|| {
     let current_exe = std::env::current_exe().unwrap_or_else(|_| "proctor".into());
-    let app_name: std::ffi::OsString = current_exe.file_stem()
+    let app_name: std::ffi::OsString = current_exe
+        .file_stem()
         .map(|name| {
             let mut n: std::ffi::OsString = name.into();
             n.push("_");
@@ -144,13 +145,16 @@ static APP_TEMPDIR: Lazy<tempfile::TempDir> = Lazy::new(|| {
         })
         .unwrap_or_else(|| "proctor_".into());
 
-    tempfile::Builder::new().prefix(app_name.as_os_str()).tempdir().unwrap_or_else(|err| {
-        panic!(
-            "failed to create {app_name:?} temp dir under {:?}: {:?}",
-            std::env::temp_dir(),
-            err
-        )
-    })
+    tempfile::Builder::new()
+        .prefix(app_name.as_os_str())
+        .tempdir()
+        .unwrap_or_else(|err| {
+            panic!(
+                "failed to create {app_name:?} temp dir under {:?}: {:?}",
+                std::env::temp_dir(),
+                err
+            )
+        })
 });
 
 #[tracing::instrument(level = "info", skip())]
