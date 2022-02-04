@@ -91,6 +91,7 @@ impl SignalDetector {
     pub fn signal(&mut self, value: f64) -> Option<Anomaly> {
         if self.window.len() < self.lag {
             self.window.push_back(value);
+            assert!(self.window.len() <= self.lag);
             return None;
         }
 
@@ -101,6 +102,8 @@ impl SignalDetector {
                 // let next_value = (value * self.influence) + ((1. - self.influence) * window_last);
                 let next_value = value.mul_add(self.influence, (1. - self.influence) * window_last);
                 self.window.push_back(next_value);
+                assert!(self.window.len() <= self.lag);
+
                 if mean < value {
                     Some(Anomaly::High)
                 } else {
