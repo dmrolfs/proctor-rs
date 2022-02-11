@@ -2,6 +2,7 @@ pub mod magnet;
 pub mod protocol;
 pub mod subscription;
 
+use std::collections::hash_map::Keys;
 use std::collections::HashSet;
 use std::fmt::{self, Debug};
 
@@ -16,7 +17,7 @@ pub use protocol::*;
 pub use subscription::*;
 use tokio::sync::mpsc;
 
-use crate::elements::{Telemetry, Timestamp};
+use crate::elements::{Telemetry, TelemetryValue, Timestamp};
 use crate::error::{ProctorError, SenseError};
 use crate::graph::stage::Stage;
 use crate::graph::{stage, Inlet, OutletsShape, Port, SinkShape, UniformFanOutShape};
@@ -99,11 +100,12 @@ impl Clearinghouse {
     ) -> Result<bool, SenseError> {
         match data {
             Some(d) => {
-                let updated_fields = d.keys().cloned().collect::<HashSet<_>>();
-                let interested =
-                    Self::find_interested_subscriptions(subscriptions, database.keys().collect(), updated_fields);
-
+                let updated_fields: HashSet<String> = d.keys().cloned().collect();
                 database.extend(d);
+
+                let interested =
+                    Self::find_interested_subscriptions(subscriptions, &database.keys(), updated_fields);
+
                 Self::push_to_subscribers(stage_name, database, interested, correlation_generator).await?;
                 Ok(true)
             },
@@ -119,12 +121,12 @@ impl Clearinghouse {
 
     #[tracing::instrument(level = "trace", skip(subscriptions,))]
     fn find_interested_subscriptions<'s>(
-        subscriptions: &'s [TelemetrySubscription], available: HashSet<&String>, changed: HashSet<String>,
+        subscriptions: &'s [TelemetrySubscription], available: &Keys<String, TelemetryValue>, changed: HashSet<String>,
     ) -> Vec<&'s TelemetrySubscription> {
         let interested = subscriptions
             .iter()
             .filter(|s| {
-                let is_interested = s.any_interest(&available, &changed);
+                let is_interested = s.any_interest(available, &changed);
                 tracing::trace!(
                     "is subscription, {}, interested in changed fields:{:?} => {}",
                     s.name(),
@@ -168,13 +170,11 @@ impl Clearinghouse {
             .map(|s| Self::fulfill_subscription(s, database).map(|fulfillment| (s, fulfillment)))
             .flatten()
             .map(|(s, mut fulfillment)| {
-                // auto-filled properties
-                fulfillment.insert(SUBSCRIPTION_TIMESTAMP.to_string(), now.into());
-                let correlation_id: Id<Telemetry> = correlation_generator.next_id();
-                fulfillment.insert(SUBSCRIPTION_CORRELATION.to_string(), correlation_id.clone().into());
+                Self::add_automatic_telemetry(&mut fulfillment, correlation_generator);
 
                 tracing::info!(subscription=%s.name(), ?correlation_id, "sending subscription data update.");
-                Self::update_metrics(s, &fulfillment);
+                s.update_metrics(&fulfillment);
+                // Self::update_metrics(s, &fulfillment);
                 s.send(fulfillment).map(move |send_status| {
                     track_publications(s.name().as_ref());
                     (s, send_status)
@@ -216,15 +216,21 @@ impl Clearinghouse {
         result
     }
 
+    fn add_automatic_telemetry(telemetry: &mut Telemetry, correlation_generator: &mut CorrelationGenerator) {
+        telemetry.insert(SUBSCRIPTION_TIMESTAMP.to_string(), now.into());
+        let correlation_id: Id<Telemetry> = correlation_generator.next_id();
+        telemetry.insert(SUBSCRIPTION_CORRELATION.to_string(), correlation_id.clone().into());
+    }
+
     #[tracing::instrument(level = "info")]
     fn fulfill_subscription(subscription: &TelemetrySubscription, database: &Telemetry) -> Option<Telemetry> {
         subscription.fulfill(database)
     }
 
-    #[tracing::instrument(level = "info", skip(subscription, telemetry))]
-    fn update_metrics(subscription: &TelemetrySubscription, telemetry: &Telemetry) {
-        subscription.update_metrics(telemetry)
-    }
+    // #[tracing::instrument(level = "info", skip(subscription, telemetry))]
+    // fn update_metrics(subscription: &TelemetrySubscription, telemetry: &Telemetry) {
+    //     subscription.update_metrics(telemetry)
+    // }
 
     #[tracing::instrument(level = "trace", skip(subscriptions, database))]
     async fn handle_command(
