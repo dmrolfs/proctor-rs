@@ -1,4 +1,3 @@
-use std::collections::hash_map::Keys;
 use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
@@ -6,7 +5,7 @@ use std::sync::Arc;
 use serde::Serialize;
 
 use crate::elements::telemetry::UpdateMetricsFn;
-use crate::elements::{Telemetry, TelemetryValue};
+use crate::elements::Telemetry;
 use crate::error::SenseError;
 use crate::graph::{Connect, Inlet, Outlet, Port, PORT_DATA};
 use crate::SharedString;
@@ -19,7 +18,9 @@ pub trait SubscriptionRequirements {
         HashSet::default()
     }
 
-    fn trigger_fields() -> HashSet<SharedString> { Self::required_fields() }
+    fn trigger_fields() -> HashSet<SharedString> {
+        Self::required_fields()
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -33,9 +34,9 @@ pub enum TelemetrySubscription {
     },
     Explicit {
         name: SharedString,
+        trigger_fields: HashSet<SharedString>,
         required_fields: HashSet<SharedString>,
         optional_fields: HashSet<SharedString>,
-        trigger_fields: HashSet<SharedString>,
         #[serde(skip)]
         outlet_to_subscription: Outlet<Telemetry>,
         #[serde(skip)]
@@ -50,9 +51,9 @@ impl fmt::Debug for TelemetrySubscription {
                 .debug_struct("TelemetrySubscription")
                 .field("name", &name)
                 .field("outlet_to_subscription", &outlet_to_subscription)
-                .field("required_fields", &"[]")
-                .field("optional_fields", &"[<all>]")
-                .field("trigger_fields", &"[<all>]")
+                .field("triggers", &"[<all>]")
+                .field("required", &"[]")
+                .field("optional", &"[<all>]")
                 .finish(),
             Self::Explicit {
                 name,
@@ -65,9 +66,9 @@ impl fmt::Debug for TelemetrySubscription {
                 .debug_struct("TelemetrySubscription")
                 .field("name", &name)
                 .field("outlet_to_subscription", &outlet_to_subscription)
+                .field("triggers", &trigger_fields)
                 .field("required", &required_fields)
                 .field("optional", &optional_fields)
-                .field("triggers", &trigger_fields)
                 .finish(),
         }
     }
@@ -151,9 +152,9 @@ impl TelemetrySubscription {
         }
     }
 
-    pub fn with_trigger_fields<S: Into<SharedString>>(self, trigger_fields: HashSet<S>) -> Self {
+    pub fn with_trigger_fields<S: Into<SharedString>>(self, triggers: HashSet<S>) -> Self {
         match self {
-            all@ Self::All { .. } => all,
+            all @ Self::All { .. } => all,
             Self::Explicit {
                 name,
                 required_fields,
@@ -162,10 +163,10 @@ impl TelemetrySubscription {
                 outlet_to_subscription,
                 update_metrics,
             } => {
-                let mut trigger_fields: HashSet<SharedString> = trigger_fields
+                let mut trigger_fields: HashSet<SharedString> = triggers
                     .into_iter()
-                    .map(|s| s.into())
-                    .filter(|s| self.contains(s))
+                    .map(|t| t.into())
+                    .filter(|t| required_fields.contains(t) || optional_fields.contains(t))
                     .collect();
 
                 trigger_fields.extend(my_triggers);
@@ -178,7 +179,7 @@ impl TelemetrySubscription {
                     outlet_to_subscription,
                     update_metrics,
                 }
-            }
+            },
         }
     }
 
@@ -187,7 +188,7 @@ impl TelemetrySubscription {
             Self::All { .. } => true,
             Self::Explicit { required_fields, optional_fields, .. } => {
                 required_fields.contains(field) || optional_fields.contains(field)
-            }
+            },
         }
     }
 
@@ -232,15 +233,13 @@ impl TelemetrySubscription {
         }
     }
 
-    pub fn any_interest(&self, available_fields: &Keys<String, TelemetryValue>, changed_fields: &HashSet<String>) -> bool {
+    pub fn any_interest(&self, pushed_fields: &HashSet<String>) -> bool {
         match self {
             Self::All { .. } => true,
-            Self::Explicit { required_fields, optional_fields,  trigger_fields,  .. } => {
+            Self::Explicit { trigger_fields, .. } => {
                 let mut interested = false;
-                WORK HERE
-                for changed in changed_fields {
-                    let changed: SharedString = SharedString::Owned(changed.clone());
-                    if required_fields.contains(&changed) || optional_fields.contains(&changed) {
+                for pushed in pushed_fields {
+                    if trigger_fields.contains(pushed.as_str()) {
                         interested = true;
                         break;
                     }

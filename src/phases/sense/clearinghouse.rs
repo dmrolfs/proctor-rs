@@ -100,11 +100,10 @@ impl Clearinghouse {
     ) -> Result<bool, SenseError> {
         match data {
             Some(d) => {
-                let updated_fields: HashSet<String> = d.keys().cloned().collect();
+                let pushed_fields = d.keys().cloned().collect();
                 database.extend(d);
 
-                let interested =
-                    Self::find_interested_subscriptions(subscriptions, &database.keys(), updated_fields);
+                let interested = Self::find_interested_subscriptions(subscriptions, &database.keys(), pushed_fields);
 
                 Self::push_to_subscribers(stage_name, database, interested, correlation_generator).await?;
                 Ok(true)
@@ -120,17 +119,18 @@ impl Clearinghouse {
     }
 
     #[tracing::instrument(level = "trace", skip(subscriptions,))]
-    fn find_interested_subscriptions<'s>(
-        subscriptions: &'s [TelemetrySubscription], available: &Keys<String, TelemetryValue>, changed: HashSet<String>,
+    fn find_interested_subscriptions<'s, 'd>(
+        subscriptions: &'s [TelemetrySubscription], available: &Keys<'d, String, TelemetryValue>,
+        pushed: HashSet<String>,
     ) -> Vec<&'s TelemetrySubscription> {
         let interested = subscriptions
             .iter()
             .filter(|s| {
-                let is_interested = s.any_interest(available, &changed);
+                let is_interested = s.any_interest(&pushed);
                 tracing::trace!(
-                    "is subscription, {}, interested in changed fields:{:?} => {}",
+                    "is subscription, {}, interested in pushed fields:{:?} => {}",
                     s.name(),
-                    changed,
+                    pushed,
                     is_interested
                 );
                 is_interested
@@ -163,14 +163,13 @@ impl Clearinghouse {
         }
 
         let nr_subscribers = subscribers.len();
-        let now = Timestamp::now();
 
         let fulfilled = subscribers
             .into_iter()
             .map(|s| Self::fulfill_subscription(s, database).map(|fulfillment| (s, fulfillment)))
             .flatten()
             .map(|(s, mut fulfillment)| {
-                Self::add_automatic_telemetry(&mut fulfillment, correlation_generator);
+                let correlation_id = Self::add_automatic_telemetry(&mut fulfillment, correlation_generator);
 
                 tracing::info!(subscription=%s.name(), ?correlation_id, "sending subscription data update.");
                 s.update_metrics(&fulfillment);
@@ -216,10 +215,13 @@ impl Clearinghouse {
         result
     }
 
-    fn add_automatic_telemetry(telemetry: &mut Telemetry, correlation_generator: &mut CorrelationGenerator) {
-        telemetry.insert(SUBSCRIPTION_TIMESTAMP.to_string(), now.into());
+    fn add_automatic_telemetry(
+        telemetry: &mut Telemetry, correlation_generator: &mut CorrelationGenerator,
+    ) -> Id<Telemetry> {
+        telemetry.insert(SUBSCRIPTION_TIMESTAMP.to_string(), Timestamp::now().into());
         let correlation_id: Id<Telemetry> = correlation_generator.next_id();
         telemetry.insert(SUBSCRIPTION_CORRELATION.to_string(), correlation_id.clone().into());
+        correlation_id
     }
 
     #[tracing::instrument(level = "info")]
@@ -487,6 +489,7 @@ mod tests {
         vec![
             TelemetrySubscription::Explicit {
                 name: "none".into(),
+                trigger_fields: HashSet::default(),
                 required_fields: HashSet::default(),
                 optional_fields: HashSet::default(),
                 outlet_to_subscription: Outlet::new("none_outlet", PORT_DATA),
@@ -494,6 +497,7 @@ mod tests {
             },
             TelemetrySubscription::Explicit {
                 name: "cat_pos".into(),
+                trigger_fields: maplit::hashset! {"pos".into(), "cat".into()},
                 required_fields: maplit::hashset! {"pos".into(), "cat".into()},
                 optional_fields: maplit::hashset! {"extra".into()},
                 outlet_to_subscription: Outlet::new("cat_pos_outlet", PORT_DATA),
@@ -525,6 +529,7 @@ mod tests {
             },
             TelemetrySubscription::Explicit {
                 name: "all".into(),
+                trigger_fields: maplit::hashset! {"pos".into(), "cat".into(), "value".into()},
                 required_fields: maplit::hashset! {"pos".into(), "cat".into(), "value".into()},
                 optional_fields: HashSet::default(),
                 outlet_to_subscription: Outlet::new("all_outlet", PORT_DATA),
@@ -735,65 +740,69 @@ mod tests {
         let main_span = tracing::info_span!("test_find_interested_subscriptions");
         let _main_span_guard = main_span.enter();
 
+        let available: HashMap<String, TelemetryValue> = HashMap::default();
         let actual =
-            Clearinghouse::find_interested_subscriptions(&SUBSCRIPTIONS, HashSet::default(), HashSet::default());
+            Clearinghouse::find_interested_subscriptions(&SUBSCRIPTIONS, &available.keys(), HashSet::default());
         assert_eq!(actual, Vec::<&TelemetrySubscription>::default());
 
-        let available = "extra".to_string();
+        let available = maplit::hashmap! {"extra".to_string() => TelemetryValue::Unit };
         let actual = Clearinghouse::find_interested_subscriptions(
             &SUBSCRIPTIONS,
-            maplit::hashset! {&available},
+            &available.keys(),
             maplit::hashset! {"extra".to_string()},
         );
-        assert_eq!(actual, vec![&SUBSCRIPTIONS[1]]);
+        assert_eq!(actual, Vec::<&TelemetrySubscription>::default());
 
-        let available = "nonsense".to_string();
+        let available = maplit::hashmap! {"nonsense".to_string() => TelemetryValue::Unit };
         let actual = Clearinghouse::find_interested_subscriptions(
             &SUBSCRIPTIONS,
-            maplit::hashset! {&available},
+            &available.keys(),
             maplit::hashset! {"nonsense".to_string()},
         );
         assert_eq!(actual, Vec::<&TelemetrySubscription>::default());
 
-        let available = "pos".to_string();
+        let available = maplit::hashmap! {"pos".to_string() => TelemetryValue::Unit };
         let actual = Clearinghouse::find_interested_subscriptions(
             &SUBSCRIPTIONS,
-            maplit::hashset! {&available},
+            &available.keys(),
             maplit::hashset! {"pos".to_string()},
         );
         assert_eq!(actual, vec![&SUBSCRIPTIONS[1], &SUBSCRIPTIONS[2]]);
 
-        let available = "value".to_string();
+        let available = maplit::hashmap! {"value".to_string() => TelemetryValue::Unit };
         let actual = Clearinghouse::find_interested_subscriptions(
             &SUBSCRIPTIONS,
-            maplit::hashset! {&available},
+            &available.keys(),
             maplit::hashset! {"value".to_string()},
         );
         assert_eq!(actual, vec![&SUBSCRIPTIONS[2]]);
 
         let base = maplit::hashset! {"pos".to_string(), "cat".to_string()};
-        let available = base.iter().collect::<HashSet<_>>();
+        let available: HashMap<String, TelemetryValue> =
+            base.iter().map(|k| (k.clone(), TelemetryValue::Unit)).collect();
         let actual = Clearinghouse::find_interested_subscriptions(
             &SUBSCRIPTIONS,
-            available,
+            &available.keys(),
             maplit::hashset! {"pos".to_string(), "cat".to_string()},
         );
         assert_eq!(actual, vec![&SUBSCRIPTIONS[1], &SUBSCRIPTIONS[2]]);
 
         let base = maplit::hashset! {"pos".to_string(), "value".to_string(), "cat".to_string()};
-        let available = base.iter().collect::<HashSet<_>>();
+        let available: HashMap<String, TelemetryValue> =
+            base.iter().map(|k| (k.clone(), TelemetryValue::Unit)).collect();
         let actual = Clearinghouse::find_interested_subscriptions(
             &SUBSCRIPTIONS,
-            available,
+            &available.keys(),
             maplit::hashset! {"pos".to_string(), "value".to_string(), "cat".to_string()},
         );
         assert_eq!(actual, vec![&SUBSCRIPTIONS[1], &SUBSCRIPTIONS[2]]);
 
         let base = maplit::hashset! {"pos".to_string(), "value".to_string(), "cat".to_string(), "extra".to_string()};
-        let available = base.iter().collect::<HashSet<_>>();
+        let available: HashMap<String, TelemetryValue> =
+            base.iter().map(|k| (k.clone(), TelemetryValue::Unit)).collect();
         let actual = Clearinghouse::find_interested_subscriptions(
             &SUBSCRIPTIONS,
-            available,
+            &available.keys(),
             maplit::hashset! {"pos".to_string(), "value".to_string(), "cat".to_string(), "extra".to_string()},
         );
         assert_eq!(actual, vec![&SUBSCRIPTIONS[1], &SUBSCRIPTIONS[2]]);

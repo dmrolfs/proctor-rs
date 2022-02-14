@@ -12,10 +12,7 @@ pub enum GovernanceError {
     Telemetry(#[from] TelemetryError),
 
     #[error("failed to handle policy binding: {key} = {value}")]
-    Binding {
-        key: String,
-        value: String,
-    },
+    Binding { key: String, value: String },
 
     #[error("{0}")]
     Stage(#[from] anyhow::Error),

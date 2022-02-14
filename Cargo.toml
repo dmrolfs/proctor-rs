@@ -1,6 +1,6 @@
 [package]
 name = "proctor"
-version = "0.11.0"
+version = "0.12.0"
 authors = ["Damon Rolfs <drolfs@gmail.com>"]
 edition = "2021"
 repository = "https://github.com/dmrolfs/proctor-rs"
@@ -44,8 +44,8 @@ either = { version = "1.6.1", features = ["serde"] }
 enum-display-derive = "0.1.1"
 flexbuffers = "2.0.0"
 frunk = "0.4.0"
-futures = "0.3.19"
-futures-util = "0.3.19"
+futures = "0.3.21"
+futures-util = "0.3.21"
 handlebars = "4.2.1"
 maplit = "1.0.2"
 num_cpus = "1.13.1"
@@ -63,17 +63,17 @@ reqwest-middleware = "0.1.4"
 reqwest-retry = "0.1.3"
 ron = "0.7.0"
 serde = "1.0.136"
-serde_json = "1.0.78"
+serde_json = "1.0.79"
 statrs = "0.15.0"
 tempfile = "3.3.0"
 thiserror = "1.0.30"
 tokio = { version = "1.16.1", features = ["full"] }
-tracing = "0.1.29"
+tracing = "0.1.30"
 tracing-bunyan-formatter = "0.3.2"
 tracing-flame = "0.2.0"
 tracing-futures = "0.2.5"
 tracing-log = "0.1.2"
-tracing-subscriber = { version = "0.3.7", features = ["env-filter", "json"] }
+tracing-subscriber = { version = "0.3.8", features = ["env-filter", "json"] }
 trim-margin = "0.1.0"
 url = "2.2.2"
 validator = { version = "0.14.0", features = ["derive"] }
@@ -81,14 +81,14 @@ validator = { version = "0.14.0", features = ["derive"] }
 [dev-dependencies]
 claim = "0.5.0"
 criterion = { version = "0.3.5", features = ["async_tokio", "html_reports"] }
-futures-core = "0.3.19"
+futures-core = "0.3.21"
 itertools = "0.10.3"
 pprof = { version = "0.6.2", features = ["flamegraph"] }
 pretty_assertions = "1.1.0"
 rand = "0.8.4"
 serde_test = "1.0.136"
 serde-transcode = "1.1.1"
-serde_with = { version = "1.11.0", features = ["chrono", "json", "macros"] }
+serde_with = { version = "1.12.0", features = ["chrono", "json", "macros"] }
 static_assertions = "1.1.0"
 tokio-test = "0.4.2"
 wiremock = "0.5.10"

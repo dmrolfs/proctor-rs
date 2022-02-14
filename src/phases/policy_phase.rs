@@ -157,9 +157,7 @@ where
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
-        self.do_check()
-            .await
-            .map_err(|err| ProctorError::Phase(err.into()))?;
+        self.do_check().await.map_err(|err| ProctorError::Phase(err.into()))?;
         Ok(())
     }
 
@@ -171,9 +169,7 @@ where
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn close(mut self: Box<Self>) -> ProctorResult<()> {
-        self.do_close()
-            .await
-            .map_err(|err| ProctorError::Phase(err.into()))?;
+        self.do_close().await.map_err(|err| ProctorError::Phase(err.into()))?;
         Ok(())
     }
 }

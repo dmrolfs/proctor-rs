@@ -9,10 +9,7 @@ pub enum DecisionError {
     DataNotFound(String),
 
     #[error("failed to handle policy binding: {key} = {value}")]
-    Binding {
-        key: String,
-        value: String,
-    },
+    Binding { key: String, value: String },
 
     #[error("{0}")]
     Telemetry(#[from] TelemetryError),
