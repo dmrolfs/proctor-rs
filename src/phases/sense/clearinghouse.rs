@@ -120,7 +120,7 @@ impl Clearinghouse {
 
     #[tracing::instrument(level = "trace", skip(subscriptions,))]
     fn find_interested_subscriptions<'s, 'd>(
-        subscriptions: &'s [TelemetrySubscription], available: &Keys<'d, String, TelemetryValue>,
+        subscriptions: &'s [TelemetrySubscription], _available: &Keys<'d, String, TelemetryValue>,
         pushed: HashSet<String>,
     ) -> Vec<&'s TelemetrySubscription> {
         let interested = subscriptions
@@ -489,7 +489,6 @@ mod tests {
         vec![
             TelemetrySubscription::Explicit {
                 name: "none".into(),
-                trigger_fields: HashSet::default(),
                 required_fields: HashSet::default(),
                 optional_fields: HashSet::default(),
                 outlet_to_subscription: Outlet::new("none_outlet", PORT_DATA),
@@ -497,7 +496,6 @@ mod tests {
             },
             TelemetrySubscription::Explicit {
                 name: "cat_pos".into(),
-                trigger_fields: maplit::hashset! {"pos".into(), "cat".into()},
                 required_fields: maplit::hashset! {"pos".into(), "cat".into()},
                 optional_fields: maplit::hashset! {"extra".into()},
                 outlet_to_subscription: Outlet::new("cat_pos_outlet", PORT_DATA),
@@ -529,7 +527,6 @@ mod tests {
             },
             TelemetrySubscription::Explicit {
                 name: "all".into(),
-                trigger_fields: maplit::hashset! {"pos".into(), "cat".into(), "value".into()},
                 required_fields: maplit::hashset! {"pos".into(), "cat".into(), "value".into()},
                 optional_fields: HashSet::default(),
                 outlet_to_subscription: Outlet::new("all_outlet", PORT_DATA),
@@ -751,7 +748,7 @@ mod tests {
             &available.keys(),
             maplit::hashset! {"extra".to_string()},
         );
-        assert_eq!(actual, Vec::<&TelemetrySubscription>::default());
+        assert_eq!(actual, vec![&SUBSCRIPTIONS[1]]);
 
         let available = maplit::hashmap! {"nonsense".to_string() => TelemetryValue::Unit };
         let actual = Clearinghouse::find_interested_subscriptions(

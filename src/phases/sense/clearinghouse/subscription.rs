@@ -34,7 +34,6 @@ pub enum TelemetrySubscription {
     },
     Explicit {
         name: SharedString,
-        trigger_fields: HashSet<SharedString>,
         required_fields: HashSet<SharedString>,
         optional_fields: HashSet<SharedString>,
         #[serde(skip)]
@@ -59,14 +58,12 @@ impl fmt::Debug for TelemetrySubscription {
                 name,
                 required_fields,
                 optional_fields,
-                trigger_fields,
                 outlet_to_subscription,
                 update_metrics: _,
             } => f
                 .debug_struct("TelemetrySubscription")
                 .field("name", &name)
                 .field("outlet_to_subscription", &outlet_to_subscription)
-                .field("triggers", &trigger_fields)
                 .field("required", &required_fields)
                 .field("optional", &optional_fields)
                 .finish(),
@@ -84,7 +81,6 @@ impl TelemetrySubscription {
     pub fn for_requirements<T: SubscriptionRequirements>(self) -> Self {
         self.with_required_fields(T::required_fields())
             .with_optional_fields(T::optional_fields())
-            .with_trigger_fields(T::trigger_fields())
     }
 
     pub fn with_required_fields<S: Into<SharedString>>(self, required_fields: HashSet<S>) -> Self {
@@ -93,7 +89,6 @@ impl TelemetrySubscription {
         match self {
             Self::All { name, outlet_to_subscription, update_metrics } => Self::Explicit {
                 name,
-                trigger_fields: required_fields.clone(),
                 optional_fields: HashSet::default(),
                 required_fields,
                 outlet_to_subscription,
@@ -103,16 +98,15 @@ impl TelemetrySubscription {
                 name,
                 required_fields: mut my_required_fields,
                 optional_fields,
-                trigger_fields,
                 outlet_to_subscription,
                 update_metrics,
             } => {
                 my_required_fields.extend(required_fields);
+
                 Self::Explicit {
                     name,
                     required_fields: my_required_fields,
                     optional_fields,
-                    trigger_fields,
                     outlet_to_subscription,
                     update_metrics,
                 }
@@ -127,7 +121,6 @@ impl TelemetrySubscription {
                 name,
                 required_fields: HashSet::default(),
                 optional_fields,
-                trigger_fields: HashSet::default(),
                 outlet_to_subscription,
                 update_metrics,
             },
@@ -135,47 +128,15 @@ impl TelemetrySubscription {
                 name,
                 required_fields,
                 optional_fields: mut my_optional_fields,
-                trigger_fields,
                 outlet_to_subscription,
                 update_metrics,
             } => {
                 my_optional_fields.extend(optional_fields);
+
                 Self::Explicit {
                     name,
                     required_fields,
                     optional_fields: my_optional_fields,
-                    trigger_fields,
-                    outlet_to_subscription,
-                    update_metrics,
-                }
-            },
-        }
-    }
-
-    pub fn with_trigger_fields<S: Into<SharedString>>(self, triggers: HashSet<S>) -> Self {
-        match self {
-            all @ Self::All { .. } => all,
-            Self::Explicit {
-                name,
-                required_fields,
-                optional_fields,
-                trigger_fields: my_triggers,
-                outlet_to_subscription,
-                update_metrics,
-            } => {
-                let mut trigger_fields: HashSet<SharedString> = triggers
-                    .into_iter()
-                    .map(|t| t.into())
-                    .filter(|t| required_fields.contains(t) || optional_fields.contains(t))
-                    .collect();
-
-                trigger_fields.extend(my_triggers);
-
-                Self::Explicit {
-                    trigger_fields,
-                    name,
-                    required_fields,
-                    optional_fields,
                     outlet_to_subscription,
                     update_metrics,
                 }
@@ -205,14 +166,12 @@ impl TelemetrySubscription {
                 name,
                 required_fields,
                 optional_fields,
-                trigger_fields,
                 outlet_to_subscription,
                 ..
             } => Self::Explicit {
                 name,
                 required_fields,
                 optional_fields,
-                trigger_fields,
                 outlet_to_subscription,
                 update_metrics: Some(Arc::new(update_metrics)),
             },
@@ -236,16 +195,10 @@ impl TelemetrySubscription {
     pub fn any_interest(&self, pushed_fields: &HashSet<String>) -> bool {
         match self {
             Self::All { .. } => true,
-            Self::Explicit { trigger_fields, .. } => {
-                let mut interested = false;
-                for pushed in pushed_fields {
-                    if trigger_fields.contains(pushed.as_str()) {
-                        interested = true;
-                        break;
-                    }
-                }
-                interested
-            },
+            Self::Explicit { required_fields, optional_fields, .. } => pushed_fields
+                .iter()
+                .map(|p| p.as_str())
+                .any(|p| required_fields.contains(p) || optional_fields.contains(p)),
         }
     }
 
