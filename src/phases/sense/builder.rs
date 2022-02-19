@@ -86,8 +86,7 @@ impl SenseBuilder<Telemetry> {
     pub async fn build_for_telemetry_out_subscription(
         mut self, out_subscription: TelemetrySubscription,
     ) -> Result<Sense<Telemetry>, SenseError> {
-        let out_channel =
-            SubscriptionChannel::connect_telemetry_subscription(out_subscription, &mut self).await?;
+        let out_channel = SubscriptionChannel::connect_telemetry_subscription(out_subscription, &mut self).await?;
         self.finish(out_channel).await
     }
 

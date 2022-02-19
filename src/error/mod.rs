@@ -10,7 +10,7 @@ mod graph_errors;
 mod plan_errors;
 mod policy_errors;
 mod port_errors;
-mod sensor_errors;
+mod sense_errors;
 mod stage_errors;
 mod telemetry_errors;
 
@@ -21,7 +21,7 @@ pub use graph_errors::GraphError;
 pub use plan_errors::PlanError;
 pub use policy_errors::PolicyError;
 pub use port_errors::PortError;
-pub use sensor_errors::{IncompatibleSensorSettings, SenseError};
+pub use sense_errors::{IncompatibleSensorSettings, SenseError};
 pub use stage_errors::StageError;
 pub use telemetry_errors::{TelemetryError, UnexpectedType};
 
