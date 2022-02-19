@@ -2,9 +2,9 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+use async_trait::async_trait;
 use cast_trait_object::DynCastExt;
 use serde::de::DeserializeOwned;
-use async_trait::async_trait;
 
 use super::{Clearinghouse, Sense, SubscriptionChannel, SubscriptionRequirements};
 use crate::elements::telemetry::UpdateMetricsFn;
@@ -26,7 +26,9 @@ pub struct SenseBuilder<Out> {
 
 #[async_trait]
 impl<Out: Send> ClearinghouseSubscriptionAgent for SenseBuilder<Out> {
-    async fn subscribe(&mut self, subscription: TelemetrySubscription, receiver: Inlet<Telemetry>) -> Result<(), SenseError> {
+    async fn subscribe(
+        &mut self, subscription: TelemetrySubscription, receiver: Inlet<Telemetry>,
+    ) -> Result<(), SenseError> {
         self.clearinghouse.subscribe(subscription, &receiver).await;
         Ok(())
     }
@@ -85,7 +87,7 @@ impl SenseBuilder<Telemetry> {
         mut self, out_subscription: TelemetrySubscription,
     ) -> Result<Sense<Telemetry>, SenseError> {
         let out_channel =
-            SubscriptionChannel::connect_telemetry_subscription(out_subscription, (&mut self).into()).await?;
+            SubscriptionChannel::connect_telemetry_subscription(out_subscription, &mut self).await?;
         self.finish(out_channel).await
     }
 
@@ -101,7 +103,7 @@ impl SenseBuilder<Telemetry> {
             .with_required_fields(out_required_fields)
             .with_optional_fields(out_optional_fields);
 
-        let out_channel = SubscriptionChannel::connect_telemetry_subscription(subscription, (&mut self).into()).await?;
+        let out_channel = SubscriptionChannel::connect_telemetry_subscription(subscription, &mut self).await?;
 
         self.finish(out_channel).await
     }
@@ -120,7 +122,7 @@ impl SenseBuilder<Telemetry> {
             .with_optional_fields(out_optional_fields)
             .with_update_metrics_fn(update_metrics);
 
-        let out_channel = SubscriptionChannel::connect_telemetry_subscription(subscription, (&mut self).into()).await?;
+        let out_channel = SubscriptionChannel::connect_telemetry_subscription(subscription, &mut self).await?;
 
         self.finish(out_channel).await
     }
@@ -134,7 +136,7 @@ where
     pub async fn build_for_out_subscription(
         mut self, out_subscription: TelemetrySubscription,
     ) -> Result<Sense<Out>, SenseError> {
-        let out_channel = SubscriptionChannel::connect_subscription(out_subscription, (&mut self).into()).await?;
+        let out_channel = SubscriptionChannel::connect_subscription(out_subscription, &mut self).await?;
         self.finish(out_channel).await
     }
 
@@ -171,7 +173,7 @@ where
             .with_update_metrics_fn(update_metrics);
 
         let out_channel: SubscriptionChannel<Out> =
-            SubscriptionChannel::connect_subscription(subscription, (&mut self).into()).await?;
+            SubscriptionChannel::connect_subscription(subscription, &mut self).await?;
 
         self.finish(out_channel).await
     }

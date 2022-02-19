@@ -6,10 +6,10 @@ use std::collections::hash_map::Keys;
 use std::collections::HashSet;
 use std::fmt::{self, Debug};
 
+pub use agent::*;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use futures::future::FutureExt;
-pub use agent::*;
 use once_cell::sync::Lazy;
 use pretty_snowflake::Id;
 use prometheus::{IntCounterVec, IntGauge, Opts};

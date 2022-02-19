@@ -6,6 +6,8 @@ use crate::error::SenseError;
 use crate::graph::Inlet;
 
 #[async_trait]
-pub trait ClearinghouseSubscriptionAgent {
-    async fn subscribe(&mut self, subscription: TelemetrySubscription, receiver: Inlet<Telemetry>) -> Result<(), SenseError>;
+pub trait ClearinghouseSubscriptionAgent: Send {
+    async fn subscribe(
+        &mut self, subscription: TelemetrySubscription, receiver: Inlet<Telemetry>,
+    ) -> Result<(), SenseError>;
 }

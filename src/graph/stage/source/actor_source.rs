@@ -4,10 +4,10 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use tokio::sync::{mpsc, oneshot};
 
+use crate::error::GraphError;
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Outlet, Port, SourceShape, PORT_DATA};
 use crate::{Ack, AppData, ProctorResult, SharedString};
-use crate::error::GraphError;
 
 pub type ActorSourceApi<T> = mpsc::UnboundedSender<ActorSourceCmd<T>>;
 
@@ -24,8 +24,7 @@ where
 {
     pub async fn push(api: &ActorSourceApi<T>, item: T) -> Result<Ack, GraphError> {
         let (tx, rx) = oneshot::channel();
-        api
-            .send(Self::Push { item, tx } )
+        api.send(Self::Push { item, tx })
             .map_err(|err| GraphError::Api(STAGE_NAME.to_string(), err.into()))?;
 
         rx.await.map_err(|err| GraphError::Api(STAGE_NAME.to_string(), err.into()))
@@ -34,8 +33,7 @@ where
     #[inline]
     pub async fn stop(api: &ActorSourceApi<T>) -> Result<Ack, GraphError> {
         let (tx, rx) = oneshot::channel();
-        api
-            .send(Self::Stop(tx))
+        api.send(Self::Stop(tx))
             .map_err(|err| GraphError::Api(STAGE_NAME.to_string(), err.into()))?;
 
         rx.await.map_err(|err| GraphError::Api(STAGE_NAME.to_string(), err.into()))
@@ -134,10 +132,10 @@ impl<T> Debug for ActorSource<T> {
 //
 #[cfg(test)]
 mod tests {
-    use tokio::sync::mpsc;
-    use tokio_test::block_on;
     use claim::*;
     use pretty_assertions::assert_eq;
+    use tokio::sync::mpsc;
+    use tokio_test::block_on;
 
     use super::*;
     use crate::graph::stage::WithApi;

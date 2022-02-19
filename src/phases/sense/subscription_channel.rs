@@ -30,7 +30,7 @@ impl<T> Drop for SubscriptionChannel<T> {
 
 impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
     #[tracing::instrument(level = "info", skip(agent))]
-    pub async fn connect_subscription<A>(subscription: TelemetrySubscription, agent: &mut A,) -> Result<Self, SenseError>
+    pub async fn connect_subscription<A>(subscription: TelemetrySubscription, agent: &mut A) -> Result<Self, SenseError>
     where
         A: ClearinghouseSubscriptionAgent,
     {
@@ -44,7 +44,9 @@ impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
 
 impl SubscriptionChannel<Telemetry> {
     #[tracing::instrument(level = "info", skip(agent))]
-    pub async fn connect_telemetry_subscription<A>(subscription: TelemetrySubscription, agent: &mut A,) -> Result<Self, SenseError>
+    pub async fn connect_telemetry_subscription<A>(
+        subscription: TelemetrySubscription, agent: &mut A,
+    ) -> Result<Self, SenseError>
     where
         A: ClearinghouseSubscriptionAgent,
     {

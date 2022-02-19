@@ -9,7 +9,10 @@ use claim::*;
 use oso::{Oso, PolarClass, PolarValue};
 use pretty_assertions::assert_eq;
 use proctor::elements::telemetry::ToTelemetry;
-use proctor::elements::{self, telemetry, PolicyOutcome, PolicySettings, PolicySubscription, QueryPolicy, QueryResult, TelemetryValue, PolicyFilterEvent};
+use proctor::elements::{
+    self, telemetry, PolicyFilterEvent, PolicyOutcome, PolicySettings, PolicySubscription, QueryPolicy, QueryResult,
+    TelemetryValue,
+};
 use proctor::elements::{PolicyRegistry, PolicySource};
 use proctor::error::PolicyError;
 use proctor::graph::stage::{self, WithApi, WithMonitor};
@@ -285,12 +288,16 @@ impl TestFlow {
 
     pub async fn push_item(&self, item: TestItem) -> anyhow::Result<()> {
         tracing::info!(?item, "PUSHING ITEM...");
-        stage::ActorSourceCmd::push(&self.tx_item_source_api, item).await.map_err(|err| err.into())
+        stage::ActorSourceCmd::push(&self.tx_item_source_api, item)
+            .await
+            .map_err(|err| err.into())
     }
 
     pub async fn push_context(&self, env: TestContext) -> anyhow::Result<()> {
         tracing::info!(?env, "PUSHING CONTEXT...");
-        stage::ActorSourceCmd::push(&self.tx_env_source_api, env).await.map_err(|err| err.into())
+        stage::ActorSourceCmd::push(&self.tx_env_source_api, env)
+            .await
+            .map_err(|err| err.into())
     }
 
     pub async fn tell_policy(
@@ -464,12 +471,10 @@ async fn test_policy_filter_before_context_baseline() -> anyhow::Result<()> {
         inbox_lag: 3,
     };
     assert_ok!(flow.push_item(item).await);
-    assert!(
-        match assert_ok!(flow.recv_policy_event().await).as_ref() {
-            PolicyFilterEvent::<TestItem, TestContext>::ContextChanged(_) => false,
-            _ => true,
-        }
-    );
+    assert!(match assert_ok!(flow.recv_policy_event().await).as_ref() {
+        PolicyFilterEvent::<TestItem, TestContext>::ContextChanged(_) => false,
+        _ => true,
+    });
 
     let actual = assert_ok!(flow.inspect_sink().await);
     assert!(actual.is_empty());

@@ -480,7 +480,9 @@ where
     }
 
     pub async fn push_telemetry(&self, telemetry: Telemetry) -> anyhow::Result<()> {
-        stage::ActorSourceCmd::push(&self.tx_data_source_api, telemetry).await.map_err(|err| err.into())
+        stage::ActorSourceCmd::push(&self.tx_data_source_api, telemetry)
+            .await
+            .map_err(|err| err.into())
     }
 
     pub async fn push_context<'a, I>(&self, context_data: I) -> anyhow::Result<()>
@@ -488,7 +490,9 @@ where
         I: IntoIterator<Item = (&'a str, TelemetryValue)>,
     {
         let telemetry = context_data.into_iter().collect();
-        stage::ActorSourceCmd::push(&self.tx_context_source_api, telemetry).await.map_err(|err| err.into())
+        stage::ActorSourceCmd::push(&self.tx_context_source_api, telemetry)
+            .await
+            .map_err(|err| err.into())
     }
 
     pub async fn tell_policy(
