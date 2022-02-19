@@ -160,18 +160,14 @@ mod tests {
     where
         T: 'static + Debug + Send + Sync,
     {
-        let (cmd, rx) = ActorSourceCmd::push(value);
-        tx.send(cmd)?;
-        rx.await.map_err(|err| err.into())
+        ActorSourceCmd::push(tx, value).await.map_err(|err| err.into())
     }
 
     async fn stop_source<T>(tx: &ActorSourceApi<T>) -> anyhow::Result<Ack>
     where
         T: 'static + Debug + Send + Sync,
     {
-        let (cmd, rx) = ActorSourceCmd::stop();
-        tx.send(cmd)?;
-        rx.await.map_err(|err| err.into())
+        ActorSourceCmd::stop(tx).await.map_err(|err| err.into())
     }
 
     #[test]

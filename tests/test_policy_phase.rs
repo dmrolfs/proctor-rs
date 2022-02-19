@@ -480,9 +480,7 @@ where
     }
 
     pub async fn push_telemetry(&self, telemetry: Telemetry) -> anyhow::Result<()> {
-        let (cmd, ack) = stage::ActorSourceCmd::push(telemetry);
-        self.tx_data_source_api.send(cmd)?;
-        ack.await.map_err(|err| err.into())
+        stage::ActorSourceCmd::push(&self.tx_data_source_api, telemetry).await.map_err(|err| err.into())
     }
 
     pub async fn push_context<'a, I>(&self, context_data: I) -> anyhow::Result<()>
@@ -490,9 +488,7 @@ where
         I: IntoIterator<Item = (&'a str, TelemetryValue)>,
     {
         let telemetry = context_data.into_iter().collect();
-        let (cmd, ack) = stage::ActorSourceCmd::push(telemetry);
-        self.tx_context_source_api.send(cmd)?;
-        ack.await.map_err(|err| err.into())
+        stage::ActorSourceCmd::push(&self.tx_context_source_api, telemetry).await.map_err(|err| err.into())
     }
 
     pub async fn tell_policy(
@@ -571,13 +567,9 @@ where
 
     #[tracing::instrument(level = "warn", skip(self))]
     pub async fn close(mut self) -> anyhow::Result<Vec<PolicyOutcome<T, C>>> {
-        let (stop, _) = stage::ActorSourceCmd::stop();
-        self.tx_data_source_api.send(stop)?;
-
-        let (stop, _) = stage::ActorSourceCmd::stop();
-        self.tx_context_source_api.send(stop)?;
-
-        self.graph_handle.await?;
+        assert_ok!(stage::ActorSourceCmd::stop(&self.tx_data_source_api).await);
+        assert_ok!(stage::ActorSourceCmd::stop(&self.tx_context_source_api).await);
+        assert_ok!(self.graph_handle.await);
 
         self.rx_sink.take().unwrap().await.map_err(|err| err.into())
     }

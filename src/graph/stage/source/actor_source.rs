@@ -7,6 +7,7 @@ use tokio::sync::{mpsc, oneshot};
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Outlet, Port, SourceShape, PORT_DATA};
 use crate::{Ack, AppData, ProctorResult, SharedString};
+use crate::error::GraphError;
 
 pub type ActorSourceApi<T> = mpsc::UnboundedSender<ActorSourceCmd<T>>;
 
@@ -16,17 +17,28 @@ pub enum ActorSourceCmd<T> {
     Stop(oneshot::Sender<Ack>),
 }
 
-impl<T> ActorSourceCmd<T> {
-    #[inline]
-    pub fn push(item: T) -> (Self, oneshot::Receiver<Ack>) {
+const STAGE_NAME: &str = "actor_source";
+impl<T> ActorSourceCmd<T>
+where
+    T: Debug + Send + Sync + 'static,
+{
+    pub async fn push(api: &ActorSourceApi<T>, item: T) -> Result<Ack, GraphError> {
         let (tx, rx) = oneshot::channel();
-        (Self::Push { item, tx }, rx)
+        api
+            .send(Self::Push { item, tx } )
+            .map_err(|err| GraphError::Api(STAGE_NAME.to_string(), err.into()))?;
+
+        rx.await.map_err(|err| GraphError::Api(STAGE_NAME.to_string(), err.into()))
     }
 
     #[inline]
-    pub fn stop() -> (Self, oneshot::Receiver<Ack>) {
+    pub async fn stop(api: &ActorSourceApi<T>) -> Result<Ack, GraphError> {
         let (tx, rx) = oneshot::channel();
-        (Self::Stop(tx), rx)
+        api
+            .send(Self::Stop(tx))
+            .map_err(|err| GraphError::Api(STAGE_NAME.to_string(), err.into()))?;
+
+        rx.await.map_err(|err| GraphError::Api(STAGE_NAME.to_string(), err.into()))
     }
 }
 
@@ -124,6 +136,8 @@ impl<T> Debug for ActorSource<T> {
 mod tests {
     use tokio::sync::mpsc;
     use tokio_test::block_on;
+    use claim::*;
+    use pretty_assertions::assert_eq;
 
     use super::*;
     use crate::graph::stage::WithApi;
@@ -145,21 +159,15 @@ mod tests {
                 src.run().await.expect("failed to run actor source");
             });
 
-            let (cmd, ack) = ActorSourceCmd::push(13_i32);
-            tx_api.send(cmd).expect("failed to send cmd");
-            ack.await.expect("command rejected");
+            assert_ok!(ActorSourceCmd::push(&tx_api, 13).await);
             let actual = rx.recv().await;
             assert_eq!(actual, Some(13_i32));
 
-            let (cmd, ack) = ActorSourceCmd::push(17_i32);
-            tx_api.send(cmd).expect("failed to send cmd");
-            ack.await.expect("command rejected");
+            assert_ok!(ActorSourceCmd::push(&tx_api, 17).await);
             let actual = rx.recv().await;
             assert_eq!(actual, Some(17_i32));
 
-            let (cmd, ack) = ActorSourceCmd::stop();
-            tx_api.send(cmd).expect("failed to send cmd");
-            ack.await.expect("command rejected");
+            assert_ok!(ActorSourceCmd::stop(&tx_api).await);
             let actual = rx.recv().await;
             assert_eq!(actual, None);
         })
@@ -182,15 +190,11 @@ mod tests {
                 src.run().await.expect("failed to run actor source");
             });
 
-            let (cmd, ack) = ActorSourceCmd::stop();
-            tx_api.send(cmd).expect("failed to send cmd");
-            ack.await.expect("command rejected");
+            assert_ok!(ActorSourceCmd::stop(&tx_api).await);
             let actual = rx.recv().await;
             assert_eq!(actual, None);
 
-            let (cmd, _ack) = ActorSourceCmd::push(13_i32);
-            let actual = tx_api.send(cmd);
-            assert!(actual.is_err());
+            assert_err!(ActorSourceCmd::push(&tx_api, 13).await);
         })
     }
 

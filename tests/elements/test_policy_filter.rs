@@ -9,9 +9,7 @@ use claim::*;
 use oso::{Oso, PolarClass, PolarValue};
 use pretty_assertions::assert_eq;
 use proctor::elements::telemetry::ToTelemetry;
-use proctor::elements::{
-    self, telemetry, PolicyOutcome, PolicySettings, PolicySubscription, QueryPolicy, QueryResult, TelemetryValue,
-};
+use proctor::elements::{self, telemetry, PolicyOutcome, PolicySettings, PolicySubscription, QueryPolicy, QueryResult, TelemetryValue, PolicyFilterEvent};
 use proctor::elements::{PolicyRegistry, PolicySource};
 use proctor::error::PolicyError;
 use proctor::graph::stage::{self, WithApi, WithMonitor};
@@ -286,15 +284,13 @@ impl TestFlow {
     }
 
     pub async fn push_item(&self, item: TestItem) -> anyhow::Result<()> {
-        let (cmd, ack) = stage::ActorSourceCmd::push(item);
-        self.tx_item_source_api.send(cmd)?;
-        ack.await.map_err(|err| err.into())
+        tracing::info!(?item, "PUSHING ITEM...");
+        stage::ActorSourceCmd::push(&self.tx_item_source_api, item).await.map_err(|err| err.into())
     }
 
     pub async fn push_context(&self, env: TestContext) -> anyhow::Result<()> {
-        let (cmd, ack) = stage::ActorSourceCmd::push(env);
-        self.tx_env_source_api.send(cmd)?;
-        ack.await.map_err(|err| err.into())
+        tracing::info!(?env, "PUSHING CONTEXT...");
+        stage::ActorSourceCmd::push(&self.tx_env_source_api, env).await.map_err(|err| err.into())
     }
 
     pub async fn tell_policy(
@@ -329,6 +325,7 @@ impl TestFlow {
     }
 
     pub async fn inspect_sink(&self) -> anyhow::Result<Vec<PolicyOutcome<TestItem, TestContext>>> {
+        tracing::info!("INSPECTING SINK...");
         let (cmd, acc) = stage::FoldCmd::get_accumulation();
         self.tx_sink_api.send(cmd)?;
         acc.await
@@ -340,14 +337,9 @@ impl TestFlow {
     }
 
     pub async fn close(mut self) -> anyhow::Result<Vec<PolicyOutcome<TestItem, TestContext>>> {
-        let (stop, _) = stage::ActorSourceCmd::stop();
-        self.tx_item_source_api.send(stop)?;
-
-        let (stop, _) = stage::ActorSourceCmd::stop();
-        self.tx_env_source_api.send(stop)?;
-
-        self.graph_handle.await?;
-
+        assert_ok!(stage::ActorSourceCmd::stop(&self.tx_item_source_api).await);
+        assert_ok!(stage::ActorSourceCmd::stop(&self.tx_env_source_api).await);
+        assert_ok!(self.graph_handle.await);
         self.rx_sink.take().unwrap().await.map_err(|err| err.into())
     }
 }
@@ -456,7 +448,7 @@ async fn test_policy_filter_before_context_baseline() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_policy_filter_before_context_baseline");
     let _ = main_span.enter();
 
-    let flow = TestFlow::new(
+    let mut flow = TestFlow::new(
         r##"eligible(_item, context) if context.location_code == {{location_code}};"##,
         PolicyTemplateData {
             location_code: 33,
@@ -471,11 +463,18 @@ async fn test_policy_filter_before_context_baseline() -> anyhow::Result<()> {
         timestamp: Utc::now().into(),
         inbox_lag: 3,
     };
-    flow.push_item(item).await?;
-    let actual = flow.inspect_sink().await?;
+    assert_ok!(flow.push_item(item).await);
+    assert!(
+        match assert_ok!(flow.recv_policy_event().await).as_ref() {
+            PolicyFilterEvent::<TestItem, TestContext>::ContextChanged(_) => false,
+            _ => true,
+        }
+    );
+
+    let actual = assert_ok!(flow.inspect_sink().await);
     assert!(actual.is_empty());
 
-    flow.close().await?;
+    assert_ok!(flow.close().await);
     Ok(())
 }
 
