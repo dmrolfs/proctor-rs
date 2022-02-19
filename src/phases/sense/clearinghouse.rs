@@ -293,7 +293,6 @@ impl Clearinghouse {
             },
 
             ClearinghouseCmd::Unsubscribe { name, tx } => {
-                // let mut subs = subscriptions.lock().await;
                 let dropped = subscriptions.iter().position(|s| s.name() == name.as_str()).map(|pos| {
                     let _dropped = subscriptions.remove(pos);
                     track_subscriptions(subscriptions.len());
@@ -623,39 +622,36 @@ mod tests {
             let nr_0_span = tracing::info_span!("nr_subscriptions is 0");
             let _ = nr_0_span.enter();
 
-            let (get_0, rx_get_0) = ClearinghouseCmd::get_clearinghouse_snapshot();
-            tx_api.send(get_0)?;
             let ClearinghouseSnapshot {
                 database: _db_0,
                 missing: _missing_0,
                 subscriptions: subs_0,
-            } = rx_get_0.await?;
+            } = assert_ok!(ClearinghouseCmd::get_clearinghouse_snapshot(&tx_api).await);
             let nr_subscriptions = subs_0.len();
             tracing::info!(%nr_subscriptions, "assert nr_subscriptions is 0...");
             assert_eq!(nr_subscriptions, 0);
 
             tracing::info!("sending add subscriber command to clearinghouse...");
             let sub1_inlet = Inlet::new("sub1", PORT_DATA);
-            let (add_cmd, rx_add) = ClearinghouseCmd::subscribe(
-                TelemetrySubscription::new("sub1")
-                    .with_required_fields(maplit::hashset! {"aaa", "bbb"})
-                    .with_optional_fields(HashSet::<&str>::default()),
-                sub1_inlet.clone(),
+            assert_ok!(
+                ClearinghouseCmd::subscribe(
+                    &tx_api,
+                    TelemetrySubscription::new("sub1")
+                        .with_required_fields(maplit::hashset! {"aaa", "bbb"})
+                        .with_optional_fields(HashSet::<&str>::default()),
+                    sub1_inlet.clone(),
+                )
+                .await
             );
-            tx_api.send(add_cmd)?;
-            tracing::info!("waiting for api confirmation...");
-            rx_add.await?;
 
             let nr_1_span = tracing::info_span!("nr_subscriptions is 1");
             let _ = nr_1_span.enter();
 
-            let (get_1, rx_get_1) = ClearinghouseCmd::get_clearinghouse_snapshot();
-            tx_api.send(get_1)?;
             let ClearinghouseSnapshot {
                 database: _db_1,
                 missing: _missing_1,
                 subscriptions: subs_1,
-            } = rx_get_1.await?;
+            } = assert_ok!(ClearinghouseCmd::get_clearinghouse_snapshot(&tx_api).await);
             let nr_subscriptions = subs_1.len();
             tracing::info!(%nr_subscriptions, "assert nr_subscriptions is now 1...");
             assert_eq!(nr_subscriptions, 1);
@@ -683,7 +679,7 @@ mod tests {
         let _main_span_guard = main_span.enter();
 
         block_on(async move {
-            let data: Telemetry = maplit::hashmap! { "dr".to_string() => 17.to_telemetry() }
+            let data: Telemetry = maplit::hashmap! { "dr".to_string() => 17_i64.to_telemetry() }
                 .into_iter()
                 .collect();
             let mut tick = stage::Tick::new("tick", Duration::from_nanos(0), Duration::from_millis(5), data);
@@ -696,29 +692,26 @@ mod tests {
             let clear_handle = tokio::spawn(async move { clearinghouse.run().await });
 
             let inlet_1 = Inlet::new("inlet_1", PORT_DATA);
-            let (add, rx_add) = ClearinghouseCmd::subscribe(
-                TelemetrySubscription::new("sub1")
-                    .with_required_fields(maplit::hashset! { "dr" })
-                    .with_optional_fields(HashSet::<String>::default()),
-                inlet_1.clone(),
+            assert_ok!(
+                ClearinghouseCmd::subscribe(
+                    &tx_api,
+                    TelemetrySubscription::new("sub1")
+                        .with_required_fields(maplit::hashset! { "dr" })
+                        .with_optional_fields(HashSet::<String>::default()),
+                    inlet_1.clone(),
+                )
+                .await
             );
-            tx_api.send(add)?;
 
-            let (get_1, rx_get_1) = ClearinghouseCmd::get_clearinghouse_snapshot();
-            tx_api.send(get_1)?;
-
-            rx_add.await?;
-            let ClearinghouseSnapshot { database: _, missing: _, subscriptions: subs1 } = rx_get_1.await?;
+            let ClearinghouseSnapshot { database: _, missing: _, subscriptions: subs1 } =
+                assert_ok!(ClearinghouseCmd::get_clearinghouse_snapshot(&tx_api).await);
             assert_eq!(subs1.len(), 1);
 
             let name_1 = subs1[0].name();
-            let (remove, rx_remove) = ClearinghouseCmd::unsubscribe(name_1);
-            tx_api.send(remove)?;
-            rx_remove.await?;
+            assert_ok!(ClearinghouseCmd::unsubscribe(&tx_api, name_1.as_ref()).await);
 
-            let (get_2, rx_get_2) = ClearinghouseCmd::get_clearinghouse_snapshot();
-            tx_api.send(get_2)?;
-            let ClearinghouseSnapshot { database: _, missing: _, subscriptions: subs2 } = rx_get_2.await?;
+            let ClearinghouseSnapshot { database: _, missing: _, subscriptions: subs2 } =
+                assert_ok!(ClearinghouseCmd::get_clearinghouse_snapshot(&tx_api).await);
             assert_eq!(subs2.len(), 0);
 
             tracing::info!("stopping tick source...");
@@ -812,7 +805,6 @@ mod tests {
         let _main_span_guard = main_span.enter();
 
         for subscriber in 0..=2 {
-            // let sub = &SUBSCRIPTIONS[subscriber];
             if let TelemetrySubscription::Explicit {
                 name: sub_name,
                 required_fields: sub_required_fields,

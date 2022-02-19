@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use tokio::sync::{mpsc, oneshot};
 
 use super::{Telemetry, TelemetrySubscription};
+use crate::error::SenseError;
 use crate::graph::Inlet;
 use crate::{Ack, SharedString};
 
@@ -26,37 +27,47 @@ pub enum ClearinghouseCmd {
 }
 
 impl ClearinghouseCmd {
-    #[inline]
-    pub fn subscribe(
-        subscription: TelemetrySubscription, receiver: Inlet<Telemetry>,
-    ) -> (Self, oneshot::Receiver<Ack>) {
+    const STAGE_NAME: &'static str = "clearinghouse";
+
+    pub async fn subscribe(
+        api: &ClearinghouseApi, subscription: TelemetrySubscription, receiver: Inlet<Telemetry>,
+    ) -> Result<Ack, SenseError> {
         let (tx, rx) = oneshot::channel();
-        (
-            Self::Subscribe { subscription: Box::new(subscription), receiver, tx },
-            rx,
-        )
+        api.send(Self::Subscribe { subscription: Box::new(subscription), receiver, tx })
+            .map_err(|err| SenseError::Api(Self::STAGE_NAME.to_string(), err.into()))?;
+
+        rx.await
+            .map_err(|err| SenseError::Api(Self::STAGE_NAME.to_string(), err.into()))
     }
 
-    #[inline]
-    pub fn unsubscribe<S: Into<String>>(name: S) -> (Self, oneshot::Receiver<Ack>) {
+    pub async fn unsubscribe(api: &ClearinghouseApi, name: &str) -> Result<Ack, SenseError> {
         let (tx, rx) = oneshot::channel();
-        (Self::Unsubscribe { name: name.into(), tx }, rx)
+        api.send(Self::Unsubscribe { name: name.to_string(), tx })
+            .map_err(|err| SenseError::Api(Self::STAGE_NAME.to_string(), err.into()))?;
+        rx.await
+            .map_err(|err| SenseError::Api(Self::STAGE_NAME.to_string(), err.into()))
     }
 
-    #[inline]
-    pub fn get_clearinghouse_snapshot() -> (Self, oneshot::Receiver<ClearinghouseSnapshot>) {
+    pub async fn get_clearinghouse_snapshot(api: &ClearinghouseApi) -> Result<ClearinghouseSnapshot, SenseError> {
         let (tx, rx) = oneshot::channel();
-        (Self::GetSnapshot { name: None, tx }, rx)
+        api.send(Self::GetSnapshot { name: None, tx })
+            .map_err(|err| SenseError::Api(Self::STAGE_NAME.to_string(), err.into()))?;
+        rx.await
+            .map_err(|err| SenseError::Api(Self::STAGE_NAME.to_string(), err.into()))
     }
 
-    #[inline]
-    pub fn get_subscription_snapshot<S: Into<String>>(name: S) -> (Self, oneshot::Receiver<ClearinghouseSnapshot>) {
+    pub async fn get_subscription_snapshot(
+        api: &ClearinghouseApi, name: &str,
+    ) -> Result<ClearinghouseSnapshot, SenseError> {
         let (tx, rx) = oneshot::channel();
-        (Self::GetSnapshot { name: Some(name.into()), tx }, rx)
+        api.send(Self::GetSnapshot { name: Some(name.to_string()), tx })
+            .map_err(|err| SenseError::Api(Self::STAGE_NAME.to_string(), err.into()))?;
+        rx.await
+            .map_err(|err| SenseError::Api(Self::STAGE_NAME.to_string(), err.into()))
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ClearinghouseSnapshot {
     pub database: Telemetry,
     pub missing: HashSet<String>,
