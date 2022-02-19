@@ -1,4 +1,4 @@
-pub mod magnet;
+pub mod agent;
 pub mod protocol;
 pub mod subscription;
 
@@ -9,7 +9,7 @@ use std::fmt::{self, Debug};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use futures::future::FutureExt;
-pub use magnet::*;
+pub use agent::*;
 use once_cell::sync::Lazy;
 use pretty_snowflake::Id;
 use prometheus::{IntCounterVec, IntGauge, Opts};

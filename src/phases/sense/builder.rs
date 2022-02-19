@@ -4,14 +4,15 @@ use std::marker::PhantomData;
 
 use cast_trait_object::DynCastExt;
 use serde::de::DeserializeOwned;
+use async_trait::async_trait;
 
 use super::{Clearinghouse, Sense, SubscriptionChannel, SubscriptionRequirements};
 use crate::elements::telemetry::UpdateMetricsFn;
 use crate::elements::Telemetry;
 use crate::error::{PortError, SenseError};
 use crate::graph::stage::{self, SourceStage, Stage, WithApi};
-use crate::graph::{Connect, Graph, SinkShape, SourceShape, UniformFanInShape};
-use crate::phases::sense::{CorrelationGenerator, TelemetrySubscription};
+use crate::graph::{Connect, Graph, Inlet, SinkShape, SourceShape, UniformFanInShape};
+use crate::phases::sense::{ClearinghouseSubscriptionAgent, CorrelationGenerator, TelemetrySubscription};
 use crate::{AppData, SharedString};
 
 #[derive(Debug)]
@@ -21,6 +22,14 @@ pub struct SenseBuilder<Out> {
     merge: stage::MergeN<Telemetry>,
     pub clearinghouse: Clearinghouse,
     marker: PhantomData<Out>,
+}
+
+#[async_trait]
+impl<Out: Send> ClearinghouseSubscriptionAgent for SenseBuilder<Out> {
+    async fn subscribe(&mut self, subscription: TelemetrySubscription, receiver: Inlet<Telemetry>) -> Result<(), SenseError> {
+        self.clearinghouse.subscribe(subscription, &receiver).await;
+        Ok(())
+    }
 }
 
 impl<Out> SenseBuilder<Out> {
@@ -142,7 +151,7 @@ where
             .with_optional_fields(out_optional_fields);
 
         let out_channel: SubscriptionChannel<Out> =
-            SubscriptionChannel::connect_subscription(subscription, (&mut self).into()).await?;
+            SubscriptionChannel::connect_subscription(subscription, &mut self).await?;
 
         self.finish(out_channel).await
     }

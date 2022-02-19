@@ -8,7 +8,7 @@ use crate::elements::{self, FromTelemetryShape, Telemetry};
 use crate::error::SenseError;
 use crate::graph::stage::Stage;
 use crate::graph::{Inlet, Outlet, Port, SourceShape, PORT_DATA};
-use crate::phases::sense::{ClearinghouseSubscriptionMagnet, TelemetrySubscription};
+use crate::phases::sense::{ClearinghouseSubscriptionAgent, TelemetrySubscription};
 use crate::{AppData, ProctorResult, SharedString};
 
 // todo: consider refactor all of these builder functions into a typed subscription channel builder.
@@ -29,12 +29,13 @@ impl<T> Drop for SubscriptionChannel<T> {
 }
 
 impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
-    #[tracing::instrument(level = "info")]
-    pub async fn connect_subscription(
-        subscription: TelemetrySubscription, mut magnet: ClearinghouseSubscriptionMagnet<'_>,
-    ) -> Result<Self, SenseError> {
+    #[tracing::instrument(level = "info", skip(agent))]
+    pub async fn connect_subscription<A>(subscription: TelemetrySubscription, agent: &mut A,) -> Result<Self, SenseError>
+    where
+        A: ClearinghouseSubscriptionAgent,
+    {
         let channel = Self::new(format!("{}_channel", subscription.name()).into()).await?;
-        magnet
+        agent
             .subscribe(subscription, channel.subscription_receiver.clone())
             .await?;
         Ok(channel)
@@ -42,12 +43,13 @@ impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
 }
 
 impl SubscriptionChannel<Telemetry> {
-    #[tracing::instrument(level = "info")]
-    pub async fn connect_telemetry_subscription(
-        subscription: TelemetrySubscription, mut magnet: ClearinghouseSubscriptionMagnet<'_>,
-    ) -> Result<Self, SenseError> {
+    #[tracing::instrument(level = "info", skip(agent))]
+    pub async fn connect_telemetry_subscription<A>(subscription: TelemetrySubscription, agent: &mut A,) -> Result<Self, SenseError>
+    where
+        A: ClearinghouseSubscriptionAgent,
+    {
         let channel = Self::telemetry(format!("{}_telemetry_channel", subscription.name()).into()).await?;
-        magnet
+        agent
             .subscribe(subscription, channel.subscription_receiver.clone())
             .await?;
         Ok(channel)
