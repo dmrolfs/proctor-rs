@@ -46,10 +46,6 @@ pub trait ProctorContext: AppData + SubscriptionRequirements + PolarClass + Seri
         )
         .await
         .map_err(|err| err.into())?;
-        // let (cmd, rx_ack) = ClearinghouseCmd::subscribe(subscription, channel.subscription_receiver.clone());
-        //
-        // tx_clearinghouse_api.send(cmd).map_err(|err| err.into())?;
-        // rx_ack.await.map_err(|err| err.into())?;
 
         Ok(channel)
     }

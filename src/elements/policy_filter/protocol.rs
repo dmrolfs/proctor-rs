@@ -4,6 +4,7 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
 use crate::elements::{PolicySource, QueryResult};
+use crate::error::PolicyError;
 use crate::Ack;
 
 pub type PolicyFilterApi<C, D> = mpsc::UnboundedSender<PolicyFilterCmd<C, D>>;
@@ -26,24 +27,48 @@ pub enum PolicyFilterCmd<C, D> {
 }
 
 impl<C, D> PolicyFilterCmd<C, D> {
-    pub fn replace_policies(
-        new_policies: impl IntoIterator<Item = PolicySource>, new_template_data: Option<D>,
-    ) -> (Self, oneshot::Receiver<Ack>) {
+    const STAGE_NAME: &'static str = "policy_filter";
+
+    pub async fn replace_policies(
+        api: &PolicyFilterApi<C, D>, new_policies: Vec<PolicySource>, new_template_data: Option<D>,
+    ) -> Result<Ack, PolicyError>
+    where
+        C: Debug + Send + Sync + 'static,
+        D: Debug + Send + Sync + 'static,
+    {
         let (tx, rx) = oneshot::channel();
-        let new_policies = new_policies.into_iter().collect();
-        (Self::ReplacePolicies { new_policies, new_template_data, tx }, rx)
+        api.send(Self::ReplacePolicies { new_policies, new_template_data, tx })
+            .map_err(|err| PolicyError::Api(Self::STAGE_NAME.to_string(), err.into()))?;
+
+        rx.await
+            .map_err(|err| PolicyError::Api(Self::STAGE_NAME.to_string(), err.into()))
     }
 
-    pub fn append_policy(
-        additional_policy: PolicySource, new_template_data: Option<D>,
-    ) -> (Self, oneshot::Receiver<Ack>) {
+    pub async fn append_policy(
+        api: &PolicyFilterApi<C, D>, additional_policy: PolicySource, new_template_data: Option<D>,
+    ) -> Result<Ack, PolicyError>
+    where
+        C: Debug + Send + Sync + 'static,
+        D: Debug + Send + Sync + 'static,
+    {
         let (tx, rx) = oneshot::channel();
-        (Self::AppendPolicy { additional_policy, new_template_data, tx }, rx)
+        api.send(Self::AppendPolicy { additional_policy, new_template_data, tx })
+            .map_err(|err| PolicyError::Api(Self::STAGE_NAME.to_string(), err.into()))?;
+
+        rx.await
+            .map_err(|err| PolicyError::Api(Self::STAGE_NAME.to_string(), err.into()))
     }
 
-    pub fn inspect() -> (Self, oneshot::Receiver<PolicyFilterDetail<C, D>>) {
+    pub async fn inspect(api: &PolicyFilterApi<C, D>) -> Result<PolicyFilterDetail<C, D>, PolicyError>
+    where
+        C: Debug + Send + Sync + 'static,
+        D: Debug + Send + Sync + 'static,
+    {
         let (tx, rx) = oneshot::channel();
-        (Self::Inspect(tx), rx)
+        api.send(Self::Inspect(tx))
+            .map_err(|err| PolicyError::Api(Self::STAGE_NAME.to_string(), err.into()))?;
+        rx.await
+            .map_err(|err| PolicyError::Api(Self::STAGE_NAME.to_string(), err.into()))
     }
 }
 

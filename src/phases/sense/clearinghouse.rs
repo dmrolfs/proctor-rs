@@ -658,7 +658,7 @@ mod tests {
 
             tracing::info!("stopping tick source...");
             let (tx_tick_stop, rx_tick_stop) = oneshot::channel();
-            let stop_tick = stage::tick::TickMsg::Stop { tx: tx_tick_stop };
+            let stop_tick = stage::tick::TickCmd::Stop { tx: tx_tick_stop };
             tx_tick_api.send(stop_tick)?;
             rx_tick_stop.await??;
 
@@ -715,9 +715,7 @@ mod tests {
             assert_eq!(subs2.len(), 0);
 
             tracing::info!("stopping tick source...");
-            let (stop_tick, _) = stage::tick::TickMsg::stop();
-            tx_tick_api.send(stop_tick)?;
-
+            assert_ok!(stage::tick::TickCmd::stop(&tx_tick_api).await);
             tick_handle.await??;
             clear_handle.await??;
             Ok(())

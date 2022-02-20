@@ -15,9 +15,6 @@ pub enum GraphError {
     #[error("Could not join task handle: {0}")]
     Join(#[from] tokio::task::JoinError),
 
-    #[error("Failure in {0} stage API: {1}")]
-    Api(String, #[source] anyhow::Error),
-
     #[error("{0}")]
     Port(#[from] PortError),
 }
@@ -32,7 +29,6 @@ impl MetricLabel for GraphError {
             // Self::Policy(e) => Right(Box::new(e)),
             Self::Stage(e) => Right(Box::new(e)),
             Self::Join(_) => Left("join".into()),
-            Self::Api(_, _) => Left("api".into()),
             Self::Port(e) => Right(Box::new(e)),
         }
     }

@@ -20,14 +20,28 @@ pub enum FoldCmd<Acc> {
 }
 
 impl<Acc> FoldCmd<Acc> {
-    pub fn get_accumulation() -> (Self, oneshot::Receiver<Acc>) {
+    const STAGE_NAME: &'static str = "fold";
+
+    pub async fn get_accumulation(api: &FoldApi<Acc>) -> Result<Acc, StageError>
+    where
+        Acc: Debug + Send + Sync + 'static,
+    {
         let (tx, rx) = oneshot::channel();
-        (Self::GetAcc(tx), rx)
+        api.send(Self::GetAcc(tx))
+            .map_err(|err| StageError::Api(Self::STAGE_NAME.to_string(), err.into()))?;
+        rx.await
+            .map_err(|err| StageError::Api(Self::STAGE_NAME.to_string(), err.into()))
     }
 
-    pub fn get_and_reset_accumulation() -> (Self, oneshot::Receiver<Acc>) {
+    pub async fn get_and_reset_accumulation(api: &FoldApi<Acc>) -> Result<Acc, StageError>
+    where
+        Acc: Debug + Send + Sync + 'static,
+    {
         let (tx, rx) = oneshot::channel();
-        (Self::GetAndReset(tx), rx)
+        api.send(Self::GetAndReset(tx))
+            .map_err(|err| StageError::Api(Self::STAGE_NAME.to_string(), err.into()))?;
+        rx.await
+            .map_err(|err| StageError::Api(Self::STAGE_NAME.to_string(), err.into()))
     }
 }
 

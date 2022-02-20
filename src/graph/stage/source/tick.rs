@@ -10,22 +10,26 @@ use tokio::sync::{mpsc, oneshot};
 use crate::error::StageError;
 use crate::graph::shape::SourceShape;
 use crate::graph::{stage, Outlet, Port, Stage, PORT_DATA};
-use crate::{AppData, ProctorResult, SharedString};
+use crate::{Ack, AppData, ProctorResult, SharedString};
 
-pub type TickApi = mpsc::UnboundedSender<TickMsg>;
+pub type TickApi = mpsc::UnboundedSender<TickCmd>;
 
 #[derive(Debug)]
-pub enum TickMsg {
+pub enum TickCmd {
     Stop {
         tx: oneshot::Sender<Result<(), StageError>>,
     },
 }
 
-impl TickMsg {
-    #[inline]
-    pub fn stop() -> (Self, oneshot::Receiver<Result<(), StageError>>) {
+impl TickCmd {
+    const STAGE_NAME: &'static str = "tick_source";
+
+    pub async fn stop(api: &TickApi) -> Result<Ack, StageError> {
         let (tx, rx) = oneshot::channel();
-        (Self::Stop { tx }, rx)
+        api.send(Self::Stop { tx })
+            .map_err(|err| StageError::Api(Self::STAGE_NAME.to_string(), err.into()))?;
+        rx.await
+            .map_err(|err| StageError::Api(Self::STAGE_NAME.to_string(), err.into()))?
     }
 }
 
@@ -140,7 +144,7 @@ pub struct Tick<T> {
     constraint: Constraint,
     outlet: Outlet<T>,
     tx_api: TickApi,
-    rx_api: mpsc::UnboundedReceiver<TickMsg>,
+    rx_api: mpsc::UnboundedReceiver<TickCmd>,
 }
 
 impl<T> Tick<T> {
@@ -234,7 +238,7 @@ where
                 },
 
                 Some(msg) = rx_api.recv() => match msg {
-                    TickMsg::Stop { tx } => {
+                    TickCmd::Stop { tx } => {
                         tracing::info!("handling request to stop ticking.");
                         let _ = tx.send(Ok(()));
                         break;
@@ -314,7 +318,7 @@ mod tests {
 
             tokio::time::sleep(Duration::from_millis(100)).await;
             let (stop_tx, stop_rx) = oneshot::channel();
-            let foo: anyhow::Result<()> = tx_api.send(TickMsg::Stop { tx: stop_tx }).map_err(|err| err.into());
+            let foo: anyhow::Result<()> = tx_api.send(TickCmd::Stop { tx: stop_tx }).map_err(|err| err.into());
             let _ = foo?;
             tracing::info!("Stop sent to Tick source.");
 

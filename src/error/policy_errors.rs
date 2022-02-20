@@ -30,6 +30,9 @@ pub enum PolicyError {
     #[error("failed to pull policy data from telemetry: {0}")]
     Telemetry(#[from] TelemetryError),
 
+    #[error("Failure in {0} policy API: {1}")]
+    Api(String, #[source] anyhow::Error),
+
     // #[error("policy data, {0}, not found")]
     // DataNotFound(String),
     #[error("failed to publish policy event: {0}")]
@@ -52,6 +55,7 @@ impl MetricLabel for PolicyError {
             Self::StringPolicy(_) => Left("string".into()),
             Self::RenderPolicyTemplate(_) | Self::PolicyTemplate(_) => Left("template".into()),
             Self::Telemetry(e) => Right(Box::new(e)),
+            Self::Api(_, _) => Left("api".into()),
             Self::Publish(_) => Left("publish".into()),
             Self::Other(_) => Left("other".into()),
         }

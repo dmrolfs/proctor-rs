@@ -12,7 +12,7 @@ use tokio::sync::mpsc;
 use super::SensorSetting;
 use crate::elements::Telemetry;
 use crate::error::{IncompatibleSensorSettings, SenseError};
-use crate::graph::stage::tick::TickMsg;
+use crate::graph::stage::tick::TickCmd;
 use crate::graph::stage::{CompositeSource, SourceStage, WithApi};
 use crate::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 
@@ -142,7 +142,7 @@ where
 pub struct TelemetrySensor {
     pub name: String,
     pub stage: Option<Box<dyn SourceStage<Telemetry>>>,
-    pub tx_stop: Option<mpsc::UnboundedSender<TickMsg>>,
+    pub tx_stop: Option<mpsc::UnboundedSender<TickCmd>>,
 }
 
 impl TelemetrySensor {

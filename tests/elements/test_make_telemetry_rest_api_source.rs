@@ -10,7 +10,7 @@ use pretty_assertions::assert_eq;
 use proctor::elements::Telemetry;
 use proctor::error::SenseError;
 use proctor::graph::stage;
-use proctor::graph::stage::tick::TickMsg;
+use proctor::graph::stage::tick::TickCmd;
 use proctor::graph::{Connect, Graph, SinkShape};
 use proctor::phases::sense::{make_telemetry_rest_api_sensor, HttpQuery, SensorSetting};
 use serde::{Deserialize, Serialize};
@@ -164,14 +164,9 @@ async fn test_make_telemetry_rest_api_source() -> Result<()> {
         tokio::time::sleep(run_duration).await;
 
         tracing::info!("tick-stop: stopping tick source...");
-        let (stop, rx_stop_ack) = TickMsg::stop();
-        tx_source_api.send(stop).map_err(|err| SenseError::Stage(err.into()))?;
-        rx_stop_ack
+        TickCmd::stop(&tx_source_api)
             .await
-            .map_err(|err| SenseError::Stage(err.into()))?
-            .map_err(|err| SenseError::Stage(err.into()))?;
-
-        Result::<(), SenseError>::Ok(())
+            .map_err(|err| SenseError::Stage(err.into()))
     });
 
     assert_ok!(g.run().await);

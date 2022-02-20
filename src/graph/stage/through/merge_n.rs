@@ -7,15 +7,27 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::error::StageError;
 use crate::graph::{stage, Inlet, InletsShape, Outlet, Port, SourceShape, Stage, UniformFanInShape, PORT_DATA};
-use crate::{AppData, ProctorResult, SharedString};
+use crate::{Ack, AppData, ProctorResult, SharedString};
 
-pub type MergeApi = mpsc::UnboundedSender<MergeMsg>;
+pub type MergeApi = mpsc::UnboundedSender<MergeCmd>;
 
 #[derive(Debug)]
-pub enum MergeMsg {
+pub enum MergeCmd {
     Stop {
         tx: oneshot::Sender<Result<(), StageError>>,
     },
+}
+
+impl MergeCmd {
+    const STAGE_NAME: &'static str = "merge_n";
+
+    pub async fn stop(api: &MergeApi) -> Result<Ack, StageError> {
+        let (tx, rx) = oneshot::channel();
+        api.send(Self::Stop { tx })
+            .map_err(|err| StageError::Api(Self::STAGE_NAME.to_string(), err.into()))?;
+        rx.await
+            .map_err(|err| StageError::Api(Self::STAGE_NAME.to_string(), err.into()))?
+    }
 }
 
 /// MergeN multiple sources. Picks elements randomly if all sources has elements ready.
@@ -25,7 +37,7 @@ pub enum MergeMsg {
 /// ```rust
 /// use rand::Rng;
 /// use proctor::tracing::{get_subscriber, init_subscriber};
-/// use proctor::graph::stage::{WithApi, MergeN, MergeMsg, Stage};
+/// use proctor::graph::stage::{WithApi, MergeN, MergeCmd, Stage};
 /// use std::fmt;
 /// use std::time::Duration;
 /// use tokio::sync::{mpsc, oneshot, Mutex};
@@ -67,7 +79,7 @@ pub enum MergeMsg {
 ///     let stop = tokio::spawn(async move {
 ///         tokio::time::sleep(Duration::from_millis(500)).await;
 ///         let (tx, rx) = oneshot::channel();
-///         tx_merge_api.send(MergeMsg::Stop { tx }).expect("failed to send stop to merge");
+///         tx_merge_api.send(MergeCmd::Stop { tx }).expect("failed to send stop to merge");
 ///         let _ = rx.await;
 ///         tracing::warn!("STOPPED MERGE");
 ///     });
@@ -136,7 +148,7 @@ pub struct MergeN<T> {
     inlets: InletsShape<T>,
     outlet: Outlet<T>,
     tx_api: MergeApi,
-    rx_api: mpsc::UnboundedReceiver<MergeMsg>,
+    rx_api: mpsc::UnboundedReceiver<MergeCmd>,
 }
 
 impl<T: Send> MergeN<T> {
@@ -219,7 +231,7 @@ impl<T: AppData> Stage for MergeN<T> {
                 },
 
                 Some(msg) = rx_api.recv() => match msg {
-                    MergeMsg::Stop { tx } => {
+                    MergeCmd::Stop { tx } => {
                         tracing::info!("handling request to stop MergeN.");
                         let _ = tx.send(Ok(()));
                         break;

@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use tokio::sync::{mpsc, oneshot};
 
-use crate::error::GraphError;
+use crate::error::StageError;
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Outlet, Port, SourceShape, PORT_DATA};
 use crate::{Ack, AppData, ProctorResult, SharedString};
@@ -22,21 +22,21 @@ impl<T> ActorSourceCmd<T>
 where
     T: Debug + Send + Sync + 'static,
 {
-    pub async fn push(api: &ActorSourceApi<T>, item: T) -> Result<Ack, GraphError> {
+    pub async fn push(api: &ActorSourceApi<T>, item: T) -> Result<Ack, StageError> {
         let (tx, rx) = oneshot::channel();
         api.send(Self::Push { item, tx })
-            .map_err(|err| GraphError::Api(STAGE_NAME.to_string(), err.into()))?;
+            .map_err(|err| StageError::Api(STAGE_NAME.to_string(), err.into()))?;
 
-        rx.await.map_err(|err| GraphError::Api(STAGE_NAME.to_string(), err.into()))
+        rx.await.map_err(|err| StageError::Api(STAGE_NAME.to_string(), err.into()))
     }
 
     #[inline]
-    pub async fn stop(api: &ActorSourceApi<T>) -> Result<Ack, GraphError> {
+    pub async fn stop(api: &ActorSourceApi<T>) -> Result<Ack, StageError> {
         let (tx, rx) = oneshot::channel();
         api.send(Self::Stop(tx))
-            .map_err(|err| GraphError::Api(STAGE_NAME.to_string(), err.into()))?;
+            .map_err(|err| StageError::Api(STAGE_NAME.to_string(), err.into()))?;
 
-        rx.await.map_err(|err| GraphError::Api(STAGE_NAME.to_string(), err.into()))
+        rx.await.map_err(|err| StageError::Api(STAGE_NAME.to_string(), err.into()))
     }
 }
 

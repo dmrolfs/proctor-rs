@@ -495,6 +495,7 @@ where
             .map_err(|err| err.into())
     }
 
+    #[allow(dead_code)]
     pub async fn tell_policy(
         &self, command_rx: (elements::PolicyFilterCmd<C, D>, oneshot::Receiver<proctor::Ack>),
     ) -> anyhow::Result<proctor::Ack> {
@@ -507,9 +508,7 @@ where
     }
 
     pub async fn inspect_policy_context(&self) -> anyhow::Result<elements::PolicyFilterDetail<C, D>> {
-        let (cmd, detail) = elements::PolicyFilterCmd::inspect();
-        self.tx_eligibility_api.send(cmd)?;
-        detail
+        elements::PolicyFilterCmd::inspect(&self.tx_eligibility_api)
             .await
             .map(|d| {
                 tracing::info!(detail=?d, "inspected policy.");
@@ -519,9 +518,7 @@ where
     }
 
     pub async fn inspect_sink(&self) -> anyhow::Result<Vec<PolicyOutcome<T, C>>> {
-        let (cmd, acc) = stage::FoldCmd::get_accumulation();
-        self.tx_sink_api.send(cmd)?;
-        acc.await
+        stage::FoldCmd::get_accumulation(&self.tx_sink_api).await
             .map(|a| {
                 tracing::info!(accumulation=?a, "inspected sink accumulation");
                 a
@@ -1258,14 +1255,15 @@ async fn test_eligibility_replace_policy() -> anyhow::Result<()> {
     flow.push_telemetry(telemetry_2.clone()).await?;
 
     tracing::warn!("replace policy and re-send");
-    let cmd_rx = elements::PolicyFilterCmd::replace_policies(
-        Some(elements::PolicySource::from_template_string(
+    elements::PolicyFilterCmd::replace_policies(
+        &flow.tx_eligibility_api,
+        vec![elements::PolicySource::from_template_string(
             TestPolicyB::base_template_name(),
             policy_2.to_string(),
-        )?),
+        )?],
         None,
-    );
-    flow.tell_policy(cmd_rx).await?;
+    )
+    .await?;
 
     tracing::warn!("DMR-B: after policy change, pushing telemetry data...");
     tracing::warn!(?telemetry_1, "DMR-B-1: item blocked...");

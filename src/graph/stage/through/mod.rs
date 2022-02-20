@@ -18,4 +18,4 @@ pub use self::identity::Identity;
 pub use self::map::Map;
 pub use self::merge::Merge;
 pub use self::merge_combine::MergeCombine;
-pub use self::merge_n::{MergeMsg, MergeN};
+pub use self::merge_n::{MergeCmd, MergeN};

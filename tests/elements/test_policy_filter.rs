@@ -300,6 +300,7 @@ impl TestFlow {
             .map_err(|err| err.into())
     }
 
+    #[allow(dead_code)]
     pub async fn tell_policy(
         &self,
         command_rx: (
@@ -320,10 +321,7 @@ impl TestFlow {
     pub async fn inspect_filter_context(
         &self,
     ) -> anyhow::Result<elements::PolicyFilterDetail<TestContext, PolicyTemplateData>> {
-        let (cmd, detail) = elements::PolicyFilterCmd::inspect();
-        self.tx_policy_api.send(cmd)?;
-        detail
-            .await
+        elements::PolicyFilterCmd::inspect(&self.tx_policy_api).await
             .map(|d| {
                 tracing::info!(detail=?d, "inspected policy.");
                 d
@@ -333,9 +331,7 @@ impl TestFlow {
 
     pub async fn inspect_sink(&self) -> anyhow::Result<Vec<PolicyOutcome<TestItem, TestContext>>> {
         tracing::info!("INSPECTING SINK...");
-        let (cmd, acc) = stage::FoldCmd::get_accumulation();
-        self.tx_sink_api.send(cmd)?;
-        acc.await
+        stage::FoldCmd::get_accumulation(&self.tx_sink_api).await
             .map(|a| {
                 tracing::info!(accumulation=?a, "inspected sink accumulation");
                 a
@@ -927,14 +923,15 @@ async fn test_replace_policy() -> anyhow::Result<()> {
     flow.push_item(item_2.clone()).await?;
 
     tracing::info!("replace policy and re-send");
-    let cmd_rx = elements::PolicyFilterCmd::replace_policies(
-        Some(elements::PolicySource::from_template_string(
+    elements::PolicyFilterCmd::replace_policies(
+        &flow.tx_policy_api,
+        vec![elements::PolicySource::from_template_string(
             TestPolicy::base_template_name(),
             policy_2.to_string(),
-        )?),
+        )?],
         None,
-    );
-    flow.tell_policy(cmd_rx).await?;
+    )
+    .await?;
 
     flow.push_item(item_1).await?;
     flow.push_item(item_2).await?;
@@ -1009,11 +1006,12 @@ async fn test_append_policy() -> anyhow::Result<()> {
     flow.push_item(item).await?;
 
     tracing::info!("add to policy and re-send");
-    let cmd_rx = elements::PolicyFilterCmd::append_policy(
+    elements::PolicyFilterCmd::append_policy(
+        &flow.tx_policy_api,
         elements::PolicySource::from_template_string(TestPolicy::base_template_name(), policy_2.to_string())?,
         None,
-    );
-    flow.tell_policy(cmd_rx).await?;
+    )
+    .await?;
 
     let item = TestItem::new(consts::SQRT_2, ts, 1);
     flow.push_item(item).await?;
@@ -1094,11 +1092,12 @@ async fn test_reset_policy() -> anyhow::Result<()> {
     flow.push_item(item).await?;
 
     tracing::info!("add to policy and resend");
-    let cmd_rx = elements::PolicyFilterCmd::append_policy(
+    elements::PolicyFilterCmd::append_policy(
+        &flow.tx_policy_api,
         elements::PolicySource::from_template_string(TestPolicy::base_template_name(), policy_2.to_string())?,
         None,
-    );
-    flow.tell_policy(cmd_rx).await?;
+    )
+    .await?;
 
     let item = TestItem::new(consts::TAU, ts, 1);
     flow.push_item(item).await?;
@@ -1106,56 +1105,5 @@ async fn test_reset_policy() -> anyhow::Result<()> {
     let item = TestItem::new(consts::LN_2, ts, 2);
     flow.push_item(item).await?;
 
-    // tracing::info!("and reset policy and resend");
-    // let cmd_rx = elements::PolicyFilterCmd::reset_policy();
-    // flow.tell_policy(cmd_rx).await?;
-    //
-    // let item = TestItem::new(consts::FRAC_1_SQRT_2, ts, 1);
-    // flow.push_item(item).await?;
-    //
-    // let item = TestItem::new(consts::SQRT_2, ts, 2);
-    // flow.push_item(item).await?;
-    //
-    // let actual = flow.close().await?;
-    // tracing::info!(?actual, "verifying actual result...");
-    // assert_eq!(
-    //     actual,
-    //     vec![
-    //         PolicyOutcome::new(
-    //             TestItem::new(consts::E, ts, 2),
-    //             TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() =>
-    // "Otis".to_telemetry()}),             QueryResult::passed_without_bindings(),
-    //         ),
-    //         PolicyOutcome::new(
-    //             TestItem::new(consts::TAU, ts, 1),
-    //             TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() =>
-    // "Otis".to_telemetry()}),             QueryResult {
-    //                 passed: true,
-    //                 bindings: maplit::hashmap! {
-    //                     "custom".to_string() => vec![
-    //                         TelemetryValue::Table(maplit::hashmap! { "cat".to_string() =>
-    // "Otis".to_telemetry(), })                     ]
-    //                 }
-    //             }
-    //         ),
-    //         PolicyOutcome::new(
-    //             TestItem::new(consts::LN_2, ts, 2),
-    //             TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() =>
-    // "Otis".to_telemetry()}),             QueryResult {
-    //                 passed: true,
-    //                 bindings: maplit::hashmap! {
-    //                     "custom".to_string() => vec![
-    //                         TelemetryValue::Table(maplit::hashmap! { "cat".to_string() =>
-    // "Otis".to_telemetry(), })                     ]
-    //                 }
-    //             }
-    //         ),
-    //         PolicyOutcome::new(
-    //             TestItem::new(consts::SQRT_2, ts, 2),
-    //             TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() =>
-    // "Otis".to_telemetry()}),             QueryResult::passed_without_bindings()
-    //         ),
-    //     ]
-    // );
     Ok(())
 }
