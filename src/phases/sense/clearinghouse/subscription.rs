@@ -17,10 +17,6 @@ pub trait SubscriptionRequirements {
     fn optional_fields() -> HashSet<SharedString> {
         HashSet::default()
     }
-
-    fn trigger_fields() -> HashSet<SharedString> {
-        Self::required_fields()
-    }
 }
 
 #[derive(Clone, Serialize)]
@@ -50,7 +46,6 @@ impl fmt::Debug for TelemetrySubscription {
                 .debug_struct("TelemetrySubscription")
                 .field("name", &name)
                 .field("outlet_to_subscription", &outlet_to_subscription)
-                .field("triggers", &"[<all>]")
                 .field("required", &"[]")
                 .field("optional", &"[<all>]")
                 .finish(),
