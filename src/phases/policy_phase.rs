@@ -18,7 +18,7 @@ use crate::{AppData, ProctorContext, ProctorResult, SharedString};
 pub struct PolicyPhase<In, Out, C, D> {
     name: SharedString,
     policy_transform: Box<dyn ThroughStage<In, Out>>,
-    pub context_inlet: Inlet<C>,
+    context_inlet: Inlet<C>,
     inlet: Inlet<In>,
     outlet: Outlet<Out>,
     tx_policy_api: PolicyFilterApi<C, D>,

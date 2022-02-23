@@ -321,7 +321,8 @@ impl TestFlow {
     pub async fn inspect_filter_context(
         &self,
     ) -> anyhow::Result<elements::PolicyFilterDetail<TestContext, PolicyTemplateData>> {
-        elements::PolicyFilterCmd::inspect(&self.tx_policy_api).await
+        elements::PolicyFilterCmd::inspect(&self.tx_policy_api)
+            .await
             .map(|d| {
                 tracing::info!(detail=?d, "inspected policy.");
                 d
@@ -331,7 +332,8 @@ impl TestFlow {
 
     pub async fn inspect_sink(&self) -> anyhow::Result<Vec<PolicyOutcome<TestItem, TestContext>>> {
         tracing::info!("INSPECTING SINK...");
-        stage::FoldCmd::get_accumulation(&self.tx_sink_api).await
+        stage::FoldCmd::get_accumulation(&self.tx_sink_api)
+            .await
             .map(|a| {
                 tracing::info!(accumulation=?a, "inspected sink accumulation");
                 a

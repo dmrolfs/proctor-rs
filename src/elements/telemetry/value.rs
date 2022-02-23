@@ -1148,7 +1148,7 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
             }
 
             #[inline]
-            #[tracing::instrument(level = "error")]
+            #[tracing::instrument(level = "trace")]
             fn visit_u32<E>(self, value: u32) -> Result<Self::Value, E> {
                 tracing::error!(?value, "deserializing u32 value");
                 Ok(TelemetryValue::Integer(value as i64))

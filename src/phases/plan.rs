@@ -10,37 +10,44 @@ use crate::graph::stage::{Stage, WithMonitor};
 use crate::graph::{stage, Inlet, Outlet, Port, SinkShape, SourceShape, PORT_CONTEXT, PORT_DATA};
 use crate::{AppData, ProctorResult, SharedString};
 
-pub type PlanMonitor<P> =
-    broadcast::Receiver<Arc<PlanEvent<<P as Planning>::Observation, <P as Planning>::Decision, <P as Planning>::Out>>>;
-
-pub type Event<P> = PlanEvent<<P as Planning>::Observation, <P as Planning>::Decision, <P as Planning>::Out>;
+// pub type Event<P> = PlanEvent<<P as Planning>::Context, <P as Planning>::Decision, <P as Planning>::Out>;
+pub type PlanMonitor<P> = broadcast::Receiver<Arc<PlanEvent<P>>>;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum PlanEvent<Observation, Decision, Out> {
-    ObservationAdded(Observation),
-    DecisionPlanned(Decision, Out),
-    DecisionIgnored(Decision),
+pub enum PlanEvent<P: Planning + ?Sized> {
+    DecisionPlanned(P::Decision, P::Out),
+    DecisionIgnored(P::Decision),
+    ContextChanged(P::Context),
 }
 
 #[async_trait]
 pub trait Planning: Debug + Send + Sync {
     type Observation: AppData + Clone;
     type Decision: AppData + Clone;
+    type Context: AppData + Clone;
     type Out: AppData + Clone;
 
     fn set_outlet(&mut self, outlet: Outlet<Self::Out>);
+
     fn add_observation(&mut self, observation: Self::Observation);
+
+    /// Patch planning context with populated properties of incoming context records. Optional
+    /// fields that are None may be ignored.
+    async fn patch_context(&mut self, context: Self::Context) -> Result<Option<PlanEvent<Self>>, PlanError>;
+
     async fn handle_decision(&mut self, decision: Self::Decision) -> Result<Option<Self::Out>, PlanError>;
+
     async fn close(mut self) -> Result<(), PlanError>;
 }
 
 pub struct Plan<P: Planning> {
     name: SharedString,
     planning: P,
-    inlet: Inlet<P::Observation>,
+    inlet: Inlet<P::Observation>, //todo: consider making observation inlet secondary to decision (in Sink Shape)
     decision_inlet: Inlet<P::Decision>,
+    context_inlet: Inlet<P::Context>,
     outlet: Outlet<P::Out>,
-    pub tx_monitor: broadcast::Sender<Arc<Event<P>>>,
+    pub tx_monitor: broadcast::Sender<Arc<PlanEvent<P>>>,
 }
 
 impl<P: Planning> Plan<P> {
@@ -48,7 +55,8 @@ impl<P: Planning> Plan<P> {
     pub fn new(name: impl AsRef<str>, mut planning: P) -> Self {
         let name = SharedString::Owned(format!("{}_plan", name.as_ref()));
         let inlet = Inlet::new(name.clone(), PORT_DATA);
-        let decision_inlet = Inlet::new(name.clone(), PORT_CONTEXT);
+        let decision_inlet = Inlet::new(name.clone(), "decision");
+        let context_inlet = Inlet::new(name.clone(), PORT_CONTEXT);
         let outlet = Outlet::new(name.clone(), PORT_DATA);
         planning.set_outlet(outlet.clone());
 
@@ -59,6 +67,7 @@ impl<P: Planning> Plan<P> {
             planning,
             inlet,
             decision_inlet,
+            context_inlet,
             outlet,
             tx_monitor,
         }
@@ -66,6 +75,10 @@ impl<P: Planning> Plan<P> {
 
     pub fn decision_inlet(&self) -> Inlet<P::Decision> {
         self.decision_inlet.clone()
+    }
+
+    pub fn context_inlet(&self) -> Inlet<P::Context> {
+        self.context_inlet.clone()
     }
 }
 
@@ -76,6 +89,7 @@ impl<P: Planning> Debug for Plan<P> {
             .field("planning", &self.planning)
             .field("inlet", &self.inlet)
             .field("decision_inlet", &self.decision_inlet)
+            .field("context_inlet", &self.context_inlet)
             .field("outlet", &self.outlet)
             .finish()
     }
@@ -136,22 +150,26 @@ impl<P: Planning> Plan<P> {
     async fn do_check(&self) -> Result<(), PlanError> {
         self.inlet.check_attachment().await?;
         self.decision_inlet.check_attachment().await?;
+        self.context_inlet.check_attachment().await?;
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
     async fn do_run(&mut self) -> Result<(), PlanError> {
         let rx_data = &mut self.inlet;
+        let rx_context = &mut self.context_inlet;
         let rx_decision = &mut self.decision_inlet;
         let tx_monitor = &self.tx_monitor;
         let planning = &mut self.planning;
 
         loop {
             tokio::select! {
-                Some(data) = rx_data.recv() => {
-                    let observation: P::Observation = data;
-                    planning.add_observation(observation.clone());
-                    Self::publish_event(tx_monitor, PlanEvent::ObservationAdded(observation));
+                Some(data) = rx_data.recv() => planning.add_observation(data),
+
+                Some(context) = rx_context.recv() => {
+                    if let Some(event) = planning.patch_context(context).await? {
+                        Self::publish_event(tx_monitor, event);
+                    }
                 },
 
                 Some(decision) = rx_decision.recv() => {
@@ -176,7 +194,7 @@ impl<P: Planning> Plan<P> {
     }
 
     #[tracing::instrument(level = "debug", skip(tx_monitor))]
-    fn publish_event(tx_monitor: &broadcast::Sender<Arc<Event<P>>>, event: Event<P>) {
+    fn publish_event(tx_monitor: &broadcast::Sender<Arc<PlanEvent<P>>>, event: PlanEvent<P>) {
         match tx_monitor.send(Arc::new(event)) {
             Ok(nr_subsribers) => tracing::debug!(%nr_subsribers, "published event to subscribers"),
             Err(err) => {
@@ -189,6 +207,7 @@ impl<P: Planning> Plan<P> {
         tracing::trace!("closing scaling_plan ports.");
         self.inlet.close().await;
         self.decision_inlet.close().await;
+        self.context_inlet.close().await;
         self.outlet.close().await;
         self.planning.close().await?;
         Ok(())

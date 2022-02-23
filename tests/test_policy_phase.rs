@@ -441,7 +441,7 @@ where
         (telemetry_channel.outlet(), eligibility.inlet()).connect().await;
         (eligibility.outlet(), sink.inlet()).connect().await;
 
-        assert!(eligibility.context_inlet.is_attached().await);
+        assert!(eligibility.context_inlet().is_attached().await);
         assert!(eligibility.inlet().is_attached().await);
         assert!(eligibility.outlet().is_attached().await);
 
@@ -518,7 +518,8 @@ where
     }
 
     pub async fn inspect_sink(&self) -> anyhow::Result<Vec<PolicyOutcome<T, C>>> {
-        stage::FoldCmd::get_accumulation(&self.tx_sink_api).await
+        stage::FoldCmd::get_accumulation(&self.tx_sink_api)
+            .await
             .map(|a| {
                 tracing::info!(accumulation=?a, "inspected sink accumulation");
                 a
