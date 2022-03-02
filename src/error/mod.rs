@@ -98,3 +98,24 @@ impl From<StageError> for ProctorError {
         Self::Graph(that.into())
     }
 }
+
+#[derive(Debug, Error)]
+pub enum UrlError {
+    #[error("failed to parse sesnor url: {0}")]
+    UrlParse(#[from] url::ParseError),
+
+    #[error("sesnor url cannot be a basis for http requests: {0}")]
+    UrlCannotBeBase(url::Url),
+}
+
+impl MetricLabel for UrlError {
+    fn slug(&self) -> SharedString {
+        "url".into()
+    }
+
+    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+        match self {
+            Self::UrlParse(_) | Self::UrlCannotBeBase(_) => Left("parse".into()),
+        }
+    }
+}

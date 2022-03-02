@@ -28,7 +28,7 @@ pub enum SenseError {
 
     /// Error processing JSON
     #[error("Error processing source JSON: {0}")]
-    JSON(#[from] serde_json::Error),
+    Json(#[from] serde_json::Error),
 
     #[error("Attempt to send via a closed subscription channel: {0}")]
     ClosedSubscription(String),
@@ -69,7 +69,7 @@ impl MetricLabel for SenseError {
             Self::HttpRequest(_) => Left("http::request".into()),
             Self::HttpMiddleware(_) => Left("http::middleware".into()),
             Self::UrlParse(_) => Left("http::url".into()),
-            Self::JSON(_) => Left("http::json".into()),
+            Self::Json(_) => Left("http::json".into()),
             Self::ClosedSubscription(_) => Left("closed_subscription".into()),
             Self::DataNotFound(_) => Left("data_not_found".into()),
             // Self::DecisionError(_) => Left("decision".into()),
@@ -85,11 +85,8 @@ impl MetricLabel for SenseError {
 
 #[derive(Debug, Error)]
 pub enum IncompatibleSensorSettings {
-    #[error("failed to parse sesnor url: {0}")]
-    UrlParse(#[from] url::ParseError),
-
-    #[error("sesnor url cannot be a basis for http requests: {0}")]
-    UrlCannotBeBase(url::Url),
+    #[error("{0}")]
+    UrlSetting(#[from] super::UrlError),
 
     #[error("expected {expected} sensor settings but got: {settings:?}")]
     ExpectedTypeError { expected: String, settings: SensorSetting },
@@ -110,7 +107,7 @@ impl MetricLabel for IncompatibleSensorSettings {
         match self {
             _e @ Self::ExpectedTypeError { .. } => Left("expected_type".into()),
             Self::InvalidRequestHeaderDetail(_) => Left("http::invalid_request_header_detail".into()),
-            Self::UrlCannotBeBase(_) | Self::UrlParse(_) => Left("http::url::parse".into()),
+            Self::UrlSetting(err) => Right(Box::new(err)),
             Self::ConfigurationParse(_) => Left("configuration_parse".into()),
         }
     }
