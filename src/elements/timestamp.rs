@@ -11,7 +11,7 @@ use once_cell::sync::Lazy;
 use oso::PolarClass;
 use regex::Regex;
 use serde::de::Unexpected;
-use serde::{de, Deserialize, Deserializer, Serialize};
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
 use super::{TelemetryType, TelemetryValue, ToTelemetry};
 use crate::error::TelemetryError;
@@ -81,6 +81,34 @@ impl Timestamp {
 
     pub const fn as_pair(&self) -> (i64, u32) {
         (self.0, self.1)
+    }
+}
+
+impl Timestamp {
+    pub fn serialize_as_secs_i64<S: Serializer>(ts: &Self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_i64(ts.as_secs())
+    }
+
+    pub fn serialize_as_secs_f64<S: Serializer>(ts: &Self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_f64(ts.as_f64())
+    }
+
+    pub fn serialize_as_millis<S: Serializer>(ts: &Self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_i64(ts.as_millis())
+    }
+
+    pub fn serialize_as_nanos<S: Serializer>(ts: &Self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_i64(ts.as_nanos())
+    }
+
+    pub fn deserialize_secs_i64<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let secs: i64 = Deserialize::deserialize(deserializer)?;
+        Ok(Self::from_secs(secs))
+    }
+
+    pub fn deserialize_millis_i64<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let millis: i64 = Deserialize::deserialize(deserializer)?;
+        Ok(Self::from_milliseconds(millis))
     }
 }
 
