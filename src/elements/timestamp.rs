@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::{self, Debug};
@@ -16,7 +17,7 @@ use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use super::{TelemetryType, TelemetryValue, ToTelemetry};
 use crate::error::TelemetryError;
 
-#[derive(PolarClass, Debug, Copy, Clone, Default, PartialEq, PartialOrd, Serialize)]
+#[derive(PolarClass, Debug, Copy, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct Timestamp(i64, u32);
 
 impl Timestamp {
@@ -118,6 +119,23 @@ impl fmt::Display for Timestamp {
             write!(f, "({},{})", self.0, self.1)
         } else {
             write!(f, "{}", self.as_utc())
+        }
+    }
+}
+
+impl PartialOrd for Timestamp {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Timestamp {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let secs_cmp = self.0.cmp(&other.0);
+        if secs_cmp == Ordering::Equal {
+            self.1.cmp(&other.1)
+        } else {
+            secs_cmp
         }
     }
 }
