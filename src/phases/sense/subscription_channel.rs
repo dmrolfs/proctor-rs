@@ -22,14 +22,8 @@ pub struct SubscriptionChannel<T> {
     outlet: Outlet<T>,
 }
 
-impl<T> Drop for SubscriptionChannel<T> {
-    fn drop(&mut self) {
-        tracing::error!(subscription_name=%self.name, subscription_outlet=?self.outlet, "DROPPING SUBSCRIPTION CHANNEL");
-    }
-}
-
 impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
-    #[tracing::instrument(level = "info", skip(agent))]
+    #[tracing::instrument(level = "trace", skip(agent))]
     pub async fn connect_subscription<A>(subscription: TelemetrySubscription, agent: &mut A) -> Result<Self, SenseError>
     where
         A: ClearinghouseSubscriptionAgent,
@@ -43,7 +37,7 @@ impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
 }
 
 impl SubscriptionChannel<Telemetry> {
-    #[tracing::instrument(level = "info", skip(agent))]
+    #[tracing::instrument(level = "trace", skip(agent))]
     pub async fn connect_telemetry_subscription<A>(
         subscription: TelemetrySubscription, agent: &mut A,
     ) -> Result<Self, SenseError>
@@ -59,7 +53,7 @@ impl SubscriptionChannel<Telemetry> {
 }
 
 impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
-    #[tracing::instrument(level = "info", name = "subscription_channel_new", skip(name))]
+    #[tracing::instrument(level = "trace", name = "subscription_channel_new", skip(name))]
     pub async fn new(name: SharedString) -> Result<Self, SenseError> {
         let inner_stage = elements::make_from_telemetry(name.clone(), true).await;
         let subscription_receiver = inner_stage.inlet();
@@ -76,7 +70,7 @@ impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
 
 impl SubscriptionChannel<Telemetry> {
     /// Create a subscription channel for direct telemetry data; i.e., no schema conversion.
-    #[tracing::instrument(level = "info", name = "subscription_channel_telemetry", skip(name))]
+    #[tracing::instrument(level = "trace", name = "subscription_channel_telemetry", skip(name))]
     pub async fn telemetry(name: SharedString) -> Result<Self, SenseError> {
         let identity = crate::graph::stage::Identity::new(
             name.to_string(),
@@ -122,19 +116,19 @@ impl<T: AppData> Stage for SubscriptionChannel<T> {
         self.name.clone()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
         self.do_check().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run subscription channel", skip(self))]
+    #[tracing::instrument(level = "trace", name = "run subscription channel", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         self.do_run().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn close(mut self: Box<Self>) -> ProctorResult<()> {
         self.do_close().await?;
         Ok(())
@@ -163,7 +157,7 @@ impl<T: AppData> SubscriptionChannel<T> {
     }
 
     async fn do_close(mut self: Box<Self>) -> Result<(), SenseError> {
-        tracing::info!("closing subscription_channel.");
+        tracing::trace!(stage=%self.name(), "closing subscription_channel.");
         self.subscription_receiver.close().await;
         if let Some(inner) = self.inner_stage.take() {
             inner.close().await.map_err(|err| SenseError::Stage(err.into()))?;

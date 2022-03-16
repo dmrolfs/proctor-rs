@@ -85,7 +85,7 @@ impl Clearinghouse {
         }
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     pub async fn subscribe(&mut self, subscription: TelemetrySubscription, receiver: &Inlet<Telemetry>) {
         tracing::info!(stage=%self.name, ?subscription, "adding clearinghouse subscription.");
         subscription.connect_to_receiver(receiver).await;
@@ -137,7 +137,7 @@ impl Clearinghouse {
             })
             .collect::<Vec<_>>();
 
-        tracing::info!(
+        tracing::debug!(
             nr_subscriptions=%subscriptions.len(),
             nr_interested=%interested.len(),
             ?interested,
@@ -149,7 +149,7 @@ impl Clearinghouse {
     }
 
     #[tracing::instrument(
-        level = "info",
+        level = "trace",
         skip(database, subscribers, correlation_generator),
         fields(subscribers = ?subscribers.iter().map(|s| s.name()).collect::<Vec<_>>(), ),
     )]
@@ -158,7 +158,7 @@ impl Clearinghouse {
         correlation_generator: &mut CorrelationGenerator,
     ) -> Result<(), SenseError> {
         if subscribers.is_empty() {
-            tracing::info!("not publishing - no subscribers corresponding to field changes.");
+            tracing::debug!("not publishing - no subscribers corresponding to field changes.");
             return Ok(());
         }
 
@@ -171,7 +171,7 @@ impl Clearinghouse {
             .map(|(s, mut fulfillment)| {
                 let correlation_id = Self::add_automatic_telemetry(&mut fulfillment, correlation_generator);
 
-                tracing::info!(subscription=%s.name(), ?correlation_id, "sending subscription data update.");
+                tracing::trace!(subscription=%s.name(), ?correlation_id, "sending subscription data update.");
                 s.update_metrics(&fulfillment);
                 // Self::update_metrics(s, &fulfillment);
                 s.send(fulfillment).map(move |send_status| {
@@ -205,7 +205,7 @@ impl Clearinghouse {
             Ok(())
         };
 
-        tracing::info!(
+        tracing::debug!(
             nr_fulfilled=%nr_fulfilled,
             nr_not_fulfilled=%(nr_subscribers - nr_fulfilled),
             sent_ok=%result.is_ok(),
@@ -224,15 +224,10 @@ impl Clearinghouse {
         correlation_id
     }
 
-    #[tracing::instrument(level = "info")]
+    #[tracing::instrument(level = "trace")]
     fn fulfill_subscription(subscription: &TelemetrySubscription, database: &Telemetry) -> Option<Telemetry> {
         subscription.fulfill(database)
     }
-
-    // #[tracing::instrument(level = "info", skip(subscription, telemetry))]
-    // fn update_metrics(subscription: &TelemetrySubscription, telemetry: &Telemetry) {
-    //     subscription.update_metrics(telemetry)
-    // }
 
     #[tracing::instrument(level = "trace", skip(subscriptions, database))]
     async fn handle_command(
@@ -242,7 +237,7 @@ impl Clearinghouse {
             ClearinghouseCmd::GetSnapshot { name, tx } => {
                 let snapshot = match name {
                     None => {
-                        tracing::info!("no subscription specified - responding with clearinghouse snapshot.");
+                        tracing::trace!("no subscription specified - responding with clearinghouse snapshot.");
                         ClearinghouseSnapshot {
                             database: database.clone(),
                             missing: HashSet::default(),
@@ -254,7 +249,7 @@ impl Clearinghouse {
                         Some(sub) => {
                             let (db, missing) = sub.trim_to_subscription(database)?;
 
-                            tracing::info!(
+                            tracing::debug!(
                                 requested_subscription=%name,
                                 data=?db,
                                 missing=?missing,
@@ -269,7 +264,7 @@ impl Clearinghouse {
                         },
 
                         None => {
-                            tracing::info!(requested_subscription=%name, "subscription not found - returning clearinghouse snapshot.");
+                            tracing::debug!(requested_subscription=%name, "subscription not found - returning clearinghouse snapshot.");
                             ClearinghouseSnapshot {
                                 database: database.clone(),
                                 missing: HashSet::default(),
@@ -339,13 +334,13 @@ impl Stage for Clearinghouse {
         self.name.clone()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
         self.do_check().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run clearinghouse", skip(self))]
+    #[tracing::instrument(level = "trace", name = "run clearinghouse", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         self.do_run().await?;
         Ok(())
@@ -414,10 +409,7 @@ impl Clearinghouse {
                     }
                 },
 
-                else => {
-                    tracing::trace!("clearinghouse done");
-                    break;
-                }
+                else => break,
             }
         }
 

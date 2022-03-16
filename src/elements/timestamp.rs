@@ -375,7 +375,7 @@ impl RelativeEq for Timestamp {
 }
 
 impl<'de> Deserialize<'de> for Timestamp {
-    #[tracing::instrument(level = "debug", skip(deserializer))]
+    #[tracing::instrument(level = "trace", skip(deserializer))]
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -393,7 +393,7 @@ impl<'de> de::Visitor<'de> for TimestampVisitor {
         formatter.write_str("a timestamp value in integer, float, sequence, map or string form")
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     fn visit_i8<E>(self, v: i8) -> Result<Self::Value, E>
     where
         E: de::Error,
@@ -401,7 +401,7 @@ impl<'de> de::Visitor<'de> for TimestampVisitor {
         self.visit_i64(v as i64)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     fn visit_i16<E>(self, v: i16) -> Result<Self::Value, E>
     where
         E: de::Error,
@@ -409,7 +409,7 @@ impl<'de> de::Visitor<'de> for TimestampVisitor {
         self.visit_i64(v as i64)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     fn visit_i32<E>(self, v: i32) -> Result<Self::Value, E>
     where
         E: de::Error,
@@ -417,7 +417,7 @@ impl<'de> de::Visitor<'de> for TimestampVisitor {
         self.visit_i64(v as i64)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
     where
         E: de::Error,
@@ -425,7 +425,7 @@ impl<'de> de::Visitor<'de> for TimestampVisitor {
         Ok(v.into())
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     fn visit_u8<E>(self, v: u8) -> Result<Self::Value, E>
     where
         E: de::Error,
@@ -433,7 +433,7 @@ impl<'de> de::Visitor<'de> for TimestampVisitor {
         self.visit_i64(v as i64)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     fn visit_u16<E>(self, v: u16) -> Result<Self::Value, E>
     where
         E: de::Error,
@@ -441,7 +441,7 @@ impl<'de> de::Visitor<'de> for TimestampVisitor {
         self.visit_i64(v as i64)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E>
     where
         E: de::Error,
@@ -449,7 +449,7 @@ impl<'de> de::Visitor<'de> for TimestampVisitor {
         self.visit_i64(v as i64)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
     where
         E: de::Error,
@@ -460,7 +460,7 @@ impl<'de> de::Visitor<'de> for TimestampVisitor {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     fn visit_f32<E>(self, v: f32) -> Result<Self::Value, E>
     where
         E: de::Error,
@@ -468,7 +468,7 @@ impl<'de> de::Visitor<'de> for TimestampVisitor {
         self.visit_f64(v as f64)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E>
     where
         E: de::Error,
@@ -476,7 +476,7 @@ impl<'de> de::Visitor<'de> for TimestampVisitor {
         Ok(v.into())
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
     where
         E: de::Error,
@@ -491,7 +491,7 @@ impl<'de> de::Visitor<'de> for TimestampVisitor {
         Ok(Timestamp::from_datetime(&dt))
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
     where
         E: de::Error,
@@ -499,7 +499,7 @@ impl<'de> de::Visitor<'de> for TimestampVisitor {
         self.visit_str(v)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
     where
         E: de::Error,
@@ -507,7 +507,7 @@ impl<'de> de::Visitor<'de> for TimestampVisitor {
         self.visit_str(v.as_str())
     }
 
-    #[tracing::instrument(level = "debug", skip(self, access))]
+    #[tracing::instrument(level = "trace", skip(self, access))]
     fn visit_seq<S>(self, mut access: S) -> Result<Self::Value, S::Error>
     where
         S: de::SeqAccess<'de>,
@@ -517,7 +517,7 @@ impl<'de> de::Visitor<'de> for TimestampVisitor {
         Ok(Timestamp::new(secs, nanos))
     }
 
-    #[tracing::instrument(level = "debug", skip(self, access))]
+    #[tracing::instrument(level = "trace", skip(self, access))]
     fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
     where
         M: de::MapAccess<'de>,

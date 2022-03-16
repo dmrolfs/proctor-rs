@@ -9,7 +9,7 @@ pub const FORMAT: &str = "%+";
 pub const SECS_KEY: &str = crate::elements::SECS_KEY;
 pub const NANOS_KEY: &str = crate::elements::NANOS_KEY;
 
-#[tracing::instrument(level = "debug")]
+#[tracing::instrument(level = "trace")]
 fn table_from_datetime(datetime: &DateTime<Utc>) -> HashMap<String, i64> {
     maplit::hashmap! {
         SECS_KEY.to_string() => datetime.timestamp(),
@@ -17,7 +17,7 @@ fn table_from_datetime(datetime: &DateTime<Utc>) -> HashMap<String, i64> {
     }
 }
 
-#[tracing::instrument(level = "debug")]
+#[tracing::instrument(level = "trace")]
 fn datetime_from_table(datetime: HashMap<String, i64>) -> DateTime<Utc> {
     Utc.timestamp(
         datetime.get(SECS_KEY).copied().unwrap_or(0),
@@ -25,7 +25,7 @@ fn datetime_from_table(datetime: HashMap<String, i64>) -> DateTime<Utc> {
     )
 }
 
-#[tracing::instrument(level = "debug", skip(serializer))]
+#[tracing::instrument(level = "trace", skip(serializer))]
 pub fn serialize_optional_datetime_map<S>(date: &Option<DateTime<Utc>>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -38,7 +38,7 @@ where
     }
 }
 
-#[tracing::instrument(level = "debug", skip(serializer))]
+#[tracing::instrument(level = "trace", skip(serializer))]
 pub fn serialize_optional_datetime_format<S>(date: &Option<DateTime<Utc>>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -51,7 +51,7 @@ where
     }
 }
 
-#[tracing::instrument(level = "debug", skip(deserializer))]
+#[tracing::instrument(level = "trace", skip(deserializer))]
 pub fn deserialize_optional_datetime<'de, D>(deserializer: D) -> Result<Option<DateTime<Utc>>, D::Error>
 where
     D: de::Deserializer<'de>,
@@ -66,7 +66,7 @@ where
 //     deserializer.deserialize_option(OptionalDateTimeFormatVisitor)
 // }
 
-#[tracing::instrument(level = "debug", skip(serializer))]
+#[tracing::instrument(level = "trace", skip(serializer))]
 pub fn serialize<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -81,7 +81,7 @@ where
     map.end()
 }
 
-#[tracing::instrument(level = "debug", skip(serializer))]
+#[tracing::instrument(level = "trace", skip(serializer))]
 pub fn serialize_format<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -90,7 +90,7 @@ where
     serializer.serialize_str(datetime_rep.as_str())
 }
 
-#[tracing::instrument(level = "debug", skip(deserializer))]
+#[tracing::instrument(level = "trace", skip(deserializer))]
 pub fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
 where
     D: de::Deserializer<'de>,
@@ -115,7 +115,7 @@ impl<'de> de::Visitor<'de> for DateTimeVisitor {
         write!(f, "a datetime table")
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
     where
         E: de::Error,
@@ -123,7 +123,7 @@ impl<'de> de::Visitor<'de> for DateTimeVisitor {
         Utc.datetime_from_str(value, FORMAT).map_err(serde::de::Error::custom)
     }
 
-    #[tracing::instrument(level = "debug", skip(self, access))]
+    #[tracing::instrument(level = "trace", skip(self, access))]
     fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
     where
         M: MapAccess<'de>,
@@ -165,7 +165,7 @@ impl<'de> de::Visitor<'de> for OptionalDateTimeMapVisitor {
         write!(f, "null or a datetime serialized value")
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     fn visit_none<E>(self) -> Result<Self::Value, E>
     where
         E: de::Error,
@@ -173,7 +173,7 @@ impl<'de> de::Visitor<'de> for OptionalDateTimeMapVisitor {
         Ok(None)
     }
 
-    #[tracing::instrument(level = "debug", skip(self, deserializer))]
+    #[tracing::instrument(level = "trace", skip(self, deserializer))]
     fn visit_some<D>(self, deserializer: D) -> Result<Option<DateTime<Utc>>, D::Error>
     where
         D: de::Deserializer<'de>,

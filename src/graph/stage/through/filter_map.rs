@@ -123,25 +123,25 @@ where
         self.name.clone()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
         self.inlet.check_attachment().await?;
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run filter_map through", skip(self))]
+    #[tracing::instrument(level = "trace", name = "run filter_map through", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         let outlet = &self.outlet;
         while let Some(item) = self.inlet.recv().await {
-            let filter_span = tracing::info_span!("filter on item", ?item);
+            let filter_span = tracing::debug_span!("filter on item", ?item, stage=%self.name());
             let _filter_span_guard = filter_span.enter();
             let _timer = stage::start_stage_eval_time(self.name.as_ref());
 
             if let Some(value) = (self.filter_map)(item) {
                 outlet.send(value).await?;
             } else if self.log_blocks {
-                tracing::warn!("{} blocking item.", self.name);
+                tracing::info!("{} blocking item.", self.name);
             }
         }
 
@@ -149,7 +149,7 @@ where
     }
 
     async fn close(mut self: Box<Self>) -> ProctorResult<()> {
-        tracing::trace!("closing filter_map-through ports.");
+        tracing::trace!(stage=%self.name(), "closing filter_map-through ports.");
         self.inlet.close().await;
         self.outlet.close().await;
         Ok(())

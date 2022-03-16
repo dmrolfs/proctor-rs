@@ -18,7 +18,7 @@ impl QueryResult {
         Self { passed: true, bindings: Bindings::default() }
     }
 
-    #[tracing::instrument(level = "debug", skip(query))]
+    #[tracing::instrument(level = "trace", skip(query))]
     pub fn from_query(query: Query) -> Result<Self, PolicyError> {
         let mut bindings = Bindings::default();
         let mut passed = None;

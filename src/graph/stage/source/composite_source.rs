@@ -180,13 +180,13 @@ impl<Out: AppData> Stage for CompositeSource<Out> {
         self.name.clone()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run composite source", skip(self))]
+    #[tracing::instrument(level = "trace", name = "run composite source", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         match self.graph.take() {
             None => Ok(()),

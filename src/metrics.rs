@@ -5,7 +5,7 @@ use crate::error::ProctorError;
 use crate::graph;
 use crate::phases::sense::clearinghouse;
 
-#[tracing::instrument(level = "info")]
+#[tracing::instrument(level = "trace")]
 pub fn register_proctor_metrics(registry: &Registry) -> Result<(), ProctorError> {
     registry.register(Box::new(graph::GRAPH_ERRORS.clone()))?;
     registry.register(Box::new(graph::STAGE_INGRESS_COUNTS.clone()))?;

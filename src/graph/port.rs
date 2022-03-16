@@ -256,7 +256,7 @@ impl<T: fmt::Debug + Send> Inlet<T> {
             let item = (*rx).as_mut()?.0.recv().await;
             tracing::trace!(stage=%self.stage, inlet=%self.name, ?item, "Inlet received {} item.", if item.is_some() {"an"} else { "no"});
             if item.is_none() && rx.is_some() {
-                tracing::info!(stage=%self.stage, inlet=%self.name, "Inlet depleted - closing receiver");
+                tracing::warn!(stage=%self.stage, inlet=%self.name, "Inlet depleted - closing receiver");
                 rx.as_mut().unwrap().0.close();
                 let _ = rx.take();
             }
@@ -346,7 +346,7 @@ impl<T: AppData> Outlet<T> {
     pub async fn check_attachment(&self) -> Result<(), PortError> {
         if self.is_attached().await {
             let receiver = self.connection.lock().await.as_ref().map(|s| s.1.clone()).unwrap();
-            tracing::info!("outlet connected: {} -> {}", self.full_name(), receiver);
+            tracing::debug!("outlet connected: {} -> {}", self.full_name(), receiver);
             Ok(())
         } else {
             Err(PortError::Detached(format!(
@@ -429,7 +429,7 @@ impl<T: AppData> Outlet<T> {
             .await
             .map_err(|err| PortError::Channel(err.into()))?;
 
-        let span = tracing::info_span!("task in output port reserve_send", stage=%self.stage, port_name=%self.name);
+        let span = tracing::trace_span!("task in output port reserve_send", stage=%self.stage, port_name=%self.name);
 
         match task.instrument(span).await {
             Ok(data) => {

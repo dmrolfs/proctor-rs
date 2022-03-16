@@ -72,28 +72,28 @@ impl<T: AppData> Stage for ActorSource<T> {
         self.name.clone()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run actor source", skip(self))]
+    #[tracing::instrument(level = "trace", name = "run actor source", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         while let Some(command) = self.rx_api.recv().await {
             let _timer = stage::start_stage_eval_time(self.name.as_ref());
 
-            tracing::info!(?command, "handling command");
+            tracing::trace!(?command, "handling command");
             match command {
                 ActorSourceCmd::Push { item, tx } => {
-                    let send_span = tracing::info_span!("sending item", ?item);
+                    let send_span = tracing::trace_span!("sending item", ?item);
                     let _ = send_span.enter();
                     self.outlet().send(item).await?;
                     let _ignore_failure = tx.send(());
                 },
 
                 ActorSourceCmd::Stop(tx) => {
-                    tracing::info!("stopping actor source.");
+                    tracing::info!(name=%self.name(), "stopping actor source.");
                     let _ignore_failure = tx.send(());
                     break;
                 },
@@ -104,7 +104,7 @@ impl<T: AppData> Stage for ActorSource<T> {
     }
 
     async fn close(mut self: Box<Self>) -> ProctorResult<()> {
-        tracing::info!("closing actor source outlet.");
+        tracing::info!(name=%self.name(), "closing actor source outlet.");
         self.outlet.close().await;
         Ok(())
     }

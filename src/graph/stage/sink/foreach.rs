@@ -99,13 +99,13 @@ where
         self.name.clone()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
         self.inlet.check_attachment().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run foreach sink", skip(self))]
+    #[tracing::instrument(level = "trace", name = "run foreach sink", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         let op = &self.operation;
         while let Some(input) = self.inlet.recv().await {

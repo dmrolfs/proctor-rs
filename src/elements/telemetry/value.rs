@@ -517,13 +517,11 @@ impl From<PolarValue> for TelemetryValue {
 impl<T: Label> TryFrom<TelemetryValue> for Id<T> {
     type Error = TelemetryError;
 
-    #[tracing::instrument(level = "info")]
+    #[tracing::instrument(level = "trace")]
     fn try_from(telemetry: TelemetryValue) -> Result<Self, Self::Error> {
         let label = <T as Label>::labeler().label();
-        let dmr_label = label.clone();
-        tracing::warn!(to_label=%dmr_label, "DMR: converting telemetry into Id<T>");
 
-        let result = match telemetry {
+        match telemetry {
             TelemetryValue::Seq(mut seq) if seq.len() == 2 => {
                 // let label = seq.pop().map(String::try_from).transpose()?.unwrap();
                 let snowflake = seq.pop().map(i64::try_from).transpose()?.unwrap();
@@ -540,10 +538,7 @@ impl<T: Label> TryFrom<TelemetryValue> for Id<T> {
                 expected: TelemetryType::Table,
                 actual: Some(format!("{:?}", value)),
             }),
-        };
-
-        tracing::warn!(to_label=%dmr_label, "DMR: converted telemetry into Id<T>: {:#?}", result);
-        result
+        }
     }
 }
 
@@ -1150,7 +1145,7 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
             #[inline]
             #[tracing::instrument(level = "trace")]
             fn visit_u32<E>(self, value: u32) -> Result<Self::Value, E> {
-                tracing::error!(?value, "deserializing u32 value");
+                tracing::debug!(?value, "deserializing u32 value");
                 Ok(TelemetryValue::Integer(value as i64))
             }
 
@@ -1215,11 +1210,10 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
                 Ok(TelemetryValue::Text(value))
             }
 
-            fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
+            fn visit_bytes<E>(self, _value: &[u8]) -> Result<Self::Value, E>
             where
                 E: Error,
             {
-                tracing::error!(?value, "deserializing bytes into telemetry is not supported");
                 Err(E::custom("deserializing bytes into telemetry is not supported"))
             }
 
@@ -1227,18 +1221,20 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
             where
                 E: Error,
             {
-                tracing::error!(?value, "deserializing borrowed bytes into telemetry is not supported");
-                Err(E::custom(
-                    "deserializing borrowed bytes into telemetry is not supported",
-                ))
+                Err(E::custom(format!(
+                    "deserializing borrowed bytes into telemetry is not supported: {:?}",
+                    value
+                )))
             }
 
             fn visit_byte_buf<E>(self, value: Vec<u8>) -> Result<Self::Value, E>
             where
                 E: Error,
             {
-                tracing::error!(?value, "deserializing byte buf into telemetry is not supported");
-                Err(E::custom("deserializing byte buf into telemetry is not supported"))
+                Err(E::custom(format!(
+                    "deserializing byte buf into telemetry is not supported: {:?}",
+                    value
+                )))
             }
 
             #[inline]
@@ -1268,9 +1264,8 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
             where
                 D: Deserializer<'de>,
             {
-                tracing::error!("deserializing newtype struct into telemetry is not supported");
                 Err(D::Error::custom(
-                    "deserializing newtype struct into telemetry is not supported",
+                    "deserializing newtype struct into telemetry is not supported".to_string(),
                 ))
             }
 
@@ -1315,7 +1310,9 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
                 A: EnumAccess<'de>,
             {
                 tracing::error!("deserializing enum into telemetry is not supported");
-                Err(A::Error::custom("deserializing enum into telemetry is not supported"))
+                Err(A::Error::custom(
+                    "deserializing enum into telemetry is not supported".to_string(),
+                ))
             }
         }
 

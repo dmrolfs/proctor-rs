@@ -189,7 +189,7 @@ impl<T: AppData> Stage for MergeN<T> {
         self.name.clone()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
         for inlet in self.inlets.0.lock().await.iter() {
             inlet.check_attachment().await?;
@@ -198,7 +198,7 @@ impl<T: AppData> Stage for MergeN<T> {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run merge through", skip(self))]
+    #[tracing::instrument(level = "trace", name = "run merge through", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         let mut active_inlets = Self::initialize_active_inlets(self.inlets()).await;
         let outlet = &self.outlet;
@@ -208,7 +208,7 @@ impl<T: AppData> Stage for MergeN<T> {
         while !active_inlets.is_empty() {
             let _timer = stage::start_stage_eval_time(self.name.as_ref());
             let available_inlets = active_inlets;
-            tracing::info!(nr_available_inlets=%available_inlets.len(), "selecting from active inlets");
+            tracing::debug!(nr_available_inlets=%available_inlets.len(), "selecting from active inlets");
 
             tokio::select! {
                 ((inlet_idx, value), target_idx, remaining) = future::select_all(available_inlets) => {
@@ -224,7 +224,7 @@ impl<T: AppData> Stage for MergeN<T> {
                     match remaining_inlets {
                         Ok(remaining_inlets) => active_inlets = remaining_inlets,
                         Err(err) => {
-                            tracing::error!(error=?err, "failed in handling selected pull - stopping MergeN");
+                            tracing::warn!(stage=%self.name(), error=?err, "failed in handling selected pull - stopping MergeN");
                             break;
                         },
                     }
@@ -232,7 +232,7 @@ impl<T: AppData> Stage for MergeN<T> {
 
                 Some(msg) = rx_api.recv() => match msg {
                     MergeCmd::Stop { tx } => {
-                        tracing::info!("handling request to stop MergeN.");
+                        tracing::trace!("handling request to stop MergeN.");
                         let _ = tx.send(Ok(()));
                         break;
                     }
@@ -243,7 +243,7 @@ impl<T: AppData> Stage for MergeN<T> {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "close MergeN through", skip(self))]
+    #[tracing::instrument(level = "trace", name = "close MergeN through", skip(self))]
     async fn close(mut self: Box<Self>) -> ProctorResult<()> {
         self.inlets.close().await;
         self.outlet.close().await;
@@ -273,7 +273,7 @@ impl<'a, T: AppData> MergeN<T> {
     }
 
     #[tracing::instrument(
-        level="info",
+        level="trace",
         skip(remaining, inlets, outlet),
         fields(nr_remaining=%remaining.len(),),
     )]
@@ -285,15 +285,15 @@ impl<'a, T: AppData> MergeN<T> {
         let is_active = value.is_some();
 
         if let Some(item) = value {
-            let send_active_span = tracing::info_span!("3.send item via outlet", ?item);
+            let send_active_span = tracing::trace_span!("3.send item via outlet", ?item);
             let _send_active_guard = send_active_span.enter();
             let _ = outlet.send(item).await?;
         }
 
-        tracing::info!(nr_remaining=%remaining_inlets.len(), %is_active, "after send");
+        tracing::trace!(nr_remaining=%remaining_inlets.len(), %is_active, "after send");
 
         if is_active {
-            let run_active_span = tracing::info_span!(
+            let run_active_span = tracing::trace_span!(
                 "4.replenish active pulls",
                 nr_available_inlets=%remaining_inlets.len()
             );
@@ -302,7 +302,7 @@ impl<'a, T: AppData> MergeN<T> {
             if let Some(inlet) = inlets.get(inlet_idx).await {
                 let rep = Self::replenish_inlet_pull(inlet_idx, inlet).boxed();
                 remaining_inlets.push(rep);
-                tracing::info!(nr_available_inlets=%remaining_inlets.len(), "4.1.active_inlets replenished.");
+                tracing::trace!(nr_available_inlets=%remaining_inlets.len(), "4.1.active_inlets replenished.");
             }
         }
 

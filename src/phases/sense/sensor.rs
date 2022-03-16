@@ -20,7 +20,7 @@ use crate::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 ///
 /// An improvement to consider is to behave lazily and iterate through the source file(s)
 /// upon downstream demand.
-#[tracing::instrument(level = "info", skip(name))]
+#[tracing::instrument(level = "trace", skip(name))]
 pub fn make_telemetry_cvs_sensor<T, S>(name: S, setting: &SensorSetting) -> Result<TelemetrySensor, SenseError>
 where
     T: Serialize + DeserializeOwned + Debug,
@@ -37,13 +37,13 @@ where
             }
         }
 
-        let csv_span = tracing::info_span!("sourcing CSV", %telemetry_name, ?path);
+        let csv_span = tracing::debug_span!("sourcing CSV", %telemetry_name, ?path);
         let _csv_span_guard = csv_span.enter();
 
         let mut records: Vec<Telemetry> = vec![];
         let mut reader = csv::Reader::from_path(path)?;
 
-        tracing::debug!("loading records from CSV...");
+        tracing::trace!("loading records from CSV...");
         for result in reader.deserialize() {
             let record: T = result?;
 
@@ -53,7 +53,7 @@ where
 
             records.push(telemetry_record);
         }
-        tracing::info!("deserialized {} records from CSV.", records.len());
+        tracing::debug!("deserialized {} records from CSV.", records.len());
 
         let source = stage::Sequence::new(telemetry_name, records);
         let stage: Option<Box<dyn SourceStage<Telemetry>>> = Some(Box::new(source));
@@ -68,7 +68,7 @@ where
     }
 }
 
-#[tracing::instrument(level = "info", skip(name))]
+#[tracing::instrument(level = "trace", skip(name))]
 pub async fn make_telemetry_rest_api_sensor<T>(
     name: String, setting: &SensorSetting,
 ) -> Result<TelemetrySensor, SenseError>
@@ -146,7 +146,7 @@ pub struct TelemetrySensor {
 }
 
 impl TelemetrySensor {
-    #[tracing::instrument(level = "info")]
+    #[tracing::instrument(level = "trace")]
     pub async fn from_settings<T>(settings: &HashMap<String, SensorSetting>) -> Result<Vec<Self>, SenseError>
     where
         T: Serialize + DeserializeOwned + Debug,

@@ -54,7 +54,7 @@ pub struct Sense<Out> {
 }
 
 impl<Out> Sense<Out> {
-    #[tracing::instrument(level = "info", skip(name, sources))]
+    #[tracing::instrument(level = "trace", skip(name, sources))]
     pub fn builder(
         name: impl Into<SharedString>, sources: Vec<Box<dyn SourceStage<Telemetry>>>, machine_node: MachineNode,
     ) -> SenseBuilder<Out> {
@@ -62,7 +62,7 @@ impl<Out> Sense<Out> {
         SenseBuilder::new(name, sources, id_generator)
     }
 
-    #[tracing::instrument(level = "info", skip(name, sources))]
+    #[tracing::instrument(level = "trace", skip(name, sources))]
     pub fn single_node_builder(
         name: impl Into<SharedString>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
     ) -> SenseBuilder<Out> {
@@ -103,19 +103,19 @@ impl<Out: AppData> Stage for Sense<Out> {
         self.name.clone()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
         self.do_check().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run sense phase", skip(self))]
+    #[tracing::instrument(level = "trace", name = "run sense phase", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         self.do_run().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn close(self: Box<Self>) -> ProctorResult<()> {
         self.do_close().await?;
         Ok(())
@@ -135,7 +135,7 @@ impl<Out: AppData> Sense<Out> {
     }
 
     async fn do_close(mut self: Box<Self>) -> Result<(), SenseError> {
-        tracing::trace!("closing sense phase ports.");
+        tracing::trace!(stage=%self.name(), "closing sense phase ports.");
         self.inner.close().await.map_err(|err| SenseError::Stage(err.into()))?;
         self.outlet.close().await;
         Ok(())

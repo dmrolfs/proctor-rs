@@ -35,7 +35,7 @@ impl<Out: Send> ClearinghouseSubscriptionAgent for SenseBuilder<Out> {
 }
 
 impl<Out> SenseBuilder<Out> {
-    #[tracing::instrument(level = "info", skip(name, sources))]
+    #[tracing::instrument(level = "trace", skip(name, sources))]
     pub fn new(
         name: impl Into<SharedString>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
         correlation_generator: CorrelationGenerator,
@@ -59,7 +59,7 @@ impl<Out> SenseBuilder<Out>
 where
     Out: AppData + SubscriptionRequirements + DeserializeOwned,
 {
-    #[tracing::instrument(level = "info", skip(), fields(nr_sources = % self.sources.len()))]
+    #[tracing::instrument(level = "trace", skip(), fields(nr_sources = % self.sources.len()))]
     pub async fn build_for_out(self) -> Result<Sense<Out>, SenseError> {
         self.build_for_out_requirements(
             <Out as SubscriptionRequirements>::required_fields(),
@@ -68,7 +68,7 @@ where
         .await
     }
 
-    #[tracing::instrument(level = "info", skip(update_metrics), fields(nr_sources = % self.sources.len()))]
+    #[tracing::instrument(level = "trace", skip(update_metrics), fields(nr_sources = % self.sources.len()))]
     pub async fn build_for_out_w_metrics(
         self, update_metrics: Box<dyn (Fn(&str, &Telemetry)) + Send + Sync + 'static>,
     ) -> Result<Sense<Out>, SenseError> {
@@ -82,7 +82,7 @@ where
 }
 
 impl SenseBuilder<Telemetry> {
-    #[tracing::instrument(level="info", fields(nr_sources = %self.sources.len()))]
+    #[tracing::instrument(level="trace", fields(nr_sources = %self.sources.len()))]
     pub async fn build_for_telemetry_out_subscription(
         mut self, out_subscription: TelemetrySubscription,
     ) -> Result<Sense<Telemetry>, SenseError> {
@@ -91,7 +91,7 @@ impl SenseBuilder<Telemetry> {
     }
 
     #[tracing::instrument(
-        level = "info",
+        level = "trace",
         skip(out_required_fields, out_optional_fields, ),
         fields(nr_sources = %self.sources.len())
     )]
@@ -108,7 +108,7 @@ impl SenseBuilder<Telemetry> {
     }
 
     #[tracing::instrument(
-        level = "info",
+        level = "trace",
         skip(out_required_fields, out_optional_fields, update_metrics),
         fields(nr_sources = %self.sources.len())
     )]
@@ -131,7 +131,7 @@ impl<Out> SenseBuilder<Out>
 where
     Out: AppData + DeserializeOwned,
 {
-    #[tracing::instrument(level="info", fields(nr_sources=%self.sources.len()))]
+    #[tracing::instrument(level="trace", fields(nr_sources=%self.sources.len()))]
     pub async fn build_for_out_subscription(
         mut self, out_subscription: TelemetrySubscription,
     ) -> Result<Sense<Out>, SenseError> {
@@ -140,7 +140,7 @@ where
     }
 
     #[tracing::instrument(
-        level = "info",
+        level = "trace",
         skip(out_required_fields, out_optional_fields),
         fields(nr_sources = % self.sources.len())
     )]
@@ -158,7 +158,7 @@ where
     }
 
     #[tracing::instrument(
-        level = "info",
+        level = "trace",
         skip(out_required_fields, out_optional_fields, update_metrics),
         fields(nr_sources = % self.sources.len())
     )]
@@ -182,7 +182,7 @@ impl<Out> SenseBuilder<Out>
 where
     Out: AppData,
 {
-    #[tracing::instrument(level = "info")]
+    #[tracing::instrument(level = "trace")]
     async fn finish(self, out_channel: SubscriptionChannel<Out>) -> Result<Sense<Out>, SenseError> {
         out_channel.subscription_receiver.check_attachment().await?;
 
@@ -195,7 +195,7 @@ where
             .map_err(|err| PortError::Channel(err.into()))?;
 
         let outlet = out_channel.outlet();
-        tracing::info!(clearinghouse=?self.clearinghouse, channel_name=%self.name, "connected subscription channel");
+        tracing::trace!(clearinghouse=?self.clearinghouse, channel_name=%self.name, "connected subscription channel");
 
         let merge_inlets = self.merge.inlets();
         let nr_merge_inlets = merge_inlets.len().await;
@@ -211,7 +211,7 @@ where
         for (idx, s) in self.sources.into_iter().enumerate() {
             match merge_inlets.get(idx).await {
                 Some(merge_inlet) => {
-                    tracing::info!(source=%s.name(), ?merge_inlet, "connecting sense source to clearinghouse.");
+                    tracing::trace!(source=%s.name(), ?merge_inlet, "connecting sense source to clearinghouse.");
                     (s.outlet(), merge_inlet).connect().await;
                     g.push_back(s.dyn_upcast()).await;
                 },

@@ -149,14 +149,14 @@ impl<In: AppData, Out: AppData> Stage for CompositeThrough<In, Out> {
         self.name.clone()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
         self.inlet.check_attachment().await?;
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run composite through", skip(self))]
+    #[tracing::instrument(level = "trace", name = "run composite through", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         match self.graph.take() {
             None => Ok(()),
@@ -165,7 +165,7 @@ impl<In: AppData, Out: AppData> Stage for CompositeThrough<In, Out> {
     }
 
     async fn close(mut self: Box<Self>) -> ProctorResult<()> {
-        tracing::trace!("closing composite graph, inlet and outlet.");
+        tracing::trace!(stage=%self.name(), "closing composite graph, inlet and outlet.");
         self.inlet.close().await;
         self.outlet.close().await;
         Ok(())

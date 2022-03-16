@@ -100,23 +100,22 @@ impl Graph {
         self.nodes.iter().map(|n| n.name.as_str()).collect()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self), fields(nodes=?self.node_names()))]
     pub async fn check(&self) -> ProctorResult<()> {
-        tracing::info!(nodes=?self.node_names(), "checking graph nodes.");
         for node in self.nodes.iter() {
             node.check().await?;
         }
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     pub async fn run(self) -> ProctorResult<()> {
         self.check().await?;
 
         let tasks = self.nodes.into_iter().map(|node| node.run()).collect::<Vec<_>>();
 
         let results: Vec<ProctorResult<()>> = futures::future::try_join_all(tasks)
-            .instrument(tracing::info_span!("graph_run_join_all"))
+            .instrument(tracing::trace_span!("graph_run_join_all"))
             .await
             .map_err(GraphError::Join)?;
 

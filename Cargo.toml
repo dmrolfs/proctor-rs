@@ -1,6 +1,6 @@
 [package]
 name = "proctor"
-version = "0.15.2"
+version = "0.15.3"
 authors = ["Damon Rolfs <drolfs@gmail.com>"]
 edition = "2021"
 repository = "https://github.com/dmrolfs/proctor-rs"
@@ -32,7 +32,7 @@ path = "examples/async_stream.rs"
 [dependencies]
 anyhow = "1.0.56"
 approx = "0.5.1"
-async-stream = "0.3.2"
+async-stream = "0.3.3"
 async-trait = "0.1.52"
 cast_trait_object = "0.1.3"
 chrono = "0.4.19"
@@ -46,7 +46,7 @@ flexbuffers = "2.0.0"
 frunk = "0.4.0"
 futures = "0.3.21"
 futures-util = "0.3.21"
-handlebars = "4.2.1"
+handlebars = "4.2.2"
 maplit = "1.0.2"
 num_cpus = "1.13.1"
 num-traits = "0.2.14"
@@ -57,8 +57,8 @@ pretty-snowflake = { git = "https://github.com/dmrolfs/pretty-snowflake-rs" }
 proctor_derive = { path = "proctor_derive" }
 prometheus = { version = "0.13.0", features = ["process"] }
 prometheus-static-metric = "0.5.1"
-regex = "1.5.4"
-reqwest = { version = "0.11.9", features = ["blocking", "json"] }
+regex = "1.5.5"
+reqwest = { version = "0.11.10", features = ["blocking", "json"] }
 reqwest-middleware = "0.1.5"
 reqwest-retry = "0.1.4"
 ron = "0.7.0"
@@ -68,7 +68,7 @@ statrs = "0.15.0"
 tempfile = "3.3.0"
 thiserror = "1.0.30"
 tokio = { version = "1.17.0", features = ["full"] }
-tracing = "0.1.31"
+tracing = "0.1.32"
 tracing-bunyan-formatter = "0.3.2"
 tracing-flame = "0.2.0"
 tracing-futures = "0.2.5"
@@ -83,8 +83,8 @@ claim = "0.5.0"
 criterion = { version = "0.3.5", features = ["async_tokio", "html_reports"] }
 futures-core = "0.3.21"
 itertools = "0.10.3"
-pprof = { version = "0.6.2", features = ["flamegraph"] }
-pretty_assertions = "1.1.0"
+pprof = { version = "0.7.0", features = ["flamegraph"] }
+pretty_assertions = "1.2.0"
 rand = "0.8.5"
 serde_test = "1.0.136"
 serde-transcode = "1.1.1"

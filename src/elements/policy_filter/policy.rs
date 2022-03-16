@@ -62,7 +62,7 @@ pub trait QueryPolicy: Debug + Send + Sync {
         None
     }
 
-    #[tracing::instrument(level = "info", skip(engine))]
+    #[tracing::instrument(level = "debug", skip(engine))]
     fn load_policy_engine(&mut self, engine: &mut oso::Oso) -> Result<(), PolicyError> {
         engine.clear_rules()?;
         let source_paths = self.render_policy_sources()?;
@@ -70,10 +70,10 @@ pub trait QueryPolicy: Debug + Send + Sync {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info")]
+    #[tracing::instrument(level = "debug")]
     fn render_policy_sources(&self) -> Result<Vec<PolicySourcePath>, PolicyError> {
         let (templates, complete) = self.sources().iter().partition::<Vec<_>, _>(|s| s.is_template());
-        tracing::info!(?complete, ?templates, "loading complete and template sources...");
+        tracing::debug!(?complete, ?templates, "loading complete and template sources...");
         let mut source_paths = Vec::with_capacity(complete.len() + 1);
         for s in complete {
             let policy = match s {
@@ -87,12 +87,12 @@ pub trait QueryPolicy: Debug + Send + Sync {
         if !templates.is_empty() {
             let name = Self::base_template_name();
             let data = self.policy_template_data();
-            tracing::info!(template_name=%name, ?data, "rendering template from sources...");
+            tracing::debug!(template_name=%name, ?data, "rendering template from sources...");
             let template_policy = render_template_policy(templates, name, data)?;
             tracing::debug!(template_name=%name, %template_policy, "rendered template policy.");
             let template_source_path = policy_source_path_for(name, Right(template_policy.as_str()))?;
             source_paths.push(template_source_path);
-            tracing::debug!(template_name=%name, "loaded template policy.");
+            tracing::debug!(template_name=%name, policy=%template_policy, "loaded template policy.");
         }
 
         Ok(source_paths)
@@ -111,13 +111,13 @@ pub trait QueryPolicy: Debug + Send + Sync {
     fn query_policy(&self, engine: &oso::Oso, args: Self::Args) -> Result<QueryResult, PolicyError>;
 }
 
-#[tracing::instrument(level = "info", skip(templates))]
+#[tracing::instrument(level = "trace", skip(templates))]
 pub fn render_template_policy<'a, T, D>(templates: T, name: &str, data: Option<&D>) -> Result<String, PolicyError>
 where
     T: IntoIterator<Item = &'a PolicySource>,
     D: Serialize + Debug,
 {
-    tracing::info!("rendering policy string as template with data.");
+    tracing::trace!("rendering policy string as template with data.");
 
     // I tried to facilitate registry caching in policy, but handlebars' lifetime parameter
     // (underlying the PolicyRegistry) hampers the ergonomics of policy definition.
@@ -128,7 +128,7 @@ where
         let policy_template: String = s.try_into()?;
         registry.register_template_string(s.name().as_ref(), policy_template)?;
     }
-    tracing::debug!(?registry, "policy templates registered with handlebars registry");
+    tracing::trace!(?registry, "policy templates registered with handlebars registry");
     let policy = registry.render(name, &data)?;
     tracing::info!(rendered_policy=%policy, "rendered {} policy from template and data.", name);
     Ok(policy)
@@ -157,7 +157,7 @@ static APP_TEMPDIR: Lazy<tempfile::TempDir> = Lazy::new(|| {
         })
 });
 
-#[tracing::instrument(level = "info", skip())]
+#[tracing::instrument(level = "trace", skip())]
 fn policy_source_path_for(name: &str, policy: Either<PathBuf, &str>) -> Result<PolicySourcePath, PolicyError> {
     match policy {
         Either::Left(path) => Ok(PolicySourcePath::File(path)),
@@ -168,7 +168,7 @@ fn policy_source_path_for(name: &str, policy: Either<PathBuf, &str>) -> Result<P
                 .suffix(".polar")
                 .tempfile_in(APP_TEMPDIR.path())?;
 
-            tracing::info!("rendered {} policy file for loading at {:?}", name, tmp);
+            tracing::trace!("rendered {} policy file for loading at {:?}", name, tmp);
 
             write!(tmp.as_file_mut(), "{}", rep)?;
 

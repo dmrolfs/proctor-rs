@@ -58,7 +58,7 @@ where
         self.name.clone()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
         for inlet in self.inlets.0.lock().await.iter() {
             inlet.check_attachment().await?;
@@ -67,12 +67,12 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run merge combine", skip(self))]
+    #[tracing::instrument(level = "trace", name = "run merge combine", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         loop {
             let active = self.start_batch().await;
             if active.is_empty() {
-                tracing::info!("empty merge_combine start batch - stopping");
+                tracing::info!(stage=%self.name(), "empty merge_combine start batch - stopping");
                 break;
             }
 
@@ -85,7 +85,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "close MergeCombine through", skip(self))]
+    #[tracing::instrument(level = "trace", name = "close MergeCombine through", skip(self))]
     async fn close(mut self: Box<Self>) -> ProctorResult<()> {
         self.inlets.close().await;
         self.outlet.close().await;
@@ -118,7 +118,7 @@ where
         (inlet.full_name().into(), inlet.recv().await)
     }
 
-    #[tracing::instrument(level = "info", skip(self, active), fields(nr_active=%active.len()))]
+    #[tracing::instrument(level = "trace", skip(self, active), fields(nr_active=%active.len()))]
     async fn complete_batch(&self, mut active: Vec<ActivePull<'a, T>>) -> Result<T, ProctorError> {
         let _timer = stage::start_stage_eval_time(self.name.as_ref());
 
@@ -130,7 +130,7 @@ where
             acc = acc.combine(&batch_item);
             // acc = acc + batch_item; // std::ops::Add not implemented for Option<T: Add>!?
 
-            tracing::info!(
+            tracing::debug!(
                 ?acc, ?batch_item,
                 %item_source,
                 remaining_pos=%pos,

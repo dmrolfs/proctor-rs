@@ -86,18 +86,18 @@ where
         self.name.clone()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run sequence source", skip(self))]
+    #[tracing::instrument(level = "trace", name = "run sequence source", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         if let Some(items) = self.items.take() {
             for (count, item) in items.enumerate() {
                 let _timer = stage::start_stage_eval_time(self.name.as_ref());
-                tracing::trace!(?item, %count, "sending item");
+                tracing::debug!(?item, %count, "sending item");
                 self.outlet.send(item).await?
             }
         }
@@ -106,7 +106,7 @@ where
     }
 
     async fn close(mut self: Box<Self>) -> ProctorResult<()> {
-        tracing::trace!("closing sequence-source outlet.");
+        tracing::trace!(stage=%self.name(), "closing sequence-source outlet.");
         self.outlet.close().await;
         Ok(())
     }

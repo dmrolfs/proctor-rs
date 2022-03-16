@@ -28,17 +28,17 @@ impl<In: AppData> Stage for LoggedSink<In> {
         self.name.clone()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
         self.inlet.check_attachment().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run logging sink", skip(self))]
+    #[tracing::instrument(level = "trace", name = "run logging sink", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         while let Some(input) = self.inlet.recv().await {
             let _timer = stage::start_stage_eval_time(self.name.as_ref());
-            tracing::warn!("in graph sink: {:?}", input);
+            tracing::info!("in graph sink: {:?}", input);
         }
         Ok(())
     }

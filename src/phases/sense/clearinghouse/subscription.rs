@@ -228,7 +228,7 @@ impl TelemetrySubscription {
         }
     }
 
-    #[tracing::instrument(level = "info")]
+    #[tracing::instrument(level = "trace")]
     pub fn fulfill(&self, database: &Telemetry) -> Option<Telemetry> {
         match self {
             Self::All { .. } => Some(database.clone()),
@@ -254,7 +254,7 @@ impl TelemetrySubscription {
 
                 tracing::trace!(?ready, ?unfilled, subscription=?self, "fulfilling required and optional fields.");
                 if ready.is_empty() || !unfilled.is_empty() {
-                    tracing::info!(
+                    tracing::debug!(
                         subscription=?self,
                         unfilled_fields=?unfilled,
                         "unsatisfied subscription - not publishing."
@@ -293,7 +293,7 @@ impl TelemetrySubscription {
 }
 
 impl TelemetrySubscription {
-    #[tracing::instrument()]
+    #[tracing::instrument(level = "trace")]
     pub async fn close(self) {
         self.outlet_to_subscription().close().await;
     }

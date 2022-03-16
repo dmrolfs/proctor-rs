@@ -179,7 +179,7 @@ impl Collect {
     }
 
     #[tracing::instrument(
-        level="info",
+        level="trace",
         name="query url",
         fields(%url),
     )]
@@ -217,13 +217,13 @@ impl Stage for Collect {
         self.name.clone()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
         self.do_check().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run collect source", skip(self))]
+    #[tracing::instrument(level = "trace", name = "run collect source", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         self.do_run().await?;
         Ok(())

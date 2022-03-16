@@ -42,14 +42,14 @@ impl<T: AppData> Stage for Identity<T> {
         self.name.clone()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
         self.inlet.check_attachment().await?;
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run identity through", skip(self))]
+    #[tracing::instrument(level = "trace", name = "run identity through", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         while let Some(value) = self.inlet.recv().await {
             let _timer = stage::start_stage_eval_time(self.name.as_ref());
@@ -60,7 +60,7 @@ impl<T: AppData> Stage for Identity<T> {
     }
 
     async fn close(mut self: Box<Self>) -> ProctorResult<()> {
-        tracing::trace!("closing identity-through ports.");
+        tracing::trace!(stage=%self.name(), "closing identity-through ports.");
         self.inlet.close().await;
         self.outlet.close().await;
         Ok(())

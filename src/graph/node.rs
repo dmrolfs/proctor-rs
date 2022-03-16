@@ -23,7 +23,7 @@ impl Node {
     pub async fn check(&self) -> ProctorResult<()> {
         self.stage
             .check()
-            .instrument(tracing::info_span!("check graph node", node=%self.stage.name()))
+            .instrument(tracing::trace_span!("check graph node", node=%self.stage.name()))
             .await?;
 
         Ok(())
@@ -36,7 +36,7 @@ impl Node {
                 let run_result: ProctorResult<()> = loop {
                     match self.stage.run().await {
                         Ok(()) => {
-                            tracing::info!("{} node completed and stopped", self.name);
+                            tracing::debug!("{} node completed and stopped", self.name);
                             break Ok(());
                         },
                         Err(ProctorError::Graph(err)) => {
@@ -53,17 +53,13 @@ impl Node {
                 let close_result = self
                     .stage
                     .close()
-                    .instrument(tracing::info_span!("close graph node"))
+                    .instrument(tracing::trace_span!("close graph node"))
                     .await;
-
-                if let Err(err) = &close_result {
-                    tracing::error!(error=?err, "node close failed.");
-                }
 
                 run_result.and(close_result)?;
                 Ok(())
             }
-            .instrument(tracing::info_span!("spawn node", node=%node_name)),
+            .instrument(tracing::trace_span!("spawn node", node=%node_name)),
         )
     }
 }

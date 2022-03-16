@@ -147,7 +147,7 @@ where
         self.rx_final.take()
     }
 
-    #[tracing::instrument(level = "info", name = "do run fold sink", skip(self))]
+    #[tracing::instrument(level = "trace", name = "do run fold sink", skip(self))]
     async fn do_run(&mut self) {
         let inlet = &mut self.inlet;
         let rx_api = &mut self.rx_api;
@@ -183,34 +183,34 @@ where
         }
     }
 
-    #[tracing::instrument(level = "info")]
+    #[tracing::instrument(level = "trace")]
     async fn handle_command(cmd: FoldCmd<Acc>, acc: Arc<Mutex<Acc>>, initial: &Acc) {
         match cmd {
             FoldCmd::GetAcc(tx) => {
-                tracing::info!("handling request for current accumulation...");
+                tracing::trace!("handling request for current accumulation...");
                 let resp = acc.lock().await;
-                tracing::info!(accumulation=?resp,"sending accumulation to sender...");
+                tracing::trace!(accumulation=?resp,"sending accumulation to sender...");
                 match tx.send(resp.clone()) {
-                    Ok(_) => tracing::info!(accumulation=?resp, "sent accumulation"),
+                    Ok(_) => tracing::debug!(accumulation=?resp, "sent accumulation"),
                     Err(resp) => tracing::warn!(accumulation=?resp, "failed to send accumulation"),
                 }
             },
 
             FoldCmd::GetAndReset(tx) => {
-                tracing::info!("handling command to reset accumulation...");
+                tracing::trace!("handling command to reset accumulation...");
                 let mut reset_accumulation = acc.lock().await;
                 let resp = reset_accumulation.clone();
                 *reset_accumulation = initial.clone();
-                tracing::info!(accumulation=?resp, ?reset_accumulation, "sending accumulation before clearing.");
+                tracing::debug!(accumulation=?resp, ?reset_accumulation, "sending accumulation before clearing.");
                 match tx.send(resp.clone()) {
-                    Ok(_) => tracing::info!(accumulation=?resp, "sent prior accumulation"),
+                    Ok(_) => tracing::debug!(accumulation=?resp, "sent prior accumulation"),
                     Err(resp) => tracing::warn!(accumulation=?resp, "failed to send prior accumulation"),
                 }
             },
         }
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn complete_fold(&mut self) -> Result<(), StageError> {
         if let Some(tx_final) = self.tx_final.take() {
             tx_final.send(self.acc.lock().await.clone()).map_err(|acc| {
@@ -251,13 +251,13 @@ where
         self.name.clone()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
         self.inlet.check_attachment().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run fold sink", skip(self))]
+    #[tracing::instrument(level = "trace", name = "run fold sink", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         self.do_run().await;
         self.complete_fold().await?;

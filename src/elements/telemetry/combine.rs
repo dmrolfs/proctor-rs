@@ -185,7 +185,7 @@ impl DoTelemetryCombination for Average {
         let mut count = 0;
         let mut sum = 0;
         Box::new(move |acc, next| {
-            let span = tracing::info_span!("combo_i64", enter_count=%count, enter_sum=%sum);
+            let span = tracing::debug_span!("combo_i64", enter_count=%count, enter_sum=%sum);
             let _ = span.enter();
 
             if count == 0 {
@@ -196,7 +196,7 @@ impl DoTelemetryCombination for Average {
             sum += next;
             count += 1;
 
-            tracing::info!(%count, %sum, "combined step");
+            tracing::debug!(%count, %sum, "combined step");
             Ok(sum / count)
         })
     }

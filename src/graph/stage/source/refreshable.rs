@@ -62,13 +62,13 @@ where
         self.name.clone()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run refreshable source", skip(self))]
+    #[tracing::instrument(level = "trace", name = "run refreshable source", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         let mut done = false;
 
@@ -84,24 +84,24 @@ where
 
             tokio::select! {
                 result = &mut operation, if !done => {
-                    let op_span = tracing::info_span!("evaluate operation", ?result);
+                    let op_span = tracing::trace_span!("evaluate operation", ?result);
                     let _op_span_guard = op_span.enter();
                     done = true;
 
                     if let Some(r) = result {
-                        tracing::info!("Completed with result = {:?}", r);
+                        tracing::debug!("Completed with result = {:?}", r);
                         let _ = outlet.send(r).await;
                         break;
                     }
                 }
 
                 Some(control_signal) = rx.recv() => {
-                    let ctrl_span = tracing::info_span!("control check", ?control_signal);
+                    let ctrl_span = tracing::trace_span!("control check", ?control_signal);
                     let _ctrl_span_guard = ctrl_span.enter();
 
                     //todo: this was initially a poc exercise so this evaluation could use generalization
                     if control_signal.into() % 2 == 0 {
-                        tracing::info!("setting operation with control signal..");
+                        tracing::trace!("setting operation with control signal..");
                         operation.set(op(Some(control_signal)));
                         done = false;
                     }
@@ -113,7 +113,7 @@ where
     }
 
     async fn close(mut self: Box<Self>) -> ProctorResult<()> {
-        tracing::info!("closing refreshable source outlet.");
+        tracing::info!(name=%self.name(), "closing refreshable source outlet.");
         self.outlet.close().await;
         Ok(())
     }

@@ -51,7 +51,7 @@ pub struct Plan<P: Planning> {
 }
 
 impl<P: Planning> Plan<P> {
-    #[tracing::instrument(level = "info", skip(name))]
+    #[tracing::instrument(level = "trace", skip(name))]
     pub fn new(name: impl AsRef<str>, mut planning: P) -> Self {
         let name = SharedString::Owned(format!("{}_plan", name.as_ref()));
         let inlet = Inlet::new(name.clone(), PORT_DATA);
@@ -126,19 +126,19 @@ impl<P: 'static + Planning> Stage for Plan<P> {
         self.name.clone()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
         self.do_check().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run scaling_plan phase", skip(self))]
+    #[tracing::instrument(level = "trace", name = "run scaling_plan phase", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         self.do_run().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn close(mut self: Box<Self>) -> ProctorResult<()> {
         self.do_close().await?;
         Ok(())
@@ -183,17 +183,14 @@ impl<P: Planning> Plan<P> {
                     Self::publish_event(tx_monitor, event);
                 },
 
-                else => {
-                    tracing::info!("Plan stage done - breaking...");
-                    break;
-                },
+                else => break,
             }
         }
 
         Ok(())
     }
 
-    #[tracing::instrument(level = "debug", skip(tx_monitor))]
+    #[tracing::instrument(level = "trace", skip(tx_monitor))]
     fn publish_event(tx_monitor: &broadcast::Sender<Arc<PlanEvent<P>>>, event: PlanEvent<P>) {
         match tx_monitor.send(Arc::new(event)) {
             Ok(nr_subsribers) => tracing::debug!(%nr_subsribers, "published event to subscribers"),
@@ -204,7 +201,7 @@ impl<P: Planning> Plan<P> {
     }
 
     async fn do_close(mut self: Box<Self>) -> Result<(), PlanError> {
-        tracing::trace!("closing scaling_plan ports.");
+        tracing::trace!(stage=%self.name, "closing scaling_plan ports.");
         self.inlet.close().await;
         self.decision_inlet.close().await;
         self.context_inlet.close().await;

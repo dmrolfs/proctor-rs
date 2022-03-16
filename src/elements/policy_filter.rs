@@ -157,13 +157,13 @@ where
         self.name.clone()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
         self.do_check().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run policy_filter through", skip(self))]
+    #[tracing::instrument(level = "trace", name = "run policy_filter through", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         self.do_run().await?;
         Ok(())
@@ -216,7 +216,7 @@ where
                         }
                     },
                     None => {
-                        tracing::info!("PolicyFilter item_inlet dropped - completing.");
+                        tracing::info!("PolicyFilter inlet,{:?}, dropped - completing.", item_inlet);
                         break;
                     }
                 },
@@ -250,7 +250,7 @@ where
 
     #[inline]
     async fn do_close(mut self: Box<Self>) -> Result<(), PortError> {
-        tracing::info!("closing policy_filter ports");
+        tracing::trace!("closing policy_filter ports");
         self.inlet.close().await;
         self.outlet.close().await;
         Ok(())
@@ -264,7 +264,7 @@ where
     P: QueryPolicy<Item = T, Context = C, Args = A, TemplateData = D>,
     D: AppData + Serialize,
 {
-    #[tracing::instrument(level = "info", name = "make policy knowledge base", skip(self))]
+    #[tracing::instrument(level = "trace", name = "make policy knowledge base", skip(self))]
     fn oso(&mut self) -> Result<Oso, PolicyError> {
         let mut oso = Oso::new();
 
@@ -295,7 +295,7 @@ where
     }
 
     #[tracing::instrument(
-        level = "info",
+        level = "trace",
         name = "policy_filter handle item",
         skip(oso, outlet, tx, policy),
         fields()
@@ -311,7 +311,7 @@ where
 
         let outcome = match query_result {
             Ok(result) if result.passed => {
-                tracing::info!(
+                tracing::debug!(
                     ?policy,
                     ?result,
                     "item passed context policy review - sending via outlet."
@@ -324,13 +324,13 @@ where
             },
 
             Ok(result) => {
-                tracing::info!(?policy, ?result, "item failed context policy review - skipping.");
+                tracing::debug!(?policy, ?result, "item failed context policy review - skipping.");
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item, Some(result)), tx)?;
                 Ok(())
             },
 
             Err(err) => {
-                tracing::warn!(error=?err, ?policy, "error in context policy review - skipping item.");
+                tracing::error!(error=?err, ?policy, "error in context policy review - skipping item.");
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item, None), tx)?;
                 Err(err)
             },
@@ -340,7 +340,7 @@ where
     }
 
     #[tracing::instrument(
-        level = "info",
+        level = "trace",
         name = "policy_filter handle item before context set",
         skip(tx),
         fields()
@@ -353,7 +353,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "policy_filter handle context", skip(context, tx), fields())]
+    #[tracing::instrument(level = "trace", name = "policy_filter handle context", skip(context, tx), fields())]
     async fn handle_context(
         context: Arc<Mutex<Option<C>>>, recv_context: C, tx: &broadcast::Sender<Arc<PolicyFilterEvent<T, C>>>,
     ) -> Result<(), PolicyError> {
@@ -365,7 +365,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "policy_filter handle command", skip(oso, policy,), fields())]
+    #[tracing::instrument(level = "trace", name = "policy_filter handle command", skip(oso, policy,), fields())]
     async fn handle_command(
         command: PolicyFilterCmd<C, D>, oso: &mut Oso, name: &SharedString, policy: &mut P,
         context: Arc<Mutex<Option<C>>>,
@@ -560,19 +560,19 @@ mod tests {
             &mut self.0
         }
 
-        #[tracing::instrument(level = "info", skip(oso))]
+        #[tracing::instrument(level = "trace", skip(oso))]
         fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
             oso.register_class(User::get_polar_class())?;
             oso.register_class(TestContext::get_polar_class())?;
             Ok(())
         }
 
-        #[tracing::instrument(level = "info")]
+        #[tracing::instrument(level = "trace")]
         fn make_query_args(&self, item: &Self::Item, _context: &Self::Context) -> Self::Args {
             (item.clone(), "foo", "bar")
         }
 
-        #[tracing::instrument(level = "info", skip(engine))]
+        #[tracing::instrument(level = "trace", skip(engine))]
         fn query_policy(&self, engine: &Oso, args: Self::Args) -> Result<QueryResult, PolicyError> {
             QueryResult::from_query(engine.query_rule("allow", args)?)
         }

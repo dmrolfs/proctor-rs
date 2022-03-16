@@ -87,7 +87,7 @@ impl<T: AppData> Stage for Merge<T> {
         self.name.clone()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
         self.inlet_0.check_attachment().await?;
         self.inlet_1.check_attachment().await?;
@@ -95,7 +95,7 @@ impl<T: AppData> Stage for Merge<T> {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run merge through", skip(self))]
+    #[tracing::instrument(level = "trace", name = "run merge through", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         let outlet = &self.outlet;
         let rx_0 = &mut self.inlet_0;
@@ -106,17 +106,17 @@ impl<T: AppData> Stage for Merge<T> {
 
             tokio::select! {
                 Some(t) = rx_0.recv() => {
-                    tracing::info!(item=?t, "inlet_0 receiving");
+                    tracing::trace!(item=?t, "inlet_0 receiving");
                     let _ = outlet.send(t).await?;
                 },
 
                 Some(t) = rx_1.recv() => {
-                    tracing::info!(item=?t, "inlet_1 receiving");
+                    tracing::trace!(item=?t, "inlet_1 receiving");
                     let _ = outlet.send(t).await?;
                 },
 
                 else => {
-                    tracing::warn!("merge done - breaking...");
+                    tracing::info!(stage=%self.name(), "merge done - breaking...");
                     break;
                 },
             }
@@ -125,9 +125,8 @@ impl<T: AppData> Stage for Merge<T> {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
     async fn close(mut self: Box<Self>) -> ProctorResult<()> {
-        tracing::trace!("closing merge-through ports.");
+        tracing::trace!(stage=%self.name(), "closing merge-through ports.");
         self.inlet_0.close().await;
         self.inlet_1.close().await;
         self.outlet.close().await;

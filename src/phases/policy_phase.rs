@@ -31,7 +31,7 @@ where
     C: ProctorContext,
     D: AppData + Serialize,
 {
-    #[tracing::instrument(level = "info", skip(name))]
+    #[tracing::instrument(level = "trace", skip(name))]
     pub async fn carry_policy_outcome<P>(name: &str, policy: P) -> Result<Self, PolicyError>
     where
         P: 'static + QueryPolicy<Item = In, Context = C, TemplateData = D>,
@@ -52,7 +52,7 @@ where
     C: ProctorContext,
     D: AppData + Serialize,
 {
-    #[tracing::instrument(level = "info", skip(name))]
+    #[tracing::instrument(level = "trace", skip(name))]
     pub async fn strip_policy_outcome<P>(name: &str, policy: P) -> Result<Self, PolicyError>
     where
         P: 'static + QueryPolicy<Item = T, Context = C, TemplateData = D>,
@@ -70,7 +70,7 @@ where
     C: ProctorContext,
     D: AppData + Serialize,
 {
-    #[tracing::instrument(level = "info", skip(name))]
+    #[tracing::instrument(level = "trace", skip(name))]
     pub async fn with_transform<P, T>(name: SharedString, policy: P, transform: T) -> Result<Self, PolicyError>
     where
         P: 'static + QueryPolicy<Item = In, Context = C, TemplateData = D>,
@@ -155,19 +155,19 @@ where
         self.name.clone()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
         self.do_check().await.map_err(|err| ProctorError::Phase(err.into()))?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run policy phase", skip(self))]
+    #[tracing::instrument(level = "trace", name = "run policy phase", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         self.do_run().await.map_err(|err| ProctorError::Phase(err.into()))?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn close(mut self: Box<Self>) -> ProctorResult<()> {
         self.do_close().await.map_err(|err| ProctorError::Phase(err.into()))?;
         Ok(())
@@ -197,7 +197,7 @@ where
     }
 
     async fn do_close(mut self: Box<Self>) -> Result<(), C::Error> {
-        tracing::trace!("closing decision ports.");
+        tracing::trace!(stage=%self.name, "closing decision ports.");
         self.inlet.close().await;
         self.context_inlet.close().await;
         self.outlet.close().await;

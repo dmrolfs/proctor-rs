@@ -44,7 +44,7 @@ impl Telemetry {
     }
 
     /// Attempt to deserialize the entire telemetry into the requested type.
-    #[tracing::instrument(level = "debug", name = "try into telemetry", skip())]
+    #[tracing::instrument(level = "debug", name = "try into telemetry")]
     pub fn try_into<T: serde_de::DeserializeOwned>(self) -> Result<T, TelemetryError> {
         let mut serializer = flexbuffers::FlexbufferSerializer::new();
         self.0.serialize(&mut serializer)?;

@@ -31,7 +31,7 @@ pub trait ProctorContext: AppData + SubscriptionRequirements + PolarClass + Seri
 
     fn custom(&self) -> telemetry::TableType;
 
-    #[tracing::instrument(level = "info", skip(tx_clearinghouse_api))]
+    #[tracing::instrument(level = "trace", skip(tx_clearinghouse_api))]
     async fn connect_context(
         subscription: TelemetrySubscription, tx_clearinghouse_api: &ClearinghouseApi,
     ) -> Result<SubscriptionChannel<Self>, Self::Error> {

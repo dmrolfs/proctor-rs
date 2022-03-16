@@ -63,7 +63,7 @@ impl ContinueTicking for Constraint {
             Constraint::ByTime { stop, limit } => match stop {
                 None => {
                     *stop = Some(tokio::time::Instant::now() + *limit);
-                    tracing::warn!(?stop, ?limit, "set tick time constraint");
+                    tracing::debug!(?stop, ?limit, "set tick time constraint");
                     true
                 },
 
@@ -71,7 +71,7 @@ impl ContinueTicking for Constraint {
                     let now = tokio::time::Instant::now();
                     let do_next = now < *stop;
                     let diff = if do_next { Ok(*stop - now) } else { Err(now - *stop) };
-                    tracing::warn!(?diff, %do_next, "eval tick time constraint.");
+                    tracing::debug!(?diff, %do_next, "eval tick time constraint.");
                     do_next
                 },
             },
@@ -193,13 +193,13 @@ where
         self.name.clone()
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn check(&self) -> ProctorResult<()> {
         self.outlet.check_attachment().await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name = "run tick source", skip(self))]
+    #[tracing::instrument(level = "trace", name = "run tick source", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         let start = tokio::time::Instant::now() + self.initial_delay;
         let interval = tokio::time::interval_at(start, self.interval);
@@ -227,19 +227,19 @@ where
             tokio::select! {
                 next_tick = ticks.next() => match next_tick {
                     Some(tick) => {
-                        tracing::info!(?tick, "sending tick...");
+                        tracing::trace!(?tick, "sending tick...");
                         outlet.send(tick).await?;
                     },
 
                     None => {
-                        tracing::warn!("ticking stopped -- breaking...");
+                        tracing::info!(name=%self.name(), "ticking stopped -- breaking...");
                         break;
                     }
                 },
 
                 Some(msg) = rx_api.recv() => match msg {
                     TickCmd::Stop { tx } => {
-                        tracing::info!("handling request to stop ticking.");
+                        tracing::info!(name=%self.name(), "handling request to stop ticking.");
                         let _ = tx.send(Ok(()));
                         break;
                     }
@@ -255,9 +255,9 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn close(mut self: Box<Self>) -> ProctorResult<()> {
-        tracing::info!("closing tick source outlet.");
+        tracing::info!(name=%self.name(), "closing tick source outlet.");
         self.outlet.close().await;
         Ok(())
     }
