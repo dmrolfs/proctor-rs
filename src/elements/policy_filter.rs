@@ -28,7 +28,7 @@ use crate::error::{PolicyError, PortError};
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Inlet, Outlet, Port, PORT_CONTEXT, PORT_DATA};
 use crate::graph::{SinkShape, SourceShape};
-use crate::{track_errors, AppData, ProctorContext, ProctorResult, SharedString};
+use crate::{track_errors, AppData, Correlation, ProctorContext, ProctorResult, SharedString};
 
 pub(crate) static POLICY_FILTER_EVAL_TIME: Lazy<HistogramVec> = Lazy::new(|| {
     HistogramVec::new(
@@ -146,7 +146,7 @@ where
 #[async_trait]
 impl<T, C, A, P, D> Stage for PolicyFilter<T, C, A, P, D>
 where
-    T: AppData + ToPolar,
+    T: AppData + Correlation + ToPolar,
     C: ProctorContext,
     A: 'static,
     P: QueryPolicy<Item = T, Context = C, Args = A, TemplateData = D> + 'static,
@@ -177,7 +177,7 @@ where
 
 impl<T, C, A, P, D> PolicyFilter<T, C, A, P, D>
 where
-    T: AppData + ToPolar,
+    T: AppData + Correlation + ToPolar,
     C: ProctorContext,
     A: 'static,
     P: QueryPolicy<Item = T, Context = C, Args = A, TemplateData = D> + 'static,
@@ -208,7 +208,7 @@ where
             tokio::select! {
                 item = item_inlet.recv() => match item {
                     Some(item) => {
-                        tracing::trace!(?item, ?context, "handling next item...");
+                        tracing::debug!(?item, ?context, "handling next item...");
 
                         match context.lock().await.as_ref() {
                             Some(ctx) => Self::handle_item(&name, item, ctx, policy, &oso, outlet, tx_monitor).await?,
@@ -259,7 +259,7 @@ where
 
 impl<T, C, A, P, D> PolicyFilter<T, C, A, P, D>
 where
-    T: AppData + ToPolar,
+    T: AppData + Correlation + ToPolar,
     C: ProctorContext,
     P: QueryPolicy<Item = T, Context = C, Args = A, TemplateData = D>,
     D: AppData + Serialize,
@@ -295,10 +295,10 @@ where
     }
 
     #[tracing::instrument(
-        level = "trace",
-        name = "policy_filter handle item",
+        level = "info",
+        name = "DMR(debug):policy_filter handle item",
         skip(oso, outlet, tx, policy),
-        fields()
+        fields(stage=%name, correlation=?item.correlation())
     )]
     async fn handle_item(
         name: &SharedString, item: T, context: &C, policy: &P, oso: &Oso, outlet: &Outlet<PolicyOutcome<T, C>>,
@@ -474,7 +474,7 @@ mod tests {
     use claim::*;
     use oso::PolarClass;
     use pretty_assertions::assert_eq;
-    use pretty_snowflake::Label;
+    use pretty_snowflake::{Id, Label};
     use prometheus::Registry;
     use serde::{Deserialize, Serialize};
     use tokio::sync::mpsc;
@@ -484,19 +484,37 @@ mod tests {
     use crate::elements::telemetry;
     use crate::phases::sense::{SubscriptionRequirements, TelemetrySubscription};
 
-    #[derive(Debug, PartialEq, Clone, PolarClass)]
+    #[derive(Label, Debug, PartialEq, Clone, PolarClass)]
     struct User {
+        pub correlation_id: Id<Self>,
         #[polar(attribute)]
         pub username: String,
     }
 
+    impl Correlation for User {
+        type Correlated = Self;
+
+        fn correlation(&self) -> &Id<Self::Correlated> {
+            &self.correlation_id
+        }
+    }
+
     #[derive(PolarClass, Label, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     struct TestContext {
+        pub correlation_id: Id<Self>,
+
         #[polar(attribute)]
         pub location_code: u32,
         #[polar(attribute)]
         #[serde(flatten)]
         pub qualities: telemetry::TableValue,
+    }
+
+    impl Correlation for TestContext {
+        type Correlated = Self;
+        fn correlation(&self) -> &Id<Self::Correlated> {
+            &self.correlation_id
+        }
     }
 
     #[async_trait]
@@ -592,7 +610,12 @@ mod tests {
         let mut policy_filter = PolicyFilter::new("test-policy-filter", policy)?;
         let oso = assert_ok!(policy_filter.oso()); //.expect("failed to build policy engine");
 
-        let item = User { username: "peter.pan@example.com".to_string() };
+        let correlation_id = Id::direct("User", 93, "DIUH");
+
+        let item = User {
+            correlation_id: correlation_id.clone(),
+            username: "peter.pan@example.com".to_string(),
+        };
 
         tracing::info!(?item, "entering test section...");
 
@@ -604,6 +627,7 @@ mod tests {
             let (tx_monitor, _rx_monitor) = broadcast::channel(4);
 
             let context = TestContext {
+                correlation_id: Id::direct("TestContext", 123, "ABC"),
                 location_code: 17,
                 qualities: maplit::hashmap! {
                     "foo".to_string() => "bar".into(),
@@ -631,7 +655,10 @@ mod tests {
             assert_eq!(
                 actual.unwrap(),
                 PolicyOutcome::new(
-                    User { username: "peter.pan@example.com".to_string() },
+                    User {
+                        correlation_id,
+                        username: "peter.pan@example.com".to_string()
+                    },
                     context,
                     QueryResult { passed: true, bindings: Bindings::default() }
                 )

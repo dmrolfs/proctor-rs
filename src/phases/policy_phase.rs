@@ -13,7 +13,7 @@ use crate::elements::{
 use crate::error::{PolicyError, ProctorError};
 use crate::graph::stage::{Stage, ThroughStage, WithApi, WithMonitor};
 use crate::graph::{stage, Connect, Graph, Inlet, Outlet, Port, SinkShape, SourceShape, PORT_DATA};
-use crate::{AppData, ProctorContext, ProctorResult, SharedString};
+use crate::{AppData, Correlation, ProctorContext, ProctorResult, SharedString};
 
 pub struct PolicyPhase<In, Out, C, D> {
     name: SharedString,
@@ -27,7 +27,7 @@ pub struct PolicyPhase<In, Out, C, D> {
 
 impl<In, C, D> PolicyPhase<In, PolicyOutcome<In, C>, C, D>
 where
-    In: AppData + ToPolar,
+    In: AppData + Correlation + ToPolar,
     C: ProctorContext,
     D: AppData + Serialize,
 {
@@ -48,7 +48,7 @@ where
 
 impl<T, C, D> PolicyPhase<T, T, C, D>
 where
-    T: AppData + ToPolar,
+    T: AppData + Correlation + ToPolar,
     C: ProctorContext,
     D: AppData + Serialize,
 {
@@ -65,7 +65,7 @@ where
 
 impl<In, Out, C, D> PolicyPhase<In, Out, C, D>
 where
-    In: AppData + ToPolar,
+    In: AppData + Correlation + ToPolar,
     Out: AppData,
     C: ProctorContext,
     D: AppData + Serialize,

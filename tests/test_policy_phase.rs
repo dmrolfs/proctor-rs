@@ -27,8 +27,8 @@ use proctor::phases::sense::{
     self, CorrelationGenerator, SubscriptionRequirements, TelemetrySubscription, SUBSCRIPTION_CORRELATION,
     SUBSCRIPTION_TIMESTAMP,
 };
-use proctor::ProctorContext;
 use proctor::{AppData, SharedString};
+use proctor::{Correlation, ProctorContext};
 use serde_test::{assert_tokens, Token};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -38,7 +38,7 @@ pub struct Data {
     pub input_messages_per_sec: f64,
     #[serde(with = "proctor::serde")]
     pub recv_timestamp: DateTime<Utc>,
-    pub correlation_id: Id<Data>,
+    pub correlation_id: Id<Self>,
     pub inbox_lag: i64,
 }
 
@@ -48,10 +48,18 @@ impl PartialEq for Data {
     }
 }
 
+impl Correlation for Data {
+    type Correlated = Self;
+
+    fn correlation(&self) -> &Id<Self::Correlated> {
+        &self.correlation_id
+    }
+}
+
 #[derive(PolarClass, Label, Debug, Clone, Serialize, Deserialize)]
 pub struct TestPolicyPhaseContext {
     pub recv_timestamp: Timestamp,
-    pub correlation_id: Id<TestPolicyPhaseContext>,
+    pub correlation_id: Id<Self>,
 
     #[polar(attribute)]
     #[serde(flatten)]
@@ -76,6 +84,14 @@ pub struct TestPolicyPhaseContext {
 impl PartialEq for TestPolicyPhaseContext {
     fn eq(&self, other: &Self) -> bool {
         self.task_status == other.task_status && self.cluster_status == other.cluster_status
+    }
+}
+
+impl Correlation for TestPolicyPhaseContext {
+    type Correlated = Self;
+
+    fn correlation(&self) -> &Id<Self::Correlated> {
+        &self.correlation_id
     }
 }
 
@@ -152,8 +168,10 @@ static DT_1_STR: Lazy<String> = Lazy::new(|| format!("{}", DT_1.format("%+")));
 static DT_1_TS: Lazy<i64> = Lazy::new(|| DT_1.timestamp());
 
 #[serde_as]
-#[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(PolarClass, Label, Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct TestItem {
+    pub correlation_id: Id<Self>,
+
     #[polar(attribute)]
     #[serde(flatten)]
     pub flow: TestFlowMetrics,
@@ -166,9 +184,18 @@ struct TestItem {
     pub my_timestamp: DateTime<Utc>,
 }
 
+impl Correlation for TestItem {
+    type Correlated = Self;
+
+    fn correlation(&self) -> &Id<Self::Correlated> {
+        &self.correlation_id
+    }
+}
+
 impl TestItem {
-    pub fn new(input_messages_per_sec: f64, inbox_lag: i32, ts: DateTime<Utc>) -> Self {
+    pub fn new(correlation_id: Id<Self>, input_messages_per_sec: f64, inbox_lag: i32, ts: DateTime<Utc>) -> Self {
         Self {
+            correlation_id,
             flow: TestFlowMetrics { input_messages_per_sec },
             inbox_lag,
             my_timestamp: ts,
@@ -386,7 +413,7 @@ struct TestFlow<T, C, D> {
 
 impl<T, C, D> TestFlow<T, C, D>
 where
-    T: AppData + DeserializeOwned + ToPolar,
+    T: AppData + Correlation + DeserializeOwned + ToPolar,
     C: ProctorContext,
     D: Debug + Clone + Serialize + DeserializeOwned + Send + Sync + 'static,
 {
@@ -649,9 +676,18 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_eligibility_happy_context");
     let _ = main_span.enter();
 
-    #[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
+    #[derive(PolarClass, Label, Debug, Clone, PartialEq, Serialize, Deserialize)]
     pub struct MeasurementData {
+        correlation_id: Id<Self>,
         measurement: f64,
+    }
+
+    impl Correlation for MeasurementData {
+        type Correlated = Self;
+
+        fn correlation(&self) -> &Id<Self::Correlated> {
+            &self.correlation_id
+        }
     }
 
     let policy = make_test_policy(&PolicySettings {
@@ -728,11 +764,19 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
 
     tracing::warn!("DMR: 05. Push Item...");
 
-    let t1: Telemetry = maplit::hashmap! {"measurement" => std::f64::consts::PI.to_telemetry()}
-        .into_iter()
-        .collect();
+    let pi_correlation_id = Id::direct("MeasurementData", 314, "PI");
+
+    let t1: Telemetry = maplit::hashmap! {
+        "correlation_id" => pi_correlation_id.clone().into(),
+        "measurement" => std::f64::consts::PI.to_telemetry()
+    }
+    .into_iter()
+    .collect();
     assert_eq!(
-        MeasurementData { measurement: std::f64::consts::PI },
+        MeasurementData {
+            correlation_id: pi_correlation_id.clone(),
+            measurement: std::f64::consts::PI
+        },
         assert_ok!(t1.try_into::<MeasurementData>())
     );
 
@@ -750,9 +794,14 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
 
     tracing::warn!("DMR: 07. Push another Item...");
 
+    let tau_correlation_id: Id<MeasurementData> = Id::direct("MeasurementData", 821, "TAU");
+
     assert_ok!(
         flow.push_telemetry(
-            maplit::hashmap! {"measurement".to_string() => std::f64::consts::TAU.to_telemetry()}.into()
+            maplit::hashmap! {
+            "correlation_id".to_string() => tau_correlation_id.clone().into(),
+            "measurement".to_string() => std::f64::consts::TAU.to_telemetry()}
+            .into()
         )
         .await
     );
@@ -763,16 +812,27 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
 
     tracing::warn!(?actual, "DMR: 09. Verify final accumulation...");
 
+    let pi_cid = &actual[0].item.correlation_id;
+    // let pi_rts = actual(0).item.recv_timestamp;
+    let tau_cid = &actual[1].item.correlation_id;
+    // let tau_rts = actual(1).item.recv_timestamp;
+
     assert_eq!(
         actual,
         vec![
             PolicyOutcome::new(
-                MeasurementData { measurement: std::f64::consts::PI },
+                MeasurementData {
+                    correlation_id: pi_cid.clone(),
+                    measurement: std::f64::consts::PI
+                },
                 context.clone(),
                 QueryResult::passed_without_bindings()
             ),
             PolicyOutcome::new(
-                MeasurementData { measurement: std::f64::consts::TAU },
+                MeasurementData {
+                    correlation_id: tau_cid.clone(),
+                    measurement: std::f64::consts::TAU
+                },
                 context.clone(),
                 QueryResult::passed_without_bindings()
             ),
@@ -787,12 +847,13 @@ fn test_item_serde() {
     let main_span = tracing::info_span!("test_item_serde");
     let _ = main_span.enter();
 
-    let item = TestItem::new(std::f64::consts::PI, 3, DT_1.clone());
+    let cid = Id::direct("MeasurementData", 314, "PI");
+    let item = TestItem::new(cid.clone(), std::f64::consts::PI, 3, DT_1.clone());
     let json = serde_json::to_string(&item).unwrap();
     assert_eq!(
         json,
         format!(
-            r#"{{"input_messages_per_sec":{},"inbox_lag":3,"my_timestamp":{}}}"#,
+            r#"{{"correlation_id":{{"snowflake":314,"pretty":"PI"}},"input_messages_per_sec":{},"inbox_lag":3,"my_timestamp":{}}}"#,
             std::f64::consts::PI,
             *DT_1_TS
         )
@@ -802,6 +863,7 @@ fn test_item_serde() {
     assert_eq!(
         telemetry,
         maplit::hashmap! {
+            "correlation_id" => cid.into(),
             "input_messages_per_sec" => std::f64::consts::PI.to_telemetry(),
             "inbox_lag" => 3.to_telemetry(),
             "my_timestamp" => DT_1_TS.to_telemetry(),
@@ -971,8 +1033,9 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ContextChanged(_));
     tracing::warn!(?event, "DMR-A: environment changed confirmed");
 
+    let pi_cid = Id::direct("TestItem", 314, "PI");
     let ts = *DT_1 + chrono::Duration::hours(1);
-    let item = TestItem::new(std::f64::consts::PI, 1, ts);
+    let item = TestItem::new(pi_cid.clone(), std::f64::consts::PI, 1, ts);
     tracing::warn!(?item, "DMR-A.1: created item to push.");
     let telemetry = Telemetry::try_from(&item);
     tracing::warn!(?item, ?telemetry, "DMR-A.2: converted item to telemetry and pushing...");
@@ -998,21 +1061,24 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ContextChanged(_));
     tracing::warn!(?event, "DMR-B: environment changed confirmed");
 
-    let item = TestItem::new(std::f64::consts::E, 2, ts);
+    let e_cid = Id::direct("TestItem", 296, "E");
+    let item = TestItem::new(e_cid.clone(), std::f64::consts::E, 2, ts);
     let telemetry = Telemetry::try_from(&item);
     flow.push_telemetry(telemetry?).await?;
     let event = &*flow.recv_policy_event().await?;
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_, _));
     tracing::warn!(?event, "DMR-C: item dropped confirmed");
 
-    let item = TestItem::new(std::f64::consts::FRAC_1_PI, 3, ts);
+    let fpi_cid = Id::direct("TestItem", 314, "FPI");
+    let item = TestItem::new(fpi_cid.clone(), std::f64::consts::FRAC_1_PI, 3, ts);
     let telemetry = Telemetry::try_from(&item)?;
     flow.push_telemetry(telemetry).await?;
     let event = &*flow.recv_policy_event().await?;
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_, _));
     tracing::warn!(?event, "DMR-D: item dropped confirmed");
 
-    let item = TestItem::new(std::f64::consts::FRAC_1_SQRT_2, 4, ts);
+    let rt_cid = Id::direct("TestItem", 717, "RT");
+    let item = TestItem::new(rt_cid.clone(), std::f64::consts::FRAC_1_SQRT_2, 4, ts);
     let telemetry = Telemetry::try_from(&item)?;
     flow.push_telemetry(telemetry).await?;
     let event = &*flow.recv_policy_event().await?;
@@ -1041,7 +1107,8 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ContextChanged(_));
     tracing::warn!(?event, "DMR-F: environment changed confirmed");
 
-    let item = TestItem::new(std::f64::consts::LN_2, 5, ts);
+    let i_cid = Id::direct("TestItem", 3978, "IDD");
+    let item = TestItem::new(i_cid.clone(), std::f64::consts::LN_2, 5, ts);
     let telemetry = Telemetry::try_from(&item)?;
     flow.push_telemetry(telemetry).await?;
 
@@ -1105,12 +1172,14 @@ async fn test_eligibility_w_custom_fields() -> anyhow::Result<()> {
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ContextChanged(_));
 
     let ts = Utc::now().into();
-    let item = TestItem::new(std::f64::consts::PI, 1, ts);
+    let i_cid_0 = Id::direct("TestItem", 314, "PI");
+    let item = TestItem::new(i_cid_0.clone(), std::f64::consts::PI, 1, ts);
     let telemetry = Telemetry::try_from(&item);
     tracing::info!(?telemetry, ?item, "pushing item telemetry");
     flow.push_telemetry(telemetry?).await?;
 
-    let item = TestItem::new(std::f64::consts::TAU, 2, ts);
+    let i_cid_1 = Id::direct("TestItem", 928, "LN_2");
+    let item = TestItem::new(i_cid_1.clone(), std::f64::consts::TAU, 2, ts);
     let telemetry = Telemetry::try_from(&item);
     flow.push_telemetry(telemetry?).await?;
 
@@ -1175,11 +1244,13 @@ async fn test_eligibility_w_item_n_env() -> anyhow::Result<()> {
     tracing::info!("DMR-C:verify context...");
 
     let ts = Utc::now().into();
-    let item = TestItem::new(std::f64::consts::PI, 1, ts);
+    let i_cid_0 = Id::direct("TestItem", 4398, "JSHD");
+    let item = TestItem::new(i_cid_0.clone(), std::f64::consts::PI, 1, ts);
     let telemetry = Telemetry::try_from(&item);
     flow.push_telemetry(telemetry?).await?;
 
-    let item = TestItem::new(std::f64::consts::TAU, 2, ts);
+    let i_cid_1 = Id::direct("TestItem", 2387, "JKHH");
+    let item = TestItem::new(i_cid_1.clone(), std::f64::consts::TAU, 2, ts);
     let telemetry = Telemetry::try_from(&item);
     flow.push_telemetry(telemetry?).await?;
 
@@ -1245,12 +1316,14 @@ async fn test_eligibility_replace_policy() -> anyhow::Result<()> {
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ContextChanged(_));
     tracing::warn!(?event, "DMR-A: environment changed confirmed");
 
-    let item_1 = TestItem::new(std::f64::consts::PI, 1, too_old_ts);
+    let cid_0 = Id::direct("TestItem", 984, "JHD");
+    let item_1 = TestItem::new(cid_0.clone(), std::f64::consts::PI, 1, too_old_ts);
     tracing::warn!(?item_1, "DMR-A-1: item passes...");
     let telemetry_1 = Telemetry::try_from(&item_1)?;
     flow.push_telemetry(telemetry_1.clone()).await?;
 
-    let item_2 = TestItem::new(17.327, 2, good_ts);
+    let cid_1 = Id::direct("TestItem", 97832, "SJHD");
+    let item_2 = TestItem::new(cid_1.clone(), 17.327, 2, good_ts);
     tracing::warn!(?item_2, "DMR-A-2: item passes...");
     let telemetry_2 = Telemetry::try_from(&item_2)?;
     flow.push_telemetry(telemetry_2.clone()).await?;
@@ -1274,22 +1347,30 @@ async fn test_eligibility_replace_policy() -> anyhow::Result<()> {
 
     let actual = flow.close().await?;
     tracing::warn!(?actual, "verifying actual result...");
+
+    let ti_cid_0 = actual[0].item.correlation().clone();
+    let c_cid_0 = actual[0].context.correlation().clone();
+    let ti_cid_1 = actual[1].item.correlation().clone();
+    let c_cid_1 = actual[1].context.correlation().clone();
+    let ti_cid_2 = actual[2].item.correlation().clone();
+    let c_cid_2 = actual[2].context.correlation().clone();
+
     assert_eq!(
         actual,
         vec![
             PolicyOutcome::new(
-                TestItem::new(std::f64::consts::PI, 1, too_old_ts),
-                context.clone(),
+                TestItem::new(ti_cid_0, std::f64::consts::PI, 1, too_old_ts),
+                TestPolicyPhaseContext { correlation_id: c_cid_0, ..context.clone() },
                 QueryResult::passed_without_bindings()
             ),
             PolicyOutcome::new(
-                TestItem::new(17.327, 2, good_ts),
-                context.clone(),
+                TestItem::new(ti_cid_1, 17.327, 2, good_ts),
+                TestPolicyPhaseContext { correlation_id: c_cid_1, ..context.clone() },
                 QueryResult::passed_without_bindings()
             ),
             PolicyOutcome::new(
-                TestItem::new(17.327, 2, good_ts),
-                context.clone(),
+                TestItem::new(ti_cid_2, 17.327, 2, good_ts),
+                TestPolicyPhaseContext { correlation_id: c_cid_2, ..context.clone() },
                 QueryResult::passed_without_bindings()
             ),
         ]

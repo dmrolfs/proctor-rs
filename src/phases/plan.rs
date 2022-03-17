@@ -8,7 +8,7 @@ use tokio::sync::broadcast;
 use crate::error::PlanError;
 use crate::graph::stage::{Stage, WithMonitor};
 use crate::graph::{stage, Inlet, Outlet, Port, SinkShape, SourceShape, PORT_CONTEXT, PORT_DATA};
-use crate::{AppData, ProctorResult, SharedString};
+use crate::{AppData, Correlation, ProctorResult, SharedString};
 
 // pub type Event<P> = PlanEvent<<P as Planning>::Context, <P as Planning>::Decision, <P as Planning>::Out>;
 pub type PlanMonitor<P> = broadcast::Receiver<Arc<PlanEvent<P>>>;
@@ -23,8 +23,8 @@ pub enum PlanEvent<P: Planning + ?Sized> {
 #[async_trait]
 pub trait Planning: Debug + Send + Sync {
     type Observation: AppData + Clone;
-    type Decision: AppData + Clone;
-    type Context: AppData + Clone;
+    type Decision: AppData + Correlation + Clone;
+    type Context: AppData + Correlation + Clone;
     type Out: AppData + Clone;
 
     fn set_outlet(&mut self, outlet: Outlet<Self::Out>);
@@ -167,12 +167,17 @@ impl<P: Planning> Plan<P> {
                 Some(data) = rx_data.recv() => planning.add_observation(data),
 
                 Some(context) = rx_context.recv() => {
+                    let span = tracing::info_span!("DMR(debug):Plan handle context", correlation=?context.correlation(),);
+                    let _guard = span.enter();
+
                     if let Some(event) = planning.patch_context(context).await? {
                         Self::publish_event(tx_monitor, event);
                     }
                 },
 
                 Some(decision) = rx_decision.recv() => {
+                    let span = tracing::info_span!("DMR(debug):Plan handle decision", correlation=?decision.correlation(),);
+                    let _guard = span.enter();
                     let _timer = stage::start_stage_eval_time(self.name.as_ref());
 
                     let event = match planning.handle_decision(decision.clone()).await? {

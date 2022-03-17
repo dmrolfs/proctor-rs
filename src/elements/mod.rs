@@ -7,7 +7,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::phases::sense::{
     ClearinghouseApi, ClearinghouseCmd, SubscriptionChannel, SubscriptionRequirements, TelemetrySubscription,
 };
-use crate::AppData;
+use crate::{AppData, Correlation};
 
 mod collection;
 mod from_telemetry;
@@ -26,7 +26,9 @@ pub use timestamp::*;
 pub type Point = (f64, f64);
 
 #[async_trait]
-pub trait ProctorContext: AppData + SubscriptionRequirements + PolarClass + Serialize + DeserializeOwned {
+pub trait ProctorContext:
+    AppData + Correlation + SubscriptionRequirements + PolarClass + Serialize + DeserializeOwned
+{
     type Error: std::error::Error + From<anyhow::Error> + Send + Sync;
 
     fn custom(&self) -> telemetry::TableType;

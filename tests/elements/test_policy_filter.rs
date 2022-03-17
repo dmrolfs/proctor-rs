@@ -8,6 +8,7 @@ use chrono::*;
 use claim::*;
 use oso::{Oso, PolarClass, PolarValue};
 use pretty_assertions::assert_eq;
+use pretty_snowflake::{Id, Label};
 use proctor::elements::telemetry::ToTelemetry;
 use proctor::elements::{
     self, telemetry, PolicyFilterEvent, PolicyOutcome, PolicySettings, PolicySubscription, QueryPolicy, QueryResult,
@@ -18,13 +19,15 @@ use proctor::error::PolicyError;
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape};
 use proctor::phases::sense::SubscriptionRequirements;
-use proctor::{ProctorContext, SharedString};
+use proctor::{Correlation, ProctorContext, SharedString};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use trim_margin::MarginTrimmable;
 
-#[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(PolarClass, Label, Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct TestItem {
+    pub correlation_id: Id<Self>,
+
     #[polar(attribute)]
     pub flow: TestFlowMetrics,
 
@@ -35,9 +38,18 @@ struct TestItem {
     pub inbox_lag: u32,
 }
 
+impl Correlation for TestItem {
+    type Correlated = Self;
+
+    fn correlation(&self) -> &Id<Self::Correlated> {
+        &self.correlation_id
+    }
+}
+
 impl TestItem {
     pub fn new(input_messages_per_sec: f64, ts: DateTime<Utc>, inbox_lag: u32) -> Self {
         Self {
+            correlation_id: Id::direct("TestItem", inbox_lag as i64, "ABC"),
             flow: TestFlowMetrics { input_messages_per_sec },
             timestamp: ts.into(),
             inbox_lag,
@@ -61,8 +73,9 @@ struct TestFlowMetrics {
     pub input_messages_per_sec: f64,
 }
 
-#[derive(PolarClass, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(PolarClass, Label, Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct TestContext {
+    pub correlation_id: Id<Self>,
     #[polar(attribute)]
     pub location_code: u32,
     custom: telemetry::TableValue,
@@ -71,6 +84,7 @@ struct TestContext {
 impl TestContext {
     pub fn new(location_code: u32) -> Self {
         Self {
+            correlation_id: Id::direct("TestContext", location_code as i64, "ABC"),
             location_code,
             custom: telemetry::TableValue::default(),
         }
@@ -78,6 +92,14 @@ impl TestContext {
 
     pub fn with_custom(self, custom: telemetry::TableValue) -> Self {
         Self { custom, ..self }
+    }
+}
+
+impl Correlation for TestContext {
+    type Correlated = Self;
+
+    fn correlation(&self) -> &Id<Self::Correlated> {
+        &self.correlation_id
     }
 }
 
@@ -464,6 +486,7 @@ async fn test_policy_filter_before_context_baseline() -> anyhow::Result<()> {
     )
     .await?;
     let item = TestItem {
+        correlation_id: Id::direct("TestItem", 333, "CCC"),
         flow: TestFlowMetrics { input_messages_per_sec: 3.1415926535 },
         timestamp: Utc::now().into(),
         inbox_lag: 3,

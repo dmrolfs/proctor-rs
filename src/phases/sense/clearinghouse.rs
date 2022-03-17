@@ -169,11 +169,10 @@ impl Clearinghouse {
             .map(|s| Self::fulfill_subscription(s, database).map(|fulfillment| (s, fulfillment)))
             .flatten()
             .map(|(s, mut fulfillment)| {
-                let correlation_id = Self::add_automatic_telemetry(&mut fulfillment, correlation_generator);
+                let (correlation, recv_timestamp) = Self::add_automatic_telemetry(&mut fulfillment, correlation_generator);
 
-                tracing::trace!(subscription=%s.name(), ?correlation_id, "sending subscription data update.");
+                tracing::info!(subscription=%s.name(), ?correlation, %recv_timestamp, "DMR(debug): sending subscription data update.");
                 s.update_metrics(&fulfillment);
-                // Self::update_metrics(s, &fulfillment);
                 s.send(fulfillment).map(move |send_status| {
                     track_publications(s.name().as_ref());
                     (s, send_status)
@@ -217,11 +216,12 @@ impl Clearinghouse {
 
     fn add_automatic_telemetry(
         telemetry: &mut Telemetry, correlation_generator: &mut CorrelationGenerator,
-    ) -> Id<Telemetry> {
-        telemetry.insert(SUBSCRIPTION_TIMESTAMP.to_string(), Timestamp::now().into());
+    ) -> (Id<Telemetry>, Timestamp) {
+        let now = Timestamp::now();
+        telemetry.insert(SUBSCRIPTION_TIMESTAMP.to_string(), now.into());
         let correlation_id: Id<Telemetry> = correlation_generator.next_id();
         telemetry.insert(SUBSCRIPTION_CORRELATION.to_string(), correlation_id.clone().into());
-        correlation_id
+        (correlation_id, now)
     }
 
     #[tracing::instrument(level = "trace")]
