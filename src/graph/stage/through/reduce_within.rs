@@ -66,10 +66,10 @@ where
         loop {
             tokio::select! {
                 _next_tick = ticker.tick() => {
-                    tracing::info!("tick");
                     let mut b_guard = batch.lock().await;
+                    tracing::debug!(batch=?*b_guard, "tick");
                     if let Some(ref b) = *b_guard {
-                        tracing::info!(batch=?b, "publishing batch");
+                        tracing::debug!(batch=?b, "publishing batch");
                         self.outlet.send(b.clone()).await?;
                         *b_guard = <Option<T> as Monoid>::empty();
                     }
