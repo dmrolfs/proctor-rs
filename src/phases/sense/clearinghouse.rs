@@ -169,9 +169,10 @@ impl Clearinghouse {
             .map(|s| Self::fulfill_subscription(s, database).map(|fulfillment| (s, fulfillment)))
             .flatten()
             .map(|(s, mut fulfillment)| {
-                let (correlation, recv_timestamp) = Self::add_automatic_telemetry(&mut fulfillment, correlation_generator);
+                let (_correlation, _recv_timestamp) =
+                    Self::add_automatic_telemetry(&mut fulfillment, correlation_generator);
 
-                tracing::info!(subscription=%s.name(), ?correlation, %recv_timestamp, "DMR(debug): sending subscription data update.");
+                tracing::info!(subscription=%s.name(), ?fulfillment, "DMR(debug): sending subscription data update.");
                 s.update_metrics(&fulfillment);
                 s.send(fulfillment).map(move |send_status| {
                     track_publications(s.name().as_ref());

@@ -8,6 +8,7 @@ mod map;
 mod merge;
 mod merge_combine;
 mod merge_n;
+mod reduce_within;
 
 pub use self::and_then::AndThen;
 pub use self::broadcast::Broadcast;
@@ -19,3 +20,4 @@ pub use self::map::Map;
 pub use self::merge::Merge;
 pub use self::merge_combine::MergeCombine;
 pub use self::merge_n::{MergeCmd, MergeN};
+pub use self::reduce_within::ReduceWithin;
