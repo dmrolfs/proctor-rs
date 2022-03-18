@@ -58,7 +58,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level = "trace", name = "run reduce_within through", skip(self))]
+    #[tracing::instrument(level = "info", name = "run reduce_within through", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         let mut ticker = self.make_ticker();
         let batch = Mutex::new(<Option<T> as Monoid>::empty());
@@ -67,9 +67,9 @@ where
             tokio::select! {
                 _next_tick = ticker.tick() => {
                     let mut b_guard = batch.lock().await;
-                    tracing::debug!(batch=?*b_guard, "tick");
+                    tracing::info!(batch=?*b_guard, "tick");
                     if let Some(ref b) = *b_guard {
-                        tracing::debug!(batch=?b, "publishing batch");
+                        tracing::info!(batch=?b, "publishing batch");
                         self.outlet.send(b.clone()).await?;
                         *b_guard = <Option<T> as Monoid>::empty();
                     }
@@ -79,7 +79,7 @@ where
                     match data {
                         Some(d) => {
                             let mut b = batch.lock().await;
-                            tracing::debug!(data=?d, batch=?b, "combining data with batch");
+                            tracing::info!(data=?d, batch=?b, "combining data with batch");
                             *b = b.combine(&Some(d));
                         },
                         None => {
