@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use futures::future::{self, BoxFuture, FutureExt};
 use tokio::sync::{mpsc, oneshot};
+use tracing_futures::Instrument;
 
 use crate::error::StageError;
 use crate::graph::{stage, Inlet, InletsShape, Outlet, Port, SourceShape, Stage, UniformFanInShape, PORT_DATA};
@@ -285,9 +286,8 @@ impl<'a, T: AppData> MergeN<T> {
         let is_active = value.is_some();
 
         if let Some(item) = value {
-            let send_active_span = tracing::trace_span!("3.send item via outlet", ?item);
-            let _send_active_guard = send_active_span.enter();
-            let _ = outlet.send(item).await?;
+            let span = tracing::trace_span!("3.send item via outlet", ?item);
+            let _ = outlet.send(item).instrument(span).await?;
         }
 
         tracing::trace!(nr_remaining=%remaining_inlets.len(), %is_active, "after send");
@@ -297,12 +297,14 @@ impl<'a, T: AppData> MergeN<T> {
                 "4.replenish active pulls",
                 nr_available_inlets=%remaining_inlets.len()
             );
-            let _run_active_guard = run_active_span.enter();
+            let inlet = inlets.get(inlet_idx).instrument(run_active_span.clone()).await;
 
-            if let Some(inlet) = inlets.get(inlet_idx).await {
-                let rep = Self::replenish_inlet_pull(inlet_idx, inlet).boxed();
-                remaining_inlets.push(rep);
-                tracing::trace!(nr_available_inlets=%remaining_inlets.len(), "4.1.active_inlets replenished.");
+            if let Some(inlet) = inlet {
+                run_active_span.in_scope(|| {
+                    let rep = Self::replenish_inlet_pull(inlet_idx, inlet).boxed();
+                    remaining_inlets.push(rep);
+                    tracing::trace!(nr_available_inlets=%remaining_inlets.len(), "4.1.active_inlets replenished.");
+                })
             }
         }
 

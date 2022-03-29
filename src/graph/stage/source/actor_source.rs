@@ -3,6 +3,7 @@ use std::fmt::{self, Debug};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use tokio::sync::{mpsc, oneshot};
+use tracing::Instrument;
 
 use crate::error::StageError;
 use crate::graph::stage::{self, Stage};
@@ -86,9 +87,8 @@ impl<T: AppData> Stage for ActorSource<T> {
             tracing::trace!(?command, "handling command");
             match command {
                 ActorSourceCmd::Push { item, tx } => {
-                    let send_span = tracing::trace_span!("sending item", ?item);
-                    let _ = send_span.enter();
-                    self.outlet().send(item).await?;
+                    let span = tracing::trace_span!("actor sourcing item", ?item);
+                    self.outlet().send(item).instrument(span).await?;
                     let _ignore_failure = tx.send(());
                 },
 

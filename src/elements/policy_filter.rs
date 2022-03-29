@@ -285,11 +285,7 @@ where
     fn publish_event(
         event: PolicyFilterEvent<T, C>, tx: &broadcast::Sender<Arc<PolicyFilterEvent<T, C>>>,
     ) -> Result<(), PolicyError> {
-        let span = tracing::trace_span!("publish_event", ?event);
-        let _ = span.enter();
-
         let nr_notified = tx.send(Arc::new(event)).map_err(|err| PolicyError::Publish(err.into()))?;
-
         tracing::trace!(%nr_notified, "notifying subscribers of policy filter event.");
         Ok(())
     }

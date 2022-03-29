@@ -4,8 +4,9 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 
 use crate::graph::shape::{SinkShape, SourceShape};
-use crate::graph::{stage, Inlet, Outlet, Port, Stage, PORT_DATA};
+use crate::graph::{Inlet, Outlet, Port, Stage, PORT_DATA};
 use crate::{AppData, ProctorResult, SharedString};
+use tracing::Instrument;
 
 /// Filter the incoming elements using a predicate.
 ///
@@ -124,14 +125,13 @@ where
     async fn run(&mut self) -> ProctorResult<()> {
         let outlet = &self.outlet;
         while let Some(item) = self.inlet.recv().await {
-            let filter_span = tracing::debug_span!("filter on item", ?item, stage=%self.name());
-            let _filter_span_guard = filter_span.enter();
-            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+            let span = tracing::trace_span!("filter on item", ?item, stage=%self.name());
+            let passed_filter = span.in_scope(|| (self.predicate)(&item));
 
-            if (self.predicate)(&item) {
-                outlet.send(item).await?;
+            if passed_filter {
+                outlet.send(item).instrument(span).await?;
             } else if self.log_blocks {
-                tracing::info!("filter blocking item.");
+                span.in_scope(|| tracing::debug!("item did not pass filter"));
             }
         }
 

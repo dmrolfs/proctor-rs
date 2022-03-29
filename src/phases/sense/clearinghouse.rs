@@ -166,8 +166,7 @@ impl Clearinghouse {
 
         let fulfilled = subscribers
             .into_iter()
-            .map(|s| Self::fulfill_subscription(s, database).map(|fulfillment| (s, fulfillment)))
-            .flatten()
+            .filter_map(|s| Self::fulfill_subscription(s, database).map(|fulfillment| (s, fulfillment)))
             .map(|(s, mut fulfillment)| {
                 let (_correlation, _recv_timestamp) =
                     Self::add_automatic_telemetry(&mut fulfillment, correlation_generator);

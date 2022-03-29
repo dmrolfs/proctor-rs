@@ -84,8 +84,6 @@ where
 
             tokio::select! {
                 result = &mut operation, if !done => {
-                    let op_span = tracing::trace_span!("evaluate operation", ?result);
-                    let _op_span_guard = op_span.enter();
                     done = true;
 
                     if let Some(r) = result {

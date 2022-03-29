@@ -9,6 +9,7 @@ use crate::error::PlanError;
 use crate::graph::stage::{Stage, WithMonitor};
 use crate::graph::{stage, Inlet, Outlet, Port, SinkShape, SourceShape, PORT_CONTEXT, PORT_DATA};
 use crate::{AppData, Correlation, ProctorResult, SharedString};
+use tracing::Instrument;
 
 // pub type Event<P> = PlanEvent<<P as Planning>::Context, <P as Planning>::Decision, <P as Planning>::Out>;
 pub type PlanMonitor<P> = broadcast::Receiver<Arc<PlanEvent<P>>>;
@@ -168,19 +169,16 @@ impl<P: Planning> Plan<P> {
 
                 Some(context) = rx_context.recv() => {
                     let span = tracing::info_span!("DMR(debug):Plan handle context", correlation=?context.correlation(),);
-                    let _guard = span.enter();
-
-                    if let Some(event) = planning.patch_context(context).await? {
+                    if let Some(event) = planning.patch_context(context).instrument(span).await? {
                         Self::publish_event(tx_monitor, event);
                     }
                 },
 
                 Some(decision) = rx_decision.recv() => {
-                    let span = tracing::info_span!("DMR(debug):Plan handle decision", correlation=?decision.correlation(),);
-                    let _guard = span.enter();
                     let _timer = stage::start_stage_eval_time(self.name.as_ref());
 
-                    let event = match planning.handle_decision(decision.clone()).await? {
+                    let span = tracing::info_span!("DMR(debug):Plan handle decision", correlation=?decision.correlation(),);
+                    let event = match planning.handle_decision(decision.clone()).instrument(span).await? {
                         Some(out) => PlanEvent::DecisionPlanned(decision, out),
                         None => PlanEvent::DecisionIgnored(decision),
                     };

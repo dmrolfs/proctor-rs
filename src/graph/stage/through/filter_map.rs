@@ -6,6 +6,7 @@ use cast_trait_object::dyn_upcast;
 use crate::graph::{stage, Inlet, Outlet, Port, Stage, PORT_DATA};
 use crate::graph::{SinkShape, SourceShape};
 use crate::{AppData, ProctorResult, SharedString};
+use tracing::Instrument;
 
 /// The FilterMap stage both filters and maps on items.
 ///
@@ -134,14 +135,14 @@ where
     async fn run(&mut self) -> ProctorResult<()> {
         let outlet = &self.outlet;
         while let Some(item) = self.inlet.recv().await {
-            let filter_span = tracing::debug_span!("filter on item", ?item, stage=%self.name());
-            let _filter_span_guard = filter_span.enter();
+            let span = tracing::debug_span!("filter on item", ?item, stage=%self.name());
             let _timer = stage::start_stage_eval_time(self.name.as_ref());
+            let filter_passed = span.in_scope(|| (self.filter_map)(item));
 
-            if let Some(value) = (self.filter_map)(item) {
-                outlet.send(value).await?;
+            if let Some(value) = filter_passed {
+                outlet.send(value).instrument(span).await?;
             } else if self.log_blocks {
-                tracing::info!("{} blocking item.", self.name);
+                span.in_scope(|| tracing::debug!("{} blocking item.", self.name));
             }
         }
 

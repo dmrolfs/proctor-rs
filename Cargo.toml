@@ -1,6 +1,6 @@
 [package]
 name = "proctor"
-version = "0.15.3"
+version = "0.15.4"
 authors = ["Damon Rolfs <drolfs@gmail.com>"]
 edition = "2021"
 repository = "https://github.com/dmrolfs/proctor-rs"
@@ -33,7 +33,7 @@ path = "examples/async_stream.rs"
 anyhow = "1.0.56"
 approx = "0.5.1"
 async-stream = "0.3.3"
-async-trait = "0.1.52"
+async-trait = "0.1.53"
 cast_trait_object = "0.1.3"
 chrono = "0.4.19"
 clap = { version = "3.1.6", features = ["yaml"] }
