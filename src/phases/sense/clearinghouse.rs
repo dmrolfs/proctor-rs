@@ -127,7 +127,7 @@ impl Clearinghouse {
             .iter()
             .filter(|s| {
                 let is_interested = s.any_interest(&pushed);
-                tracing::trace!(
+                tracing::debug!(
                     "is subscription, {}, interested in pushed fields:{:?} => {}",
                     s.name(),
                     pushed,
