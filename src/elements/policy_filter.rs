@@ -575,7 +575,7 @@ mod tests {
         }
 
         #[tracing::instrument(level = "trace", skip(oso))]
-        fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
+        fn initialize_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
             oso.register_class(User::get_polar_class())?;
             oso.register_class(TestContext::get_polar_class())?;
             Ok(())

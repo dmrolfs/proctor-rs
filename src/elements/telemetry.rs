@@ -16,9 +16,10 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
 use std::iter::{FromIterator, IntoIterator};
 
+use crate::elements::PolicyContributor;
 use flexbuffers;
-use oso::PolarClass;
 use oso::ToPolar;
+use oso::{Oso, PolarClass};
 use pretty_snowflake::Label;
 use serde::{de as serde_de, Deserialize, Serialize};
 
@@ -71,12 +72,14 @@ impl Telemetry {
     pub fn extend(&mut self, that: Self) {
         self.0.extend(&that.0);
     }
+}
 
-    #[tracing::instrument(level = "trace", skip(oso))]
-    pub fn initialize_policy_engine(oso: &mut oso::Oso) -> Result<(), PolicyError> {
-        oso.register_class(Self::get_polar_class())?;
+impl PolicyContributor for Telemetry {
+    #[tracing::instrument(level = "trace", skip(engine))]
+    fn register_with_policy_engine(engine: &mut Oso) -> Result<(), PolicyError> {
+        engine.register_class(Self::get_polar_class())?;
 
-        oso.register_class(
+        engine.register_class(
             oso::ClassBuilder::<TelemetryValue>::with_default()
                 .add_method("to_polar", |v: &TelemetryValue| v.clone().to_polar())
                 .build(),

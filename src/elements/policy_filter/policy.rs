@@ -52,6 +52,10 @@ pub trait PolicySubscription: QueryPolicy {
 
 pub type PolicyRegistry<'h> = handlebars::Handlebars<'h>;
 
+pub trait PolicyContributor {
+    fn register_with_policy_engine(engine: &mut oso::Oso) -> Result<(), PolicyError>;
+}
+
 pub trait QueryPolicy: Debug + Send + Sync {
     type Item: ToPolar + Clone;
     type Context: ToPolar + Clone;
@@ -106,7 +110,7 @@ pub trait QueryPolicy: Debug + Send + Sync {
     fn sources(&self) -> &[PolicySource];
     fn sources_mut(&mut self) -> &mut Vec<PolicySource>;
 
-    fn initialize_policy_engine(&mut self, engine: &mut oso::Oso) -> Result<(), PolicyError>;
+    fn initialize_policy_engine(&self, engine: &mut oso::Oso) -> Result<(), PolicyError>;
     fn make_query_args(&self, item: &Self::Item, context: &Self::Context) -> Self::Args;
     fn query_policy(&self, engine: &oso::Oso, args: Self::Args) -> Result<QueryResult, PolicyError>;
 }

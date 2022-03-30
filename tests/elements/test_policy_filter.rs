@@ -202,7 +202,7 @@ impl QueryPolicy for TestPolicy {
         &mut self.sources
     }
 
-    fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
+    fn initialize_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
         oso.register_class(
             TestItem::get_polar_class_builder()
                 .name("TestMetricCatalog")

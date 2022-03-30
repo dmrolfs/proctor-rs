@@ -367,7 +367,7 @@ impl<T: AppData + ToPolar + Clone> QueryPolicy for TestPolicyA<T> {
         &mut self.policies
     }
 
-    fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
+    fn initialize_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
         assert_ok!(oso.register_class(
             TestPolicyPhaseContext::get_polar_class_builder()
                 .name("TestEnvironment")
@@ -974,7 +974,7 @@ impl QueryPolicy for TestPolicyB {
         &mut self.sources
     }
 
-    fn initialize_policy_engine(&mut self, oso: &mut Oso) -> Result<(), PolicyError> {
+    fn initialize_policy_engine(&self, oso: &mut Oso) -> Result<(), PolicyError> {
         assert_ok!(oso.register_class(
             TestItem::get_polar_class_builder()
                 .name("TestMetricCatalog")
