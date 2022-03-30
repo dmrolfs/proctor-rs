@@ -306,6 +306,15 @@ impl std::ops::Sub<Duration> for Timestamp {
     }
 }
 
+impl std::ops::Sub<Self> for Timestamp {
+    type Output = Duration;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        let secs = self.as_f64() - rhs.as_f64();
+        Duration::from_secs_f64(secs)
+    }
+}
+
 // impl std::ops::Sub<chrono::Duration> for Timestamp {
 //     type Output = Timestamp;
 //
@@ -539,7 +548,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use super::*;
-    //     use approx::assert_relative_eq;
+    use approx::assert_relative_eq;
 
     #[test]
     fn test_from_pair_string() {
@@ -559,5 +568,13 @@ mod tests {
 
         let actual = Timestamp::from_milliseconds(millis);
         assert_eq!(actual, Timestamp::new(1_638_989_054, 310_000_000));
+    }
+
+    #[test]
+    fn test_timestamp_difference() {
+        let ts1 = Timestamp::new(1_638_989_054, 310_000_000);
+        let ts2 = Timestamp::new(1_638_389_054, 0);
+        let actual = (ts1 - ts2).as_secs_f64();
+        assert_relative_eq!(actual, 600_000.31, epsilon = 0.001);
     }
 }
