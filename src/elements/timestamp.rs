@@ -17,6 +17,72 @@ use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use super::{TelemetryType, TelemetryValue, ToTelemetry};
 use crate::error::TelemetryError;
 
+#[derive(Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Interval(Timestamp, Timestamp);
+
+impl Interval {
+    pub const fn new(start: Timestamp, end: Timestamp) -> Self {
+        Self(start, end)
+    }
+}
+
+impl From<Interval> for (Timestamp, Timestamp) {
+    fn from(value: Interval) -> Self {
+        (value.0, value.1)
+    }
+}
+
+impl From<(Timestamp, Timestamp)> for Interval {
+    fn from(value: (Timestamp, Timestamp)) -> Self {
+        Self::new(value.0, value.1)
+    }
+}
+
+impl fmt::Debug for Interval {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[{} - {}]", self.0, self.1)
+    }
+}
+
+impl Interval {
+    pub fn contains(&self, timestamp: Timestamp) -> bool {
+        self.0 <= timestamp && timestamp <= self.1
+    }
+
+    pub fn abuts(&self, other: Self) -> bool {
+        self.0 == other.1 || self.1 == other.0
+    }
+
+    pub fn overlap(&self, other: Self) -> Option<Self> {
+        let start = if other.0 < self.0 { self.0 } else { other.0 };
+        let end = if self.1 < other.1 { self.1 } else { other.1 };
+
+        if start < end {
+            Some(Self(start, end))
+        } else {
+            None
+        }
+    }
+
+    pub fn gap(&self, other: Self) -> Option<Self> {
+        if self.abuts(other) || self.overlap(other).is_some() {
+            None
+        } else if self.is_completely_before(other) {
+            Some(Self(self.1, other.0))
+        } else {
+            Some(Self(other.1, self.0))
+        }
+    }
+
+    pub fn is_completely_before(&self, other: Self) -> bool {
+        self.1 < other.0
+    }
+
+    pub fn is_completely_after(&self, other: Self) -> bool {
+        other.1 < self.0
+    }
+}
+
 #[derive(PolarClass, Debug, Copy, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct Timestamp(i64, u32);
 
@@ -576,5 +642,117 @@ mod tests {
         let ts2 = Timestamp::new(1_638_389_054, 0);
         let actual = (ts1 - ts2).as_secs_f64();
         assert_relative_eq!(actual, 600_000.31, epsilon = 0.001);
+    }
+
+    #[test]
+    fn test_interval_contains() {
+        let interval: Interval = (Timestamp::new(10, 33), Timestamp::new(15, 0)).into();
+        assert!(interval.contains(Timestamp::new(12, 0)));
+        assert!(interval.contains(Timestamp::new(10, 33)));
+        assert!(interval.contains(Timestamp::new(15, 0)));
+        assert_eq!(interval.contains(Timestamp::new(10, 0)), false);
+        assert_eq!(interval.contains(Timestamp::new(100, 0)), false);
+    }
+
+    #[allow(non_snake_case)]
+    #[test]
+    fn test_interval_abuts() {
+        let i_9__10: Interval = Interval::new(Timestamp::new(9, 0), Timestamp::new(10, 0)).into();
+        let i_9__9_01: Interval = Interval::new(Timestamp::new(9, 0), Timestamp::new(9, 1)).into();
+        let i_9__9: Interval = Interval::new(Timestamp::new(9, 0), Timestamp::new(9, 0)).into();
+        let i_8__8_30: Interval = Interval::new(Timestamp::new(8, 0), Timestamp::new(8, 30)).into();
+        let i_8__9: Interval = Interval::new(Timestamp::new(8, 0), Timestamp::new(9, 0)).into();
+        let i_8__9_01: Interval = Interval::new(Timestamp::new(8, 0), Timestamp::new(9, 1)).into();
+        let i_10__10: Interval = Interval::new(Timestamp::new(10, 0), Timestamp::new(10, 0)).into();
+        let i_10__10_30: Interval = Interval::new(Timestamp::new(10, 0), Timestamp::new(10, 30)).into();
+        let i_10_30__11: Interval = Interval::new(Timestamp::new(10, 30), Timestamp::new(11, 0)).into();
+        let i_14__14: Interval = Interval::new(Timestamp::new(14, 0), Timestamp::new(14, 0)).into();
+        let i_14__15: Interval = Interval::new(Timestamp::new(14, 0), Timestamp::new(15, 0)).into();
+        let i_13__14: Interval = Interval::new(Timestamp::new(13, 0), Timestamp::new(14, 0)).into();
+
+        assert_eq!(i_9__10.abuts(i_8__8_30), false); // completely before
+        assert_eq!(i_9__10.abuts(i_8__9), true);
+        assert_eq!(i_9__10.abuts(i_8__9_01), false); // overlaps
+
+        assert_eq!(i_9__10.abuts(i_9__9), true);
+        assert_eq!(i_9__10.abuts(i_9__9_01), false); // overlaps
+
+        assert_eq!(i_9__10.abuts(i_10__10), true);
+        assert_eq!(i_9__10.abuts(i_10__10_30), true);
+
+        assert_eq!(i_9__10.abuts(i_10_30__11), false); // completely after
+
+        assert_eq!(i_14__14.abuts(i_14__14), true);
+        assert_eq!(i_14__14.abuts(i_14__15), true);
+        assert_eq!(i_14__14.abuts(i_13__14), true);
+    }
+
+    #[allow(non_snake_case)]
+    #[test]
+    fn test_interval_overlap() {
+        let i_9__10: Interval = Interval::new(Timestamp::new(9, 0), Timestamp::new(10, 0)).into();
+        let i_9__9_01: Interval = Interval::new(Timestamp::new(9, 0), Timestamp::new(9, 1)).into();
+        let i_9__9: Interval = Interval::new(Timestamp::new(9, 0), Timestamp::new(9, 0)).into();
+        let i_8__8_30: Interval = Interval::new(Timestamp::new(8, 0), Timestamp::new(8, 30)).into();
+        let i_8__9: Interval = Interval::new(Timestamp::new(8, 0), Timestamp::new(9, 0)).into();
+        let i_8__9_01: Interval = Interval::new(Timestamp::new(8, 0), Timestamp::new(9, 1)).into();
+        let i_10__10: Interval = Interval::new(Timestamp::new(10, 0), Timestamp::new(10, 0)).into();
+        let i_10__10_30: Interval = Interval::new(Timestamp::new(10, 0), Timestamp::new(10, 30)).into();
+        let i_10_30__11: Interval = Interval::new(Timestamp::new(10, 30), Timestamp::new(11, 0)).into();
+        let i_14__14: Interval = Interval::new(Timestamp::new(14, 0), Timestamp::new(14, 0)).into();
+        let i_14__15: Interval = Interval::new(Timestamp::new(14, 0), Timestamp::new(15, 0)).into();
+        let i_13__14: Interval = Interval::new(Timestamp::new(13, 0), Timestamp::new(14, 0)).into();
+
+        assert_none!(i_9__10.overlap(i_8__8_30)); // completely before
+        assert_none!(i_9__10.overlap(i_8__9)); // abuts
+        assert_eq!(assert_some!(i_9__10.overlap(i_8__9_01)), i_9__9_01); // overlaps
+
+        assert_none!(i_9__10.overlap(i_9__9)); // abuts
+        assert_eq!(assert_some!(i_9__10.overlap(i_9__9_01)), i_9__9_01); // overlaps
+
+        assert_none!(i_9__10.overlap(i_10__10)); // abuts
+        assert_none!(i_9__10.overlap(i_10__10_30)); // abuts
+
+        assert_none!(i_9__10.overlap(i_10_30__11)); // completely after
+
+        assert_none!(i_14__14.overlap(i_14__14)); // abuts
+        assert_none!(i_14__14.overlap(i_14__15)); // abuts
+        assert_none!(i_14__14.overlap(i_13__14)); // abuts
+    }
+
+    #[allow(non_snake_case)]
+    #[test]
+    fn test_interval_gap() {
+        let i_9__10: Interval = Interval::new(Timestamp::new(9, 0), Timestamp::new(10, 0)).into();
+        let i_9__9_01: Interval = Interval::new(Timestamp::new(9, 0), Timestamp::new(9, 1)).into();
+        let i_9__9: Interval = Interval::new(Timestamp::new(9, 0), Timestamp::new(9, 0)).into();
+        let i_8__8_30: Interval = Interval::new(Timestamp::new(8, 0), Timestamp::new(8, 30)).into();
+        let i_8__9: Interval = Interval::new(Timestamp::new(8, 0), Timestamp::new(9, 0)).into();
+        let i_8__9_01: Interval = Interval::new(Timestamp::new(8, 0), Timestamp::new(9, 1)).into();
+        let i_10__10: Interval = Interval::new(Timestamp::new(10, 0), Timestamp::new(10, 0)).into();
+        let i_10__10_30: Interval = Interval::new(Timestamp::new(10, 0), Timestamp::new(10, 30)).into();
+        let i_10_30__11: Interval = Interval::new(Timestamp::new(10, 30), Timestamp::new(11, 0)).into();
+        let i_14__14: Interval = Interval::new(Timestamp::new(14, 0), Timestamp::new(14, 0)).into();
+        let i_14__15: Interval = Interval::new(Timestamp::new(14, 0), Timestamp::new(15, 0)).into();
+        let i_13__14: Interval = Interval::new(Timestamp::new(13, 0), Timestamp::new(14, 0)).into();
+
+        assert_eq!(
+            assert_some!(i_9__10.gap(i_8__8_30)),
+            (Timestamp::new(8, 30), Timestamp::new(9, 0)).into()
+        ); // completely before
+        assert_none!(i_9__10.gap(i_8__9)); // abuts
+        assert_none!(i_9__10.gap(i_8__9_01)); // overlaps
+
+        assert_none!(i_9__10.gap(i_9__9)); // abuts
+        assert_none!(i_9__10.gap(i_9__9_01)); // overlaps
+
+        assert_none!(i_9__10.gap(i_10__10)); // abuts
+        assert_none!(i_9__10.gap(i_10__10_30)); // abuts
+
+        assert_eq!(assert_some!(i_9__10.gap(i_10_30__11)), i_10__10_30); // completely after
+
+        assert_none!(i_14__14.gap(i_14__14)); // abuts
+        assert_none!(i_14__14.gap(i_14__15)); // abuts
+        assert_none!(i_14__14.gap(i_13__14)); // abuts
     }
 }
