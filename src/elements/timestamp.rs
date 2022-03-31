@@ -67,18 +67,20 @@ impl Interval {
     pub fn gap(&self, other: Self) -> Option<Self> {
         if self.abuts(other) || self.overlap(other).is_some() {
             None
-        } else if self.is_completely_before(other) {
+        } else if self.is_before(other) {
             Some(Self(self.1, other.0))
         } else {
             Some(Self(other.1, self.0))
         }
     }
 
-    pub fn is_completely_before(&self, other: Self) -> bool {
+    /// Intervals are inclusive of the start and exclusive
+    pub fn is_before(&self, other: Self) -> bool {
         self.1 < other.0
     }
 
-    pub fn is_completely_after(&self, other: Self) -> bool {
+    /// Intervals are inclusive of the start and exclusive
+    pub fn is_after(&self, other: Self) -> bool {
         other.1 < self.0
     }
 }
