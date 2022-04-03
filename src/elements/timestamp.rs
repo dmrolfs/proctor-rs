@@ -45,8 +45,12 @@ impl fmt::Debug for Interval {
 }
 
 impl Interval {
-    pub fn contains(&self, timestamp: Timestamp) -> bool {
+    pub fn contains_timestamp(&self, timestamp: Timestamp) -> bool {
         self.0 <= timestamp && timestamp <= self.1
+    }
+
+    pub fn contains(&self, other: Self) -> bool {
+        self.0 <= other.0 && other.0 <= self.1 && self.0 <= other.1 && other.1 <= self.1
     }
 
     pub fn abuts(&self, other: Self) -> bool {
@@ -649,11 +653,11 @@ mod tests {
     #[test]
     fn test_interval_contains() {
         let interval: Interval = (Timestamp::new(10, 33), Timestamp::new(15, 0)).into();
-        assert!(interval.contains(Timestamp::new(12, 0)));
-        assert!(interval.contains(Timestamp::new(10, 33)));
-        assert!(interval.contains(Timestamp::new(15, 0)));
-        assert_eq!(interval.contains(Timestamp::new(10, 0)), false);
-        assert_eq!(interval.contains(Timestamp::new(100, 0)), false);
+        assert!(interval.contains_timestamp(Timestamp::new(12, 0)));
+        assert!(interval.contains_timestamp(Timestamp::new(10, 33)));
+        assert!(interval.contains_timestamp(Timestamp::new(15, 0)));
+        assert_eq!(interval.contains_timestamp(Timestamp::new(10, 0)), false);
+        assert_eq!(interval.contains_timestamp(Timestamp::new(100, 0)), false);
     }
 
     #[allow(non_snake_case)]
