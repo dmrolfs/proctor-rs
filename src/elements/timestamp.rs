@@ -45,6 +45,10 @@ impl fmt::Debug for Interval {
 }
 
 impl Interval {
+    pub fn duration(&self) -> Duration {
+        self.1 - self.0
+    }
+
     pub fn contains_timestamp(&self, timestamp: Timestamp) -> bool {
         self.0 <= timestamp && timestamp <= self.1
     }
