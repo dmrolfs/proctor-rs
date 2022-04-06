@@ -115,7 +115,7 @@ pub trait QueryPolicy: Debug + Send + Sync {
     fn query_policy(&self, engine: &oso::Oso, args: Self::Args) -> Result<QueryResult, PolicyError>;
 }
 
-#[tracing::instrument(level = "trace", skip(templates))]
+#[tracing::instrument(level = "trace", skip(templates, name), fields(template_name=name))]
 pub fn render_template_policy<'a, T, D>(templates: T, name: &str, data: Option<&D>) -> Result<String, PolicyError>
 where
     T: IntoIterator<Item = &'a PolicySource>,
@@ -161,7 +161,7 @@ static APP_TEMPDIR: Lazy<tempfile::TempDir> = Lazy::new(|| {
         })
 });
 
-#[tracing::instrument(level = "trace", skip())]
+#[tracing::instrument(level = "trace", skip(name), fields(policy_name=name))]
 fn policy_source_path_for(name: &str, policy: Either<PathBuf, &str>) -> Result<PolicySourcePath, PolicyError> {
     match policy {
         Either::Left(path) => Ok(PolicySourcePath::File(path)),

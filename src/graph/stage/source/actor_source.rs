@@ -93,7 +93,7 @@ impl<T: AppData> Stage for ActorSource<T> {
                 },
 
                 ActorSourceCmd::Stop(tx) => {
-                    tracing::info!(name=%self.name(), "stopping actor source.");
+                    tracing::info!(stage=%self.name(), "stopping actor source.");
                     let _ignore_failure = tx.send(());
                     break;
                 },
@@ -104,7 +104,7 @@ impl<T: AppData> Stage for ActorSource<T> {
     }
 
     async fn close(mut self: Box<Self>) -> ProctorResult<()> {
-        tracing::info!(name=%self.name(), "closing actor source outlet.");
+        tracing::info!(stage=%self.name(), "closing actor source outlet.");
         self.outlet.close().await;
         Ok(())
     }

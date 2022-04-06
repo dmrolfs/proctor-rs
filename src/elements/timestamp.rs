@@ -16,13 +16,24 @@ use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
 use super::{TelemetryType, TelemetryValue, ToTelemetry};
 use crate::error::TelemetryError;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum TimestampError {
+    #[error("starting timestamp({0}) cannot be after ending timestamp({1}) because it leads to negative duration")]
+    NegativeInterval(Timestamp, Timestamp),
+}
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Interval(Timestamp, Timestamp);
 
 impl Interval {
-    pub const fn new(start: Timestamp, end: Timestamp) -> Self {
-        Self(start, end)
+    pub fn new(start: Timestamp, end: Timestamp) -> Result<Self, TimestampError> {
+        if end < start {
+            Err(TimestampError::NegativeInterval(start, end))
+        } else {
+            Ok(Self(start, end))
+        }
     }
 }
 
@@ -32,8 +43,10 @@ impl From<Interval> for (Timestamp, Timestamp) {
     }
 }
 
-impl From<(Timestamp, Timestamp)> for Interval {
-    fn from(value: (Timestamp, Timestamp)) -> Self {
+impl TryFrom<(Timestamp, Timestamp)> for Interval {
+    type Error = TimestampError;
+
+    fn try_from(value: (Timestamp, Timestamp)) -> Result<Self, Self::Error> {
         Self::new(value.0, value.1)
     }
 }
@@ -45,6 +58,18 @@ impl fmt::Debug for Interval {
 }
 
 impl Interval {
+    pub const fn start(&self) -> Timestamp {
+        self.0
+    }
+
+    pub const fn end(&self) -> Timestamp {
+        self.1
+    }
+
+    pub fn is_point(&self) -> bool {
+        self.0 == self.1
+    }
+
     pub fn duration(&self) -> Duration {
         self.1 - self.0
     }
@@ -54,7 +79,7 @@ impl Interval {
     }
 
     pub fn contains(&self, other: Self) -> bool {
-        self.0 <= other.0 && other.0 <= self.1 && self.0 <= other.1 && other.1 <= self.1
+        self.0 <= other.0 && other.1 <= self.1
     }
 
     pub fn abuts(&self, other: Self) -> bool {
@@ -134,7 +159,7 @@ impl Timestamp {
     }
 
     /// Returns seconds timestamp (including partial) as a floating point.
-    pub fn as_f64(&self) -> f64 {
+    pub fn as_secs_f64(&self) -> f64 {
         (self.0 as f64) + ((self.1 as f64) / (Self::NANOS_PER_SEC as f64))
     }
 
@@ -167,7 +192,7 @@ impl Timestamp {
     }
 
     pub fn serialize_as_secs_f64<S: Serializer>(ts: &Self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_f64(ts.as_f64())
+        serializer.serialize_f64(ts.as_secs_f64())
     }
 
     pub fn serialize_as_millis<S: Serializer>(ts: &Self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -273,7 +298,7 @@ impl TryFrom<TelemetryValue> for Timestamp {
 
 // impl AsRef<f64> for Timestamp {
 //     fn as_ref(&self) -> &f64 {
-//         &self.as_f64()
+//         &self.as_secs_f64()
 //     }
 // }
 
@@ -291,7 +316,7 @@ impl From<DateTime<Utc>> for Timestamp {
 
 impl From<Timestamp> for f64 {
     fn from(ts: Timestamp) -> Self {
-        ts.as_f64()
+        ts.as_secs_f64()
     }
 }
 
@@ -311,7 +336,7 @@ impl From<i64> for Timestamp {
 
 impl From<&Timestamp> for f64 {
     fn from(ts: &Timestamp) -> Self {
-        ts.as_f64()
+        ts.as_secs_f64()
     }
 }
 
@@ -343,7 +368,7 @@ impl std::ops::Add<Duration> for Timestamp {
     type Output = Self;
 
     fn add(self, rhs: Duration) -> Self::Output {
-        let total = self.as_f64() + rhs.as_secs_f64();
+        let total = self.as_secs_f64() + rhs.as_secs_f64();
         total.into()
     }
 }
@@ -361,10 +386,10 @@ impl std::ops::Add<Duration> for Timestamp {
 //
 //
 //         // let total = if let Some(nanos) = rhs.num_nanoseconds() {
-//         //     self.as_f64() + (nanos as f64) / 10.powi(9)
+//         //     self.as_secs_f64() + (nanos as f64) / 10.powi(9)
 //         // } else if let Some(micros) = rhs.num_microseconds() {
 //         //     let r = micros * 10.powi(3);
-//         //     self.as_f64() + (micros as f64) * 10.powi(3);
+//         //     self.as_secs_f64() + (micros as f64) * 10.powi(3);
 //         // }
 //         // Self(self.0 + rhs.num_seconds(), self.1 + rhs.nan)
 //         // let nanos = rhs.num_nanoseconds()
@@ -378,7 +403,7 @@ impl std::ops::Sub<Duration> for Timestamp {
     type Output = Self;
 
     fn sub(self, rhs: Duration) -> Self::Output {
-        (self.as_f64() - rhs.as_secs_f64()).into()
+        (self.as_secs_f64() - rhs.as_secs_f64()).into()
     }
 }
 
@@ -386,7 +411,7 @@ impl std::ops::Sub<Self> for Timestamp {
     type Output = Duration;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        let secs = self.as_f64() - rhs.as_f64();
+        let secs = self.as_secs_f64() - rhs.as_secs_f64();
         Duration::from_secs_f64(secs)
     }
 }
@@ -405,7 +430,7 @@ impl std::ops::Add<Duration> for &Timestamp {
     type Output = Timestamp;
 
     fn add(self, rhs: Duration) -> Self::Output {
-        (self.as_f64() + rhs.as_secs_f64()).into()
+        (self.as_secs_f64() + rhs.as_secs_f64()).into()
     }
 }
 
@@ -423,7 +448,7 @@ impl std::ops::Sub<Duration> for &Timestamp {
     type Output = Timestamp;
 
     fn sub(self, rhs: Duration) -> Self::Output {
-        (self.as_f64() - rhs.as_secs_f64()).into()
+        (self.as_secs_f64() - rhs.as_secs_f64()).into()
     }
 }
 
@@ -445,7 +470,7 @@ impl AbsDiffEq for Timestamp {
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        f64::abs_diff_eq(&self.as_f64(), &other.as_f64(), epsilon)
+        f64::abs_diff_eq(&self.as_secs_f64(), &other.as_secs_f64(), epsilon)
     }
 }
 
@@ -455,7 +480,7 @@ impl RelativeEq for Timestamp {
     }
 
     fn relative_eq(&self, other: &Self, epsilon: Self::Epsilon, max_relative: Self::Epsilon) -> bool {
-        f64::relative_eq(&self.as_f64(), &other.as_f64(), epsilon, max_relative)
+        f64::relative_eq(&self.as_secs_f64(), &other.as_secs_f64(), epsilon, max_relative)
     }
 }
 
@@ -656,7 +681,7 @@ mod tests {
 
     #[test]
     fn test_interval_contains() {
-        let interval: Interval = (Timestamp::new(10, 33), Timestamp::new(15, 0)).into();
+        let interval = assert_ok!(Interval::new(Timestamp::new(10, 33), Timestamp::new(15, 0)));
         assert!(interval.contains_timestamp(Timestamp::new(12, 0)));
         assert!(interval.contains_timestamp(Timestamp::new(10, 33)));
         assert!(interval.contains_timestamp(Timestamp::new(15, 0)));
@@ -667,18 +692,18 @@ mod tests {
     #[allow(non_snake_case)]
     #[test]
     fn test_interval_abuts() {
-        let i_9__10: Interval = Interval::new(Timestamp::new(9, 0), Timestamp::new(10, 0)).into();
-        let i_9__9_01: Interval = Interval::new(Timestamp::new(9, 0), Timestamp::new(9, 1)).into();
-        let i_9__9: Interval = Interval::new(Timestamp::new(9, 0), Timestamp::new(9, 0)).into();
-        let i_8__8_30: Interval = Interval::new(Timestamp::new(8, 0), Timestamp::new(8, 30)).into();
-        let i_8__9: Interval = Interval::new(Timestamp::new(8, 0), Timestamp::new(9, 0)).into();
-        let i_8__9_01: Interval = Interval::new(Timestamp::new(8, 0), Timestamp::new(9, 1)).into();
-        let i_10__10: Interval = Interval::new(Timestamp::new(10, 0), Timestamp::new(10, 0)).into();
-        let i_10__10_30: Interval = Interval::new(Timestamp::new(10, 0), Timestamp::new(10, 30)).into();
-        let i_10_30__11: Interval = Interval::new(Timestamp::new(10, 30), Timestamp::new(11, 0)).into();
-        let i_14__14: Interval = Interval::new(Timestamp::new(14, 0), Timestamp::new(14, 0)).into();
-        let i_14__15: Interval = Interval::new(Timestamp::new(14, 0), Timestamp::new(15, 0)).into();
-        let i_13__14: Interval = Interval::new(Timestamp::new(13, 0), Timestamp::new(14, 0)).into();
+        let i_9__10 = assert_ok!(Interval::new(Timestamp::new(9, 0), Timestamp::new(10, 0)));
+        let i_9__9_01 = assert_ok!(Interval::new(Timestamp::new(9, 0), Timestamp::new(9, 1)));
+        let i_9__9 = assert_ok!(Interval::new(Timestamp::new(9, 0), Timestamp::new(9, 0)));
+        let i_8__8_30 = assert_ok!(Interval::new(Timestamp::new(8, 0), Timestamp::new(8, 30)));
+        let i_8__9 = assert_ok!(Interval::new(Timestamp::new(8, 0), Timestamp::new(9, 0)));
+        let i_8__9_01 = assert_ok!(Interval::new(Timestamp::new(8, 0), Timestamp::new(9, 1)));
+        let i_10__10 = assert_ok!(Interval::new(Timestamp::new(10, 0), Timestamp::new(10, 0)));
+        let i_10__10_30 = assert_ok!(Interval::new(Timestamp::new(10, 0), Timestamp::new(10, 30)));
+        let i_10_30__11 = assert_ok!(Interval::new(Timestamp::new(10, 30), Timestamp::new(11, 0)));
+        let i_14__14 = assert_ok!(Interval::new(Timestamp::new(14, 0), Timestamp::new(14, 0)));
+        let i_14__15 = assert_ok!(Interval::new(Timestamp::new(14, 0), Timestamp::new(15, 0)));
+        let i_13__14 = assert_ok!(Interval::new(Timestamp::new(13, 0), Timestamp::new(14, 0)));
 
         assert_eq!(i_9__10.abuts(i_8__8_30), false); // completely before
         assert_eq!(i_9__10.abuts(i_8__9), true);
@@ -700,18 +725,18 @@ mod tests {
     #[allow(non_snake_case)]
     #[test]
     fn test_interval_overlap() {
-        let i_9__10: Interval = Interval::new(Timestamp::new(9, 0), Timestamp::new(10, 0)).into();
-        let i_9__9_01: Interval = Interval::new(Timestamp::new(9, 0), Timestamp::new(9, 1)).into();
-        let i_9__9: Interval = Interval::new(Timestamp::new(9, 0), Timestamp::new(9, 0)).into();
-        let i_8__8_30: Interval = Interval::new(Timestamp::new(8, 0), Timestamp::new(8, 30)).into();
-        let i_8__9: Interval = Interval::new(Timestamp::new(8, 0), Timestamp::new(9, 0)).into();
-        let i_8__9_01: Interval = Interval::new(Timestamp::new(8, 0), Timestamp::new(9, 1)).into();
-        let i_10__10: Interval = Interval::new(Timestamp::new(10, 0), Timestamp::new(10, 0)).into();
-        let i_10__10_30: Interval = Interval::new(Timestamp::new(10, 0), Timestamp::new(10, 30)).into();
-        let i_10_30__11: Interval = Interval::new(Timestamp::new(10, 30), Timestamp::new(11, 0)).into();
-        let i_14__14: Interval = Interval::new(Timestamp::new(14, 0), Timestamp::new(14, 0)).into();
-        let i_14__15: Interval = Interval::new(Timestamp::new(14, 0), Timestamp::new(15, 0)).into();
-        let i_13__14: Interval = Interval::new(Timestamp::new(13, 0), Timestamp::new(14, 0)).into();
+        let i_9__10 = assert_ok!(Interval::new(Timestamp::new(9, 0), Timestamp::new(10, 0)));
+        let i_9__9_01 = assert_ok!(Interval::new(Timestamp::new(9, 0), Timestamp::new(9, 1)));
+        let i_9__9 = assert_ok!(Interval::new(Timestamp::new(9, 0), Timestamp::new(9, 0)));
+        let i_8__8_30 = assert_ok!(Interval::new(Timestamp::new(8, 0), Timestamp::new(8, 30)));
+        let i_8__9 = assert_ok!(Interval::new(Timestamp::new(8, 0), Timestamp::new(9, 0)));
+        let i_8__9_01 = assert_ok!(Interval::new(Timestamp::new(8, 0), Timestamp::new(9, 1)));
+        let i_10__10 = assert_ok!(Interval::new(Timestamp::new(10, 0), Timestamp::new(10, 0)));
+        let i_10__10_30 = assert_ok!(Interval::new(Timestamp::new(10, 0), Timestamp::new(10, 30)));
+        let i_10_30__11 = assert_ok!(Interval::new(Timestamp::new(10, 30), Timestamp::new(11, 0)));
+        let i_14__14 = assert_ok!(Interval::new(Timestamp::new(14, 0), Timestamp::new(14, 0)));
+        let i_14__15 = assert_ok!(Interval::new(Timestamp::new(14, 0), Timestamp::new(15, 0)));
+        let i_13__14 = assert_ok!(Interval::new(Timestamp::new(13, 0), Timestamp::new(14, 0)));
 
         assert_none!(i_9__10.overlap(i_8__8_30)); // completely before
         assert_none!(i_9__10.overlap(i_8__9)); // abuts
@@ -733,22 +758,22 @@ mod tests {
     #[allow(non_snake_case)]
     #[test]
     fn test_interval_gap() {
-        let i_9__10: Interval = Interval::new(Timestamp::new(9, 0), Timestamp::new(10, 0)).into();
-        let i_9__9_01: Interval = Interval::new(Timestamp::new(9, 0), Timestamp::new(9, 1)).into();
-        let i_9__9: Interval = Interval::new(Timestamp::new(9, 0), Timestamp::new(9, 0)).into();
-        let i_8__8_30: Interval = Interval::new(Timestamp::new(8, 0), Timestamp::new(8, 30)).into();
-        let i_8__9: Interval = Interval::new(Timestamp::new(8, 0), Timestamp::new(9, 0)).into();
-        let i_8__9_01: Interval = Interval::new(Timestamp::new(8, 0), Timestamp::new(9, 1)).into();
-        let i_10__10: Interval = Interval::new(Timestamp::new(10, 0), Timestamp::new(10, 0)).into();
-        let i_10__10_30: Interval = Interval::new(Timestamp::new(10, 0), Timestamp::new(10, 30)).into();
-        let i_10_30__11: Interval = Interval::new(Timestamp::new(10, 30), Timestamp::new(11, 0)).into();
-        let i_14__14: Interval = Interval::new(Timestamp::new(14, 0), Timestamp::new(14, 0)).into();
-        let i_14__15: Interval = Interval::new(Timestamp::new(14, 0), Timestamp::new(15, 0)).into();
-        let i_13__14: Interval = Interval::new(Timestamp::new(13, 0), Timestamp::new(14, 0)).into();
+        let i_9__10 = assert_ok!(Interval::new(Timestamp::new(9, 0), Timestamp::new(10, 0)));
+        let i_9__9_01 = assert_ok!(Interval::new(Timestamp::new(9, 0), Timestamp::new(9, 1)));
+        let i_9__9 = assert_ok!(Interval::new(Timestamp::new(9, 0), Timestamp::new(9, 0)));
+        let i_8__8_30 = assert_ok!(Interval::new(Timestamp::new(8, 0), Timestamp::new(8, 30)));
+        let i_8__9 = assert_ok!(Interval::new(Timestamp::new(8, 0), Timestamp::new(9, 0)));
+        let i_8__9_01 = assert_ok!(Interval::new(Timestamp::new(8, 0), Timestamp::new(9, 1)));
+        let i_10__10 = assert_ok!(Interval::new(Timestamp::new(10, 0), Timestamp::new(10, 0)));
+        let i_10__10_30 = assert_ok!(Interval::new(Timestamp::new(10, 0), Timestamp::new(10, 30)));
+        let i_10_30__11 = assert_ok!(Interval::new(Timestamp::new(10, 30), Timestamp::new(11, 0)));
+        let i_14__14 = assert_ok!(Interval::new(Timestamp::new(14, 0), Timestamp::new(14, 0)));
+        let i_14__15 = assert_ok!(Interval::new(Timestamp::new(14, 0), Timestamp::new(15, 0)));
+        let i_13__14 = assert_ok!(Interval::new(Timestamp::new(13, 0), Timestamp::new(14, 0)));
 
         assert_eq!(
             assert_some!(i_9__10.gap(i_8__8_30)),
-            (Timestamp::new(8, 30), Timestamp::new(9, 0)).into()
+            assert_ok!(Interval::new(Timestamp::new(8, 30), Timestamp::new(9, 0)))
         ); // completely before
         assert_none!(i_9__10.gap(i_8__9)); // abuts
         assert_none!(i_9__10.gap(i_8__9_01)); // overlaps
