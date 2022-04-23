@@ -1,11 +1,12 @@
-use crate::error::ProctorError;
-use crate::graph::stage::Stage;
-use crate::graph::{stage, Inlet, InletsShape, Outlet, Port, SourceShape, UniformFanInShape, PORT_DATA};
-use crate::{AppData, ProctorResult, SharedString};
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use frunk::{Monoid, Semigroup};
 use futures_util::future::{self, BoxFuture, FutureExt};
+
+use crate::error::ProctorError;
+use crate::graph::stage::Stage;
+use crate::graph::{stage, Inlet, InletsShape, Outlet, Port, SourceShape, UniformFanInShape, PORT_DATA};
+use crate::{AppData, ProctorResult, SharedString};
 
 #[derive(Debug)]
 pub struct MergeCombine<T> {
@@ -147,14 +148,16 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Debug;
+
+    use claim::*;
+    use pretty_assertions::assert_eq;
+    use tokio_test::block_on;
+
     use super::*;
     use crate::graph::stage::{ActorSourceApi, ActorSourceCmd, WithApi};
     use crate::graph::{Connect, Graph, SinkShape, SourceShape};
     use crate::Ack;
-    use claim::*;
-    use pretty_assertions::assert_eq;
-    use std::fmt::Debug;
-    use tokio_test::block_on;
 
     async fn push_source<T>(tx: &ActorSourceApi<T>, value: T) -> anyhow::Result<Ack>
     where

@@ -4,14 +4,15 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use tokio::sync::broadcast;
+use tracing::Instrument;
 
 use crate::error::PlanError;
 use crate::graph::stage::{Stage, WithMonitor};
 use crate::graph::{stage, Inlet, Outlet, Port, SinkShape, SourceShape, PORT_CONTEXT, PORT_DATA};
 use crate::{AppData, Correlation, ProctorResult, SharedString};
-use tracing::Instrument;
 
-// pub type Event<P> = PlanEvent<<P as Planning>::Context, <P as Planning>::Decision, <P as Planning>::Out>;
+// pub type Event<P> = PlanEvent<<P as Planning>::Context, <P as Planning>::Decision, <P as
+// Planning>::Out>;
 pub type PlanMonitor<P> = broadcast::Receiver<Arc<PlanEvent<P>>>;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -44,7 +45,7 @@ pub trait Planning: Debug + Send + Sync {
 pub struct Plan<P: Planning> {
     name: SharedString,
     planning: P,
-    inlet: Inlet<P::Observation>, //todo: consider making observation inlet secondary to decision (in Sink Shape)
+    inlet: Inlet<P::Observation>, // todo: consider making observation inlet secondary to decision (in Sink Shape)
     decision_inlet: Inlet<P::Decision>,
     context_inlet: Inlet<P::Context>,
     outlet: Outlet<P::Out>,

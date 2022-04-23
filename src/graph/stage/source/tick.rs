@@ -53,14 +53,14 @@ pub enum Constraint {
 impl ContinueTicking for Constraint {
     fn next(&mut self) -> bool {
         match self {
-            Constraint::None => true,
+            Self::None => true,
 
-            Constraint::ByCount { count, limit } => {
+            Self::ByCount { count, limit } => {
                 *count += 1;
                 count <= limit
             },
 
-            Constraint::ByTime { stop, limit } => match stop {
+            Self::ByTime { stop, limit } => match stop {
                 None => {
                     *stop = Some(tokio::time::Instant::now() + *limit);
                     tracing::debug!(?stop, ?limit, "set tick time constraint");

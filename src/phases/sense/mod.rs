@@ -49,8 +49,8 @@ pub struct Sense<Out> {
     inner: Box<dyn SourceStage<Out>>,
     outlet: Outlet<Out>,
     pub tx_clearinghouse_api: ClearinghouseApi,
-    /* todo: tx_api: CollectApi,
-     * todo: tx_monitor: CollectMonitor, */
+    // todo: tx_api: CollectApi,
+    // todo: tx_monitor: CollectMonitor,
 }
 
 impl<Out> Sense<Out> {

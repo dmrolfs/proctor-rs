@@ -1,7 +1,8 @@
-use super::{MetricLabel, PortError, TelemetryError};
-use crate::SharedString;
 use either::{Either, Left, Right};
 use thiserror::Error;
+
+use super::{MetricLabel, PortError, TelemetryError};
+use crate::SharedString;
 
 #[derive(Debug, Error)]
 pub enum EligibilityError {

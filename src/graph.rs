@@ -3,11 +3,6 @@ mod port;
 mod shape;
 pub mod stage;
 
-pub use self::port::{connect_out_to_in, Connect};
-pub use self::port::{Inlet, Outlet, Port, PORT_CONTEXT, PORT_DATA};
-pub use self::port::{STAGE_EGRESS_COUNTS, STAGE_INGRESS_COUNTS};
-pub use self::shape::*;
-
 use std::collections::VecDeque;
 use std::fmt;
 
@@ -16,6 +11,10 @@ use prometheus::{IntCounterVec, Opts};
 use tracing::Instrument;
 
 use self::node::Node;
+pub use self::port::{connect_out_to_in, Connect};
+pub use self::port::{Inlet, Outlet, Port, PORT_CONTEXT, PORT_DATA};
+pub use self::port::{STAGE_EGRESS_COUNTS, STAGE_INGRESS_COUNTS};
+pub use self::shape::*;
 use self::stage::Stage;
 use crate::error::{GraphError, MetricLabel, ProctorError};
 use crate::ProctorResult;

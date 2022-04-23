@@ -1,7 +1,8 @@
-use super::{MetricLabel, PortError, TelemetryError};
-use crate::SharedString;
 use either::{Either, Left, Right};
 use thiserror::Error;
+
+use super::{MetricLabel, PortError, TelemetryError};
+use crate::SharedString;
 
 /// Set of errors occurring during policy initialization or evaluation.
 #[derive(Debug, Error)]
@@ -55,7 +56,7 @@ impl MetricLabel for PolicyError {
             Self::StringPolicy(_) => Left("string".into()),
             Self::RenderPolicyTemplate(_) | Self::PolicyTemplate(_) => Left("template".into()),
             Self::Telemetry(e) => Right(Box::new(e)),
-            Self::Api(_, _) => Left("api".into()),
+            Self::Api(..) => Left("api".into()),
             Self::Publish(_) => Left("publish".into()),
             Self::Other(_) => Left("other".into()),
         }

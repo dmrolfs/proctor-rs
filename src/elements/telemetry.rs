@@ -16,13 +16,13 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
 use std::iter::{FromIterator, IntoIterator};
 
-use crate::elements::PolicyContributor;
 use flexbuffers;
 use oso::ToPolar;
 use oso::{Oso, PolarClass};
 use pretty_snowflake::Label;
 use serde::{de as serde_de, Deserialize, Serialize};
 
+use crate::elements::PolicyContributor;
 use crate::error::{PolicyError, TelemetryError};
 
 // Arc to support Clone

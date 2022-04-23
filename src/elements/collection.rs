@@ -105,7 +105,6 @@ use crate::{AppData, ProctorResult, SharedString};
 ///     Ok(())
 /// }
 /// ```
-///
 pub struct Collect {
     name: SharedString,
     target: Url,

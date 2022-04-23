@@ -1,7 +1,9 @@
-use crate::SharedString;
-use either::{Either, Left, Right};
 use std::fmt::Debug;
+
+use either::{Either, Left, Right};
 use thiserror::Error;
+
+use crate::SharedString;
 
 mod decision_errors;
 mod eligibility_errors;

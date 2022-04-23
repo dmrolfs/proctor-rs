@@ -5,7 +5,7 @@ use tokio::sync::{mpsc, oneshot};
 use super::{Telemetry, TelemetrySubscription};
 use crate::error::SenseError;
 use crate::graph::Inlet;
-use crate::{Ack, SharedString};
+use crate::Ack;
 
 pub type ClearinghouseApi = mpsc::UnboundedSender<ClearinghouseCmd>;
 
@@ -82,8 +82,8 @@ impl serde::Serialize for ClearinghouseSnapshot {
         #[derive(serde::Serialize)]
         struct Subscription<'n> {
             name: &'n str,
-            required: Option<HashSet<SharedString>>,
-            optional: Option<HashSet<SharedString>>,
+            required: Option<HashSet<String>>,
+            optional: Option<HashSet<String>>,
         }
 
         use serde::ser::SerializeStruct;

@@ -1,11 +1,13 @@
-use crate::graph::stage::Stage;
-use crate::graph::{Inlet, Outlet, Port, SinkShape, SourceShape, PORT_DATA};
-use crate::{AppData, Correlation, ProctorResult, SharedString};
+use std::time::Duration;
+
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 use frunk::{Monoid, Semigroup};
-use std::time::Duration;
 use tokio::sync::Mutex;
+
+use crate::graph::stage::Stage;
+use crate::graph::{Inlet, Outlet, Port, SinkShape, SourceShape, PORT_DATA};
+use crate::{AppData, Correlation, ProctorResult, SharedString};
 
 #[derive(Debug)]
 pub struct ReduceWithin<T> {
@@ -27,6 +29,7 @@ impl<T> ReduceWithin<T> {
 
 impl<T> SinkShape for ReduceWithin<T> {
     type In = T;
+
     fn inlet(&self) -> Inlet<T> {
         self.inlet.clone()
     }
@@ -123,14 +126,16 @@ impl<T> ReduceWithin<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::elements::{Telemetry, TelemetryValue};
+    use std::collections::HashMap;
+
     use claim::*;
     use pretty_assertions::assert_eq;
     use pretty_snowflake::Id;
-    use std::collections::HashMap;
     use tokio::sync::mpsc;
     use tokio_test::block_on;
+
+    use super::*;
+    use crate::elements::{Telemetry, TelemetryValue};
 
     #[derive(Debug, Clone)]
     struct TestData {

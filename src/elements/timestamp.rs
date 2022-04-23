@@ -13,10 +13,10 @@ use oso::PolarClass;
 use regex::Regex;
 use serde::de::Unexpected;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use thiserror::Error;
 
 use super::{TelemetryType, TelemetryValue, ToTelemetry};
 use crate::error::TelemetryError;
-use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum TimestampError {
@@ -645,11 +645,11 @@ impl<'de> de::Visitor<'de> for TimestampVisitor {
 
 #[cfg(test)]
 mod tests {
+    use approx::assert_relative_eq;
     use claim::*;
     use pretty_assertions::assert_eq;
 
     use super::*;
-    use approx::assert_relative_eq;
 
     #[test]
     fn test_from_pair_string() {

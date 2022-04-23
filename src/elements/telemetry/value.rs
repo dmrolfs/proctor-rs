@@ -294,7 +294,7 @@ impl From<ResultSet> for TelemetryValue {
                 .get_typed(key)
                 .expect("failed to convert polar value into telemetry value");
             match typed_value {
-                TelemetryValue::Unit => (),
+                Self::Unit => (),
                 value => {
                     let _ = table.insert(key.to_string(), value);
                 },

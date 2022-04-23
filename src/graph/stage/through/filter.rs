@@ -2,11 +2,11 @@ use std::fmt::{self, Debug};
 
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
+use tracing::Instrument;
 
 use crate::graph::shape::{SinkShape, SourceShape};
 use crate::graph::{Inlet, Outlet, Port, Stage, PORT_DATA};
 use crate::{AppData, ProctorResult, SharedString};
-use tracing::Instrument;
 
 /// Filter the incoming elements using a predicate.
 ///

@@ -508,6 +508,7 @@ mod tests {
 
     impl Correlation for TestContext {
         type Correlated = Self;
+
         fn correlation(&self) -> &Id<Self::Correlated> {
             &self.correlation_id
         }

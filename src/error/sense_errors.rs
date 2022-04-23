@@ -1,8 +1,9 @@
+use either::{Either, Left, Right};
+use thiserror::Error;
+
 use super::{MetricLabel, PortError, TelemetryError};
 use crate::phases::sense::SensorSetting;
 use crate::SharedString;
-use either::{Either, Left, Right};
-use thiserror::Error;
 
 /// Set of errors occurring while sensing target environment
 #[derive(Debug, Error)]
@@ -76,7 +77,7 @@ impl MetricLabel for SenseError {
             Self::Telemetry(e) => Right(Box::new(e)),
             Self::PortError(e) => Right(Box::new(e)),
             Self::NotABaseUrl(_) => Left("http::url".into()),
-            Self::Api(_, _) => Left("api".into()),
+            Self::Api(..) => Left("api".into()),
             Self::Task(_) => Left("task".into()),
             Self::Stage(_) => Left("stage".into()),
         }

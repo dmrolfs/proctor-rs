@@ -1,10 +1,12 @@
+use std::convert::Infallible;
+use std::fmt;
+
+use either::{Either, Left};
+use thiserror::Error;
+
 use super::MetricLabel;
 use crate::elements::{TelemetryType, TelemetryValue};
 use crate::SharedString;
-use either::{Either, Left};
-use std::convert::Infallible;
-use std::fmt;
-use thiserror::Error;
 
 /// Set of errors occurring while handling telemetry data
 #[derive(Debug, Error)]
@@ -71,13 +73,13 @@ pub enum UnexpectedType {
 impl fmt::Display for UnexpectedType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            UnexpectedType::Boolean(b) => write!(f, "boolean `{}`", b),
-            UnexpectedType::Integer(i) => write!(f, "integer `{}`", i),
-            UnexpectedType::Float(v) => write!(f, "floating point `{}`", v),
-            UnexpectedType::Text(ref s) => write!(f, "text {:?}", s),
-            UnexpectedType::Unit => write!(f, "unit value"),
-            UnexpectedType::Seq => write!(f, "list"),
-            UnexpectedType::Table => write!(f, "map"),
+            Self::Boolean(b) => write!(f, "boolean `{}`", b),
+            Self::Integer(i) => write!(f, "integer `{}`", i),
+            Self::Float(v) => write!(f, "floating point `{}`", v),
+            Self::Text(ref s) => write!(f, "text {:?}", s),
+            Self::Unit => write!(f, "unit value"),
+            Self::Seq => write!(f, "list"),
+            Self::Table => write!(f, "map"),
         }
     }
 }

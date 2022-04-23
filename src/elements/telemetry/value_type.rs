@@ -41,31 +41,31 @@ impl TelemetryType {
             return Ok(telemetry);
         }
 
-        use self::{TelemetryType as T, TelemetryValue as V};
+        use self::{TelemetryValue as V};
 
         match (&telemetry, self) {
-            (V::Integer(from), T::Float) => Ok(V::Float(*from as f64)),
-            (V::Integer(from), T::Text) => Ok(V::Text(from.to_string())),
+            (V::Integer(from), Self::Float) => Ok(V::Float(*from as f64)),
+            (V::Integer(from), Self::Text) => Ok(V::Text(from.to_string())),
 
-            (V::Float(from), T::Integer) => Ok(V::Integer(*from as i64)),
-            (V::Float(from), T::Text) => Ok(V::Text(from.to_string())),
+            (V::Float(from), Self::Integer) => Ok(V::Integer(*from as i64)),
+            (V::Float(from), Self::Text) => Ok(V::Text(from.to_string())),
 
-            (V::Text(from), T::Unit) if from.is_empty() => Ok(V::Unit),
-            (V::Text(from), T::Boolean) => Ok(V::Boolean(
+            (V::Text(from), Self::Unit) if from.is_empty() => Ok(V::Unit),
+            (V::Text(from), Self::Boolean) => Ok(V::Boolean(
                 bool::from_str(from.as_str()).map_err(|err| TelemetryError::ValueParse(err.into()))?,
             )),
-            (V::Text(from), T::Integer) => Ok(V::Integer(
+            (V::Text(from), Self::Integer) => Ok(V::Integer(
                 i64::from_str(from.as_str()).map_err(|err| TelemetryError::ValueParse(err.into()))?,
             )),
-            (V::Text(from), T::Float) => Ok(V::Float(
+            (V::Text(from), Self::Float) => Ok(V::Float(
                 f64::from_str(from.as_str()).map_err(|err| TelemetryError::ValueParse(err.into()))?,
             )),
 
-            // (V::Table(from), T::Seq) => {
+            // (V::Table(from), Self::Seq) => {
             //     let items: Vec<(String, TelemetryValue)> = (*from).into_iter().collect();
             //     Ok(V::Seq((*from).into_iter().collect()))
             // },
-            (tv, T::Seq) if tv.as_telemetry_type() != Self::Table => Ok(V::Seq(vec![telemetry])),
+            (tv, Self::Seq) if tv.as_telemetry_type() != Self::Table => Ok(V::Seq(vec![telemetry])),
 
             (from, to) => Err(TelemetryError::NotSupported(format!(
                 "telemetry conversion from {} to {} is not supported",

@@ -30,8 +30,8 @@ pub enum TelemetrySubscription {
     },
     Explicit {
         name: SharedString,
-        required_fields: HashSet<SharedString>,
-        optional_fields: HashSet<SharedString>,
+        required_fields: HashSet<String>,
+        optional_fields: HashSet<String>,
         #[serde(skip)]
         outlet_to_subscription: Outlet<Telemetry>,
         #[serde(skip)]
@@ -78,8 +78,8 @@ impl TelemetrySubscription {
             .with_optional_fields(T::optional_fields())
     }
 
-    pub fn with_required_fields<S: Into<SharedString>>(self, required_fields: HashSet<S>) -> Self {
-        let required_fields: HashSet<SharedString> = required_fields.into_iter().map(|s| s.into()).collect();
+    pub fn with_required_fields<S: Into<String>>(self, required_fields: HashSet<S>) -> Self {
+        let required_fields = required_fields.into_iter().map(|s| s.into()).collect();
 
         match self {
             Self::All { name, outlet_to_subscription, update_metrics } => Self::Explicit {
@@ -109,7 +109,7 @@ impl TelemetrySubscription {
         }
     }
 
-    pub fn with_optional_fields<S: Into<SharedString>>(self, optional_fields: HashSet<S>) -> Self {
+    pub fn with_optional_fields<S: Into<String>>(self, optional_fields: HashSet<S>) -> Self {
         let optional_fields = optional_fields.into_iter().map(|s| s.into()).collect();
         match self {
             Self::All { name, outlet_to_subscription, update_metrics } => Self::Explicit {
@@ -205,21 +205,20 @@ impl TelemetrySubscription {
             Self::Explicit { required_fields, optional_fields, .. } => {
                 let mut missing = HashSet::default();
                 for (key, _value) in database.iter() {
-                    let key = SharedString::Owned(key.clone());
-                    if !required_fields.contains(&key) && !optional_fields.contains(&key) {
-                        let _ = db.remove(key.as_ref());
+                    if !required_fields.contains(key) && !optional_fields.contains(key) {
+                        let _ = db.remove(key);
                     }
                 }
 
                 for req in required_fields {
-                    if !db.contains_key(req.as_ref()) {
-                        missing.insert(req.to_string());
+                    if !db.contains_key(req) {
+                        missing.insert(req.clone());
                     }
                 }
 
                 for opt in optional_fields {
-                    if !db.contains_key(opt.as_ref()) {
-                        missing.insert(opt.to_string());
+                    if !db.contains_key(opt) {
+                        missing.insert(opt.clone());
                     }
                 }
 
@@ -237,8 +236,8 @@ impl TelemetrySubscription {
                 let mut unfilled = Vec::new();
 
                 for required in required_fields.iter() {
-                    match database.get(required.as_ref()) {
-                        Some(value) => ready.push((required.to_string(), value)),
+                    match database.get(required) {
+                        Some(value) => ready.push((required.clone(), value.clone())),
                         None => unfilled.push(required),
                     }
                 }
@@ -246,8 +245,8 @@ impl TelemetrySubscription {
                 if unfilled.is_empty() {
                     for optional in optional_fields.iter() {
                         tracing::trace!(?optional, "looking for optional.");
-                        if let Some(value) = database.get(optional.as_ref()) {
-                            ready.push((optional.to_string(), value))
+                        if let Some(value) = database.get(optional) {
+                            ready.push((optional.clone(), value.clone()))
                         }
                     }
                 }
@@ -262,8 +261,7 @@ impl TelemetrySubscription {
 
                     None
                 } else {
-                    let ready = ready.into_iter().map(|(k, v)| (k, v.clone())).collect();
-                    Some(ready)
+                    Some(Telemetry::from_iter(ready.into_iter()))
                 }
             },
         }

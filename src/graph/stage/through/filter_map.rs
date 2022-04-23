@@ -2,11 +2,11 @@ use std::fmt::{self, Debug};
 
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
+use tracing::Instrument;
 
 use crate::graph::{stage, Inlet, Outlet, Port, Stage, PORT_DATA};
 use crate::graph::{SinkShape, SourceShape};
 use crate::{AppData, ProctorResult, SharedString};
-use tracing::Instrument;
 
 /// The FilterMap stage both filters and maps on items.
 ///

@@ -1,8 +1,10 @@
+use std::fmt::Debug;
+
+use either::{Either, Left};
+use thiserror::Error;
+
 use super::MetricLabel;
 use crate::SharedString;
-use either::{Either, Left};
-use std::fmt::Debug;
-use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum PortError {

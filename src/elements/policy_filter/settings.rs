@@ -37,7 +37,7 @@ impl<T> PolicySettings<T>
 where
     T: Debug + Serialize + DeserializeOwned,
 {
-    pub fn new(required_fields: HashSet<String>, optional_fields: HashSet<String>) -> Self {
+    pub const fn new(required_fields: HashSet<String>, optional_fields: HashSet<String>) -> Self {
         Self {
             required_subscription_fields: required_fields,
             optional_subscription_fields: optional_fields,

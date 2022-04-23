@@ -1,8 +1,9 @@
-use super::{MetricLabel, PortError, TelemetryError};
-use crate::SharedString;
 use chrono::{DateTime, Utc};
 use either::{Either, Left, Right};
 use thiserror::Error;
+
+use super::{MetricLabel, PortError, TelemetryError};
+use crate::SharedString;
 
 #[derive(Debug, Error)]
 pub enum PlanError {

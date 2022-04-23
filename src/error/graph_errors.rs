@@ -1,8 +1,9 @@
+use either::{Either, Left, Right};
+use thiserror::Error;
+
 use super::StageError;
 use super::{MetricLabel, PortError};
 use crate::SharedString;
-use either::{Either, Left, Right};
-use thiserror::Error;
 
 #[derive(Debug, Error)]
 #[allow(clippy::large_enum_variant)]
