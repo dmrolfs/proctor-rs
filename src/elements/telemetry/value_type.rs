@@ -41,7 +41,7 @@ impl TelemetryType {
             return Ok(telemetry);
         }
 
-        use self::{TelemetryValue as V};
+        use self::TelemetryValue as V;
 
         match (&telemetry, self) {
             (V::Integer(from), Self::Float) => Ok(V::Float(*from as f64)),

@@ -23,6 +23,7 @@ use proctor::error::{PolicyError, ProctorError};
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape, UniformFanInShape};
 use proctor::phases::policy_phase::PolicyPhase;
+use proctor::phases::sense::clearinghouse::TelemetryCacheSettings;
 use proctor::phases::sense::{
     self, CorrelationGenerator, SubscriptionRequirements, TelemetrySubscription, SUBSCRIPTION_CORRELATION,
     SUBSCRIPTION_TIMESTAMP,
@@ -430,7 +431,11 @@ where
         let merge = stage::MergeN::new("source_merge", 2);
 
         let id_generator = PrettyIdGenerator::single_node(IdPrettifier::<AlphabetCodec>::default());
-        let mut clearinghouse = sense::Clearinghouse::new("clearinghouse", id_generator.clone());
+        let mut clearinghouse = sense::Clearinghouse::new(
+            "clearinghouse",
+            &TelemetryCacheSettings::default(),
+            id_generator.clone(),
+        );
         let tx_clearinghouse_api = clearinghouse.tx_api();
 
         // todo: expand testing to include settings-based reqd/opt subscription fields

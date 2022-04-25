@@ -12,6 +12,7 @@ use crate::elements::Telemetry;
 use crate::error::{PortError, SenseError};
 use crate::graph::stage::{self, SourceStage, Stage, WithApi};
 use crate::graph::{Connect, Graph, Inlet, SinkShape, SourceShape, UniformFanInShape};
+use crate::phases::sense::clearinghouse::TelemetryCacheSettings;
 use crate::phases::sense::{ClearinghouseSubscriptionAgent, CorrelationGenerator, TelemetrySubscription};
 use crate::{AppData, SharedString};
 
@@ -38,12 +39,13 @@ impl<Out> SenseBuilder<Out> {
     #[tracing::instrument(level = "trace", skip(name, sources))]
     pub fn new(
         name: impl Into<SharedString>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
-        correlation_generator: CorrelationGenerator,
+        cache_settings: &TelemetryCacheSettings, correlation_generator: CorrelationGenerator,
     ) -> Self {
         let name = name.into();
         let nr_sources = sources.len();
         let merge = stage::MergeN::new(format!("{}_source_merge_{}", name, nr_sources), nr_sources);
-        let clearinghouse = Clearinghouse::new(format!("{}_clearinghouse", name), correlation_generator);
+        let clearinghouse =
+            Clearinghouse::new(format!("{}_clearinghouse", name), cache_settings, correlation_generator);
 
         Self {
             name,

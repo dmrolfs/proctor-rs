@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use serde::Serialize;
 
+use super::cache::TelemetryCache;
 use crate::elements::telemetry::UpdateMetricsFn;
 use crate::elements::Telemetry;
 use crate::error::SenseError;
@@ -187,13 +188,18 @@ impl TelemetrySubscription {
         }
     }
 
-    pub fn any_interest(&self, pushed_fields: &HashSet<String>) -> bool {
+    pub fn any_interest<'f, I>(&self, fields: I) -> bool
+    where
+        I: IntoIterator<Item = &'f String>,
+    {
         match self {
             Self::All { .. } => true,
-            Self::Explicit { required_fields, optional_fields, .. } => pushed_fields
-                .iter()
-                .map(|p| p.as_str())
-                .any(|p| required_fields.contains(p) || optional_fields.contains(p)),
+            Self::Explicit { required_fields, optional_fields, .. } => fields
+                .into_iter()
+                // .map(|p| p.as_str())
+                .any(|field| {
+                    required_fields.contains(field) || optional_fields.contains(field)
+                }),
         }
     }
 
@@ -227,17 +233,21 @@ impl TelemetrySubscription {
         }
     }
 
-    #[tracing::instrument(level = "trace")]
-    pub fn fulfill(&self, database: &Telemetry) -> Option<Telemetry> {
+    #[tracing::instrument(level = "trace", skip(self, cache))]
+    pub(super) fn fulfill(&self, cache: &TelemetryCache) -> Option<Telemetry> {
         match self {
-            Self::All { .. } => Some(database.clone()),
+            Self::All { .. } => {
+                // let all = data.iter().cloned().collect::<std::collections::HashMap<_, _>>();
+                // let all_telemetry = Telemetry::from_iter(all.into_iter());
+                Some(cache.get_telemetry())
+            },
             Self::Explicit { required_fields, optional_fields, .. } => {
                 let mut ready = Vec::new();
                 let mut unfilled = Vec::new();
 
                 for required in required_fields.iter() {
-                    match database.get(required) {
-                        Some(value) => ready.push((required.clone(), value.clone())),
+                    match cache.get(required) {
+                        Some(value) => ready.push((required.clone(), value.value().clone())),
                         None => unfilled.push(required),
                     }
                 }
@@ -245,8 +255,8 @@ impl TelemetrySubscription {
                 if unfilled.is_empty() {
                     for optional in optional_fields.iter() {
                         tracing::trace!(?optional, "looking for optional.");
-                        if let Some(value) = database.get(optional) {
-                            ready.push((optional.clone(), value.clone()))
+                        if let Some(value) = cache.get(optional) {
+                            ready.push((optional.clone(), value.value().clone()))
                         }
                     }
                 }

@@ -24,6 +24,9 @@ pub enum ClearinghouseCmd {
         name: Option<String>,
         tx: oneshot::Sender<ClearinghouseSnapshot>,
     },
+    Clear {
+        tx: oneshot::Sender<Ack>,
+    },
 }
 
 impl ClearinghouseCmd {
@@ -65,11 +68,19 @@ impl ClearinghouseCmd {
         rx.await
             .map_err(|err| SenseError::Api(Self::STAGE_NAME.to_string(), err.into()))
     }
+
+    pub async fn clear(api: &ClearinghouseApi) -> Result<Ack, SenseError> {
+        let (tx, rx) = oneshot::channel();
+        api.send(Self::Clear { tx })
+            .map_err(|err| SenseError::Api(Self::STAGE_NAME.to_string(), err.into()))?;
+        rx.await
+            .map_err(|err| SenseError::Api(Self::STAGE_NAME.to_string(), err.into()))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClearinghouseSnapshot {
-    pub database: Telemetry,
+    pub telemetry: Telemetry,
     pub missing: HashSet<String>,
     pub subscriptions: Vec<TelemetrySubscription>,
 }
@@ -90,7 +101,7 @@ impl serde::Serialize for ClearinghouseSnapshot {
 
         let mut state = serializer.serialize_struct("ClearinghouseSnapshot", 3)?;
 
-        let telemetry = (&self.database).iter().collect::<std::collections::HashMap<_, _>>();
+        let telemetry = (&self.telemetry).iter().collect::<std::collections::HashMap<_, _>>();
         state.serialize_field("telemetry", &telemetry)?;
 
         state.serialize_field("missing", &self.missing)?;

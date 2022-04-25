@@ -1,13 +1,8 @@
 use std::fmt::{self, Debug};
 
 use async_trait::async_trait;
-pub use builder::*;
 use cast_trait_object::dyn_upcast;
-pub use clearinghouse::*;
 use pretty_snowflake::{AlphabetCodec, IdPrettifier, MachineNode};
-pub use sensor::*;
-pub use settings::*;
-pub use subscription_channel::*;
 
 use crate::elements::Telemetry;
 use crate::error::SenseError;
@@ -20,6 +15,17 @@ pub mod clearinghouse;
 pub mod sensor;
 pub mod settings;
 pub mod subscription_channel;
+
+pub use builder::SenseBuilder;
+pub use clearinghouse::{
+    Clearinghouse, ClearinghouseApi, ClearinghouseCmd, ClearinghouseSubscriptionAgent, CorrelationGenerator,
+    SubscriptionRequirements, TelemetrySubscription, SUBSCRIPTION_CORRELATION, SUBSCRIPTION_TIMESTAMP,
+};
+pub use sensor::{make_telemetry_cvs_sensor, make_telemetry_rest_api_sensor, TelemetrySensor};
+pub use settings::{HttpQuery, SensorSetting};
+pub use subscription_channel::SubscriptionChannel;
+
+use crate::phases::sense::clearinghouse::TelemetryCacheSettings;
 
 // todo: implement
 // pub type CollectApi = mpsc::UnboundedSender<CollectCmd>;
@@ -56,17 +62,19 @@ pub struct Sense<Out> {
 impl<Out> Sense<Out> {
     #[tracing::instrument(level = "trace", skip(name, sources))]
     pub fn builder(
-        name: impl Into<SharedString>, sources: Vec<Box<dyn SourceStage<Telemetry>>>, machine_node: MachineNode,
+        name: impl Into<SharedString>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
+        cache_settings: &TelemetryCacheSettings, machine_node: MachineNode,
     ) -> SenseBuilder<Out> {
         let id_generator = CorrelationGenerator::distributed(machine_node, IdPrettifier::<AlphabetCodec>::default());
-        SenseBuilder::new(name, sources, id_generator)
+        SenseBuilder::new(name, sources, cache_settings, id_generator)
     }
 
     #[tracing::instrument(level = "trace", skip(name, sources))]
     pub fn single_node_builder(
         name: impl Into<SharedString>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
+        cache_settings: &TelemetryCacheSettings,
     ) -> SenseBuilder<Out> {
-        Self::builder(name, sources, MachineNode::default())
+        Self::builder(name, sources, cache_settings, MachineNode::default())
     }
 }
 

@@ -1,23 +1,27 @@
 pub mod agent;
+mod cache;
 pub mod protocol;
 pub mod subscription;
 
-use std::collections::hash_map::Keys;
 use std::collections::HashSet;
 use std::fmt::{self, Debug};
+use std::time::Duration;
 
 pub use agent::*;
 use async_trait::async_trait;
+use cache::TelemetryCache;
+pub use cache::TelemetryCacheSettings;
 use cast_trait_object::dyn_upcast;
 use futures::future::FutureExt;
 use once_cell::sync::Lazy;
 use pretty_snowflake::Id;
 use prometheus::{IntCounterVec, IntGauge, Opts};
 pub use protocol::*;
+use stretto::AsyncCache;
 pub use subscription::*;
 use tokio::sync::mpsc;
 
-use crate::elements::{Telemetry, TelemetryValue, Timestamp};
+use crate::elements::{Telemetry, Timestamp};
 use crate::error::{ProctorError, SenseError};
 use crate::graph::stage::Stage;
 use crate::graph::{stage, Inlet, OutletsShape, Port, SinkShape, UniformFanOutShape};
@@ -59,8 +63,9 @@ pub type CorrelationGenerator = ProctorIdGenerator<Telemetry>;
 pub struct Clearinghouse {
     name: SharedString,
     subscriptions: Vec<TelemetrySubscription>,
-    database: Telemetry,
-    correlation_generator: CorrelationGenerator,
+    cache: TelemetryCache,
+    telemetry_ttl: Duration,
+    correlation_generator: tokio::sync::Mutex<CorrelationGenerator>,
     inlet: Inlet<Telemetry>,
     tx_api: ClearinghouseApi,
     rx_api: mpsc::UnboundedReceiver<ClearinghouseCmd>,
@@ -69,16 +74,27 @@ pub struct Clearinghouse {
 const PORT_TELEMETRY: &str = "telemetry";
 
 impl Clearinghouse {
-    pub fn new(name: impl Into<SharedString>, correlation_generator: CorrelationGenerator) -> Self {
+    pub fn new(
+        name: impl Into<SharedString>, cache_settings: &TelemetryCacheSettings,
+        correlation_generator: CorrelationGenerator,
+    ) -> Self {
         let name = name.into();
         let (tx_api, rx_api) = mpsc::unbounded_channel();
         let inlet = Inlet::new(name.clone(), PORT_TELEMETRY);
+        let cache = AsyncCache::builder(cache_settings.num_counters, cache_settings.max_cost)
+            .set_metrics(true)
+            .set_cleanup_duration(cache_settings.cleanup_interval)
+            .set_ignore_internal_cost(cache_settings.ignore_memory_cost)
+            .finalize()
+            .expect("failed creating clearinghouse cache");
+
 
         Self {
             name,
             subscriptions: Vec::default(),
-            database: Telemetry::default(),
-            correlation_generator,
+            cache: TelemetryCache::new(cache),
+            telemetry_ttl: cache_settings.ttl,
+            correlation_generator: tokio::sync::Mutex::new(correlation_generator),
             inlet,
             tx_api,
             rx_api,
@@ -93,19 +109,40 @@ impl Clearinghouse {
         track_subscriptions(self.subscriptions.len());
     }
 
-    #[tracing::instrument(level = "trace", skip(subscriptions, database,))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn handle_telemetry_data(
-        stage_name: &SharedString, data: Option<Telemetry>, subscriptions: &[TelemetrySubscription],
-        database: &mut Telemetry, correlation_generator: &mut CorrelationGenerator,
+        &mut self,
+        data: Option<Telemetry>,
+        // stage_name: &SharedString, data: Option<Telemetry>, subscriptions: &[TelemetrySubscription],
+        // cache: &mut TelemetryCache, correlation_generator: &mut CorrelationGenerator,
     ) -> Result<bool, SenseError> {
         match data {
             Some(d) => {
-                let pushed_fields = d.keys().cloned().collect();
-                database.extend(d);
+                let mut pushed_fields = HashSet::with_capacity(d.len());
+                for (k, v) in d {
+                    let cache_insert = self
+                        .cache
+                        .try_insert_with_ttl(k.clone(), v, 1, self.telemetry_ttl)
+                        .await
+                        .map(|added| {
+                            if added {
+                                pushed_fields.insert(k.clone());
+                            } else {
+                                tracing::warn!(stage=%self.name, field=%k, "failed to add to clearinghouse cache.");
+                            }
+                        });
 
-                let interested = Self::find_interested_subscriptions(subscriptions, &database.keys(), pushed_fields);
+                    if let Err(err) = cache_insert {
+                        tracing::warn!(stage=%self.name, field=%k, error=?err, "cache error during clearinghouse cache insert.");
+                    }
+                }
+                if let Err(err) = self.cache.wait().await {
+                    tracing::error!(stage=%self.name, error=?err, "failed to wait on clearinghouse cache.");
+                }
 
-                Self::push_to_subscribers(stage_name, database, interested, correlation_generator).await?;
+                let interested = Self::find_interested_subscriptions(&self.subscriptions, &pushed_fields);
+
+                self.push_to_subscribers(interested).await?;
                 Ok(true)
             },
 
@@ -118,15 +155,18 @@ impl Clearinghouse {
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(subscriptions,))]
-    fn find_interested_subscriptions<'s, 'd>(
-        subscriptions: &'s [TelemetrySubscription], _available: &Keys<'d, String, TelemetryValue>,
-        pushed: HashSet<String>,
+    // #[tracing::instrument(level = "trace", skip(self,))]
+    #[tracing::instrument(level = "trace", skip(subscriptions, pushed,))]
+    fn find_interested_subscriptions<'s, 'f>(
+        // &self,
+        subscriptions: &'s [TelemetrySubscription],
+        // _available: &Keys<'d, String, TelemetryValue>,
+        pushed: &'f HashSet<String>,
     ) -> Vec<&'s TelemetrySubscription> {
         let interested = subscriptions
             .iter()
             .filter(|s| {
-                let is_interested = s.any_interest(&pushed);
+                let is_interested = s.any_interest(pushed.iter());
                 tracing::debug!(
                     "is subscription, {}, interested in pushed fields:{:?} => {}",
                     s.name(),
@@ -150,12 +190,15 @@ impl Clearinghouse {
 
     #[tracing::instrument(
         level = "trace",
-        skip(database, subscribers, correlation_generator),
+        skip(self, subscribers),
         fields(subscribers = ?subscribers.iter().map(|s| s.name()).collect::<Vec<_>>(), ),
     )]
     async fn push_to_subscribers(
-        stage_name: &SharedString, database: &Telemetry, subscribers: Vec<&TelemetrySubscription>,
-        correlation_generator: &mut CorrelationGenerator,
+        &self,
+        // stage_name: &SharedString,
+        // cache: &TelemetryCache,
+        subscribers: Vec<&TelemetrySubscription>,
+        // correlation_generator: &mut CorrelationGenerator,
     ) -> Result<(), SenseError> {
         if subscribers.is_empty() {
             tracing::debug!("not publishing - no subscribers corresponding to field changes.");
@@ -163,13 +206,16 @@ impl Clearinghouse {
         }
 
         let nr_subscribers = subscribers.len();
+        let mut correlation_generator = self.correlation_generator.lock().await;
 
         let fulfilled = subscribers
             .into_iter()
-            .filter_map(|s| Self::fulfill_subscription(s, database).map(|fulfillment| (s, fulfillment)))
+            .filter_map(|s| Self::fulfill_subscription(s, &self.cache).map(|fulfillment| (s, fulfillment)))
+            .collect::<Vec<_>>()
+            .into_iter()
             .map(|(s, mut fulfillment)| {
                 let (_correlation, _recv_timestamp) =
-                    Self::add_automatic_telemetry(&mut fulfillment, correlation_generator);
+                    Self::add_automatic_telemetry(&mut fulfillment, &mut correlation_generator);
 
                 tracing::info!(subscription=%s.name(), ?fulfillment, "DMR(debug): sending subscription data update.");
                 s.update_metrics(&fulfillment);
@@ -189,7 +235,7 @@ impl Clearinghouse {
             // todo: resolve design to avoid this hack to satisfy track_errors api while not exposing
             // sense stage with proctor error.
             let proctor_err = ProctorError::SensePhase(err);
-            crate::graph::track_errors(stage_name.as_ref(), &proctor_err);
+            crate::graph::track_errors(self.name.as_ref(), &proctor_err);
             let err = match proctor_err {
                 ProctorError::SensePhase(err) => Some(err),
                 err => {
@@ -225,39 +271,40 @@ impl Clearinghouse {
     }
 
     #[tracing::instrument(level = "trace")]
-    fn fulfill_subscription(subscription: &TelemetrySubscription, database: &Telemetry) -> Option<Telemetry> {
-        subscription.fulfill(database)
+    fn fulfill_subscription(subscription: &TelemetrySubscription, cache: &TelemetryCache) -> Option<Telemetry> {
+        subscription.fulfill(cache)
     }
 
-    #[tracing::instrument(level = "trace", skip(subscriptions, database))]
+    #[tracing::instrument(level = "trace", skip(self))]
     async fn handle_command(
-        command: ClearinghouseCmd, subscriptions: &mut Vec<TelemetrySubscription>, database: &Telemetry,
+        &mut self,
+        command: ClearinghouseCmd, // subscriptions: &mut Vec<TelemetrySubscription>, database: &Telemetry,
     ) -> Result<bool, SenseError> {
         match command {
             ClearinghouseCmd::GetSnapshot { name, tx } => {
+                let telemetry = self.cache.get_telemetry();
+
                 let snapshot = match name {
                     None => {
                         tracing::trace!("no subscription specified - responding with clearinghouse snapshot.");
                         ClearinghouseSnapshot {
-                            database: database.clone(),
+                            telemetry,
                             missing: HashSet::default(),
-                            subscriptions: subscriptions.clone(),
+                            subscriptions: self.subscriptions.clone(),
                         }
                     },
 
-                    Some(name) => match subscriptions.iter().find(|s| s.name() == name.as_str()) {
+                    Some(name) => match self.subscriptions.iter().find(|s| s.name() == name.as_str()) {
                         Some(sub) => {
-                            let (db, missing) = sub.trim_to_subscription(database)?;
+                            let (db, missing) = sub.trim_to_subscription(&telemetry)?;
 
                             tracing::debug!(
-                                requested_subscription=%name,
-                                data=?db,
-                                missing=?missing,
+                                requested_subscription=%name, data=?db, missing=?missing,
                                 "subscription found - focusing snapshot."
                             );
 
                             ClearinghouseSnapshot {
-                                database: db,
+                                telemetry: db,
                                 missing,
                                 subscriptions: vec![sub.clone()],
                             }
@@ -266,9 +313,9 @@ impl Clearinghouse {
                         None => {
                             tracing::debug!(requested_subscription=%name, "subscription not found - returning clearinghouse snapshot.");
                             ClearinghouseSnapshot {
-                                database: database.clone(),
+                                telemetry,
                                 missing: HashSet::default(),
-                                subscriptions: subscriptions.clone(),
+                                subscriptions: self.subscriptions.clone(),
                             }
                         },
                     },
@@ -281,19 +328,32 @@ impl Clearinghouse {
             ClearinghouseCmd::Subscribe { subscription, receiver, tx } => {
                 tracing::info!(?subscription, "adding telemetry subscriber.");
                 subscription.connect_to_receiver(&receiver).await;
-                subscriptions.push(*subscription);
-                track_subscriptions(subscriptions.len());
+                self.subscriptions.push(*subscription);
+                track_subscriptions(self.subscriptions.len());
                 let _ = tx.send(());
                 Ok(true)
             },
 
             ClearinghouseCmd::Unsubscribe { name, tx } => {
-                let dropped = subscriptions.iter().position(|s| s.name() == name.as_str()).map(|pos| {
-                    let _dropped = subscriptions.remove(pos);
-                    track_subscriptions(subscriptions.len());
-                });
+                let dropped = self
+                    .subscriptions
+                    .iter()
+                    .position(|s| s.name() == name.as_str())
+                    .map(|pos| {
+                        let _dropped = self.subscriptions.remove(pos);
+                        track_subscriptions(self.subscriptions.len());
+                    });
 
                 tracing::info!(?dropped, "subscription dropped");
+                let _ = tx.send(());
+                Ok(true)
+            },
+
+            ClearinghouseCmd::Clear { tx } => {
+                if let Err(err) = self.cache.clear() {
+                    tracing::error!(error=?err, "failed to clear cache -- ignoring.");
+                }
+
                 let _ = tx.send(());
                 Ok(true)
             },
@@ -306,7 +366,7 @@ impl Debug for Clearinghouse {
         f.debug_struct("Clearinghouse")
             .field("name", &self.name)
             .field("subscriptions", &self.subscriptions)
-            .field("data", &self.database)
+            .field("telemetry_ttl", &self.telemetry_ttl)
             .finish()
     }
 }
@@ -364,31 +424,30 @@ impl Clearinghouse {
     }
 
     async fn do_run(&mut self) -> Result<(), SenseError> {
-        let stage_name = &self.name;
-        let mut inlet = self.inlet.clone();
-        let rx_api = &mut self.rx_api;
-        let database = &mut self.database;
-        let correlation_generator = &mut self.correlation_generator;
-        let subscriptions = &mut self.subscriptions;
+        // let stage_name = &self.name;
+        // let mut inlet = self.inlet.clone();
+        // let rx_api = &mut self.rx_api;
+        // let cache = &mut self.cache;
+        // let correlation_generator = &mut self.correlation_generator;
+        // let subscriptions = &mut self.subscriptions;
 
         loop {
-            let _timer = stage::start_stage_eval_time(stage_name.as_ref());
+            let _timer = stage::start_stage_eval_time(self.name.as_ref());
 
             tracing::trace!(
-                nr_subscriptions=%subscriptions.len(),
-                subscriptions=?subscriptions,
-                database=?database,
+                nr_subscriptions=%self.subscriptions.len(),
+                subscriptions=?self.subscriptions,
                 "handling next item.."
             );
 
             tokio::select! {
-                data = inlet.recv() => {
-                    let cont_loop = Self::handle_telemetry_data(
-                        stage_name,
+                data = self.inlet.recv() => {
+                    let cont_loop = self.handle_telemetry_data(
+                        // self.name,
                         data,
-                        subscriptions,
-                        database,
-                        correlation_generator
+                        // self.subscriptions,
+                        // self.cache,
+                        // self.correlation_generator
                     ).await?;
 
                     if !cont_loop {
@@ -396,15 +455,10 @@ impl Clearinghouse {
                     }
                 },
 
-                Some(command) = rx_api.recv() => {
-                    let cont_loop = Self::handle_command(
-                        command,
-                        subscriptions,
-                        database,
-                    )
-                    .await?;
+                Some(command) = self.rx_api.recv() => {
+                    let continue_loop = self.handle_command(command).await?;
 
-                    if !cont_loop {
+                    if !continue_loop {
                         break;
                     }
                 },
@@ -564,14 +618,15 @@ mod tests {
         let main_span = tracing::info_span!("test_create_with_subscriptions");
         let _main_span_guard = main_span.enter();
 
-        let mut clearinghouse = Clearinghouse::new("test", ID_GENERATOR.clone());
-        assert!(clearinghouse.database.is_empty());
-        assert!(clearinghouse.subscriptions.is_empty());
-        assert_eq!(clearinghouse.name, "test");
-
         let sub1_inlet = Inlet::new("sub1", PORT_DATA);
         block_on(async {
+            let mut clearinghouse =
+                Clearinghouse::new("test", &TelemetryCacheSettings::default(), ID_GENERATOR.clone());
+            // assert!(clearinghouse.cache.is_empty());
+            assert!(clearinghouse.subscriptions.is_empty());
+            assert_eq!(clearinghouse.name, "test");
             assert!(!clearinghouse.inlet.is_attached().await);
+
 
             clearinghouse
                 .subscribe(
@@ -581,8 +636,9 @@ mod tests {
                     &sub1_inlet,
                 )
                 .await;
+            assert_eq!(clearinghouse.subscriptions.len(), 1);
         });
-        assert_eq!(clearinghouse.subscriptions.len(), 1);
+
         block_on(async {
             assert!(sub1_inlet.is_attached().await);
         });
@@ -602,7 +658,11 @@ mod tests {
                 .collect();
             let mut tick = stage::Tick::new("tick", Duration::from_nanos(0), Duration::from_millis(5), data);
             let tx_tick_api = tick.tx_api();
-            let mut clearinghouse = Clearinghouse::new("test-clearinghouse", ID_GENERATOR.clone());
+            let mut clearinghouse = Clearinghouse::new(
+                "test-clearinghouse",
+                &TelemetryCacheSettings::default(),
+                ID_GENERATOR.clone(),
+            );
             let tx_api = clearinghouse.tx_api();
             (tick.outlet(), clearinghouse.inlet()).connect().await;
 
@@ -615,7 +675,7 @@ mod tests {
             let _ = nr_0_span.enter();
 
             let ClearinghouseSnapshot {
-                database: _db_0,
+                telemetry: _db_0,
                 missing: _missing_0,
                 subscriptions: subs_0,
             } = assert_ok!(ClearinghouseCmd::get_clearinghouse_snapshot(&tx_api).await);
@@ -640,7 +700,7 @@ mod tests {
             let _ = nr_1_span.enter();
 
             let ClearinghouseSnapshot {
-                database: _db_1,
+                telemetry: _db_1,
                 missing: _missing_1,
                 subscriptions: subs_1,
             } = assert_ok!(ClearinghouseCmd::get_clearinghouse_snapshot(&tx_api).await);
@@ -676,7 +736,11 @@ mod tests {
                 .collect();
             let mut tick = stage::Tick::new("tick", Duration::from_nanos(0), Duration::from_millis(5), data);
             let tx_tick_api = tick.tx_api();
-            let mut clearinghouse = Clearinghouse::new("test-clearinghouse", ID_GENERATOR.clone());
+            let mut clearinghouse = Clearinghouse::new(
+                "test-clearinghouse",
+                &TelemetryCacheSettings::default(),
+                ID_GENERATOR.clone(),
+            );
             let tx_api = clearinghouse.tx_api();
             (tick.outlet(), clearinghouse.inlet()).connect().await;
 
@@ -695,14 +759,14 @@ mod tests {
                 .await
             );
 
-            let ClearinghouseSnapshot { database: _, missing: _, subscriptions: subs1 } =
+            let ClearinghouseSnapshot { telemetry: _, missing: _, subscriptions: subs1 } =
                 assert_ok!(ClearinghouseCmd::get_clearinghouse_snapshot(&tx_api).await);
             assert_eq!(subs1.len(), 1);
 
             let name_1 = subs1[0].name();
             assert_ok!(ClearinghouseCmd::unsubscribe(&tx_api, name_1.as_ref()).await);
 
-            let ClearinghouseSnapshot { database: _, missing: _, subscriptions: subs2 } =
+            let ClearinghouseSnapshot { telemetry: _, missing: _, subscriptions: subs2 } =
                 assert_ok!(ClearinghouseCmd::get_clearinghouse_snapshot(&tx_api).await);
             assert_eq!(subs2.len(), 0);
 
@@ -720,70 +784,70 @@ mod tests {
         let main_span = tracing::info_span!("test_find_interested_subscriptions");
         let _main_span_guard = main_span.enter();
 
-        let available: HashMap<String, TelemetryValue> = HashMap::default();
-        let actual =
-            Clearinghouse::find_interested_subscriptions(&SUBSCRIPTIONS, &available.keys(), HashSet::default());
+        // let available: HashMap<String, TelemetryValue> = HashMap::default();
+        // let available_keys: HashSet<String> = available.keys().cloned().collect();
+        let actual = Clearinghouse::find_interested_subscriptions(&SUBSCRIPTIONS, &HashSet::default()); //&available_keys);
         assert_eq!(actual, Vec::<&TelemetrySubscription>::default());
 
-        let available = maplit::hashmap! {"extra".to_string() => TelemetryValue::Unit };
+        // let available = maplit::hashmap! {"extra".to_string() => TelemetryValue::Unit };
         let actual = Clearinghouse::find_interested_subscriptions(
             &SUBSCRIPTIONS,
-            &available.keys(),
-            maplit::hashset! {"extra".to_string()},
+            // &available_keys,
+            &maplit::hashset! {"extra".to_string()},
         );
         assert_eq!(actual, vec![&SUBSCRIPTIONS[1]]);
 
-        let available = maplit::hashmap! {"nonsense".to_string() => TelemetryValue::Unit };
+        // let available = maplit::hashmap! {"nonsense".to_string() => TelemetryValue::Unit };
         let actual = Clearinghouse::find_interested_subscriptions(
             &SUBSCRIPTIONS,
-            &available.keys(),
-            maplit::hashset! {"nonsense".to_string()},
+            // &available.keys(),
+            &maplit::hashset! {"nonsense".to_string()},
         );
         assert_eq!(actual, Vec::<&TelemetrySubscription>::default());
 
-        let available = maplit::hashmap! {"pos".to_string() => TelemetryValue::Unit };
+        // let available = maplit::hashmap! {"pos".to_string() => TelemetryValue::Unit };
         let actual = Clearinghouse::find_interested_subscriptions(
             &SUBSCRIPTIONS,
-            &available.keys(),
-            maplit::hashset! {"pos".to_string()},
+            // &available.keys(),
+            &maplit::hashset! {"pos".to_string()},
         );
         assert_eq!(actual, vec![&SUBSCRIPTIONS[1], &SUBSCRIPTIONS[2]]);
 
-        let available = maplit::hashmap! {"value".to_string() => TelemetryValue::Unit };
+        // let available = maplit::hashmap! {"value".to_string() => TelemetryValue::Unit };
         let actual = Clearinghouse::find_interested_subscriptions(
             &SUBSCRIPTIONS,
-            &available.keys(),
-            maplit::hashset! {"value".to_string()},
+            // &available.keys(),
+            &maplit::hashset! {"value".to_string()},
         );
         assert_eq!(actual, vec![&SUBSCRIPTIONS[2]]);
 
-        let base = maplit::hashset! {"pos".to_string(), "cat".to_string()};
-        let available: HashMap<String, TelemetryValue> =
-            base.iter().map(|k| (k.clone(), TelemetryValue::Unit)).collect();
+        // let base = maplit::hashset! {"pos".to_string(), "cat".to_string()};
+        // let available: HashMap<String, TelemetryValue> =
+        //     base.iter().map(|k| (k.clone(), TelemetryValue::Unit)).collect();
         let actual = Clearinghouse::find_interested_subscriptions(
             &SUBSCRIPTIONS,
-            &available.keys(),
-            maplit::hashset! {"pos".to_string(), "cat".to_string()},
+            // &available.keys(),
+            &maplit::hashset! {"pos".to_string(), "cat".to_string()},
         );
         assert_eq!(actual, vec![&SUBSCRIPTIONS[1], &SUBSCRIPTIONS[2]]);
 
-        let base = maplit::hashset! {"pos".to_string(), "value".to_string(), "cat".to_string()};
-        let available: HashMap<String, TelemetryValue> =
-            base.iter().map(|k| (k.clone(), TelemetryValue::Unit)).collect();
+        // let base = maplit::hashset! {"pos".to_string(), "value".to_string(), "cat".to_string()};
+        // let available: HashMap<String, TelemetryValue> =
+        //     base.iter().map(|k| (k.clone(), TelemetryValue::Unit)).collect();
         let actual = Clearinghouse::find_interested_subscriptions(
             &SUBSCRIPTIONS,
-            &available.keys(),
-            maplit::hashset! {"pos".to_string(), "value".to_string(), "cat".to_string()},
+            // &available.keys(),
+            &maplit::hashset! {"pos".to_string(), "value".to_string(), "cat".to_string()},
         );
         assert_eq!(actual, vec![&SUBSCRIPTIONS[1], &SUBSCRIPTIONS[2]]);
 
-        let base = maplit::hashset! {"pos".to_string(), "value".to_string(), "cat".to_string(), "extra".to_string()};
-        let available: HashMap<String, TelemetryValue> =
-            base.iter().map(|k| (k.clone(), TelemetryValue::Unit)).collect();
+        // let base = maplit::hashset! {"pos".to_string(), "value".to_string(), "cat".to_string(),
+        // "extra".to_string()}; let available: HashMap<String, TelemetryValue> =
+        //     base.iter().map(|k| (k.clone(), TelemetryValue::Unit)).collect();
         let actual = Clearinghouse::find_interested_subscriptions(
             &SUBSCRIPTIONS,
-            &available.keys(),
-            maplit::hashset! {"pos".to_string(), "value".to_string(), "cat".to_string(), "extra".to_string()},
+            // &available.keys(),
+            &maplit::hashset! {"pos".to_string(), "value".to_string(), "cat".to_string(), "extra".to_string()},
         );
         assert_eq!(actual, vec![&SUBSCRIPTIONS[1], &SUBSCRIPTIONS[2]]);
     }
@@ -812,14 +876,36 @@ mod tests {
                     "next test scenario..."
                 );
                 for ((row, data_row), expected_row) in DB_ROWS.iter().enumerate().zip(expected) {
-                    let actual = Clearinghouse::fulfill_subscription(
-                        &TelemetrySubscription::new(sub_name)
-                            .with_required_fields(sub_required_fields.clone())
-                            .with_optional_fields(sub_optional_fields.clone()),
-                        data_row,
-                    );
+                    block_on(async {
+                        let mut cache = TelemetryCache::new(
+                            AsyncCache::builder(1_000, 1e6 as i64)
+                            .set_metrics(true)
+                            .set_cleanup_duration(Duration::from_secs(5))
+                            // .set_ignore_internal_cost(true)
+                            .finalize()
+                            .expect("failed creating clearinghouse cache"),
+                        );
 
-                    assert_eq!((sub_name, row, &actual), (sub_name, row, expected_row));
+                        for (k, v) in data_row.iter() {
+                            assert!(
+                                cache
+                                    .insert_with_ttl(k.clone(), v.clone(), 1, Duration::from_secs(60))
+                                    .await
+                            );
+                        }
+
+                        assert_ok!(cache.wait().await);
+                        assert_eq!(data_row.keys().cloned().collect::<HashSet<_>>(), cache.seen());
+                        assert_eq!(data_row, &cache.get_telemetry());
+                        let actual = Clearinghouse::fulfill_subscription(
+                            &TelemetrySubscription::new(sub_name)
+                                .with_required_fields(sub_required_fields.clone())
+                                .with_optional_fields(sub_optional_fields.clone()),
+                            &cache,
+                        );
+
+                        assert_eq!((sub_name, row, &actual), (sub_name, row, expected_row));
+                    })
                 }
             }
         }
@@ -855,7 +941,7 @@ mod tests {
             ],
         };
 
-        let mut id_generator = ID_GENERATOR.clone();
+        let id_generator = ID_GENERATOR.clone();
 
         block_on(async move {
             let nr_skip = 0; // todo expand test to remove this line
@@ -874,16 +960,30 @@ mod tests {
             }
 
             for row in 0..DB_ROWS.len() {
-                let db = &DB_ROWS[row];
+                let mut c = Clearinghouse::new(
+                    format!("test-{row}"),
+                    &TelemetryCacheSettings::default(),
+                    id_generator.clone(),
+                );
+                for (k, v) in DB_ROWS[row].iter() {
+                    assert!(c.cache.insert_with_ttl(k.clone(), v.clone(), 1, c.telemetry_ttl).await);
+                }
+                assert_ok!(c.cache.wait().await);
+
+                let db = c.cache.get_telemetry();
+                assert_eq!(db.keys().cloned().collect::<HashSet<_>>(), c.cache.seen());
+                assert_eq!(&DB_ROWS[row], &db);
                 tracing::info!(?db, "pushing database to subscribers");
-                Clearinghouse::push_to_subscribers(
-                    &"test_clearinghouse".into(),
-                    db,
-                    subscriptions.clone(),
-                    &mut id_generator,
-                )
+                assert_ok!(
+                    c.push_to_subscribers(subscriptions.clone())
+                // Clearinghouse::push_to_subscribers(
+                //     &"test_clearinghouse".into(),
+                //     db,
+                //     subscriptions.clone(),
+                //     &mut id_generator,
+                // )
                 .await
-                .expect("failed to publish");
+                );
             }
 
             for s in subscriptions.iter() {
