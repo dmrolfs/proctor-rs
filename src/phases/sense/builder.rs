@@ -14,11 +14,11 @@ use crate::graph::stage::{self, SourceStage, Stage, WithApi};
 use crate::graph::{Connect, Graph, Inlet, SinkShape, SourceShape, UniformFanInShape};
 use crate::phases::sense::clearinghouse::TelemetryCacheSettings;
 use crate::phases::sense::{ClearinghouseSubscriptionAgent, CorrelationGenerator, TelemetrySubscription};
-use crate::{AppData, SharedString};
+use crate::AppData;
 
 #[derive(Debug)]
 pub struct SenseBuilder<Out> {
-    name: SharedString,
+    name: String,
     sources: Vec<Box<dyn SourceStage<Telemetry>>>,
     merge: stage::MergeN<Telemetry>,
     pub clearinghouse: Clearinghouse,
@@ -38,7 +38,7 @@ impl<Out: Send> ClearinghouseSubscriptionAgent for SenseBuilder<Out> {
 impl<Out> SenseBuilder<Out> {
     #[tracing::instrument(level = "trace", skip(name, sources))]
     pub fn new(
-        name: impl Into<SharedString>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
+        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
         cache_settings: &TelemetryCacheSettings, correlation_generator: CorrelationGenerator,
     ) -> Self {
         let name = name.into();
@@ -100,7 +100,7 @@ impl SenseBuilder<Telemetry> {
     pub async fn build_for_telemetry_out(
         mut self, out_required_fields: HashSet<String>, out_optional_fields: HashSet<String>,
     ) -> Result<Sense<Telemetry>, SenseError> {
-        let subscription = TelemetrySubscription::new(self.name.as_ref())
+        let subscription = TelemetrySubscription::new(self.name.clone())
             .with_required_fields(out_required_fields)
             .with_optional_fields(out_optional_fields);
 
@@ -118,7 +118,7 @@ impl SenseBuilder<Telemetry> {
         mut self, out_required_fields: HashSet<String>, out_optional_fields: HashSet<String>,
         update_metrics: Box<dyn (Fn(&str, &Telemetry)) + Send + Sync + 'static>,
     ) -> Result<Sense<Telemetry>, SenseError> {
-        let subscription = TelemetrySubscription::new(self.name.as_ref())
+        let subscription = TelemetrySubscription::new(self.name.clone())
             .with_required_fields(out_required_fields)
             .with_optional_fields(out_optional_fields)
             .with_update_metrics_fn(update_metrics);
@@ -147,9 +147,9 @@ where
         fields(nr_sources = % self.sources.len())
     )]
     pub async fn build_for_out_requirements(
-        mut self, out_required_fields: HashSet<SharedString>, out_optional_fields: HashSet<SharedString>,
+        mut self, out_required_fields: HashSet<String>, out_optional_fields: HashSet<String>,
     ) -> Result<Sense<Out>, SenseError> {
-        let subscription = TelemetrySubscription::new(self.name.as_ref())
+        let subscription = TelemetrySubscription::new(self.name.clone())
             .with_required_fields(out_required_fields)
             .with_optional_fields(out_optional_fields);
 
@@ -165,10 +165,10 @@ where
         fields(nr_sources = % self.sources.len())
     )]
     pub async fn build_for_out_requirements_w_metrics(
-        mut self, out_required_fields: HashSet<SharedString>, out_optional_fields: HashSet<SharedString>,
+        mut self, out_required_fields: HashSet<String>, out_optional_fields: HashSet<String>,
         update_metrics: UpdateMetricsFn,
     ) -> Result<Sense<Out>, SenseError> {
-        let subscription = TelemetrySubscription::new(self.name.as_ref())
+        let subscription = TelemetrySubscription::new(self.name.clone())
             .with_required_fields(out_required_fields)
             .with_optional_fields(out_optional_fields)
             .with_update_metrics_fn(update_metrics);
@@ -227,10 +227,12 @@ where
         g.push_back(Box::new(self.merge)).await;
         g.push_back(Box::new(self.clearinghouse)).await;
         g.push_back(Box::new(out_channel)).await;
-        let composite = stage::CompositeSource::new(format!("{}_composite_source", self.name).into(), g, outlet).await;
 
+        let composite_name = format!("{}_composite_source", self.name);
+        let composite = stage::CompositeSource::new(&composite_name, g, outlet).await;
         let inner: Box<dyn SourceStage<Out>> = Box::new(composite);
         let outlet = inner.outlet();
+
         Ok(Sense {
             name: self.name,
             inner,

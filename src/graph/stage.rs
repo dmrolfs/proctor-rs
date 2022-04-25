@@ -13,7 +13,7 @@ pub use self::sink::*;
 pub use self::source::*;
 pub use self::through::*;
 use super::{SinkShape, SourceShape, ThroughShape};
-use crate::{ProctorResult, SharedString};
+use crate::ProctorResult;
 
 pub trait SourceStage<Out>: Stage + SourceShape<Out = Out> + 'static {}
 impl<Out, T: 'static + Stage + SourceShape<Out = Out>> SourceStage<Out> for T {}
@@ -50,7 +50,7 @@ pub fn start_stage_eval_time(stage: &str) -> HistogramTimer {
 #[dyn_upcast]
 #[async_trait]
 pub trait Stage: fmt::Debug + Send + Sync {
-    fn name(&self) -> SharedString;
+    fn name(&self) -> &str;
     async fn check(&self) -> ProctorResult<()>;
     async fn run(&mut self) -> ProctorResult<()>;
     async fn close(self: Box<Self>) -> ProctorResult<()>;

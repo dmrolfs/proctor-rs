@@ -5,15 +5,15 @@ use cast_trait_object::dyn_upcast;
 
 use crate::graph::shape::SinkShape;
 use crate::graph::{stage, Inlet, Port, Stage, PORT_DATA};
-use crate::{AppData, ProctorResult, SharedString};
+use crate::{AppData, ProctorResult};
 
 pub struct LoggedSink<In> {
-    name: SharedString,
+    name: String,
     inlet: Inlet<In>,
 }
 
 impl<In> LoggedSink<In> {
-    pub fn new<S: Into<SharedString>>(name: S) -> Self {
+    pub fn new<S: Into<String>>(name: S) -> Self {
         let name = name.into();
         let inlet = Inlet::new(name.clone(), PORT_DATA);
         Self { name, inlet }
@@ -24,8 +24,8 @@ impl<In> LoggedSink<In> {
 #[async_trait]
 impl<In: AppData> Stage for LoggedSink<In> {
     #[inline]
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

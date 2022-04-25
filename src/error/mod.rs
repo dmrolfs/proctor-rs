@@ -3,8 +3,6 @@ use std::fmt::Debug;
 use either::{Either, Left, Right};
 use thiserror::Error;
 
-use crate::SharedString;
-
 mod decision_errors;
 mod eligibility_errors;
 mod governance_errors;
@@ -28,15 +26,15 @@ pub use stage_errors::StageError;
 pub use telemetry_errors::{TelemetryError, UnexpectedType};
 
 pub trait MetricLabel {
-    fn label(&self) -> SharedString {
+    fn label(&self) -> String {
         match self.next() {
-            Either::Right(n) => format!("{}::{}", self.slug(), n.label()).into(),
-            Either::Left(ls) => format!("{}::{}", self.slug(), ls).into(),
+            Either::Right(n) => format!("{}::{}", self.slug(), n.label()),
+            Either::Left(ls) => format!("{}::{}", self.slug(), ls),
         }
     }
 
-    fn slug(&self) -> SharedString;
-    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>>;
+    fn slug(&self) -> String;
+    fn next(&self) -> Either<String, Box<&dyn MetricLabel>>;
 }
 
 #[derive(Debug, Error)]
@@ -70,11 +68,11 @@ pub enum ProctorError {
 }
 
 impl MetricLabel for ProctorError {
-    fn slug(&self) -> SharedString {
+    fn slug(&self) -> String {
         "proctor".into()
     }
 
-    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+    fn next(&self) -> Either<String, Box<&dyn MetricLabel>> {
         match self {
             Self::SensePhase(e) => Right(Box::new(e)),
             Self::EligibilityPhase(e) => Right(Box::new(e)),
@@ -111,11 +109,11 @@ pub enum UrlError {
 }
 
 impl MetricLabel for UrlError {
-    fn slug(&self) -> SharedString {
+    fn slug(&self) -> String {
         "url".into()
     }
 
-    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+    fn next(&self) -> Either<String, Box<&dyn MetricLabel>> {
         match self {
             Self::UrlParse(_) | Self::UrlCannotBeBase(_) => Left("parse".into()),
         }

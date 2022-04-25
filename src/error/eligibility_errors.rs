@@ -2,7 +2,6 @@ use either::{Either, Left, Right};
 use thiserror::Error;
 
 use super::{MetricLabel, PortError, TelemetryError};
-use crate::SharedString;
 
 #[derive(Debug, Error)]
 pub enum EligibilityError {
@@ -25,11 +24,11 @@ pub enum EligibilityError {
 }
 
 impl MetricLabel for EligibilityError {
-    fn slug(&self) -> SharedString {
+    fn slug(&self) -> String {
         "eligibility".into()
     }
 
-    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+    fn next(&self) -> Either<String, Box<&dyn MetricLabel>> {
         match self {
             Self::DataNotFound(_) => Left("data_not_found".into()),
             Self::Binding { .. } => Left("binding".into()),

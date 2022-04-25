@@ -5,7 +5,7 @@ use cast_trait_object::dyn_upcast;
 
 use crate::graph::shape::{SinkShape, SourceShape};
 use crate::graph::{stage, Connect, Graph, Inlet, Outlet, Port, Stage};
-use crate::{AppData, ProctorResult, SharedString};
+use crate::{AppData, ProctorResult};
 
 /// Through shape that encapsulates externally created stages, supporting graph stage composition.
 ///
@@ -85,25 +85,30 @@ use crate::{AppData, ProctorResult, SharedString};
 /// ```
 #[derive(Debug)]
 pub struct CompositeThrough<In, Out> {
-    name: SharedString,
+    name: String,
     graph: Option<Graph>,
     inlet: Inlet<In>,
     outlet: Outlet<Out>,
 }
 
 impl<In: AppData, Out: AppData> CompositeThrough<In, Out> {
-    pub async fn new(name: SharedString, graph: Graph, graph_inlet: Inlet<In>, graph_outlet: Outlet<Out>) -> Self {
-        let (graph, inlet, outlet) = Self::extend_graph(name.clone(), graph, graph_inlet, graph_outlet).await;
-        Self { name, graph: Some(graph), inlet, outlet }
+    pub async fn new(name: &str, graph: Graph, graph_inlet: Inlet<In>, graph_outlet: Outlet<Out>) -> Self {
+        let (graph, inlet, outlet) = Self::extend_graph(name, graph, graph_inlet, graph_outlet).await;
+        Self {
+            name: name.to_string(),
+            graph: Some(graph),
+            inlet,
+            outlet,
+        }
     }
 
     async fn extend_graph(
-        name: SharedString, mut graph: Graph, graph_inlet: Inlet<In>, graph_outlet: Outlet<Out>,
+        name: &str, mut graph: Graph, graph_inlet: Inlet<In>, graph_outlet: Outlet<Out>,
     ) -> (Graph, Inlet<In>, Outlet<Out>) {
-        let composite_inlet = Inlet::new(name.clone(), "composite");
-        let into_graph = Outlet::new(name.clone(), "into_composite_graph");
-        let from_graph = Inlet::new(name.clone(), "from_composite_graph");
-        let composite_outlet = Outlet::new(name.clone(), "composite");
+        let composite_inlet = Inlet::new(name, "composite");
+        let into_graph = Outlet::new(name, "into_composite_graph");
+        let from_graph = Inlet::new(name, "from_composite_graph");
+        let composite_outlet = Outlet::new(name, "composite");
 
         (&into_graph, &graph_inlet).connect().await;
         (&graph_outlet, &from_graph).connect().await;
@@ -145,8 +150,8 @@ impl<In, Out> SinkShape for CompositeThrough<In, Out> {
 #[dyn_upcast]
 #[async_trait]
 impl<In: AppData, Out: AppData> Stage for CompositeThrough<In, Out> {
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

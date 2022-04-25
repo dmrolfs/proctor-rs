@@ -10,7 +10,6 @@ use tracing::Instrument;
 
 use crate::error::PortError;
 use crate::AppData;
-use crate::SharedString;
 
 pub static STAGE_INGRESS_COUNTS: Lazy<IntCounterVec> = Lazy::new(|| {
     IntCounterVec::new(
@@ -108,20 +107,20 @@ impl<T: AppData> Connect<T> for (&Inlet<T>, &Outlet<T>) {
 
 pub async fn connect_out_to_in<T: AppData>(mut lhs: Outlet<T>, mut rhs: Inlet<T>) {
     let (tx, rx) = mpsc::channel(num_cpus::get());
-    lhs.attach(rhs.full_name().into(), tx).await;
-    rhs.attach(lhs.full_name().into(), rx).await;
+    lhs.attach(&rhs.full_name(), tx).await;
+    rhs.attach(&lhs.full_name(), rx).await;
 }
 
-pub type InletConnection<T> = Arc<Mutex<Option<(mpsc::Receiver<T>, SharedString)>>>;
+pub type InletConnection<T> = Arc<Mutex<Option<(mpsc::Receiver<T>, String)>>>;
 
 pub struct Inlet<T> {
-    pub stage: SharedString,
-    pub name: SharedString,
+    pub stage: String,
+    pub name: String,
     connection: InletConnection<T>,
 }
 
 impl<T> Inlet<T> {
-    pub fn new(stage: impl Into<SharedString>, port_name: impl Into<SharedString>) -> Self {
+    pub fn new(stage: impl Into<String>, port_name: impl Into<String>) -> Self {
         Self {
             stage: stage.into(),
             name: port_name.into(),
@@ -130,8 +129,7 @@ impl<T> Inlet<T> {
     }
 
     pub fn with_receiver(
-        stage: impl Into<SharedString>, port_name: impl Into<SharedString>, receiver_name: impl Into<SharedString>,
-        rx: mpsc::Receiver<T>,
+        stage: impl Into<String>, port_name: impl Into<String>, receiver_name: impl Into<String>, rx: mpsc::Receiver<T>,
     ) -> Self {
         Self {
             stage: stage.into(),
@@ -144,11 +142,11 @@ impl<T> Inlet<T> {
 #[async_trait]
 impl<T: Send> Port for Inlet<T> {
     fn stage(&self) -> &str {
-        self.stage.as_ref()
+        &self.stage
     }
 
     fn name(&self) -> &str {
-        self.name.as_ref()
+        &self.name
     }
 
     async fn close(&mut self) {
@@ -176,9 +174,9 @@ impl<T> Clone for Inlet<T> {
 }
 
 impl<T: fmt::Debug + Send> Inlet<T> {
-    pub async fn attach(&mut self, sender_name: SharedString, rx: mpsc::Receiver<T>) {
+    pub async fn attach(&mut self, sender_name: &str, rx: mpsc::Receiver<T>) {
         let mut port = self.connection.lock().await;
-        *port = Some((rx, sender_name));
+        *port = Some((rx, sender_name.to_string()));
     }
 
     pub async fn is_attached(&self) -> bool {
@@ -278,16 +276,16 @@ impl<T> fmt::Debug for Inlet<T> {
     }
 }
 
-pub type OutletConnection<T> = Arc<Mutex<Option<(mpsc::Sender<T>, SharedString)>>>;
+pub type OutletConnection<T> = Arc<Mutex<Option<(mpsc::Sender<T>, String)>>>;
 
 pub struct Outlet<T> {
-    pub stage: SharedString,
-    pub name: SharedString,
+    pub stage: String,
+    pub name: String,
     connection: OutletConnection<T>,
 }
 
 impl<T> Outlet<T> {
-    pub fn new(stage: impl Into<SharedString>, port_name: impl Into<SharedString>) -> Self {
+    pub fn new(stage: impl Into<String>, port_name: impl Into<String>) -> Self {
         Self {
             stage: stage.into(),
             name: port_name.into(),
@@ -296,8 +294,7 @@ impl<T> Outlet<T> {
     }
 
     pub fn with_receiver(
-        stage: impl Into<SharedString>, port_name: impl Into<SharedString>, receiver_name: impl Into<SharedString>,
-        tx: mpsc::Sender<T>,
+        stage: impl Into<String>, port_name: impl Into<String>, receiver_name: impl Into<String>, tx: mpsc::Sender<T>,
     ) -> Self {
         Self {
             stage: stage.into(),
@@ -334,9 +331,9 @@ impl<T> Clone for Outlet<T> {
 }
 
 impl<T: AppData> Outlet<T> {
-    pub async fn attach(&mut self, sender_name: SharedString, tx: mpsc::Sender<T>) {
+    pub async fn attach(&mut self, sender_name: &str, tx: mpsc::Sender<T>) {
         let mut port = self.connection.lock().await;
-        *port = Some((tx, sender_name));
+        *port = Some((tx, sender_name.to_string()));
     }
 
     pub async fn is_attached(&self) -> bool {

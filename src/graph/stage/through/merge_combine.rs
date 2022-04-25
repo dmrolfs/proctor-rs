@@ -10,13 +10,13 @@ use crate::{AppData, ProctorResult, SharedString};
 
 #[derive(Debug)]
 pub struct MergeCombine<T> {
-    name: SharedString,
+    name: String,
     inlets: InletsShape<T>,
     outlet: Outlet<T>,
 }
 
 impl<T: Send> MergeCombine<T> {
-    pub fn new(name: impl Into<SharedString>, input_ports: usize) -> Self {
+    pub fn new(name: impl Into<String>, input_ports: usize) -> Self {
         let name = name.into();
         let outlet = Outlet::new(name.clone(), PORT_DATA);
         let inlets = InletsShape::new(
@@ -55,8 +55,8 @@ where
     T: AppData + Monoid,
     // T: AppData + Default + Add<Output = T>,// std::ops::Add not implemented for Option<T: Add>!?
 {
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

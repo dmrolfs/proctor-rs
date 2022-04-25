@@ -6,7 +6,6 @@ use thiserror::Error;
 
 use super::MetricLabel;
 use crate::elements::{TelemetryType, TelemetryValue};
-use crate::SharedString;
 
 /// Set of errors occurring while handling telemetry data
 #[derive(Debug, Error)]
@@ -41,11 +40,11 @@ pub enum TelemetryError {
 }
 
 impl MetricLabel for TelemetryError {
-    fn slug(&self) -> SharedString {
+    fn slug(&self) -> String {
         "telemetry".into()
     }
 
-    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+    fn next(&self) -> Either<String, Box<&dyn MetricLabel>> {
         match self {
             _e @ Self::TypeError { .. } => Left("type".into()),
             _e @ Self::ExpectedType(..) => Left("expected_type".into()),

@@ -5,16 +5,16 @@ use cast_trait_object::dyn_upcast;
 
 use crate::graph::shape::{SinkShape, SourceShape};
 use crate::graph::{stage, Inlet, Outlet, Port, Stage};
-use crate::{AppData, ProctorResult, SharedString};
+use crate::{AppData, ProctorResult};
 
 pub struct Identity<T> {
-    name: SharedString,
+    name: String,
     inlet: Inlet<T>,
     outlet: Outlet<T>,
 }
 
 impl<T> Identity<T> {
-    pub fn new(name: impl Into<SharedString>, inlet: Inlet<T>, outlet: Outlet<T>) -> Self {
+    pub fn new(name: impl Into<String>, inlet: Inlet<T>, outlet: Outlet<T>) -> Self {
         Self { name: name.into(), inlet, outlet }
     }
 }
@@ -38,8 +38,8 @@ impl<T> SinkShape for Identity<T> {
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData> Stage for Identity<T> {
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

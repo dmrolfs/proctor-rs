@@ -126,7 +126,7 @@ where
         cg.push_back(Box::new(tick)).await;
         cg.push_back(Box::new(collect_telemetry)).await;
         let composite: CompositeSource<Telemetry> =
-            stage::CompositeSource::new(format!("telemetry_{}", name).into(), cg, composite_outlet).await;
+            stage::CompositeSource::new(format!("telemetry_{}", name).as_str(), cg, composite_outlet).await;
         let stage: Option<Box<dyn SourceStage<Telemetry>>> = Some(Box::new(composite));
 
         Ok(TelemetrySensor { name, stage, tx_stop: Some(tx_tick_api) })

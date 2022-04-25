@@ -9,13 +9,12 @@ use crate::elements::telemetry::UpdateMetricsFn;
 use crate::elements::Telemetry;
 use crate::error::SenseError;
 use crate::graph::{Connect, Inlet, Outlet, Port, PORT_DATA};
-use crate::SharedString;
 
 // todo: refactor to based on something like Json Schema
 pub trait SubscriptionRequirements {
-    fn required_fields() -> HashSet<SharedString>;
+    fn required_fields() -> HashSet<String>;
 
-    fn optional_fields() -> HashSet<SharedString> {
+    fn optional_fields() -> HashSet<String> {
         HashSet::default()
     }
 }
@@ -23,14 +22,14 @@ pub trait SubscriptionRequirements {
 #[derive(Clone, Serialize)]
 pub enum TelemetrySubscription {
     All {
-        name: SharedString,
+        name: String,
         #[serde(skip)]
         outlet_to_subscription: Outlet<Telemetry>,
         #[serde(skip)]
         update_metrics: Option<Arc<UpdateMetricsFn>>,
     },
     Explicit {
-        name: SharedString,
+        name: String,
         required_fields: HashSet<String>,
         optional_fields: HashSet<String>,
         #[serde(skip)]
@@ -69,8 +68,8 @@ impl fmt::Debug for TelemetrySubscription {
 
 impl TelemetrySubscription {
     pub fn new(name: impl AsRef<str>) -> Self {
-        let name: SharedString = SharedString::Owned(format!("{}_subscription", name.as_ref()));
-        let outlet_to_subscription = Outlet::new(name.clone(), PORT_DATA);
+        let name = format!("{}_subscription", name.as_ref());
+        let outlet_to_subscription = Outlet::new(&name, PORT_DATA);
         Self::All { name, outlet_to_subscription, update_metrics: None }
     }
 
@@ -174,10 +173,10 @@ impl TelemetrySubscription {
         }
     }
 
-    pub fn name(&self) -> SharedString {
+    pub fn name(&self) -> &str {
         match self {
-            Self::All { name, .. } => name.clone(),
-            Self::Explicit { name, .. } => name.clone(),
+            Self::All { name, .. } => name,
+            Self::Explicit { name, .. } => name,
         }
     }
 
@@ -284,7 +283,7 @@ impl TelemetrySubscription {
         };
 
         if let Some(update_metrics) = update_fn {
-            update_metrics(self.name().as_ref(), telemetry)
+            update_metrics(self.name(), telemetry)
         }
     }
 

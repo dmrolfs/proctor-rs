@@ -9,7 +9,7 @@ use tokio::sync::{mpsc, oneshot};
 use crate::error::StageError;
 use crate::graph::shape::SinkShape;
 use crate::graph::{stage, Inlet, Port, Stage, PORT_DATA};
-use crate::{AppData, ProctorResult, SharedString};
+use crate::{AppData, ProctorResult};
 
 pub type FoldApi<Acc> = mpsc::UnboundedSender<FoldCmd<Acc>>;
 
@@ -106,7 +106,7 @@ pub struct Fold<F, In, Acc>
 where
     F: FnMut(Acc, In) -> Acc,
 {
-    name: SharedString,
+    name: String,
     acc: Arc<Mutex<Acc>>,
     initial: Acc,
     operation: F,
@@ -123,7 +123,7 @@ where
     In: Debug + Send,
     Acc: Debug + Clone + Send + Sync,
 {
-    pub fn new<S: Into<SharedString>>(name: S, initial: Acc, operation: F) -> Self {
+    pub fn new<S: Into<String>>(name: S, initial: Acc, operation: F) -> Self {
         let name = name.into();
         let inlet = Inlet::new(name.clone(), PORT_DATA);
         let (tx_api, rx_api) = mpsc::unbounded_channel();
@@ -247,8 +247,8 @@ where
     Acc: AppData + Clone,
 {
     #[inline]
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

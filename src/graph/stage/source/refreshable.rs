@@ -7,7 +7,7 @@ use tokio::sync::mpsc;
 
 use crate::graph::shape::SourceShape;
 use crate::graph::{stage, Outlet, Port, Stage, PORT_DATA};
-use crate::{AppData, ProctorResult, SharedString};
+use crate::{AppData, ProctorResult};
 
 /// A source that produces a single outcome, which may be restarted or cancelled via a control
 /// channel and evaluation function.
@@ -17,7 +17,7 @@ where
     A: Fn(Option<Ctrl>) -> F,
     F: Future<Output = Option<Out>>,
 {
-    name: SharedString,
+    name: String,
     action: A,
     rx_control: mpsc::Receiver<Ctrl>,
     outlet: Outlet<Out>,
@@ -28,7 +28,7 @@ where
     A: Fn(Option<Ctrl>) -> F,
     F: Future<Output = Option<Out>>,
 {
-    pub fn new<S: Into<SharedString>>(name: S, action: A, rx_control: mpsc::Receiver<Ctrl>) -> Self {
+    pub fn new<S: Into<String>>(name: S, action: A, rx_control: mpsc::Receiver<Ctrl>) -> Self {
         let name = name.into();
         let outlet = Outlet::new(name.clone(), PORT_DATA);
         Self { name, action, rx_control, outlet }
@@ -58,8 +58,8 @@ where
     F: Future<Output = Option<Out>> + Send + 'static,
 {
     #[inline]
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

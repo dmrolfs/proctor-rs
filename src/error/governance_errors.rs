@@ -2,7 +2,6 @@ use either::{Either, Left, Right};
 use thiserror::Error;
 
 use super::{MetricLabel, PortError, TelemetryError};
-use crate::SharedString;
 
 #[derive(Debug, Error)]
 pub enum GovernanceError {
@@ -20,11 +19,11 @@ pub enum GovernanceError {
 }
 
 impl MetricLabel for GovernanceError {
-    fn slug(&self) -> SharedString {
+    fn slug(&self) -> String {
         "governance".into()
     }
 
-    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+    fn next(&self) -> Either<String, Box<&dyn MetricLabel>> {
         match self {
             Self::Port(e) => Right(Box::new(e)),
             Self::Telemetry(e) => Right(Box::new(e)),

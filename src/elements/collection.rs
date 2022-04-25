@@ -10,7 +10,7 @@ use super::Telemetry;
 use crate::error::SenseError;
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Connect, Graph, Inlet, Outlet, Port, SinkShape, SourceShape};
-use crate::{AppData, ProctorResult, SharedString};
+use crate::{AppData, ProctorResult};
 
 // todo: collect once every minute for scaling metrics
 
@@ -106,7 +106,7 @@ use crate::{AppData, ProctorResult, SharedString};
 /// }
 /// ```
 pub struct Collect {
-    name: SharedString,
+    name: String,
     target: Url,
     graph: Option<Graph>,
     trigger: Inlet<()>,
@@ -115,16 +115,15 @@ pub struct Collect {
 
 impl Collect {
     #[deprecated(since = "0.3.0", note = "prefer proctor::phases::sense module.")]
-    pub async fn new<T, F>(name: SharedString, url: Url, default_headers: HeaderMap, transform: F) -> Self
+    pub async fn new<T, F>(name: &str, url: Url, default_headers: HeaderMap, transform: F) -> Self
     where
         T: AppData + DeserializeOwned + 'static,
         F: FnMut(T) -> Telemetry + Send + Sync + 'static,
     {
-        let (graph, trigger, outlet) =
-            Self::make_graph::<T, _>(name.clone(), url.clone(), default_headers, transform).await;
+        let (graph, trigger, outlet) = Self::make_graph::<T, _>(name, url.clone(), default_headers, transform).await;
 
         Self {
-            name,
+            name: name.to_string(),
             target: url,
             graph: Some(graph),
             trigger,
@@ -133,13 +132,13 @@ impl Collect {
     }
 
     async fn make_graph<T, F>(
-        name: SharedString, url: Url, default_headers: HeaderMap, transform: F,
+        name: &str, url: Url, default_headers: HeaderMap, transform: F,
     ) -> (Graph, Inlet<()>, Outlet<Telemetry>)
     where
         T: AppData + DeserializeOwned + 'static,
         F: FnMut(T) -> Telemetry + Send + Sync + 'static,
     {
-        let query = stage::AndThen::new(format!("{}-query", name), move |_| {
+        let query = stage::AndThen::new(format!("{name}-query"), move |_| {
             let client = reqwest::Client::builder()
                 .default_headers(default_headers.clone())
                 .build()
@@ -147,20 +146,20 @@ impl Collect {
             let query_url = url.clone();
             async move { Self::do_query::<T>(&client, query_url).await.expect("failed to query") }
         });
-        let transform = stage::Map::<_, T, Telemetry>::new(format!("{}-transform", name), transform);
+        let transform = stage::Map::<_, T, Telemetry>::new(format!("{name}-transform"), transform);
 
-        let bridge_inlet = Inlet::new(name.clone(), "sense");
+        let bridge_inlet = Inlet::new(name, "sense");
 
         let in_bridge = stage::Identity::new(
-            format!("{}-trigger-bridge", name),
+            format!("{name}-trigger-bridge"),
             bridge_inlet.clone(),
-            Outlet::new(name.clone(), "from_collection_graph"),
+            Outlet::new(name, "from_collection_graph"),
         );
 
-        let bridge_outlet = Outlet::new(name.clone(), "sense");
+        let bridge_outlet = Outlet::new(name, "sense");
         let out_bridge = stage::Identity::new(
-            format!("{}-output-bridge", name),
-            Inlet::new(name.clone(), "from_collection_graph"),
+            format!("{name}-output-bridge"),
+            Inlet::new(name, "from_collection_graph"),
             bridge_outlet.clone(),
         );
 
@@ -212,8 +211,8 @@ impl SinkShape for Collect {
 #[async_trait]
 impl Stage for Collect {
     #[inline]
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

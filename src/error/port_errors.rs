@@ -4,7 +4,6 @@ use either::{Either, Left};
 use thiserror::Error;
 
 use super::MetricLabel;
-use crate::SharedString;
 
 #[derive(Debug, Error)]
 pub enum PortError {
@@ -17,11 +16,11 @@ pub enum PortError {
 }
 
 impl MetricLabel for PortError {
-    fn slug(&self) -> SharedString {
+    fn slug(&self) -> String {
         "port".into()
     }
 
-    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+    fn next(&self) -> Either<String, Box<&dyn MetricLabel>> {
         match self {
             Self::Detached(_) => Left("detached".into()),
             Self::Channel(_) => Left("channel".into()),

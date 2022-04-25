@@ -10,7 +10,7 @@ use tokio::sync::{mpsc, oneshot};
 use crate::error::StageError;
 use crate::graph::shape::SourceShape;
 use crate::graph::{stage, Outlet, Port, Stage, PORT_DATA};
-use crate::{Ack, AppData, ProctorResult, SharedString};
+use crate::{Ack, AppData, ProctorResult};
 
 pub type TickApi = mpsc::UnboundedSender<TickCmd>;
 
@@ -137,7 +137,7 @@ impl Constraint {
 /// }
 /// ```
 pub struct Tick<T> {
-    name: SharedString,
+    name: String,
     pub initial_delay: Duration,
     pub interval: Duration,
     tick: T,
@@ -148,11 +148,11 @@ pub struct Tick<T> {
 }
 
 impl<T> Tick<T> {
-    pub fn new<S: Into<SharedString>>(name: S, initial_delay: Duration, interval: Duration, tick: T) -> Self {
+    pub fn new<S: Into<String>>(name: S, initial_delay: Duration, interval: Duration, tick: T) -> Self {
         Self::with_constraint(name, initial_delay, interval, tick, Constraint::None)
     }
 
-    pub fn with_constraint<S: Into<SharedString>>(
+    pub fn with_constraint<S: Into<String>>(
         name: S, initial_delay: Duration, interval: Duration, tick: T, constraint: Constraint,
     ) -> Self {
         assert!(interval > Duration::new(0, 0), "`interval` must be non-zero.");
@@ -189,8 +189,8 @@ where
     T: AppData + Clone + Unpin + Sync,
 {
     #[inline]
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 
 use crate::graph::{stage, Inlet, Outlet, OutletsShape, Port, SinkShape, Stage, UniformFanOutShape, PORT_DATA};
-use crate::{AppData, ProctorResult, SharedString};
+use crate::{AppData, ProctorResult};
 
 /// Fan-out the stream to several streams emitting each incoming upstream element to all downstream
 /// consumers.
@@ -73,13 +73,13 @@ use crate::{AppData, ProctorResult, SharedString};
 /// }
 /// ```
 pub struct Broadcast<T> {
-    name: SharedString,
+    name: String,
     inlet: Inlet<T>,
     outlets: Vec<Outlet<T>>,
 }
 
 impl<T> Broadcast<T> {
-    pub fn new<S: Into<SharedString>>(name: S, output_ports: usize) -> Self {
+    pub fn new<S: Into<String>>(name: S, output_ports: usize) -> Self {
         let name = name.into();
         let inlet = Inlet::new(name.clone(), PORT_DATA);
         let outlets = (0..output_ports)
@@ -112,8 +112,8 @@ impl<T> SinkShape for Broadcast<T> {
 #[async_trait]
 impl<T: AppData + Clone> Stage for Broadcast<T> {
     #[inline]
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

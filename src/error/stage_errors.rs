@@ -2,7 +2,6 @@ use either::{Either, Left, Right};
 use thiserror::Error;
 
 use super::{MetricLabel, PortError};
-use crate::SharedString;
 
 #[derive(Debug, Error)]
 pub enum StageError {
@@ -17,11 +16,11 @@ pub enum StageError {
 }
 
 impl MetricLabel for StageError {
-    fn slug(&self) -> SharedString {
+    fn slug(&self) -> String {
         "stage".into()
     }
 
-    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+    fn next(&self) -> Either<String, Box<&dyn MetricLabel>> {
         match self {
             Self::Materialization(_) => Left("materialization".into()),
             Self::Api(..) => Left("api".into()),

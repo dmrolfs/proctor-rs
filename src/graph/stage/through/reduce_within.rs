@@ -7,11 +7,11 @@ use tokio::sync::Mutex;
 
 use crate::graph::stage::Stage;
 use crate::graph::{Inlet, Outlet, Port, SinkShape, SourceShape, PORT_DATA};
-use crate::{AppData, Correlation, ProctorResult, SharedString};
+use crate::{AppData, Correlation, ProctorResult};
 
 #[derive(Debug)]
 pub struct ReduceWithin<T> {
-    name: SharedString,
+    name: String,
     pub initial_delay: Duration,
     pub interval: Duration,
     inlet: Inlet<T>,
@@ -19,7 +19,7 @@ pub struct ReduceWithin<T> {
 }
 
 impl<T> ReduceWithin<T> {
-    pub fn new(name: impl Into<SharedString>, initial_delay: Duration, interval: Duration) -> Self {
+    pub fn new(name: impl Into<String>, initial_delay: Duration, interval: Duration) -> Self {
         let name = name.into();
         let inlet = Inlet::new(name.clone(), PORT_DATA);
         let outlet = Outlet::new(name.clone(), PORT_DATA);
@@ -50,8 +50,8 @@ where
     T: AppData + Correlation + Monoid,
 {
     #[inline]
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

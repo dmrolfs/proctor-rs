@@ -6,7 +6,7 @@ use futures::future::Future;
 
 use crate::graph::shape::{SinkShape, SourceShape};
 use crate::graph::{stage, Inlet, Outlet, Port, Stage, PORT_DATA};
-use crate::{AppData, ProctorResult, SharedString};
+use crate::{AppData, ProctorResult};
 
 /// Transform this stream by applying the given function to each of the elements as they pass
 /// through this processing step.
@@ -51,7 +51,7 @@ where
     Fut: Future<Output = Out>,
     Op: FnMut(In) -> Fut,
 {
-    name: SharedString,
+    name: String,
     operation: Op,
     inlet: Inlet<In>,
     outlet: Outlet<Out>,
@@ -76,7 +76,7 @@ where
     Fut: Future<Output = Out>,
     Op: FnMut(In) -> Fut,
 {
-    pub fn new<S: Into<SharedString>>(name: S, operation: Op) -> Self {
+    pub fn new<S: Into<String>>(name: S, operation: Op) -> Self {
         let name = name.into();
         let inlet = Inlet::new(name.clone(), PORT_DATA);
         let outlet = Outlet::new(name.clone(), PORT_DATA);
@@ -117,8 +117,8 @@ where
     Fut: Future<Output = Out> + Send + 'static,
     Op: FnMut(In) -> Fut + Send + Sync + 'static,
 {
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

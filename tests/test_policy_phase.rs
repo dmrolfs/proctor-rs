@@ -28,7 +28,7 @@ use proctor::phases::sense::{
     self, CorrelationGenerator, SubscriptionRequirements, TelemetrySubscription, SUBSCRIPTION_CORRELATION,
     SUBSCRIPTION_TIMESTAMP,
 };
-use proctor::{AppData, SharedString};
+use proctor::{AppData, };
 use proctor::{Correlation, ProctorContext};
 use serde_test::{assert_tokens, Token};
 use tokio::sync::oneshot;
@@ -106,7 +106,7 @@ impl ProctorContext for TestPolicyPhaseContext {
 }
 
 impl SubscriptionRequirements for TestPolicyPhaseContext {
-    fn required_fields() -> HashSet<SharedString> {
+    fn required_fields() -> HashSet<String> {
         maplit::hashset! {
             "cluster.location_code".into(),
             "cluster.is_deploying".into(),
@@ -114,7 +114,7 @@ impl SubscriptionRequirements for TestPolicyPhaseContext {
         }
     }
 
-    fn optional_fields() -> HashSet<SharedString> {
+    fn optional_fields() -> HashSet<String> {
         maplit::hashset! { "task.last_failure".into(), }
     }
 }

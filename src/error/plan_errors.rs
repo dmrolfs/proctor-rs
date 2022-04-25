@@ -3,7 +3,6 @@ use either::{Either, Left, Right};
 use thiserror::Error;
 
 use super::{MetricLabel, PortError, TelemetryError};
-use crate::SharedString;
 
 #[derive(Debug, Error)]
 pub enum PlanError {
@@ -45,11 +44,11 @@ pub enum PlanError {
 }
 
 impl MetricLabel for PlanError {
-    fn slug(&self) -> SharedString {
+    fn slug(&self) -> String {
         "plan".into()
     }
 
-    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+    fn next(&self) -> Either<String, Box<&dyn MetricLabel>> {
         match self {
             Self::DataNotFound(_) => Left("data_not_found".into()),
             Self::UnknownRepositoryType(_) => Left("settings".into()),

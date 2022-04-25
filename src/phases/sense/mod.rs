@@ -8,7 +8,7 @@ use crate::elements::Telemetry;
 use crate::error::SenseError;
 use crate::graph::stage::{SourceStage, Stage, WithApi};
 use crate::graph::{Outlet, Port, SourceShape};
-use crate::{AppData, ProctorResult, SharedString};
+use crate::{AppData, ProctorResult};
 
 pub mod builder;
 pub mod clearinghouse;
@@ -51,7 +51,7 @@ use crate::phases::sense::clearinghouse::TelemetryCacheSettings;
 // }
 
 pub struct Sense<Out> {
-    name: SharedString,
+    name: String,
     inner: Box<dyn SourceStage<Out>>,
     outlet: Outlet<Out>,
     pub tx_clearinghouse_api: ClearinghouseApi,
@@ -62,7 +62,7 @@ pub struct Sense<Out> {
 impl<Out> Sense<Out> {
     #[tracing::instrument(level = "trace", skip(name, sources))]
     pub fn builder(
-        name: impl Into<SharedString>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
+        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
         cache_settings: &TelemetryCacheSettings, machine_node: MachineNode,
     ) -> SenseBuilder<Out> {
         let id_generator = CorrelationGenerator::distributed(machine_node, IdPrettifier::<AlphabetCodec>::default());
@@ -71,8 +71,7 @@ impl<Out> Sense<Out> {
 
     #[tracing::instrument(level = "trace", skip(name, sources))]
     pub fn single_node_builder(
-        name: impl Into<SharedString>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
-        cache_settings: &TelemetryCacheSettings,
+        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>, cache_settings: &TelemetryCacheSettings,
     ) -> SenseBuilder<Out> {
         Self::builder(name, sources, cache_settings, MachineNode::default())
     }
@@ -107,8 +106,8 @@ impl<Out> WithApi for Sense<Out> {
 #[dyn_upcast]
 #[async_trait]
 impl<Out: AppData> Stage for Sense<Out> {
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

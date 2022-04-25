@@ -6,7 +6,7 @@ use tracing::Instrument;
 
 use crate::graph::shape::{SinkShape, SourceShape};
 use crate::graph::{Inlet, Outlet, Port, Stage, PORT_DATA};
-use crate::{AppData, ProctorResult, SharedString};
+use crate::{AppData, ProctorResult};
 
 /// Filter the incoming elements using a predicate.
 ///
@@ -55,7 +55,7 @@ pub struct Filter<P, T>
 where
     P: FnMut(&T) -> bool,
 {
-    name: SharedString,
+    name: String,
     predicate: P,
     inlet: Inlet<T>,
     outlet: Outlet<T>,
@@ -66,7 +66,7 @@ impl<P, T> Filter<P, T>
 where
     P: FnMut(&T) -> bool,
 {
-    pub fn new<S: Into<SharedString>>(name: S, predicate: P) -> Self {
+    pub fn new<S: Into<String>>(name: S, predicate: P) -> Self {
         let name = name.into();
         let inlet = Inlet::new(name.clone(), PORT_DATA);
         let outlet = Outlet::new(name.clone(), PORT_DATA);
@@ -110,8 +110,8 @@ where
     T: AppData,
 {
     #[inline]
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

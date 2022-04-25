@@ -5,7 +5,7 @@ use cast_trait_object::dyn_upcast;
 
 use crate::graph::shape::SourceShape;
 use crate::graph::{stage, Outlet, Port, Stage, PORT_DATA};
-use crate::{AppData, ProctorResult, SharedString};
+use crate::{AppData, ProctorResult};
 
 /// Helper to create Source from Iterable. Example usage: Slice::new(vec![1,2,3]).
 ///
@@ -56,7 +56,7 @@ use crate::{AppData, ProctorResult, SharedString};
 /// }
 /// ```
 pub struct Sequence<T, I> {
-    name: SharedString,
+    name: String,
     items: Option<I>,
     outlet: Outlet<T>,
 }
@@ -65,7 +65,7 @@ impl<T, I> Sequence<T, I> {
     pub fn new<I0, S>(name: S, data: I0) -> Self
     where
         I0: IntoIterator<Item = T, IntoIter = I>,
-        S: Into<SharedString>,
+        S: Into<String>,
     {
         let name = name.into();
         let outlet = Outlet::new(name.clone(), PORT_DATA);
@@ -82,8 +82,8 @@ where
     I: Iterator<Item = T> + Send + Sync + 'static,
 {
     #[inline]
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

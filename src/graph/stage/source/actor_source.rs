@@ -8,7 +8,7 @@ use tracing::Instrument;
 use crate::error::StageError;
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Outlet, Port, SourceShape, PORT_DATA};
-use crate::{Ack, AppData, ProctorResult, SharedString};
+use crate::{Ack, AppData, ProctorResult};
 
 pub type ActorSourceApi<T> = mpsc::UnboundedSender<ActorSourceCmd<T>>;
 
@@ -43,14 +43,14 @@ where
 
 /// Actor-based protocol to source items into a graph flow.
 pub struct ActorSource<T> {
-    name: SharedString,
+    name: String,
     outlet: Outlet<T>,
     tx_api: ActorSourceApi<T>,
     rx_api: mpsc::UnboundedReceiver<ActorSourceCmd<T>>,
 }
 
 impl<T> ActorSource<T> {
-    pub fn new(name: impl Into<SharedString>) -> Self {
+    pub fn new(name: impl Into<String>) -> Self {
         let name = name.into();
         let outlet = Outlet::new(name.clone(), PORT_DATA);
         let (tx_api, rx_api) = mpsc::unbounded_channel();
@@ -69,8 +69,8 @@ impl<T> SourceShape for ActorSource<T> {
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData> Stage for ActorSource<T> {
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

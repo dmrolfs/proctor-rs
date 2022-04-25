@@ -5,7 +5,7 @@ use cast_trait_object::dyn_upcast;
 
 use crate::graph::shape::SourceShape;
 use crate::graph::{stage, Connect, Graph, Inlet, Outlet, Port, Stage, PORT_DATA};
-use crate::{AppData, ProctorResult, SharedString};
+use crate::{AppData, ProctorResult};
 
 /// Source shape that encapsulates externally created stages, supporting graph stage composition.
 ///
@@ -141,22 +141,22 @@ use crate::{AppData, ProctorResult, SharedString};
 /// ```
 #[derive(Debug)]
 pub struct CompositeSource<Out> {
-    name: SharedString,
+    name: String,
     graph: Option<Graph>,
     outlet: Outlet<Out>,
 }
 
 impl<Out: AppData> CompositeSource<Out> {
-    pub async fn new(name: SharedString, graph: Graph, graph_outlet: Outlet<Out>) -> Self {
-        let (graph, outlet) = Self::extend_graph(name.clone(), graph, graph_outlet).await;
-        Self { name, graph: Some(graph), outlet }
+    pub async fn new(name: &str, graph: Graph, graph_outlet: Outlet<Out>) -> Self {
+        let (graph, outlet) = Self::extend_graph(name, graph, graph_outlet).await;
+        Self { name: name.to_string(), graph: Some(graph), outlet }
     }
 
-    async fn extend_graph(name: SharedString, mut graph: Graph, graph_outlet: Outlet<Out>) -> (Graph, Outlet<Out>) {
-        let from_graph = Inlet::new(name.clone(), "from_graph");
+    async fn extend_graph(name: &str, mut graph: Graph, graph_outlet: Outlet<Out>) -> (Graph, Outlet<Out>) {
+        let from_graph = Inlet::new(name, "from_graph");
         (&graph_outlet, &from_graph).connect().await;
-        let composite_outlet = Outlet::new(name.clone(), PORT_DATA);
-        let bridge = stage::Identity::new(format!("{}_bridge", name), from_graph, composite_outlet.clone());
+        let composite_outlet = Outlet::new(name, PORT_DATA);
+        let bridge = stage::Identity::new(format!("{name}_bridge"), from_graph, composite_outlet.clone());
 
         graph.push_back(Box::new(bridge)).await;
         (graph, composite_outlet)
@@ -176,8 +176,8 @@ impl<Out> SourceShape for CompositeSource<Out> {
 #[async_trait]
 impl<Out: AppData> Stage for CompositeSource<Out> {
     #[inline]
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

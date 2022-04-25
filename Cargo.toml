@@ -30,70 +30,70 @@ name = "async-stream"
 path = "examples/async_stream.rs"
 
 [dependencies]
-anyhow = "1"
-approx = "0"
-async-stream = "0"
-async-trait = "0"
-cast_trait_object = "0"
-chrono = "0"
-clap = { version = "3", features = ["yaml"] }
-config = "0"
+anyhow = "1.0.57"
+approx = "0.5.1"
+async-stream = "0.3.3"
+async-trait = "0.1.53"
+cast_trait_object = "0.1.3"
+chrono = "0.4.19"
+clap = { version = "3.1.12", features = ["yaml"] }
+config = "0.13.1"
 #config = { git = "https://github.com/dmrolfs/config-rs" }
-csv = "1"
-dashmap = "5"
-either = { version = "1", features = ["serde"] }
-enum-display-derive = "0"
-flexbuffers = "2"
-frunk = "0"
-futures = "0"
-futures-util = "0"
-handlebars = "4"
-maplit = "1"
-num_cpus = "1"
-num-traits = "0"
-once_cell = "1"
-oso = "0"
-polar-core = "0"
+csv = "1.1.6"
+dashmap = "5.2.0"
+either = { version = "1.6.1", features = ["serde"] }
+enum-display-derive = "0.1.1"
+flexbuffers = "2.0.0"
+frunk = "0.4.0"
+futures = "0.3.21"
+futures-util = "0.3.21"
+handlebars = "4.2.2"
+maplit = "1.0.2"
+num_cpus = "1.13.1"
+num-traits = "0.2.14"
+once_cell = "1.10.0"
+oso = "0.26.0"
+polar-core = "0.26.0"
 pretty-snowflake = { git = "https://github.com/dmrolfs/pretty-snowflake-rs" }
 proctor_derive = { path = "proctor_derive" }
-prometheus = { version = "0", features = ["process"] }
-prometheus-static-metric = "0"
-regex = "1"
-reqwest = { version = "0", features = ["blocking", "json"] }
-reqwest-middleware = "0"
-reqwest-retry = "0"
-ron = "0"
-serde = "1"
-serde_json = "1"
-statrs = "0"
-stretto = { version = "0.4", features = ["async"] }
-tempfile = "3"
-thiserror = "1"
-tokio = { version = "1", features = ["full"] }
-tracing = "0"
-tracing-bunyan-formatter = "0"
-tracing-flame = "0"
-tracing-futures = "0"
-tracing-log = "0"
-tracing-subscriber = { version = "0", features = ["env-filter", "json"] }
-trim-margin = "0"
-url = "2"
-validator = { version = "0", features = ["derive"] }
+prometheus = { version = "0.13.0", features = ["process"] }
+prometheus-static-metric = "0.5.1"
+regex = "1.5.5"
+reqwest = { version = "0.11.10", features = ["blocking", "json"] }
+reqwest-middleware = "0.1.6"
+reqwest-retry = "0.1.5"
+ron = "0.7.0"
+serde = "1.0.136"
+serde_json = "1.0.79"
+statrs = "0.15.0"
+stretto = { version = "0.4.3", features = ["async"] }
+tempfile = "3.3.0"
+thiserror = "1.0.30"
+tokio = { version = "1.17.0", features = ["full"] }
+tracing = "0.1.34"
+tracing-bunyan-formatter = "0.3.2"
+tracing-flame = "0.2.0"
+tracing-futures = "0.2.5"
+tracing-log = "0.1.3"
+tracing-subscriber = { version = "0.3.11", features = ["env-filter", "json"] }
+trim-margin = "0.1.0"
+url = "2.2.2"
+validator = { version = "0.14.0", features = ["derive"] }
 
 [dev-dependencies]
 claim = "0.5.0"
 criterion = { version = "0.3.5", features = ["async_tokio", "html_reports"] }
 futures-core = "0.3.21"
 itertools = "0.10.3"
-pprof = { version = "0.7.0", features = ["flamegraph"] }
+pprof = { version = "0.8.0", features = ["flamegraph"] }
 pretty_assertions = "1.2.1"
 rand = "0.8.5"
 serde_test = "1.0.136"
 serde-transcode = "1.1.1"
-serde_with = { version = "1.12.0", features = ["chrono", "json", "macros"] }
+serde_with = { version = "1.13.0", features = ["chrono", "json", "macros"] }
 static_assertions = "1.1.0"
 tokio-test = "0.4.2"
-wiremock = "0.5.12"
+wiremock = "0.5.13"
 inspect_prometheus = { git = "https://github.com/dmrolfs/inspect_prometheus" }
 
 [[bench]]

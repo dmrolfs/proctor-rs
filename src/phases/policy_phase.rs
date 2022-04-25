@@ -13,10 +13,10 @@ use crate::elements::{
 use crate::error::{PolicyError, ProctorError};
 use crate::graph::stage::{Stage, ThroughStage, WithApi, WithMonitor};
 use crate::graph::{stage, Connect, Graph, Inlet, Outlet, Port, SinkShape, SourceShape, PORT_DATA};
-use crate::{AppData, Correlation, ProctorContext, ProctorResult, SharedString};
+use crate::{AppData, Correlation, ProctorContext, ProctorResult};
 
 pub struct PolicyPhase<In, Out, C, D> {
-    name: SharedString,
+    name: String,
     policy_transform: Box<dyn ThroughStage<In, Out>>,
     context_inlet: Inlet<C>,
     inlet: Inlet<In>,
@@ -36,13 +36,13 @@ where
     where
         P: 'static + QueryPolicy<Item = In, Context = C, TemplateData = D>,
     {
-        let name = SharedString::Owned(format!("{}_carry_policy_outcome", name));
+        let name = format!("{name}_carry_policy_outcome");
         let identity: stage::Identity<PolicyOutcome<In, C>> = stage::Identity::new(
             name.to_string(),
             Inlet::new(name.clone(), PORT_DATA),
             Outlet::new(name.clone(), PORT_DATA),
         );
-        Self::with_transform(name, policy, identity).await
+        Self::with_transform(&name, policy, identity).await
     }
 }
 
@@ -57,9 +57,9 @@ where
     where
         P: 'static + QueryPolicy<Item = T, Context = C, TemplateData = D>,
     {
-        let name = SharedString::Owned(format!("{}_strip_policy_outcome", name));
+        let name = format!("{name}_strip_policy_outcome");
         let strip = stage::Map::new(name.to_string(), |outcome: PolicyOutcome<T, C>| outcome.item);
-        Self::with_transform(name, policy, strip).await
+        Self::with_transform(&name, policy, strip).await
     }
 }
 
@@ -71,12 +71,12 @@ where
     D: AppData + Serialize,
 {
     #[tracing::instrument(level = "trace", skip(name))]
-    pub async fn with_transform<P, T>(name: SharedString, policy: P, transform: T) -> Result<Self, PolicyError>
+    pub async fn with_transform<P, T>(name: &str, policy: P, transform: T) -> Result<Self, PolicyError>
     where
         P: 'static + QueryPolicy<Item = In, Context = C, TemplateData = D>,
         T: 'static + ThroughStage<PolicyOutcome<In, C>, Out>,
     {
-        let policy_filter = PolicyFilter::new(format!("{}_filter", name), policy)?;
+        let policy_filter = PolicyFilter::new(format!("{name}_filter"), policy)?;
         let context_inlet = policy_filter.context_inlet();
         let tx_policy_api = policy_filter.tx_api();
         let tx_policy_monitor = policy_filter.tx_monitor.clone();
@@ -90,14 +90,15 @@ where
         graph.push_back(Box::new(transform)).await;
 
         let policy_transform = Box::new(
-            stage::CompositeThrough::new(format!("{}_composite", name).into(), graph, graph_inlet, graph_outlet).await,
+            stage::CompositeThrough::new(format!("{}_composite", name).as_str(), graph, graph_inlet, graph_outlet)
+                .await,
         );
 
         let inlet = policy_transform.inlet();
         let outlet = policy_transform.outlet();
 
         Ok(Self {
-            name,
+            name: name.to_string(),
             policy_transform,
             context_inlet,
             inlet,
@@ -151,8 +152,8 @@ where
     C: ProctorContext,
     D: AppData,
 {
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

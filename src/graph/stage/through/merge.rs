@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
 
 use crate::graph::{stage, FanInShape2, Inlet, Outlet, Port, SourceShape, Stage, PORT_DATA};
-use crate::{AppData, ProctorResult, SharedString};
+use crate::{AppData, ProctorResult};
 
 /// Merge multiple sources. Picks elements randomly if all sources has elements ready.
 ///
@@ -39,14 +39,14 @@ use crate::{AppData, ProctorResult, SharedString};
 /// }
 /// ```
 pub struct Merge<T> {
-    name: SharedString,
+    name: String,
     inlet_0: Inlet<T>,
     inlet_1: Inlet<T>,
     outlet: Outlet<T>,
 }
 
 impl<T> Merge<T> {
-    pub fn new<S: Into<SharedString>>(name: S) -> Self {
+    pub fn new<S: Into<String>>(name: S) -> Self {
         let name = name.into();
         let inlet_0 = Inlet::new(name.clone(), format!("{}_0", PORT_DATA));
         let inlet_1 = Inlet::new(name.clone(), format!("{}_1", PORT_DATA));
@@ -83,8 +83,8 @@ impl<T> SourceShape for Merge<T> {
 #[async_trait]
 impl<T: AppData> Stage for Merge<T> {
     #[inline]
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

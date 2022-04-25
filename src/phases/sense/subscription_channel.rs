@@ -9,14 +9,14 @@ use crate::error::SenseError;
 use crate::graph::stage::Stage;
 use crate::graph::{Inlet, Outlet, Port, SourceShape, PORT_DATA};
 use crate::phases::sense::{ClearinghouseSubscriptionAgent, TelemetrySubscription};
-use crate::{AppData, ProctorResult, SharedString};
+use crate::{AppData, ProctorResult};
 
 // todo: consider refactor all of these builder functions into a typed subscription channel builder.
 
 /// Subscription Source stage that can be used to adapt subscribed telemetry data into a
 /// typed inlet.
 pub struct SubscriptionChannel<T> {
-    name: SharedString,
+    name: String,
     pub subscription_receiver: Inlet<Telemetry>,
     inner_stage: Option<FromTelemetryShape<T>>,
     outlet: Outlet<T>,
@@ -28,7 +28,7 @@ impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
     where
         A: ClearinghouseSubscriptionAgent,
     {
-        let channel = Self::new(format!("{}_channel", subscription.name()).into()).await?;
+        let channel = Self::new(format!("{}_channel", subscription.name()).as_str()).await?;
         agent
             .subscribe(subscription, channel.subscription_receiver.clone())
             .await?;
@@ -44,7 +44,8 @@ impl SubscriptionChannel<Telemetry> {
     where
         A: ClearinghouseSubscriptionAgent,
     {
-        let channel = Self::telemetry(format!("{}_telemetry_channel", subscription.name()).into()).await?;
+        let channel_name = format!("{}_channel", subscription.name());
+        let channel = Self::telemetry(&channel_name).await?;
         agent
             .subscribe(subscription, channel.subscription_receiver.clone())
             .await?;
@@ -54,13 +55,13 @@ impl SubscriptionChannel<Telemetry> {
 
 impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
     #[tracing::instrument(level = "trace", name = "subscription_channel_new", skip(name))]
-    pub async fn new(name: SharedString) -> Result<Self, SenseError> {
-        let inner_stage = elements::make_from_telemetry(name.clone(), true).await;
+    pub async fn new(name: &str) -> Result<Self, SenseError> {
+        let inner_stage = elements::make_from_telemetry(name, true).await;
         let subscription_receiver = inner_stage.inlet();
         let outlet = inner_stage.outlet();
 
         Ok(Self {
-            name,
+            name: name.to_string(),
             subscription_receiver,
             inner_stage: Some(inner_stage),
             outlet,
@@ -71,18 +72,15 @@ impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
 impl SubscriptionChannel<Telemetry> {
     /// Create a subscription channel for direct telemetry data; i.e., no schema conversion.
     #[tracing::instrument(level = "trace", name = "subscription_channel_telemetry", skip(name))]
-    pub async fn telemetry(name: SharedString) -> Result<Self, SenseError> {
-        let identity = crate::graph::stage::Identity::new(
-            name.to_string(),
-            Inlet::new(name.clone(), PORT_DATA),
-            Outlet::new(name.clone(), PORT_DATA),
-        );
+    pub async fn telemetry(name: &str) -> Result<Self, SenseError> {
+        let identity =
+            crate::graph::stage::Identity::new(name, Inlet::new(name, PORT_DATA), Outlet::new(name, PORT_DATA));
         let inner_stage: FromTelemetryShape<Telemetry> = Box::new(identity);
         let subscription_receiver = inner_stage.inlet();
         let outlet = inner_stage.outlet();
 
         Ok(Self {
-            name: format!("{}_telemetry_subscription", name).into(),
+            name: format!("{name}_subscription"),
             subscription_receiver,
             inner_stage: Some(inner_stage),
             outlet,
@@ -112,8 +110,8 @@ impl<T> SourceShape for SubscriptionChannel<T> {
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData> Stage for SubscriptionChannel<T> {
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

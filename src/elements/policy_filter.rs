@@ -28,7 +28,7 @@ use crate::error::{PolicyError, PortError};
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Inlet, Outlet, Port, PORT_CONTEXT, PORT_DATA};
 use crate::graph::{SinkShape, SourceShape};
-use crate::{track_errors, AppData, Correlation, ProctorContext, ProctorResult, SharedString};
+use crate::{track_errors, AppData, Correlation, ProctorContext, ProctorResult};
 
 pub(crate) static POLICY_FILTER_EVAL_TIME: Lazy<HistogramVec> = Lazy::new(|| {
     HistogramVec::new(
@@ -68,7 +68,7 @@ pub struct PolicyFilter<T, C, A, P, D>
 where
     P: QueryPolicy<Item = T, Context = C, Args = A, TemplateData = D>,
 {
-    name: SharedString,
+    name: String,
     policy: P,
     context_inlet: Inlet<C>,
     inlet: Inlet<T>,
@@ -84,7 +84,7 @@ where
     C: Clone,
     P: QueryPolicy<Item = T, Context = C, Args = A, TemplateData = D>,
 {
-    pub fn new<S: Into<SharedString>>(name: S, mut policy: P) -> Result<Self, PolicyError> {
+    pub fn new<S: Into<String>>(name: S, mut policy: P) -> Result<Self, PolicyError> {
         Self::check_policy(&mut policy)?;
         let name = name.into();
 
@@ -153,8 +153,8 @@ where
     D: AppData + Serialize,
 {
     #[inline]
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
@@ -192,7 +192,7 @@ where
 
     #[inline]
     async fn do_run(&mut self) -> Result<(), PolicyError> {
-        let name = SharedString::Owned(self.name().to_string());
+        let name = self.name().to_string();
         let mut oso = self.oso()?;
         let outlet = &self.outlet;
         let item_inlet = &mut self.inlet;
@@ -203,7 +203,7 @@ where
         let tx_monitor = &self.tx_monitor;
 
         loop {
-            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+            let _timer = stage::start_stage_eval_time(&name);
 
             tokio::select! {
                 item = item_inlet.recv() => match item {
@@ -297,10 +297,10 @@ where
         fields(stage=%name, correlation=?item.correlation())
     )]
     async fn handle_item(
-        name: &SharedString, item: T, context: &C, policy: &P, oso: &Oso, outlet: &Outlet<PolicyOutcome<T, C>>,
+        name: &str, item: T, context: &C, policy: &P, oso: &Oso, outlet: &Outlet<PolicyOutcome<T, C>>,
         tx: &broadcast::Sender<Arc<PolicyFilterEvent<T, C>>>,
     ) -> Result<(), PolicyError> {
-        let _timer = start_policy_timer(name.as_ref());
+        let _timer = start_policy_timer(name);
 
         // query lifetime cannot span across `.await` since it cannot `Send` between threads.
         let query_result = policy.query_policy(oso, policy.make_query_args(&item, context));
@@ -363,8 +363,7 @@ where
 
     #[tracing::instrument(level = "trace", name = "policy_filter handle command", skip(oso, policy,), fields())]
     async fn handle_command(
-        command: PolicyFilterCmd<C, D>, oso: &mut Oso, name: &SharedString, policy: &mut P,
-        context: Arc<Mutex<Option<C>>>,
+        command: PolicyFilterCmd<C, D>, oso: &mut Oso, name: &str, policy: &mut P, context: Arc<Mutex<Option<C>>>,
     ) -> bool {
         tracing::trace!(?command, ?context, "handling policy filter command...");
 
@@ -524,7 +523,7 @@ mod tests {
     }
 
     impl SubscriptionRequirements for TestContext {
-        fn required_fields() -> HashSet<SharedString> {
+        fn required_fields() -> HashSet<String> {
             maplit::hashset! { "location_code".into(), }
         }
     }
@@ -634,7 +633,7 @@ mod tests {
             };
 
             PolicyFilter::handle_item(
-                &"test_stage".into(),
+                "test_stage",
                 item,
                 &context,
                 &policy_filter.policy,

@@ -8,7 +8,7 @@ use tracing_futures::Instrument;
 
 use crate::error::StageError;
 use crate::graph::{stage, Inlet, InletsShape, Outlet, Port, SourceShape, Stage, UniformFanInShape, PORT_DATA};
-use crate::{Ack, AppData, ProctorResult, SharedString};
+use crate::{Ack, AppData, ProctorResult};
 
 pub type MergeApi = mpsc::UnboundedSender<MergeCmd>;
 
@@ -145,7 +145,7 @@ impl MergeCmd {
 /// }
 /// ```
 pub struct MergeN<T> {
-    name: SharedString,
+    name: String,
     inlets: InletsShape<T>,
     outlet: Outlet<T>,
     tx_api: MergeApi,
@@ -153,7 +153,7 @@ pub struct MergeN<T> {
 }
 
 impl<T: Send> MergeN<T> {
-    pub fn new(name: impl Into<SharedString>, input_ports: usize) -> Self {
+    pub fn new(name: impl Into<String>, input_ports: usize) -> Self {
         let name = name.into();
         let outlet = Outlet::new(name.clone(), PORT_DATA);
         let (tx_api, rx_api) = mpsc::unbounded_channel();
@@ -186,8 +186,8 @@ impl<T> SourceShape for MergeN<T> {
 #[dyn_upcast]
 #[async_trait]
 impl<T: AppData> Stage for MergeN<T> {
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

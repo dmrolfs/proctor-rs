@@ -19,7 +19,7 @@ use proctor::error::PolicyError;
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape};
 use proctor::phases::sense::SubscriptionRequirements;
-use proctor::{Correlation, ProctorContext, SharedString};
+use proctor::{Correlation, ProctorContext, };
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use trim_margin::MarginTrimmable;
@@ -113,7 +113,7 @@ impl proctor::ProctorContext for TestContext {
 }
 
 impl SubscriptionRequirements for TestContext {
-    fn required_fields() -> HashSet<SharedString> {
+    fn required_fields() -> HashSet<String> {
         maplit::hashset! { "location_code".into(), "input_messages_per_sec".into(), }
     }
 }

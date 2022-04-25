@@ -3,7 +3,6 @@ use thiserror::Error;
 
 use super::StageError;
 use super::{MetricLabel, PortError};
-use crate::SharedString;
 
 #[derive(Debug, Error)]
 #[allow(clippy::large_enum_variant)]
@@ -21,11 +20,11 @@ pub enum GraphError {
 }
 
 impl MetricLabel for GraphError {
-    fn slug(&self) -> SharedString {
+    fn slug(&self) -> String {
         "graph".into()
     }
 
-    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+    fn next(&self) -> Either<String, Box<&dyn MetricLabel>> {
         match self {
             // Self::Policy(e) => Right(Box::new(e)),
             Self::Stage(e) => Right(Box::new(e)),

@@ -25,7 +25,7 @@ use crate::elements::{Telemetry, Timestamp};
 use crate::error::{ProctorError, SenseError};
 use crate::graph::stage::Stage;
 use crate::graph::{stage, Inlet, OutletsShape, Port, SinkShape, UniformFanOutShape};
-use crate::{ProctorIdGenerator, ProctorResult, SharedString};
+use crate::{ProctorIdGenerator, ProctorResult};
 
 pub(crate) static SUBSCRIPTIONS_GAUGE: Lazy<IntGauge> = Lazy::new(|| {
     IntGauge::new(
@@ -61,7 +61,7 @@ pub type CorrelationGenerator = ProctorIdGenerator<Telemetry>;
 /// Clearinghouse is a sink for collected telemetry data and a subscription-based source for
 /// groups of telemetry fields.
 pub struct Clearinghouse {
-    name: SharedString,
+    name: String,
     subscriptions: Vec<TelemetrySubscription>,
     cache: TelemetryCache,
     telemetry_ttl: Duration,
@@ -75,8 +75,7 @@ const PORT_TELEMETRY: &str = "telemetry";
 
 impl Clearinghouse {
     pub fn new(
-        name: impl Into<SharedString>, cache_settings: &TelemetryCacheSettings,
-        correlation_generator: CorrelationGenerator,
+        name: impl Into<String>, cache_settings: &TelemetryCacheSettings, correlation_generator: CorrelationGenerator,
     ) -> Self {
         let name = name.into();
         let (tx_api, rx_api) = mpsc::unbounded_channel();
@@ -220,7 +219,7 @@ impl Clearinghouse {
                 tracing::info!(subscription=%s.name(), ?fulfillment, "DMR(debug): sending subscription data update.");
                 s.update_metrics(&fulfillment);
                 s.send(fulfillment).map(move |send_status| {
-                    track_publications(s.name().as_ref());
+                    track_publications(s.name());
                     (s, send_status)
                 })
             })
@@ -390,8 +389,8 @@ impl UniformFanOutShape for Clearinghouse {
 #[dyn_upcast]
 #[async_trait]
 impl Stage for Clearinghouse {
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
@@ -866,7 +865,7 @@ mod tests {
                 ..
             } = &SUBSCRIPTIONS[subscriber]
             {
-                let expected = &EXPECTED[sub_name.as_ref()];
+                let expected = &EXPECTED[sub_name];
                 tracing::info!(
                     nr=%subscriber,
                     subscriber_name=%sub_name,
@@ -995,7 +994,7 @@ mod tests {
                 for (sub, receiver) in sub_receivers.iter_mut() {
                     let sub_name = sub.name();
                     tracing::info!(%sub_name, "test iteration");
-                    let expected = &all_expected[sub_name.as_ref()][row];
+                    let expected = &all_expected[sub_name][row];
                     let actual: Option<Telemetry> = receiver.recv().await;
                     tracing::info!(%sub_name, ?actual, ?expected, "asserting scenario");
                     let actuals = actual.and_then(|mut a| {

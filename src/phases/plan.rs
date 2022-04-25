@@ -9,7 +9,7 @@ use tracing::Instrument;
 use crate::error::PlanError;
 use crate::graph::stage::{Stage, WithMonitor};
 use crate::graph::{stage, Inlet, Outlet, Port, SinkShape, SourceShape, PORT_CONTEXT, PORT_DATA};
-use crate::{AppData, Correlation, ProctorResult, SharedString};
+use crate::{AppData, Correlation, ProctorResult};
 
 // pub type Event<P> = PlanEvent<<P as Planning>::Context, <P as Planning>::Decision, <P as
 // Planning>::Out>;
@@ -43,7 +43,7 @@ pub trait Planning: Debug + Send + Sync {
 }
 
 pub struct Plan<P: Planning> {
-    name: SharedString,
+    name: String,
     planning: P,
     inlet: Inlet<P::Observation>, // todo: consider making observation inlet secondary to decision (in Sink Shape)
     decision_inlet: Inlet<P::Decision>,
@@ -55,7 +55,7 @@ pub struct Plan<P: Planning> {
 impl<P: Planning> Plan<P> {
     #[tracing::instrument(level = "trace", skip(name))]
     pub fn new(name: impl AsRef<str>, mut planning: P) -> Self {
-        let name = SharedString::Owned(format!("{}_plan", name.as_ref()));
+        let name = format!("{}_plan", name.as_ref());
         let inlet = Inlet::new(name.clone(), PORT_DATA);
         let decision_inlet = Inlet::new(name.clone(), "decision");
         let context_inlet = Inlet::new(name.clone(), PORT_CONTEXT);
@@ -124,8 +124,8 @@ impl<P: Planning> WithMonitor for Plan<P> {
 #[dyn_upcast]
 #[async_trait]
 impl<P: 'static + Planning> Stage for Plan<P> {
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

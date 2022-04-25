@@ -6,7 +6,7 @@ use tracing::Instrument;
 
 use crate::graph::{stage, Inlet, Outlet, Port, Stage, PORT_DATA};
 use crate::graph::{SinkShape, SourceShape};
-use crate::{AppData, ProctorResult, SharedString};
+use crate::{AppData, ProctorResult};
 
 /// The FilterMap stage both filters and maps on items.
 ///
@@ -61,7 +61,7 @@ pub struct FilterMap<F, In, Out>
 where
     F: FnMut(In) -> Option<Out>,
 {
-    name: SharedString,
+    name: String,
     filter_map: F,
     inlet: Inlet<In>,
     outlet: Outlet<Out>,
@@ -72,7 +72,7 @@ impl<F, In, Out> FilterMap<F, In, Out>
 where
     F: FnMut(In) -> Option<Out>,
 {
-    pub fn new(name: impl Into<SharedString>, f: F) -> Self {
+    pub fn new(name: impl Into<String>, f: F) -> Self {
         let name = name.into();
         let inlet = Inlet::new(name.clone(), PORT_DATA);
         let outlet = Outlet::new(name.clone(), PORT_DATA);
@@ -120,8 +120,8 @@ where
     In: AppData,
     Out: AppData,
 {
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

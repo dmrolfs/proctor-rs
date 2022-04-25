@@ -2,7 +2,6 @@ use either::{Either, Left, Right};
 use thiserror::Error;
 
 use super::{MetricLabel, PortError, TelemetryError};
-use crate::SharedString;
 
 /// Set of errors occurring during policy initialization or evaluation.
 #[derive(Debug, Error)]
@@ -44,11 +43,11 @@ pub enum PolicyError {
 }
 
 impl MetricLabel for PolicyError {
-    fn slug(&self) -> SharedString {
+    fn slug(&self) -> String {
         "policy".into()
     }
 
-    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+    fn next(&self) -> Either<String, Box<&dyn MetricLabel>> {
         match self {
             Self::IO(_) => Left("io".into()),
             Self::PolicyEngine(_) => Left("engine".into()),

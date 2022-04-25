@@ -3,7 +3,6 @@ use thiserror::Error;
 
 use super::{MetricLabel, PortError, TelemetryError};
 use crate::phases::sense::SensorSetting;
-use crate::SharedString;
 
 /// Set of errors occurring while sensing target environment
 #[derive(Debug, Error)]
@@ -59,11 +58,11 @@ pub enum SenseError {
 }
 
 impl MetricLabel for SenseError {
-    fn slug(&self) -> SharedString {
+    fn slug(&self) -> String {
         "sense".into()
     }
 
-    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+    fn next(&self) -> Either<String, Box<&dyn MetricLabel>> {
         match self {
             Self::IncompatibleSettings(e) => Right(Box::new(e)),
             Self::CSV(_) => Left("csv".into()),
@@ -100,11 +99,11 @@ pub enum IncompatibleSensorSettings {
 }
 
 impl MetricLabel for IncompatibleSensorSettings {
-    fn slug(&self) -> SharedString {
+    fn slug(&self) -> String {
         "sensor_settings".into()
     }
 
-    fn next(&self) -> Either<SharedString, Box<&dyn MetricLabel>> {
+    fn next(&self) -> Either<String, Box<&dyn MetricLabel>> {
         match self {
             _e @ Self::ExpectedTypeError { .. } => Left("expected_type".into()),
             Self::InvalidRequestHeaderDetail(_) => Left("http::invalid_request_header_detail".into()),

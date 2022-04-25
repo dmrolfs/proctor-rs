@@ -8,7 +8,6 @@ use proctor::error::TelemetryError;
 use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use proctor::phases::sense::clearinghouse::TelemetryCacheSettings;
 use proctor::phases::sense::{self, Sense, SensorSetting};
-use proctor::SharedString;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -101,7 +100,7 @@ async fn test_basic_2_clearinghouse_subscription() -> anyhow::Result<()> {
 
 /// returns pos field (count, sum)
 #[tracing::instrument(level = "info")]
-async fn test_scenario(focus: HashSet<SharedString>) -> anyhow::Result<(i64, i64)> {
+async fn test_scenario(focus: HashSet<String>) -> anyhow::Result<(i64, i64)> {
     let base_path = std::env::current_dir()?;
     let cvs_path = base_path.join(PathBuf::from("./tests/data/cats.csv"));
     let cvs_setting = SensorSetting::Csv { path: cvs_path };

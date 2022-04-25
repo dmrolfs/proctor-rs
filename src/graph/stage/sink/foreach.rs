@@ -5,7 +5,7 @@ use cast_trait_object::dyn_upcast;
 
 use crate::graph::shape::SinkShape;
 use crate::graph::{stage, Inlet, Port, Stage, PORT_DATA};
-use crate::{AppData, ProctorResult, SharedString};
+use crate::{AppData, ProctorResult};
 
 /// A Sink that will invoke the given procedure for each received element.
 ///
@@ -59,7 +59,7 @@ pub struct Foreach<F, In>
 where
     F: Fn(In),
 {
-    name: SharedString,
+    name: String,
     operation: F,
     inlet: Inlet<In>,
 }
@@ -68,7 +68,7 @@ impl<F, In> Foreach<F, In>
 where
     F: Fn(In),
 {
-    pub fn new<S: Into<SharedString>>(name: S, operation: F) -> Self {
+    pub fn new<S: Into<String>>(name: S, operation: F) -> Self {
         let name = name.into();
         let inlet = Inlet::new(name.clone(), PORT_DATA);
         Self { name, operation, inlet }
@@ -95,8 +95,8 @@ where
     In: AppData,
 {
     #[inline]
-    fn name(&self) -> SharedString {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
