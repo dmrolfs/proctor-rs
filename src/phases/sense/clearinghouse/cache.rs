@@ -12,6 +12,9 @@ use crate::elements::{Telemetry, TelemetryValue};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TelemetryCacheSettings {
+    /// Optional setting for the time to live for each clearinghouse field. The default is 5
+    /// minutes. The clearinghouse is cleared during rescaling, so this value should be set to a
+    /// duration reflecting a break in connectivity or the job not running.
     #[serde(
         rename = "ttl_secs",
         default = "TelemetryCacheSettings::default_ttl",
@@ -19,8 +22,19 @@ pub struct TelemetryCacheSettings {
         deserialize_with = "crate::serde::deserialize_duration_secs"
     )]
     pub ttl: Duration,
+
+    /// Optional setting for the cache access counter kept for admission and eviction. The default
+    /// is 1000. A good  value is to set nr_counters to be 10x the number of *unique* fields
+    /// expected to be kept in the clearinghouse cache when full, not necessarily "cost"
+    /// related.
     pub nr_counters: usize,
+
+    /// Optional setting for maximum cost of the items stored in the cache. The default is 100,
+    /// which assumes the normal case where the per-item cost is 1.
     pub max_cost: i64,
+
+    /// Optional setting to direct how frequent the cache is checked for eviction. The default is 5
+    /// seconds. A good setting should consider the frequency of data pushed into the clearinghouse.
     #[serde(
         rename = "cleanup_interval_secs",
         default = "TelemetryCacheSettings::default_cleanup_interval",
@@ -28,7 +42,6 @@ pub struct TelemetryCacheSettings {
         deserialize_with = "crate::serde::deserialize_duration_secs"
     )]
     pub cleanup_interval: Duration,
-    pub ignore_memory_cost: bool,
 }
 
 impl Default for TelemetryCacheSettings {
@@ -38,7 +51,6 @@ impl Default for TelemetryCacheSettings {
             nr_counters: 1_000,
             max_cost: 100, // 1e6 as i64,
             cleanup_interval: Self::default_cleanup_interval(),
-            ignore_memory_cost: true,
         }
     }
 }
@@ -49,7 +61,7 @@ impl TelemetryCacheSettings {
     }
 
     pub const fn default_cleanup_interval() -> Duration {
-        Duration::from_secs(60)
+        Duration::from_secs(5)
     }
 }
 
@@ -212,6 +224,7 @@ impl TelemetryCache {
 #[cfg(test)]
 mod tests {
     use serde_test::{assert_tokens, Token};
+
     use super::*;
 
     #[test]
@@ -220,7 +233,7 @@ mod tests {
         assert_tokens(
             &settings,
             &vec![
-                Token::Struct { name: "TelemetryCacheSettings", len: 5 },
+                Token::Struct { name: "TelemetryCacheSettings", len: 4 },
                 Token::Str("ttl_secs"),
                 Token::U64(300),
                 Token::Str("nr_counters"),
@@ -228,9 +241,7 @@ mod tests {
                 Token::Str("max_cost"),
                 Token::I64(100),
                 Token::Str("cleanup_interval_secs"),
-                Token::U64(60),
-                Token::Str("ignore_memory_cost"),
-                Token::Bool(true),
+                Token::U64(5),
                 Token::StructEnd,
             ],
         )

@@ -64,6 +64,7 @@ pub struct Clearinghouse {
     name: String,
     subscriptions: Vec<TelemetrySubscription>,
     cache: TelemetryCache,
+    item_cost: i64,
     telemetry_ttl: Duration,
     correlation_generator: tokio::sync::Mutex<CorrelationGenerator>,
     inlet: Inlet<Telemetry>,
@@ -83,15 +84,16 @@ impl Clearinghouse {
         let cache = AsyncCache::builder(cache_settings.nr_counters, cache_settings.max_cost)
             .set_metrics(true)
             .set_cleanup_duration(cache_settings.cleanup_interval)
-            .set_ignore_internal_cost(cache_settings.ignore_memory_cost)
+            .set_ignore_internal_cost(true)
             .finalize()
             .expect("failed creating clearinghouse cache");
-
+        let item_cost = 1; // if cache_settings.ignore_memory_cost { 1 } else { 0 };
 
         Self {
             name,
             subscriptions: Vec::default(),
             cache: TelemetryCache::new(cache),
+            item_cost,
             telemetry_ttl: cache_settings.ttl,
             correlation_generator: tokio::sync::Mutex::new(correlation_generator),
             inlet,
@@ -121,7 +123,7 @@ impl Clearinghouse {
                 for (k, v) in d {
                     let cache_insert = self
                         .cache
-                        .try_insert_with_ttl(k.clone(), v, 1, self.telemetry_ttl)
+                        .try_insert_with_ttl(k.clone(), v, self.item_cost, self.telemetry_ttl)
                         .await
                         .map(|added| {
                             if added {
@@ -878,11 +880,10 @@ mod tests {
                     block_on(async {
                         let mut cache = TelemetryCache::new(
                             AsyncCache::builder(1_000, 1e6 as i64)
-                            .set_metrics(true)
-                            .set_cleanup_duration(Duration::from_secs(5))
-                            // .set_ignore_internal_cost(true)
-                            .finalize()
-                            .expect("failed creating clearinghouse cache"),
+                                .set_metrics(true)
+                                .set_cleanup_duration(Duration::from_secs(5))
+                                .finalize()
+                                .expect("failed creating clearinghouse cache"),
                         );
 
                         for (k, v) in data_row.iter() {
