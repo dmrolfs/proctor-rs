@@ -13,14 +13,16 @@ use crate::elements::{Telemetry, TelemetryValue};
 #[serde(default)]
 pub struct TelemetryCacheSettings {
     #[serde(
+        rename = "ttl_secs",
         default = "TelemetryCacheSettings::default_ttl",
         serialize_with = "crate::serde::serialize_duration_secs",
         deserialize_with = "crate::serde::deserialize_duration_secs"
     )]
     pub ttl: Duration,
-    pub num_counters: usize,
+    pub nr_counters: usize,
     pub max_cost: i64,
     #[serde(
+        rename = "cleanup_interval_secs",
         default = "TelemetryCacheSettings::default_cleanup_interval",
         serialize_with = "crate::serde::serialize_duration_secs",
         deserialize_with = "crate::serde::deserialize_duration_secs"
@@ -33,7 +35,7 @@ impl Default for TelemetryCacheSettings {
     fn default() -> Self {
         Self {
             ttl: Self::default_ttl(),
-            num_counters: 1_000,
+            nr_counters: 1_000,
             max_cost: 100, // 1e6 as i64,
             cleanup_interval: Self::default_cleanup_interval(),
             ignore_memory_cost: true,
@@ -204,5 +206,33 @@ impl TelemetryCache {
             .collect();
 
         telemetry.into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_test::{assert_tokens, Token};
+    use super::*;
+
+    #[test]
+    fn test_cache_settings_serde_tokens() {
+        let settings = TelemetryCacheSettings::default();
+        assert_tokens(
+            &settings,
+            &vec![
+                Token::Struct { name: "TelemetryCacheSettings", len: 5 },
+                Token::Str("ttl_secs"),
+                Token::U64(300),
+                Token::Str("nr_counters"),
+                Token::U64(1_000),
+                Token::Str("max_cost"),
+                Token::I64(100),
+                Token::Str("cleanup_interval_secs"),
+                Token::U64(60),
+                Token::Str("ignore_memory_cost"),
+                Token::Bool(true),
+                Token::StructEnd,
+            ],
+        )
     }
 }

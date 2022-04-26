@@ -80,7 +80,7 @@ impl Clearinghouse {
         let name = name.into();
         let (tx_api, rx_api) = mpsc::unbounded_channel();
         let inlet = Inlet::new(name.clone(), PORT_TELEMETRY);
-        let cache = AsyncCache::builder(cache_settings.num_counters, cache_settings.max_cost)
+        let cache = AsyncCache::builder(cache_settings.nr_counters, cache_settings.max_cost)
             .set_metrics(true)
             .set_cleanup_duration(cache_settings.cleanup_interval)
             .set_ignore_internal_cost(cache_settings.ignore_memory_cost)

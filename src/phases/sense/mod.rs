@@ -18,8 +18,9 @@ pub mod subscription_channel;
 
 pub use builder::SenseBuilder;
 pub use clearinghouse::{
-    Clearinghouse, ClearinghouseApi, ClearinghouseCmd, ClearinghouseSubscriptionAgent, CorrelationGenerator,
-    SubscriptionRequirements, TelemetrySubscription, SUBSCRIPTION_CORRELATION, SUBSCRIPTION_TIMESTAMP,
+    Clearinghouse, ClearinghouseApi, ClearinghouseCmd, ClearinghouseSnapshot, ClearinghouseSubscriptionAgent,
+    CorrelationGenerator, SubscriptionRequirements, TelemetrySubscription, SUBSCRIPTION_CORRELATION,
+    SUBSCRIPTION_TIMESTAMP,
 };
 pub use sensor::{make_telemetry_cvs_sensor, make_telemetry_rest_api_sensor, TelemetrySensor};
 pub use settings::{HttpQuery, SensorSetting};

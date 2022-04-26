@@ -28,7 +28,7 @@ use proctor::phases::sense::{
     self, CorrelationGenerator, SubscriptionRequirements, TelemetrySubscription, SUBSCRIPTION_CORRELATION,
     SUBSCRIPTION_TIMESTAMP,
 };
-use proctor::{AppData, };
+use proctor::AppData;
 use proctor::{Correlation, ProctorContext};
 use serde_test::{assert_tokens, Token};
 use tokio::sync::oneshot;

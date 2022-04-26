@@ -19,7 +19,7 @@ use proctor::error::PolicyError;
 use proctor::graph::stage::{self, WithApi, WithMonitor};
 use proctor::graph::{Connect, Graph, SinkShape, SourceShape};
 use proctor::phases::sense::SubscriptionRequirements;
-use proctor::{Correlation, ProctorContext, };
+use proctor::{Correlation, ProctorContext};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use trim_margin::MarginTrimmable;
