@@ -351,8 +351,11 @@ impl Clearinghouse {
             },
 
             ClearinghouseCmd::Clear { tx } => {
-                if let Err(err) = self.cache.clear() {
-                    tracing::error!(error=?err, "failed to clear cache -- ignoring.");
+                match self.cache.clear() {
+                    Ok(()) => tracing::debug!(stage=%self.name(), "clearinghouse telemetry cache cleared."),
+                    Err(err) => {
+                        tracing::error!(error=?err, "failed to clear clearinghouse telemetry cache -- ignoring.")
+                    },
                 }
 
                 let _ = tx.send(());
