@@ -80,7 +80,7 @@ where
         let rx = &mut self.rx_control;
 
         loop {
-            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+            let _timer = stage::start_stage_eval_time(&self.name);
 
             tokio::select! {
                 result = &mut operation, if !done => {

@@ -222,7 +222,7 @@ where
         let outlet = &self.outlet;
 
         loop {
-            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+            let _timer = stage::start_stage_eval_time(&self.name);
 
             tokio::select! {
                 next_tick = ticks.next() => match next_tick {

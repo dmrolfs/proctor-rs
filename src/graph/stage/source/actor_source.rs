@@ -82,7 +82,7 @@ impl<T: AppData> Stage for ActorSource<T> {
     #[tracing::instrument(level = "trace", name = "run actor source", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         while let Some(command) = self.rx_api.recv().await {
-            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+            let _timer = stage::start_stage_eval_time(&self.name);
 
             tracing::trace!(?command, "handling command");
             match command {

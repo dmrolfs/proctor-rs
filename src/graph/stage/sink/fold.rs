@@ -155,7 +155,7 @@ where
         let initial = &self.initial;
 
         loop {
-            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+            let _timer = stage::start_stage_eval_time(self.name.as_str());
 
             tracing::trace!("handling next item..");
             tokio::select! {

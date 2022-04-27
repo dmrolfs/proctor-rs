@@ -259,7 +259,7 @@ impl<T: fmt::Debug + Send> Inlet<T> {
                 let _ = rx.take();
             }
 
-            track_ingress(self.stage.as_ref(), self.name.as_ref());
+            track_ingress(self.stage(), self.name());
             item
         } else {
             None
@@ -307,11 +307,11 @@ impl<T> Outlet<T> {
 #[async_trait]
 impl<T: Send> Port for Outlet<T> {
     fn stage(&self) -> &str {
-        self.stage.as_ref()
+        &self.stage
     }
 
     fn name(&self) -> &str {
-        self.name.as_ref()
+        &self.name
     }
 
     async fn close(&mut self) {
@@ -407,7 +407,7 @@ impl<T: AppData> Outlet<T> {
         self.check_attachment().await?;
         let tx = self.connection.lock().await;
         (*tx).as_ref().unwrap().0.send(value).await?;
-        track_egress(self.stage.as_ref(), self.name.as_ref());
+        track_egress(self.stage(), self.name());
         Ok(())
     }
 

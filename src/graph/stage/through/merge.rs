@@ -102,7 +102,7 @@ impl<T: AppData> Stage for Merge<T> {
         let rx_1 = &mut self.inlet_1;
         // let noop = future::ok(());
         loop {
-            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+            let _timer = stage::start_stage_eval_time(&self.name);
 
             tokio::select! {
                 Some(t) = rx_0.recv() => {

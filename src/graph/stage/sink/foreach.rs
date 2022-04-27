@@ -109,7 +109,7 @@ where
     async fn run(&mut self) -> ProctorResult<()> {
         let op = &self.operation;
         while let Some(input) = self.inlet.recv().await {
-            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+            let _timer = stage::start_stage_eval_time(&self.name);
             op(input);
         }
         Ok(())

@@ -52,7 +52,7 @@ impl<T: AppData> Stage for Identity<T> {
     #[tracing::instrument(level = "trace", name = "run identity through", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         while let Some(value) = self.inlet.recv().await {
-            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+            let _timer = stage::start_stage_eval_time(&self.name);
             self.outlet.send(value).await?;
         }
 

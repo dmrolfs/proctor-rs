@@ -136,7 +136,7 @@ where
         let outlet = &self.outlet;
         while let Some(item) = self.inlet.recv().await {
             let span = tracing::debug_span!("filter on item", ?item, stage=%self.name());
-            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+            let _timer = stage::start_stage_eval_time(&self.name);
             let filter_passed = span.in_scope(|| (self.filter_map)(item));
 
             if let Some(value) = filter_passed {

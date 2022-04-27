@@ -96,7 +96,7 @@ where
     async fn run(&mut self) -> ProctorResult<()> {
         if let Some(items) = self.items.take() {
             for (count, item) in items.enumerate() {
-                let _timer = stage::start_stage_eval_time(self.name.as_ref());
+                let _timer = stage::start_stage_eval_time(&self.name);
                 tracing::debug!(?item, %count, "sending item");
                 self.outlet.send(item).await?
             }

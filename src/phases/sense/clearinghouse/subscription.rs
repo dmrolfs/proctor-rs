@@ -263,8 +263,7 @@ impl TelemetrySubscription {
                 tracing::trace!(?ready, ?unfilled, subscription=?self, "fulfilling required and optional fields.");
                 if ready.is_empty() || !unfilled.is_empty() {
                     tracing::debug!(
-                        subscription=?self,
-                        unfilled_fields=?unfilled,
+                        subscription=?self, seen=?cache.seen(), unfilled_fields=?unfilled, ready_fields=?ready,
                         "unsatisfied subscription - not publishing."
                     );
 

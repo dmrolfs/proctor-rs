@@ -111,13 +111,13 @@ impl serde::Serialize for ClearinghouseSnapshot {
             .iter()
             .map(|subscription| match subscription {
                 TelemetrySubscription::All { name, .. } => Subscription {
-                    name: name.as_ref(),
+                    name,
                     required: None,
                     optional: None,
                 }, // (name, None, None),
                 TelemetrySubscription::Explicit { name, required_fields, optional_fields, .. } => {
                     Subscription {
-                        name: name.as_ref(),
+                        name,
                         required: Some(required_fields.clone()),
                         optional: Some(optional_fields.clone()),
                     }

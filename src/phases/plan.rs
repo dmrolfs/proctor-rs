@@ -176,7 +176,7 @@ impl<P: Planning> Plan<P> {
                 },
 
                 Some(decision) = rx_decision.recv() => {
-                    let _timer = stage::start_stage_eval_time(self.name.as_ref());
+                    let _timer = stage::start_stage_eval_time(&self.name);
 
                     let span = tracing::info_span!("DMR(debug):Plan handle decision", correlation=?decision.correlation(),);
                     let event = match planning.handle_decision(decision.clone()).instrument(span).await? {

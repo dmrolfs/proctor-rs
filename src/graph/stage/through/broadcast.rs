@@ -129,7 +129,7 @@ impl<T: AppData + Clone> Stage for Broadcast<T> {
     async fn run(&mut self) -> ProctorResult<()> {
         let outlets = &self.outlets;
         while let Some(item) = self.inlet.recv().await {
-            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+            let _timer = stage::start_stage_eval_time(&self.name);
 
             for o in outlets.iter() {
                 o.send(item.clone()).await?;

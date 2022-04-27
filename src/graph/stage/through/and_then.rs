@@ -133,7 +133,7 @@ where
         let outlet = &self.outlet;
 
         while let Some(input) = self.inlet.recv().await {
-            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+            let _timer = stage::start_stage_eval_time(&self.name);
             let value = (self.operation)(input).await;
             outlet.send(value).await?;
         }

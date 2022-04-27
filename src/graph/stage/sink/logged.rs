@@ -37,7 +37,7 @@ impl<In: AppData> Stage for LoggedSink<In> {
     #[tracing::instrument(level = "trace", name = "run logging sink", skip(self))]
     async fn run(&mut self) -> ProctorResult<()> {
         while let Some(input) = self.inlet.recv().await {
-            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+            let _timer = stage::start_stage_eval_time(&self.name);
             tracing::info!("in graph sink: {:?}", input);
         }
         Ok(())

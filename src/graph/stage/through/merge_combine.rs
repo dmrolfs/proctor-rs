@@ -121,7 +121,7 @@ where
 
     #[tracing::instrument(level = "trace", skip(self, active), fields(nr_active=%active.len()))]
     async fn complete_batch(&self, mut active: Vec<ActivePull<'a, T>>) -> Result<T, ProctorError> {
-        let _timer = stage::start_stage_eval_time(self.name.as_ref());
+        let _timer = stage::start_stage_eval_time(&self.name);
 
         let mut acc: Option<T> = None;
         let nr_pulls = active.len();
