@@ -33,13 +33,17 @@ pub struct TelemetryCacheSettings {
     /// which assumes the normal case where the per-item cost is 1.
     pub max_cost: i64,
 
+    /// Derived field for the incremental cost of an item to the cache, which is used in an
+    /// item-count cost model.
+    pub incremental_item_cost: i64,
+
     /// Optional setting to direct how frequent the cache is checked for eviction. The default is 5
     /// seconds. A good setting should consider the frequency of data pushed into the clearinghouse.
     #[serde(
-        rename = "cleanup_interval_secs",
+        rename = "cleanup_interval_millis",
         default = "TelemetryCacheSettings::default_cleanup_interval",
-        serialize_with = "crate::serde::serialize_duration_secs",
-        deserialize_with = "crate::serde::deserialize_duration_secs"
+        serialize_with = "crate::serde::serialize_duration_millis",
+        deserialize_with = "crate::serde::deserialize_duration_millis"
     )]
     pub cleanup_interval: Duration,
 }
@@ -50,6 +54,7 @@ impl Default for TelemetryCacheSettings {
             ttl: Self::default_ttl(),
             nr_counters: 1_000,
             max_cost: 100, // 1e6 as i64,
+            incremental_item_cost: 1,
             cleanup_interval: Self::default_cleanup_interval(),
         }
     }
@@ -111,8 +116,18 @@ impl std::ops::Deref for TelemetryCache {
 
 #[allow(dead_code)]
 impl TelemetryCache {
-    pub fn new(cache: AsyncCache<String, TelemetryValue>) -> Self {
+    pub fn new(settings: &TelemetryCacheSettings) -> Self {
+        let cache = Self::make_cache(settings);
         Self { cache, seen: Arc::new(DashSet::default()) }
+    }
+
+    fn make_cache(cache_settings: &TelemetryCacheSettings) -> AsyncCache<String, TelemetryValue> {
+        AsyncCache::builder(cache_settings.nr_counters, cache_settings.max_cost)
+            .set_metrics(true)
+            .set_cleanup_duration(cache_settings.cleanup_interval)
+            .set_ignore_internal_cost(true)
+            .finalize()
+            .expect("failed creating clearinghouse cache")
     }
 
     #[tracing::instrument(level = "debug")]
@@ -223,9 +238,99 @@ impl TelemetryCache {
 
 #[cfg(test)]
 mod tests {
+    use claim::*;
+    use pretty_assertions::assert_eq;
     use serde_test::{assert_tokens, Token};
+    use tokio_test::block_on;
 
     use super::*;
+
+    #[ignore = "stretto bug: use after clear does not work"]
+    #[test]
+    fn test_basic_cache_add_after_clear() {
+        let ttl = Duration::from_secs(60);
+        block_on(async {
+            let cache = AsyncCache::builder(1000, 100)
+                .set_metrics(true)
+                .set_ignore_internal_cost(true)
+                .finalize()
+                .expect("failed creating cache");
+
+            assert!(cache.insert_with_ttl("foo".to_string(), 17.to_string(), 1, ttl).await);
+            assert!(cache.insert_with_ttl("bar".to_string(), "otis".to_string(), 1, ttl).await);
+            assert_ok!(cache.wait().await);
+
+            assert_eq!(assert_some!(cache.get(&"foo".to_string())).value(), &17.to_string());
+            assert_eq!(assert_some!(cache.get(&"bar".to_string())).value(), &"otis".to_string());
+
+            assert_ok!(cache.clear());
+            assert_ok!(cache.wait().await);
+
+            assert_none!(cache.get(&"foo".to_string()));
+
+            assert!(cache.insert_with_ttl("zed".to_string(), 33.to_string(), 1, ttl).await);
+            assert_ok!(cache.wait().await);
+
+            assert_none!(cache.get(&"bar".to_string()));
+            assert_eq!(assert_some!(cache.get(&"zed".to_string())).value(), &33.to_string());
+        });
+    }
+
+    #[ignore = "stretto bug: use after clear does not work"]
+    #[test]
+    fn test_cache_add_after_clear() {
+        let ttl = Duration::from_secs(60);
+        block_on(async {
+            // let cache = AsyncCache::builder(1000, 100)
+            //     .set_metrics(true)
+            //     .set_ignore_internal_cost(true)
+            //     .finalize()
+            //     .expect("failed creating clearinghouse cache");
+
+            let settings = TelemetryCacheSettings {
+                ttl,
+                nr_counters: 1_000,
+                max_cost: 100,
+                incremental_item_cost: 1,
+                cleanup_interval: Duration::from_millis(500),
+            };
+
+            let mut cache = TelemetryCache::new(&settings);
+            assert!(cache.insert_with_ttl("foo".into(), 17.into(), 1, ttl).await);
+            assert!(cache.insert_with_ttl("bar".into(), "otis".into(), 1, ttl).await);
+            assert_ok!(cache.wait().await);
+
+            assert_eq!(cache.seen(), maplit::hashset!["foo".into(), "bar".into()]);
+            assert_eq!(
+                cache.get_telemetry(),
+                Telemetry::from(maplit::hashmap! {
+                    "foo".into() => TelemetryValue::Integer(17),
+                    "bar".into() => TelemetryValue::Text("otis".into()),
+                })
+            );
+
+            assert_ok!(cache.clear());
+            assert_ok!(cache.wait().await);
+
+            assert!(cache.seen().is_empty());
+            assert!(cache.get_telemetry().is_empty());
+
+            assert!(
+                cache
+                    .insert_with_ttl("zed".into(), TelemetryValue::Seq(vec![17.into()]), 1, ttl)
+                    .await
+            );
+            assert_ok!(cache.wait().await);
+
+            assert_eq!(cache.seen(), maplit::hashset!["zed".into()]);
+            assert_eq!(
+                cache.get_telemetry(),
+                Telemetry::from(maplit::hashmap! {
+                    "zed".into() => TelemetryValue::Seq(vec![TelemetryValue::Integer(17)]),
+                })
+            )
+        });
+    }
 
     #[test]
     fn test_cache_settings_serde_tokens() {
@@ -233,15 +338,17 @@ mod tests {
         assert_tokens(
             &settings,
             &vec![
-                Token::Struct { name: "TelemetryCacheSettings", len: 4 },
+                Token::Struct { name: "TelemetryCacheSettings", len: 5 },
                 Token::Str("ttl_secs"),
                 Token::U64(300),
                 Token::Str("nr_counters"),
                 Token::U64(1_000),
                 Token::Str("max_cost"),
                 Token::I64(100),
-                Token::Str("cleanup_interval_secs"),
-                Token::U64(5),
+                Token::Str("incremental_item_cost"),
+                Token::I64(1),
+                Token::Str("cleanup_interval_millis"),
+                Token::U64(5000),
                 Token::StructEnd,
             ],
         )

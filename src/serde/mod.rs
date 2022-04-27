@@ -33,3 +33,12 @@ pub fn deserialize_duration_secs<'de, D: Deserializer<'de>>(deserializer: D) -> 
     let secs: u64 = Deserialize::deserialize(deserializer)?;
     Ok(Duration::from_secs(secs))
 }
+
+pub fn serialize_duration_millis<S: Serializer>(that: &Duration, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_u64(that.as_millis() as u64)
+}
+
+pub fn deserialize_duration_millis<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Duration, D::Error> {
+    let millis: u64 = Deserialize::deserialize(deserializer)?;
+    Ok(Duration::from_millis(millis))
+}

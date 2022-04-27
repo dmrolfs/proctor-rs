@@ -5,7 +5,6 @@ pub mod subscription;
 
 use std::collections::HashSet;
 use std::fmt::{self, Debug};
-use std::time::Duration;
 
 pub use agent::*;
 use async_trait::async_trait;
@@ -17,7 +16,7 @@ use once_cell::sync::Lazy;
 use pretty_snowflake::Id;
 use prometheus::{IntCounterVec, IntGauge, Opts};
 pub use protocol::*;
-use stretto::AsyncCache;
+use stretto::CacheError;
 pub use subscription::*;
 use tokio::sync::mpsc;
 
@@ -64,8 +63,7 @@ pub struct Clearinghouse {
     name: String,
     subscriptions: Vec<TelemetrySubscription>,
     cache: TelemetryCache,
-    item_cost: i64,
-    telemetry_ttl: Duration,
+    cache_settings: TelemetryCacheSettings,
     correlation_generator: tokio::sync::Mutex<CorrelationGenerator>,
     inlet: Inlet<Telemetry>,
     tx_api: ClearinghouseApi,
@@ -81,20 +79,13 @@ impl Clearinghouse {
         let name = name.into();
         let (tx_api, rx_api) = mpsc::unbounded_channel();
         let inlet = Inlet::new(name.clone(), PORT_TELEMETRY);
-        let cache = AsyncCache::builder(cache_settings.nr_counters, cache_settings.max_cost)
-            .set_metrics(true)
-            .set_cleanup_duration(cache_settings.cleanup_interval)
-            .set_ignore_internal_cost(true)
-            .finalize()
-            .expect("failed creating clearinghouse cache");
-        let item_cost = 1; // if cache_settings.ignore_memory_cost { 1 } else { 0 };
+        let cache = TelemetryCache::new(cache_settings);
 
         Self {
             name,
             subscriptions: Vec::default(),
-            cache: TelemetryCache::new(cache),
-            item_cost,
-            telemetry_ttl: cache_settings.ttl,
+            cache,
+            cache_settings: cache_settings.clone(),
             correlation_generator: tokio::sync::Mutex::new(correlation_generator),
             inlet,
             tx_api,
@@ -111,19 +102,19 @@ impl Clearinghouse {
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    async fn handle_telemetry_data(
-        &mut self,
-        data: Option<Telemetry>,
-        // stage_name: &SharedString, data: Option<Telemetry>, subscriptions: &[TelemetrySubscription],
-        // cache: &mut TelemetryCache, correlation_generator: &mut CorrelationGenerator,
-    ) -> Result<bool, SenseError> {
+    async fn handle_telemetry_data(&mut self, data: Option<Telemetry>) -> Result<bool, SenseError> {
         match data {
             Some(d) => {
                 let mut pushed_fields = HashSet::with_capacity(d.len());
                 for (k, v) in d {
                     let cache_insert = self
                         .cache
-                        .try_insert_with_ttl(k.clone(), v, self.item_cost, self.telemetry_ttl)
+                        .try_insert_with_ttl(
+                            k.clone(),
+                            v,
+                            self.cache_settings.incremental_item_cost,
+                            self.cache_settings.ttl,
+                        )
                         .await
                         .map(|added| {
                             if added {
@@ -138,7 +129,7 @@ impl Clearinghouse {
                     }
                 }
                 if let Err(err) = self.cache.wait().await {
-                    tracing::error!(stage=%self.name, error=?err, "failed to wait on clearinghouse cache.");
+                    tracing::error!(stage=%self.name, error=?err, "failed to wait on clearinghouse cache. - ignoring");
                 }
 
                 let interested = Self::find_interested_subscriptions(&self.subscriptions, &pushed_fields);
@@ -156,13 +147,9 @@ impl Clearinghouse {
         }
     }
 
-    // #[tracing::instrument(level = "trace", skip(self,))]
     #[tracing::instrument(level = "trace", skip(subscriptions, pushed,))]
     fn find_interested_subscriptions<'s, 'f>(
-        // &self,
-        subscriptions: &'s [TelemetrySubscription],
-        // _available: &Keys<'d, String, TelemetryValue>,
-        pushed: &'f HashSet<String>,
+        subscriptions: &'s [TelemetrySubscription], pushed: &'f HashSet<String>,
     ) -> Vec<&'s TelemetrySubscription> {
         let interested = subscriptions
             .iter()
@@ -194,13 +181,7 @@ impl Clearinghouse {
         skip(self, subscribers),
         fields(subscribers = ?subscribers.iter().map(|s| s.name()).collect::<Vec<_>>(), ),
     )]
-    async fn push_to_subscribers(
-        &self,
-        // stage_name: &SharedString,
-        // cache: &TelemetryCache,
-        subscribers: Vec<&TelemetrySubscription>,
-        // correlation_generator: &mut CorrelationGenerator,
-    ) -> Result<(), SenseError> {
+    async fn push_to_subscribers(&self, subscribers: Vec<&TelemetrySubscription>) -> Result<(), SenseError> {
         if subscribers.is_empty() {
             tracing::debug!("not publishing - no subscribers corresponding to field changes.");
             return Ok(());
@@ -215,9 +196,7 @@ impl Clearinghouse {
             .collect::<Vec<_>>()
             .into_iter()
             .map(|(s, mut fulfillment)| {
-                let (_correlation, _recv_timestamp) =
-                    Self::add_automatic_telemetry(&mut fulfillment, &mut correlation_generator);
-
+                let (_corr, _recv_ts) = Self::add_automatic_telemetry(&mut fulfillment, &mut correlation_generator);
                 tracing::info!(subscription=%s.name(), ?fulfillment, "DMR(debug): sending subscription data update.");
                 s.update_metrics(&fulfillment);
                 s.send(fulfillment).map(move |send_status| {
@@ -236,7 +215,7 @@ impl Clearinghouse {
             // todo: resolve design to avoid this hack to satisfy track_errors api while not exposing
             // sense stage with proctor error.
             let proctor_err = ProctorError::SensePhase(err);
-            crate::graph::track_errors(self.name.as_ref(), &proctor_err);
+            crate::graph::track_errors(self.name(), &proctor_err);
             let err = match proctor_err {
                 ProctorError::SensePhase(err) => Some(err),
                 err => {
@@ -351,17 +330,31 @@ impl Clearinghouse {
             },
 
             ClearinghouseCmd::Clear { tx } => {
-                match self.cache.clear() {
-                    Ok(()) => tracing::debug!(stage=%self.name(), "clearinghouse telemetry cache cleared."),
-                    Err(err) => {
-                        tracing::error!(error=?err, "failed to clear clearinghouse telemetry cache -- ignoring.")
-                    },
+                if let Err(err) = self.clear_cache().await {
+                    tracing::error!(error=?err, "failed to clear clearinghouse telementry cache - ignoring.");
                 }
 
                 let _ = tx.send(());
                 Ok(true)
             },
         }
+    }
+
+    async fn clear_cache(&mut self) -> Result<(), CacheError> {
+        // clear doesn't work now, but hopefully soon!
+        let clear_ack = match self.cache.clear() {
+            Ok(()) => self.cache.wait().await,
+            err => err,
+        };
+        match clear_ack {
+            Ok(()) => tracing::debug!(stage=%self.name(), "clearinghouse telemetry cache cleared."),
+            Err(err) => {
+                tracing::error!(error=?err, "failed to clear clearinghouse telemetry cache -- ignoring.")
+            },
+        }
+
+        self.cache = TelemetryCache::new(&self.cache_settings);
+        Ok(())
     }
 }
 
@@ -370,7 +363,7 @@ impl Debug for Clearinghouse {
         f.debug_struct("Clearinghouse")
             .field("name", &self.name)
             .field("subscriptions", &self.subscriptions)
-            .field("telemetry_ttl", &self.telemetry_ttl)
+            .field("telemetry_ttl", &self.cache_settings.ttl)
             .finish()
     }
 }
@@ -428,15 +421,8 @@ impl Clearinghouse {
     }
 
     async fn do_run(&mut self) -> Result<(), SenseError> {
-        // let stage_name = &self.name;
-        // let mut inlet = self.inlet.clone();
-        // let rx_api = &mut self.rx_api;
-        // let cache = &mut self.cache;
-        // let correlation_generator = &mut self.correlation_generator;
-        // let subscriptions = &mut self.subscriptions;
-
         loop {
-            let _timer = stage::start_stage_eval_time(self.name.as_ref());
+            let _timer = stage::start_stage_eval_time(self.name());
 
             tracing::trace!(
                 nr_subscriptions=%self.subscriptions.len(),
@@ -446,13 +432,7 @@ impl Clearinghouse {
 
             tokio::select! {
                 data = self.inlet.recv() => {
-                    let cont_loop = self.handle_telemetry_data(
-                        // self.name,
-                        data,
-                        // self.subscriptions,
-                        // self.cache,
-                        // self.correlation_generator
-                    ).await?;
+                    let cont_loop = self.handle_telemetry_data(data).await?;
 
                     if !cont_loop {
                         break;
@@ -505,16 +485,18 @@ mod tests {
 
     use claim::*;
     use pretty_assertions::assert_eq;
-    use pretty_snowflake::{Id, IdPrettifier, PrettyIdGenerator};
+    use pretty_snowflake::{AlphabetCodec, Id, IdPrettifier, PrettyIdGenerator};
     use prometheus::{IntCounterVec, IntGaugeVec, Opts, Registry};
+    use tokio::sync::mpsc::error::TryRecvError;
     use tokio::sync::oneshot;
     use tokio_test::block_on;
     use tracing::Instrument;
 
     use super::*;
-    use crate::elements::telemetry::ToTelemetry;
-    use crate::graph::stage::{self, Stage, WithApi};
+    use crate::elements::telemetry::{TableType, ToTelemetry};
+    use crate::graph::stage::{self, ActorSourceCmd, Stage, WithApi};
     use crate::graph::{Connect, Outlet, SinkShape, SourceShape, PORT_DATA};
+    use crate::phases::sense::SubscriptionChannel;
 
     static ID_GENERATOR: Lazy<CorrelationGenerator> =
         Lazy::new(|| PrettyIdGenerator::single_node(IdPrettifier::default()));
@@ -862,6 +844,14 @@ mod tests {
         let main_span = tracing::info_span!("test_fulfill_subscription");
         let _main_span_guard = main_span.enter();
 
+        let settings = TelemetryCacheSettings {
+            ttl: Duration::from_secs(60),
+            nr_counters: 1_000,
+            max_cost: 1e6 as i64,
+            incremental_item_cost: 1,
+            cleanup_interval: Duration::from_secs(5),
+        };
+
         for subscriber in 0..=2 {
             if let TelemetrySubscription::Explicit {
                 name: sub_name,
@@ -881,13 +871,7 @@ mod tests {
                 );
                 for ((row, data_row), expected_row) in DB_ROWS.iter().enumerate().zip(expected) {
                     block_on(async {
-                        let mut cache = TelemetryCache::new(
-                            AsyncCache::builder(1_000, 1e6 as i64)
-                                .set_metrics(true)
-                                .set_cleanup_duration(Duration::from_secs(5))
-                                .finalize()
-                                .expect("failed creating clearinghouse cache"),
-                        );
+                        let mut cache = TelemetryCache::new(&settings);
 
                         for (k, v) in data_row.iter() {
                             assert!(
@@ -969,7 +953,16 @@ mod tests {
                     id_generator.clone(),
                 );
                 for (k, v) in DB_ROWS[row].iter() {
-                    assert!(c.cache.insert_with_ttl(k.clone(), v.clone(), 1, c.telemetry_ttl).await);
+                    assert!(
+                        c.cache
+                            .insert_with_ttl(
+                                k.clone(),
+                                v.clone(),
+                                c.cache_settings.incremental_item_cost,
+                                c.cache_settings.ttl
+                            )
+                            .await
+                    );
                 }
                 assert_ok!(c.cache.wait().await);
 
@@ -977,16 +970,7 @@ mod tests {
                 assert_eq!(db.keys().cloned().collect::<HashSet<_>>(), c.cache.seen());
                 assert_eq!(&DB_ROWS[row], &db);
                 tracing::info!(?db, "pushing database to subscribers");
-                assert_ok!(
-                    c.push_to_subscribers(subscriptions.clone())
-                // Clearinghouse::push_to_subscribers(
-                //     &"test_clearinghouse".into(),
-                //     db,
-                //     subscriptions.clone(),
-                //     &mut id_generator,
-                // )
-                .await
-                );
+                assert_ok!(c.push_to_subscribers(subscriptions.clone()).await);
             }
 
             for s in subscriptions.iter() {
@@ -1041,5 +1025,120 @@ mod tests {
             format!("{:?}", pos_metric),
             r##"name: "test_push_to_subscribers_current_pos" help: "current position" type: GAUGE metric {label {name: "subscription" value: "cat_pos"} gauge {value: 4}}"##
         );
+    }
+
+    fn without_auto_fields(telemetry: &Telemetry) -> Telemetry {
+        let mut telemetry = telemetry.clone();
+        telemetry.remove(SUBSCRIPTION_TIMESTAMP);
+        telemetry.remove(SUBSCRIPTION_CORRELATION);
+        telemetry
+    }
+
+    #[test]
+    fn test_clearinghouse_use_after_clear() {
+        Lazy::force(&crate::tracing::TEST_TRACING);
+        const SPAN_NAME: &'static str = "test_clearinghouse_use_after_clear";
+        let main_span = tracing::info_span!(SPAN_NAME);
+        let _main_span_guard = main_span.enter();
+
+        let cache_settings = TelemetryCacheSettings {
+            ttl: Duration::from_secs(1),
+            nr_counters: 1000,
+            max_cost: 100,
+            incremental_item_cost: 1,
+            cleanup_interval: Duration::from_millis(500),
+        };
+
+        block_on(async {
+            let source = stage::ActorSource::new("source");
+            let tx_source = source.tx_api();
+
+            let id_gen = PrettyIdGenerator::single_node(IdPrettifier::<AlphabetCodec>::default());
+            let mut clearinghouse = Clearinghouse::new("clearinghouse", &cache_settings, id_gen);
+            let tx_clearinghouse = clearinghouse.tx_api();
+
+            let subscription = TelemetrySubscription::Explicit {
+                name: "sub".into(),
+                required_fields: maplit::hashset! {"pos".into(), "cat".into()},
+                optional_fields: maplit::hashset! {"extra".into()},
+                outlet_to_subscription: Outlet::new("sub_outlet", PORT_DATA),
+                update_metrics: None,
+            };
+
+            let channel: SubscriptionChannel<TableType> = assert_ok!(SubscriptionChannel::new("channel").await);
+            let (tx_sink, mut rx_sink) = mpsc::channel(8);
+
+            (source.outlet(), clearinghouse.inlet()).connect().await;
+            clearinghouse.subscribe(subscription, &channel.subscription_receiver).await;
+            channel.outlet().attach("sink", tx_sink).await;
+
+            let mut graph = crate::graph::Graph::default();
+            graph.push_back(Box::new(source)).await;
+            graph.push_back(Box::new(clearinghouse)).await;
+            graph.push_back(Box::new(channel)).await;
+            let graph_handle = tokio::spawn(async move { graph.run().await });
+
+            assert_ok!(
+                ActorSourceCmd::push(
+                    &tx_source,
+                    Telemetry::from(maplit::hashmap! {
+                        "pos".into() => 13_i64.into(),
+                        "cat".into() => "stella".into(),
+                    })
+                )
+                .await
+            );
+
+            let actual = assert_ok!(rx_sink.try_recv());
+            assert_eq!(
+                without_auto_fields(&Telemetry::from(actual)),
+                without_auto_fields(&Telemetry::from(maplit::hashmap! {
+                    "pos".into() => 13_i64.into(),
+                    "cat".into() => "stella".into(),
+                }))
+            );
+
+            assert_ok!(ClearinghouseCmd::clear(&tx_clearinghouse).await);
+
+            assert_matches!(rx_sink.try_recv(), Err(TryRecvError::Empty));
+
+            assert_ok!(
+                ActorSourceCmd::push(
+                    &tx_source,
+                    Telemetry::from(maplit::hashmap! {
+                        "pos".into() => 13_i64.into(),
+                        "extra".into() => 3.14_f64.into(),
+                    })
+                )
+                .await
+            );
+
+            assert_matches!(rx_sink.try_recv(), Err(TryRecvError::Empty));
+
+            assert_ok!(
+                ActorSourceCmd::push(
+                    &tx_source,
+                    Telemetry::from(maplit::hashmap! {
+                        "cat".into() => "neo".into(),
+                    })
+                )
+                .await
+            );
+
+            let actual = assert_some!(rx_sink.recv().await);
+            assert_eq!(
+                without_auto_fields(&Telemetry::from(actual)),
+                without_auto_fields(&Telemetry::from(maplit::hashmap! {
+                    "pos".into() => 13_i64.into(),
+                    "cat".into() => "neo".into(),
+                    "extra".into() => 3.14_f64.into(),
+                }))
+            );
+
+            assert_ok!(ActorSourceCmd::stop(&tx_source).await);
+
+            assert_ok!(assert_ok!(graph_handle.await));
+            assert_none!(rx_sink.recv().await);
+        })
     }
 }
