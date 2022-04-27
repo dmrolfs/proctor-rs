@@ -255,7 +255,7 @@ impl Clearinghouse {
         subscription.fulfill(cache)
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     async fn handle_command(
         &mut self,
         command: ClearinghouseCmd, // subscriptions: &mut Vec<TelemetrySubscription>, database: &Telemetry,
@@ -340,6 +340,7 @@ impl Clearinghouse {
         }
     }
 
+    #[tracing::instrument(level="info", skip(self))]
     async fn clear_cache(&mut self) -> Result<(), CacheError> {
         // clear doesn't work now, but hopefully soon!
         let clear_ack = match self.cache.clear() {
@@ -347,7 +348,7 @@ impl Clearinghouse {
             err => err,
         };
         match clear_ack {
-            Ok(()) => tracing::debug!(stage=%self.name(), "clearinghouse telemetry cache cleared."),
+            Ok(()) => tracing::info!(stage=%self.name(), "clearinghouse telemetry cache cleared."),
             Err(err) => {
                 tracing::error!(error=?err, "failed to clear clearinghouse telemetry cache -- ignoring.")
             },
