@@ -343,7 +343,7 @@ impl<T: AppData> Outlet<T> {
     pub async fn check_attachment(&self) -> Result<(), PortError> {
         if self.is_attached().await {
             let receiver = self.connection.lock().await.as_ref().map(|s| s.1.clone()).unwrap();
-            tracing::debug!("outlet connected: {} -> {}", self.full_name(), receiver);
+            tracing::trace!("outlet connected: {} -> {}", self.full_name(), receiver);
             Ok(())
         } else {
             Err(PortError::Detached(format!(

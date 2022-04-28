@@ -340,7 +340,7 @@ impl Clearinghouse {
         }
     }
 
-    #[tracing::instrument(level="info", skip(self))]
+    #[tracing::instrument(level = "info", skip(self))]
     async fn clear_cache(&mut self) -> Result<(), CacheError> {
         // clear doesn't work now, but hopefully soon!
         let clear_ack = match self.cache.clear() {

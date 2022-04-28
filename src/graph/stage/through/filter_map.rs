@@ -135,7 +135,7 @@ where
     async fn run(&mut self) -> ProctorResult<()> {
         let outlet = &self.outlet;
         while let Some(item) = self.inlet.recv().await {
-            let span = tracing::debug_span!("filter on item", ?item, stage=%self.name());
+            let span = tracing::trace_span!("filter on item", ?item, stage=%self.name());
             let _timer = stage::start_stage_eval_time(&self.name);
             let filter_passed = span.in_scope(|| (self.filter_map)(item));
 

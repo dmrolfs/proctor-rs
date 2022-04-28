@@ -70,9 +70,9 @@ where
             tokio::select! {
                 _next_tick = ticker.tick() => {
                     let mut b_guard = batch.lock().await;
-                    tracing::debug!(batch=?*b_guard, "tick");
+                    tracing::trace!(batch=?*b_guard, "tick");
                     if let Some(ref b) = *b_guard {
-                        tracing::debug!(batch=?b, "publishing batch");
+                        tracing::trace!(batch=?b, "publishing batch");
                         self.outlet.send(b.clone()).await?;
                         *b_guard = <Option<T> as Monoid>::empty();
                     }
@@ -82,7 +82,7 @@ where
                     match data {
                         Some(d) => {
                             let mut b = batch.lock().await;
-                            tracing::debug!(data=?d, batch=?b, "combining data with batch");
+                            tracing::trace!(data=?d, batch=?b, "combining data with batch");
                             *b = b.combine(&Some(d));
                         },
                         None => {

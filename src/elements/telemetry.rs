@@ -45,7 +45,7 @@ impl Telemetry {
     }
 
     /// Attempt to deserialize the entire telemetry into the requested type.
-    #[tracing::instrument(level = "debug", name = "try into telemetry")]
+    #[tracing::instrument(level = "trace", name = "try into telemetry")]
     pub fn try_into<T: serde_de::DeserializeOwned>(self) -> Result<T, TelemetryError> {
         let mut serializer = flexbuffers::FlexbufferSerializer::new();
         self.0.serialize(&mut serializer)?;
@@ -57,7 +57,7 @@ impl Telemetry {
     // todo: DMR - I can't get this to work wrt Enum Unit Variants - see commented out try_form portion
     // of test_telemetry_simple_enum()
     /// Attempt to serialize the entire telemetry from the given type.
-    #[tracing::instrument(level = "debug", name = "try from telemetry", skip())]
+    #[tracing::instrument(level = "trace", name = "try from telemetry", skip())]
     pub fn try_from<T: Serialize + Debug>(from: &T) -> Result<Self, TelemetryError> {
         // todo: mimic technique in config-rs more closely
         let mut serializer = flexbuffers::FlexbufferSerializer::new();
@@ -141,7 +141,6 @@ impl From<BTreeMap<String, TelemetryValue>> for Telemetry {
 impl std::ops::Add for Telemetry {
     type Output = Self;
 
-    #[tracing::instrument(level = "trace", skip())]
     fn add(mut self, rhs: Self) -> Self::Output {
         self.0.extend(&rhs.0);
         self

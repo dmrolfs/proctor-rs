@@ -169,7 +169,7 @@ impl<P: Planning> Plan<P> {
                 Some(data) = rx_data.recv() => planning.add_observation(data),
 
                 Some(context) = rx_context.recv() => {
-                    let span = tracing::info_span!("DMR(debug):Plan handle context", correlation=?context.correlation(),);
+                    let span = tracing::debug_span!("Plan handle context", correlation=?context.correlation(),);
                     if let Some(event) = planning.patch_context(context).instrument(span).await? {
                         Self::publish_event(tx_monitor, event);
                     }
@@ -178,7 +178,7 @@ impl<P: Planning> Plan<P> {
                 Some(decision) = rx_decision.recv() => {
                     let _timer = stage::start_stage_eval_time(&self.name);
 
-                    let span = tracing::info_span!("DMR(debug):Plan handle decision", correlation=?decision.correlation(),);
+                    let span = tracing::debug_span!("Plan handle decision", correlation=?decision.correlation(),);
                     let event = match planning.handle_decision(decision.clone()).instrument(span).await? {
                         Some(out) => PlanEvent::DecisionPlanned(decision, out),
                         None => PlanEvent::DecisionIgnored(decision),
