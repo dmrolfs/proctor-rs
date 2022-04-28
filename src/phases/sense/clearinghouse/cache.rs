@@ -130,7 +130,7 @@ impl TelemetryCache {
             .expect("failed creating clearinghouse cache")
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub async fn insert(&mut self, key: String, val: TelemetryValue, cost: i64) -> bool {
         let result = self.cache.insert(key.clone(), val, cost).await;
         if result {
@@ -139,7 +139,7 @@ impl TelemetryCache {
         result
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub async fn try_insert(&mut self, key: String, val: TelemetryValue, cost: i64) -> Result<bool, CacheError> {
         let result = self
             .cache
@@ -153,7 +153,7 @@ impl TelemetryCache {
         result
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub async fn insert_with_ttl(&mut self, key: String, val: TelemetryValue, cost: i64, ttl: Duration) -> bool {
         let result = self.cache.insert_with_ttl(key.clone(), val, cost, ttl).await;
         if result {
@@ -162,7 +162,7 @@ impl TelemetryCache {
         result
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub async fn try_insert_with_ttl(
         &mut self, key: String, val: TelemetryValue, cost: i64, ttl: Duration,
     ) -> Result<bool, CacheError> {
@@ -175,7 +175,7 @@ impl TelemetryCache {
         result
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub async fn insert_if_present(&mut self, key: String, val: TelemetryValue, cost: i64) -> bool {
         let result = self.cache.insert_if_present(key.clone(), val, cost).await;
         if result {
@@ -184,7 +184,7 @@ impl TelemetryCache {
         result
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub async fn try_insert_if_present(
         &mut self, key: String, val: TelemetryValue, cost: i64,
     ) -> Result<bool, CacheError> {
@@ -197,14 +197,14 @@ impl TelemetryCache {
         result
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "trace")]
     pub async fn wait(&self) -> Result<(), CacheError> {
         let result = self.cache.wait().await;
         tracing::debug!(
             wait=?result,
             cost_added=?self.cache.metrics.get_cost_added(),
             cost_evicted=?self.cache.metrics.get_cost_evicted(),
-            "cache metrics after cache operation wait"
+            "clearinghouse telemetry cache metrics after wait operation"
         );
         result
     }
