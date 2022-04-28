@@ -331,7 +331,7 @@ impl Clearinghouse {
 
             ClearinghouseCmd::Clear { tx } => {
                 if let Err(err) = self.clear_cache().await {
-                    tracing::error!(error=?err, "failed to clear clearinghouse telementry cache - ignoring.");
+                    tracing::error!(error=?err, "failed to clear clearinghouse telemetry cache - ignoring.");
                 }
 
                 let _ = tx.send(());
