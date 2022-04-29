@@ -233,7 +233,7 @@ impl QueryPolicy for TestPolicy {
     fn query_policy(&self, engine: &Oso, args: Self::Args) -> Result<QueryResult, PolicyError> {
         let q = engine.query_rule(self.query.as_str(), args)?;
         let result = QueryResult::from_query(q)?;
-        tracing::info!(?result, "DMR: query policy results!");
+        tracing::info!(?result, "query policy results!");
         Ok(result)
     }
 }
@@ -516,28 +516,28 @@ async fn test_policy_filter_happy_context() -> anyhow::Result<()> {
     )
     .await?;
 
-    tracing::info!("DMR: 01. Make sure empty env...");
+    tracing::info!("01. Make sure empty env...");
 
     let detail = flow.inspect_filter_context().await?;
     assert_none!(detail.context);
 
-    tracing::info!("DMR: 02. Push context...");
+    tracing::info!("02. Push context...");
 
     flow.push_context(TestContext::new(33)).await?;
 
-    tracing::info!("DMR: 03. Verify context set...");
+    tracing::info!("03. Verify context set...");
 
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     let detail = flow.inspect_filter_context().await?;
     assert_some!(detail.context);
 
-    tracing::info!("DMR: 04. Push Item...");
+    tracing::info!("04. Push Item...");
 
     let ts = Utc::now().into();
     let item = TestItem::new(consts::PI, ts, 1);
     flow.push_item(item).await?;
 
-    tracing::info!("DMR: 05. Look for Item in sink...");
+    tracing::info!("05. Look for Item in sink...");
 
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     let actual = flow.inspect_sink().await?;
@@ -550,16 +550,16 @@ async fn test_policy_filter_happy_context() -> anyhow::Result<()> {
         ),]
     );
 
-    tracing::info!("DMR: 06. Push another Item...");
+    tracing::info!("06. Push another Item...");
 
     let item = TestItem::new(consts::TAU, ts, 2);
     flow.push_item(item).await?;
 
-    tracing::info!("DMR: 07. Close flow...");
+    tracing::info!("07. Close flow...");
 
     let actual = flow.close().await?;
 
-    tracing::info!(?actual, "DMR: 08. Verify final accumulation...");
+    tracing::info!(?actual, "08. Verify final accumulation...");
 
     assert_eq!(
         actual,
@@ -593,7 +593,7 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     flow.push_context(TestContext::new(33)).await?;
     let event = &*flow.recv_policy_event().await?;
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ContextChanged(_));
-    tracing::info!(?event, "DMR-A: context changed confirmed");
+    tracing::info!(?event, "A: context changed confirmed");
 
     let ts = Utc::now().into();
     let item = TestItem::new(consts::PI, ts, 1);
@@ -604,30 +604,30 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
     flow.push_context(TestContext::new(19)).await?;
     let event = &*flow.recv_policy_event().await?;
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ContextChanged(_));
-    tracing::info!(?event, "DMR-B: context changed confirmed");
+    tracing::info!(?event, "B: context changed confirmed");
 
     let item = TestItem::new(consts::E, ts, 2);
     flow.push_item(item).await?;
     let event = &*flow.recv_policy_event().await?;
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_, _));
-    tracing::info!(?event, "DMR-C: item dropped confirmed");
+    tracing::info!(?event, "C: item dropped confirmed");
 
     let item = TestItem::new(consts::FRAC_1_PI, ts, 3);
     flow.push_item(item).await?;
     let event = &*flow.recv_policy_event().await?;
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_, _));
-    tracing::info!(?event, "DMR-D: item dropped confirmed");
+    tracing::info!(?event, "D: item dropped confirmed");
 
     let item = TestItem::new(consts::FRAC_1_SQRT_2, ts, 4);
     flow.push_item(item).await?;
     let event = &*flow.recv_policy_event().await?;
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_, _));
-    tracing::info!(?event, "DMR-E: item dropped confirmed");
+    tracing::info!(?event, "E: item dropped confirmed");
 
     flow.push_context(TestContext::new(33)).await?;
     let event = &*flow.recv_policy_event().await?;
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ContextChanged(_));
-    tracing::info!(?event, "DMR-F: context changed confirmed");
+    tracing::info!(?event, "F: context changed confirmed");
 
     let item = TestItem::new(consts::LN_2, ts, 5);
     flow.push_item(item).await?;
@@ -636,7 +636,7 @@ async fn test_policy_filter_w_pass_and_blocks() -> anyhow::Result<()> {
 
     let actual = flow.close().await?;
 
-    tracing::info!(?actual, "DMR: 08. Verify final accumulation...");
+    tracing::info!(?actual, "08. Verify final accumulation...");
     assert_eq!(
         actual,
         vec![
@@ -810,7 +810,7 @@ async fn test_policy_w_item_n_env() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_policy_w_item_n_env");
     let _ = main_span.enter();
 
-    tracing::info!("DMR-A:create flow...");
+    tracing::info!("A:create flow...");
     // another form for policy that works
     // r#"
     //     eligible(item, env) if proper_cat(item, env) and lag_2(item, env);
@@ -835,12 +835,12 @@ async fn test_policy_w_item_n_env() -> anyhow::Result<()> {
     )
     .await?;
 
-    tracing::info!("DMR-B:push env...");
+    tracing::info!("B:push env...");
     flow.push_context(
         TestContext::new(23).with_custom(maplit::hashmap! {"cat".to_string() => "Otis".to_telemetry()}.into()),
     )
     .await?;
-    tracing::info!("DMR-C:verify enviornment...");
+    tracing::info!("C:verify enviornment...");
 
     let ts = Utc::now().into();
     let item = TestItem::new(consts::PI, ts, 1);
@@ -924,7 +924,7 @@ async fn test_replace_policy() -> anyhow::Result<()> {
 
     let policy_1 = r##"eligible(_, env: TestContext, c) if c = env.custom() and c.cat = "{{cat}}";"##;
     let policy_2 = format!("eligible(item, _, _) if item.within_seconds({});", boundary_age_secs);
-    tracing::info!(?policy_2, "DMR: policy with timestamp");
+    tracing::info!(?policy_2, "policy with timestamp");
 
     let flow = TestFlow::new(
         policy_1,

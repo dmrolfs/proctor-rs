@@ -100,7 +100,7 @@ where
                 },
 
                 else => {
-                    tracing::error!("DMR: reduce_within: unexpected message");
+                    tracing::error!("reduce_within: unexpected message - stopping");
                     break
                 },
             }

@@ -197,7 +197,7 @@ impl Clearinghouse {
             .into_iter()
             .map(|(s, mut fulfillment)| {
                 let (_corr, _recv_ts) = Self::add_automatic_telemetry(&mut fulfillment, &mut correlation_generator);
-                tracing::info!(subscription=%s.name(), ?fulfillment, "DMR(debug): sending subscription data update.");
+                tracing::debug!(subscription=%s.name(), ?fulfillment, "sending subscription data update.");
                 s.update_metrics(&fulfillment);
                 s.send(fulfillment).map(move |send_status| {
                     track_publications(s.name());
@@ -994,7 +994,7 @@ mod tests {
                         let corr = assert_ok!(a
                             .remove(SUBSCRIPTION_CORRELATION)
                             .map(|c| {
-                                tracing::warn!("DMR: trying to parse Id from c={:?}", c);
+                                tracing::info!("trying to parse Id from c={:?}", c);
                                 Id::try_from(c)
                             })
                             .transpose());

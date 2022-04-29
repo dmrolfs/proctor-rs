@@ -291,8 +291,8 @@ where
     }
 
     #[tracing::instrument(
-        level = "info",
-        name = "DMR(debug):policy_filter handle item",
+        level = "trace",
+        name = "policy_filter handle item",
         skip(oso, outlet, tx, policy),
         fields(stage=%name, correlation=?item.correlation())
     )]

@@ -257,25 +257,25 @@ fn test_context_serde() {
         Token::MapEnd,
     ];
 
-    tracing::error!("DMR... A");
+    tracing::error!("A");
     let mut result = std::panic::catch_unwind(|| {
-        tracing::error!("DMR... B1");
+        tracing::error!("B1");
         assert_tokens(&context, expected.as_slice());
-        tracing::error!("DMR... B2");
+        tracing::error!("B2");
     });
 
-    tracing::error!("DMR... C");
+    tracing::error!("C");
     if result.is_err() {
-        tracing::error!(?expected, "DMR... D0");
+        tracing::error!(?expected, "D0");
         expected.swap(9, 11);
         expected.swap(10, 12);
-        tracing::error!(?expected, "DMR... D1");
+        tracing::error!(?expected, "D1");
         result = std::panic::catch_unwind(|| {
             assert_tokens(&context, expected.as_slice());
         });
-        tracing::error!("DMR... D2");
+        tracing::error!("D2");
     }
-    tracing::error!("DMR... E");
+    tracing::error!("E");
 
     assert_ok!(result);
 }
@@ -326,18 +326,18 @@ impl<T: AppData + oso::ToPolar> PolicySubscription for TestPolicyA<T> {
 
     fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
         tracing::warn!(
-            "DMR: TestPolicy::subscription: before custom subscription:{:?}",
+            "TestPolicy::subscription: before custom subscription:{:?}",
             subscription
         );
 
         let result = if let Some(ref custom_fields) = self.custom_fields {
-            tracing::error!("DMR: TestPolicy::subscription: custom_fields:{:?}", custom_fields);
+            tracing::error!("TestPolicy::subscription: custom_fields:{:?}", custom_fields);
             subscription.with_optional_fields(custom_fields.clone())
         } else {
             subscription
         };
 
-        tracing::warn!("DMR: TestPolicy::subscription: after custom subscription:{:?}", result);
+        tracing::warn!("TestPolicy::subscription: after custom subscription:{:?}", result);
         result
     }
 }
@@ -713,12 +713,12 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
         .await
     );
 
-    tracing::warn!("DMR: 01. Make sure empty env...");
+    tracing::warn!("01. Make sure empty env...");
 
     let detail = assert_ok!(flow.inspect_policy_context().await);
     assert!(detail.context.is_none());
 
-    tracing::warn!("DMR: 02. Push environment...");
+    tracing::warn!("02. Push environment...");
 
     let now = Utc::now();
     let t1 = now - chrono::Duration::days(1);
@@ -732,12 +732,12 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
     let mut context_telemetry: Telemetry = context_data.clone().into_iter().collect();
     context_telemetry.insert(SUBSCRIPTION_TIMESTAMP.to_string(), Timestamp::now().into());
     context_telemetry.insert(SUBSCRIPTION_CORRELATION.to_string(), flow.id_generator.next_id().into());
-    tracing::warn!(?context_telemetry, "DMR: converting context telemetry...");
+    tracing::warn!(?context_telemetry, "converting context telemetry...");
     let context: TestPolicyPhaseContext = assert_ok!(context_telemetry.try_into());
-    tracing::warn!(?context, "DMR: pushing context object...");
+    tracing::warn!(?context, "pushing context object...");
     assert_ok!(flow.push_context(context_data).await);
 
-    tracing::warn!("DMR: 03. Verify environment set...");
+    tracing::warn!("03. Verify environment set...");
 
     match &*assert_ok!(flow.rx_eligibility_monitor.recv().await) {
         PolicyFilterEvent::ContextChanged(Some(ctx)) => {
@@ -761,13 +761,13 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
         PolicyFilterEvent::ItemBlocked(item, _) => panic!("unexpected item receipt - blocked: {:?}", item),
         PolicyFilterEvent::ItemPassed(data, _) => panic!("unexpected data passed policy: {:?}", data),
     };
-    tracing::warn!("DMR: 04. environment change verified.");
+    tracing::warn!("04. environment change verified.");
 
     let detail = assert_ok!(flow.inspect_policy_context().await);
-    tracing::warn!("DMR: policy detail = {:?}", detail);
+    tracing::warn!("policy detail = {:?}", detail);
     assert!(detail.context.is_some());
 
-    tracing::warn!("DMR: 05. Push Item...");
+    tracing::warn!("05. Push Item...");
 
     let pi_correlation_id = Id::direct("MeasurementData", 314, "PI");
 
@@ -790,14 +790,14 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
             .await
     );
 
-    tracing::warn!("DMR: 06. Look for Item in sink...");
+    tracing::warn!("06. Look for Item in sink...");
 
     assert!(assert_ok!(
         flow.check_sink_accumulation("first", Duration::from_secs(2), |acc| acc.len() == 1)
             .await
     ));
 
-    tracing::warn!("DMR: 07. Push another Item...");
+    tracing::warn!("07. Push another Item...");
 
     let tau_correlation_id: Id<MeasurementData> = Id::direct("MeasurementData", 821, "TAU");
 
@@ -811,11 +811,11 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
         .await
     );
 
-    tracing::warn!("DMR: 08. Close flow...");
+    tracing::warn!("08. Close flow...");
 
     let actual = assert_ok!(flow.close().await);
 
-    tracing::warn!(?actual, "DMR: 09. Verify final accumulation...");
+    tracing::warn!(?actual, "09. Verify final accumulation...");
 
     let pi_cid = &actual[0].item.correlation_id;
     // let pi_rts = actual(0).item.recv_timestamp;
@@ -1036,14 +1036,14 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
 
     let event = &*flow.recv_policy_event().await?;
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ContextChanged(_));
-    tracing::warn!(?event, "DMR-A: environment changed confirmed");
+    tracing::warn!(?event, "A: environment changed confirmed");
 
     let pi_cid = Id::direct("TestItem", 314, "PI");
     let ts = *DT_1 + chrono::Duration::hours(1);
     let item = TestItem::new(pi_cid.clone(), std::f64::consts::PI, 1, ts);
-    tracing::warn!(?item, "DMR-A.1: created item to push.");
+    tracing::warn!(?item, "A.1: created item to push.");
     let telemetry = Telemetry::try_from(&item);
-    tracing::warn!(?item, ?telemetry, "DMR-A.2: converted item to telemetry and pushing...");
+    tracing::warn!(?item, ?telemetry, "A.2: converted item to telemetry and pushing...");
     flow.push_telemetry(telemetry?).await?;
     let event = &*flow.recv_policy_event().await?;
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemPassed(_, _));
@@ -1054,7 +1054,7 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
             .await?
     );
 
-    tracing::warn!("DMR-A.3: pushed telemetry and now pushing context update...");
+    tracing::warn!("A.3: pushed telemetry and now pushing context update...");
 
     flow.push_context(maplit::hashmap! {
         "cluster.location_code" => 19.to_telemetry(),
@@ -1064,7 +1064,7 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
     .await?;
     let event = &*flow.recv_policy_event().await?;
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ContextChanged(_));
-    tracing::warn!(?event, "DMR-B: environment changed confirmed");
+    tracing::warn!(?event, "B: environment changed confirmed");
 
     let e_cid = Id::direct("TestItem", 296, "E");
     let item = TestItem::new(e_cid.clone(), std::f64::consts::E, 2, ts);
@@ -1072,7 +1072,7 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
     flow.push_telemetry(telemetry?).await?;
     let event = &*flow.recv_policy_event().await?;
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_, _));
-    tracing::warn!(?event, "DMR-C: item dropped confirmed");
+    tracing::warn!(?event, "C: item dropped confirmed");
 
     let fpi_cid = Id::direct("TestItem", 314, "FPI");
     let item = TestItem::new(fpi_cid.clone(), std::f64::consts::FRAC_1_PI, 3, ts);
@@ -1080,7 +1080,7 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
     flow.push_telemetry(telemetry).await?;
     let event = &*flow.recv_policy_event().await?;
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_, _));
-    tracing::warn!(?event, "DMR-D: item dropped confirmed");
+    tracing::warn!(?event, "D: item dropped confirmed");
 
     let rt_cid = Id::direct("TestItem", 717, "RT");
     let item = TestItem::new(rt_cid.clone(), std::f64::consts::FRAC_1_SQRT_2, 4, ts);
@@ -1088,13 +1088,13 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
     flow.push_telemetry(telemetry).await?;
     let event = &*flow.recv_policy_event().await?;
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ItemBlocked(_, _));
-    tracing::warn!(?event, "DMR-E: item dropped confirmed");
+    tracing::warn!(?event, "E: item dropped confirmed");
 
     flow.push_context(maplit::hashmap! { "cluster.location_code" => 33.to_telemetry(), })
         .await?;
 
     let event = &*flow.recv_policy_event().await?;
-    tracing::info!(?event, "DMR-E.1: policy event received.");
+    tracing::info!(?event, "E.1: policy event received.");
     assert_eq!(
         event,
         &elements::PolicyFilterEvent::ContextChanged(Some(TestPolicyPhaseContext {
@@ -1110,7 +1110,7 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
         }))
     );
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ContextChanged(_));
-    tracing::warn!(?event, "DMR-F: environment changed confirmed");
+    tracing::warn!(?event, "F: environment changed confirmed");
 
     let i_cid = Id::direct("TestItem", 3978, "IDD");
     let item = TestItem::new(i_cid.clone(), std::f64::consts::LN_2, 5, ts);
@@ -1125,7 +1125,7 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
 
     let actual: Vec<PolicyOutcome<TestItem, TestPolicyPhaseContext>> = flow.close().await?;
 
-    tracing::warn!(?actual, "DMR: 08. Verify final accumulation...");
+    tracing::warn!(?actual, "08. Verify final accumulation...");
     let actual_vals: Vec<(f64, i32)> = actual
         .into_iter()
         .map(|a| (a.item.flow.input_messages_per_sec, a.item.inbox_lag))
@@ -1209,7 +1209,7 @@ async fn test_eligibility_w_item_n_env() -> anyhow::Result<()> {
     let main_span = tracing::info_span!("test_eligibility_w_item_n_env");
     let _ = main_span.enter();
 
-    tracing::info!("DMR-A:create flow...");
+    tracing::info!("A:create flow...");
 
     let subscription = TelemetrySubscription::new("data").with_required_fields(maplit::hashset! {
         "input_messages_per_sec",
@@ -1238,7 +1238,7 @@ async fn test_eligibility_w_item_n_env() -> anyhow::Result<()> {
     // "#,
     let flow = TestFlow::new(subscription, policy).await?;
 
-    tracing::info!("DMR-B:push env...");
+    tracing::info!("B:push env...");
     flow.push_context(maplit::hashmap! {
         "cluster.location_code" => 23.to_telemetry(),
         "cluster.is_deploying" => false.to_telemetry(),
@@ -1246,7 +1246,7 @@ async fn test_eligibility_w_item_n_env() -> anyhow::Result<()> {
         "cat" => "Otis".to_telemetry(),
     })
     .await?;
-    tracing::info!("DMR-C:verify context...");
+    tracing::info!("C:verify context...");
 
     let ts = Utc::now().into();
     let i_cid_0 = Id::direct("TestItem", 4398, "JSHD");
@@ -1289,7 +1289,7 @@ async fn test_eligibility_replace_policy() -> anyhow::Result<()> {
 
     let policy_1 = r##"eligible(_, env: PhaseContext) if env.custom.cat = "{{kitty}}";"##;
     let policy_2 = r##"eligible(metrics, _) if metrics.within_seconds({{boundary}});"##;
-    tracing::info!(?policy_2, "DMR: policy with timestamp");
+    tracing::info!(?policy_2, "policy with timestamp");
 
     let policy = TestPolicyB::new_with_extension(
         policy_1,
@@ -1319,17 +1319,17 @@ async fn test_eligibility_replace_policy() -> anyhow::Result<()> {
 
     let event = &*flow.recv_policy_event().await?;
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ContextChanged(_));
-    tracing::warn!(?event, "DMR-A: environment changed confirmed");
+    tracing::warn!(?event, "A: environment changed confirmed");
 
     let cid_0 = Id::direct("TestItem", 984, "JHD");
     let item_1 = TestItem::new(cid_0.clone(), std::f64::consts::PI, 1, too_old_ts);
-    tracing::warn!(?item_1, "DMR-A-1: item passes...");
+    tracing::warn!(?item_1, "A-1: item passes...");
     let telemetry_1 = Telemetry::try_from(&item_1)?;
     flow.push_telemetry(telemetry_1.clone()).await?;
 
     let cid_1 = Id::direct("TestItem", 97832, "SJHD");
     let item_2 = TestItem::new(cid_1.clone(), 17.327, 2, good_ts);
-    tracing::warn!(?item_2, "DMR-A-2: item passes...");
+    tracing::warn!(?item_2, "A-2: item passes...");
     let telemetry_2 = Telemetry::try_from(&item_2)?;
     flow.push_telemetry(telemetry_2.clone()).await?;
 
@@ -1344,10 +1344,10 @@ async fn test_eligibility_replace_policy() -> anyhow::Result<()> {
     )
     .await?;
 
-    tracing::warn!("DMR-B: after policy change, pushing telemetry data...");
-    tracing::warn!(?telemetry_1, "DMR-B-1: item blocked...");
+    tracing::warn!("B: after policy change, pushing telemetry data...");
+    tracing::warn!(?telemetry_1, "B-1: item blocked...");
     flow.push_telemetry(telemetry_1).await?;
-    tracing::warn!(?telemetry_2, "DMR-B-2: item passes...");
+    tracing::warn!(?telemetry_2, "B-2: item passes...");
     flow.push_telemetry(telemetry_2).await?;
 
     let actual = flow.close().await?;
