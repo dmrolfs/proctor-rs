@@ -316,7 +316,7 @@ where
             },
 
             Ok(result) => {
-                tracing::debug!(?policy, ?result, "item failed {name} policy review - skipping.");
+                tracing::info!(?policy, ?result, "item failed {name} policy review - skipping.");
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item, Some(result)), tx)?;
                 Ok(())
             },
