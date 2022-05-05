@@ -208,7 +208,7 @@ where
             tokio::select! {
                 item = item_inlet.recv() => match item {
                     Some(item) => {
-                        tracing::debug!(?item, ?context, "handling next item...");
+                        tracing::debug!(?item, ?context, "{} handling next item...", name);
 
                         match context.lock().await.as_ref() {
                             Some(ctx) => Self::handle_item(&name, item, ctx, policy, &oso, outlet, tx_monitor).await?,
@@ -216,7 +216,7 @@ where
                         }
                     },
                     None => {
-                        tracing::info!("PolicyFilter inlet,{:?}, dropped - completing.", item_inlet);
+                        tracing::info!("{} PolicyFilter inlet,{:?}, dropped - completing.", name, item_inlet);
                         break;
                     }
                 },
@@ -233,13 +233,13 @@ where
                     ).await;
 
                     if !cont_loop {
-                        tracing::trace!("policy commanded to stop - breaking...");
+                        tracing::trace!("{} policy commanded to stop - breaking...", name);
                         break;
                     }
                 },
 
                 else => {
-                    tracing::trace!("feed into policy depleted - breaking...");
+                    tracing::trace!("{} feed into policy depleted - breaking...", name);
                     break;
                 },
             }
@@ -305,13 +305,9 @@ where
         // query lifetime cannot span across `.await` since it cannot `Send` between threads.
         let query_result = policy.query_policy(oso, policy.make_query_args(&item, context));
 
-        let outcome = match query_result {
+        match query_result {
             Ok(result) if result.passed => {
-                tracing::debug!(
-                    ?policy,
-                    ?result,
-                    "item passed context policy review - sending via outlet."
-                );
+                tracing::info!(?result, "item passed {name} policy review - sending via outlet.");
                 outlet
                     .send(PolicyOutcome::new(item.clone(), context.clone(), result.clone()))
                     .await?;
@@ -320,19 +316,20 @@ where
             },
 
             Ok(result) => {
-                tracing::debug!(?policy, ?result, "item failed context policy review - skipping.");
+                tracing::debug!(?policy, ?result, "item failed {name} policy review - skipping.");
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item, Some(result)), tx)?;
                 Ok(())
             },
 
             Err(err) => {
-                tracing::error!(error=?err, ?policy, "error in context policy review - skipping item.");
+                tracing::error!(
+                    error=?err, ?policy,
+                    "error in {name} policy review (possible error in policy definition) - skipping item."
+                );
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item, None), tx)?;
                 Err(err)
             },
-        };
-
-        outcome
+        }
     }
 
     #[tracing::instrument(
