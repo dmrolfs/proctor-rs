@@ -37,7 +37,8 @@ impl<T> PolicySettings<T>
 where
     T: Debug + Serialize + DeserializeOwned,
 {
-    pub const fn new(required_fields: HashSet<String>, optional_fields: HashSet<String>) -> Self {
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn new(required_fields: HashSet<String>, optional_fields: HashSet<String>) -> Self {
         Self {
             required_subscription_fields: required_fields,
             optional_subscription_fields: optional_fields,
@@ -51,6 +52,7 @@ where
         self
     }
 
+    #[allow(clippy::missing_const_for_fn)]
     pub fn with_template_data(mut self, data: T) -> Self {
         self.template_data = Some(data);
         self

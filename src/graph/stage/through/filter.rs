@@ -73,6 +73,7 @@ where
         Self { name, predicate, inlet, outlet, log_blocks: false }
     }
 
+    #[allow(clippy::missing_const_for_fn)]
     pub fn with_block_logging(self) -> Self {
         Self { log_blocks: true, ..self }
     }
