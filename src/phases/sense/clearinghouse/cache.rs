@@ -1,27 +1,73 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
 use dashmap::DashSet;
-use serde::{Deserialize, Serialize};
+use serde::de::MapAccess;
+use serde::{de, ser::SerializeMap, Deserialize, Deserializer, Serialize, Serializer};
 use stretto::{AsyncCache, CacheError};
 
 use crate::elements::{Telemetry, TelemetryValue};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct TelemetryCacheSettings {
+pub struct CacheTtl {
     /// Optional setting for the time to live for each clearinghouse field. The default is 5
     /// minutes. The clearinghouse is cleared during rescaling, so this value should be set to a
     /// duration reflecting a break in connectivity or the job not running.
     #[serde(
-        rename = "ttl_secs",
-        default = "TelemetryCacheSettings::default_ttl",
+        rename = "default_ttl_secs",
+        default = "CacheTtl::default_ttl",
         serialize_with = "crate::serde::serialize_duration_secs",
         deserialize_with = "crate::serde::deserialize_duration_secs"
     )]
-    pub ttl: Duration,
+    pub default_ttl: Duration,
+
+    /// Optional setting to override specific clearinghouse fields' time to live. This can be used
+    /// to set a different time to live or perhaps make a field never expire.
+    #[serde(
+        rename = "ttl_overrides",
+        skip_serializing_if = "HashMap::is_empty",
+        serialize_with = "TelemetryCacheSettings::serialize_ttl_overrides",
+        deserialize_with = "TelemetryCacheSettings::deserialize_ttl_overrides"
+    )]
+    pub ttl_overrides: HashMap<String, Duration>,
+
+    /// Optional setting to specify certain clearinghouse fields never expire.
+    #[serde(skip_serializing_if = "HashSet::is_empty", default)]
+    pub never_expire: HashSet<String>,
+}
+
+impl Default for CacheTtl {
+    fn default() -> Self {
+        Self {
+            default_ttl: Self::default_ttl(),
+            ttl_overrides: HashMap::default(),
+            never_expire: HashSet::default(),
+        }
+    }
+}
+
+impl CacheTtl {
+    pub const fn default_ttl() -> Duration {
+        Duration::from_secs(5 * 60)
+    }
+
+    /// Returns the time to live for a given field considering the corresponding specification.
+    pub fn for_field(&self, field: impl AsRef<str>) -> Option<Duration> {
+        if self.never_expire.contains(field.as_ref()) {
+            None
+        } else {
+            self.ttl_overrides.get(field.as_ref()).copied().or(Some(self.default_ttl))
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TelemetryCacheSettings {
+    pub ttl: CacheTtl,
 
     /// Optional setting for the cache access counter kept for admission and eviction. The default
     /// is 1000. A good  value is to set nr_counters to be 10x the number of *unique* fields
@@ -51,7 +97,7 @@ pub struct TelemetryCacheSettings {
 impl Default for TelemetryCacheSettings {
     fn default() -> Self {
         Self {
-            ttl: Self::default_ttl(),
+            ttl: CacheTtl::default(),
             nr_counters: 1_000,
             max_cost: 100, // 1e6 as i64,
             incremental_item_cost: 1,
@@ -61,12 +107,49 @@ impl Default for TelemetryCacheSettings {
 }
 
 impl TelemetryCacheSettings {
-    pub const fn default_ttl() -> Duration {
-        Duration::from_secs(5 * 60)
-    }
-
     pub const fn default_cleanup_interval() -> Duration {
         Duration::from_secs(5)
+    }
+
+    pub fn serialize_ttl_overrides<S>(that: &HashMap<String, Duration>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(that.len()))?;
+        for (k, v) in that {
+            map.serialize_entry(k, &v.as_secs())?;
+        }
+        map.end()
+    }
+
+    pub fn deserialize_ttl_overrides<'de, D>(deserializer: D) -> Result<HashMap<String, Duration>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct EntryVisitor;
+
+        impl<'de> de::Visitor<'de> for EntryVisitor {
+            type Value = HashMap<String, Duration>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("a map of string to ttl in seconds")
+            }
+
+            fn visit_map<A>(self, mut access: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut map = HashMap::with_capacity(access.size_hint().unwrap_or(0));
+
+                while let Some((key, value)) = access.next_entry()? {
+                    map.insert(key, Duration::from_secs(value));
+                }
+
+                Ok(map)
+            }
+        }
+
+        deserializer.deserialize_map(EntryVisitor)
     }
 }
 
@@ -97,6 +180,7 @@ impl TelemetryCacheSettings {
 pub struct TelemetryCache {
     cache: AsyncCache<String, TelemetryValue>,
     seen: Arc<DashSet<String>>,
+    ttl: CacheTtl,
 }
 
 impl fmt::Debug for TelemetryCache {
@@ -118,7 +202,11 @@ impl std::ops::Deref for TelemetryCache {
 impl TelemetryCache {
     pub fn new(settings: &TelemetryCacheSettings) -> Self {
         let cache = Self::make_cache(settings);
-        Self { cache, seen: Arc::new(DashSet::default()) }
+        Self {
+            cache,
+            seen: Arc::new(DashSet::default()),
+            ttl: settings.ttl.clone(),
+        }
     }
 
     fn make_cache(cache_settings: &TelemetryCacheSettings) -> AsyncCache<String, TelemetryValue> {
@@ -130,35 +218,44 @@ impl TelemetryCache {
             .expect("failed creating clearinghouse cache")
     }
 
+    /// insert honoring cache ttl specification.
     #[tracing::instrument(level = "trace")]
     pub async fn insert(&mut self, key: String, val: TelemetryValue, cost: i64) -> bool {
-        let result = self.cache.insert(key.clone(), val, cost).await;
+        let result = match self.ttl.for_field(&key) {
+            Some(ttl) => self.cache.insert_with_ttl(key.clone(), val, cost, ttl).await,
+            None => self.cache.insert(key.clone(), val, cost).await,
+        };
+
         if result {
             self.seen.insert(key);
         }
+
         result
     }
 
+    /// Tries to insert honoring cache ttl specification.
     #[tracing::instrument(level = "trace")]
     pub async fn try_insert(&mut self, key: String, val: TelemetryValue, cost: i64) -> Result<bool, CacheError> {
-        let result = self
-            .cache
-            .try_insert_with_ttl(key.clone(), val, cost, Duration::ZERO)
-            .await;
-        if let Ok(is_inserted) = result {
-            if is_inserted {
-                self.seen.insert(key);
-            }
+        let result = match self.ttl.for_field(&key) {
+            Some(ttl) => self.cache.try_insert_with_ttl(key.clone(), val, cost, ttl).await,
+            None => self.cache.try_insert(key.clone(), val, cost).await,
+        };
+
+        if let Ok(true) = result {
+            self.seen.insert(key);
         }
+
         result
     }
 
     #[tracing::instrument(level = "trace")]
     pub async fn insert_with_ttl(&mut self, key: String, val: TelemetryValue, cost: i64, ttl: Duration) -> bool {
         let result = self.cache.insert_with_ttl(key.clone(), val, cost, ttl).await;
+
         if result {
             self.seen.insert(key);
         }
+
         result
     }
 
@@ -167,20 +264,22 @@ impl TelemetryCache {
         &mut self, key: String, val: TelemetryValue, cost: i64, ttl: Duration,
     ) -> Result<bool, CacheError> {
         let result = self.cache.try_insert_with_ttl(key.clone(), val, cost, ttl).await;
-        if let Ok(is_inserted) = result {
-            if is_inserted {
-                self.seen.insert(key);
-            }
+
+        if let Ok(true) = result {
+            self.seen.insert(key);
         }
+
         result
     }
 
     #[tracing::instrument(level = "trace")]
     pub async fn insert_if_present(&mut self, key: String, val: TelemetryValue, cost: i64) -> bool {
         let result = self.cache.insert_if_present(key.clone(), val, cost).await;
+
         if result {
             self.seen.insert(key);
         }
+
         result
     }
 
@@ -189,11 +288,11 @@ impl TelemetryCache {
         &mut self, key: String, val: TelemetryValue, cost: i64,
     ) -> Result<bool, CacheError> {
         let result = self.cache.try_insert_if_present(key.clone(), val, cost).await;
-        if let Ok(is_inserted) = result {
-            if is_inserted {
-                self.seen.insert(key);
-            }
+
+        if let Ok(true) = result {
+            self.seen.insert(key);
         }
+
         result
     }
 
@@ -233,124 +332,5 @@ impl TelemetryCache {
             .collect();
 
         telemetry.into()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use claim::*;
-    use pretty_assertions::assert_eq;
-    use serde_test::{assert_tokens, Token};
-    use tokio_test::block_on;
-
-    use super::*;
-
-    #[ignore = "stretto bug: use after clear does not work"]
-    #[test]
-    fn test_basic_cache_add_after_clear() {
-        let ttl = Duration::from_secs(60);
-        block_on(async {
-            let cache = AsyncCache::builder(1000, 100)
-                .set_metrics(true)
-                .set_ignore_internal_cost(true)
-                .finalize()
-                .expect("failed creating cache");
-
-            assert!(cache.insert_with_ttl("foo".to_string(), 17.to_string(), 1, ttl).await);
-            assert!(cache.insert_with_ttl("bar".to_string(), "otis".to_string(), 1, ttl).await);
-            assert_ok!(cache.wait().await);
-
-            assert_eq!(assert_some!(cache.get(&"foo".to_string())).value(), &17.to_string());
-            assert_eq!(assert_some!(cache.get(&"bar".to_string())).value(), &"otis".to_string());
-
-            assert_ok!(cache.clear());
-            assert_ok!(cache.wait().await);
-
-            assert_none!(cache.get(&"foo".to_string()));
-
-            assert!(cache.insert_with_ttl("zed".to_string(), 33.to_string(), 1, ttl).await);
-            assert_ok!(cache.wait().await);
-
-            assert_none!(cache.get(&"bar".to_string()));
-            assert_eq!(assert_some!(cache.get(&"zed".to_string())).value(), &33.to_string());
-        });
-    }
-
-    #[ignore = "stretto bug: use after clear does not work"]
-    #[test]
-    fn test_cache_add_after_clear() {
-        let ttl = Duration::from_secs(60);
-        block_on(async {
-            // let cache = AsyncCache::builder(1000, 100)
-            //     .set_metrics(true)
-            //     .set_ignore_internal_cost(true)
-            //     .finalize()
-            //     .expect("failed creating clearinghouse cache");
-
-            let settings = TelemetryCacheSettings {
-                ttl,
-                nr_counters: 1_000,
-                max_cost: 100,
-                incremental_item_cost: 1,
-                cleanup_interval: Duration::from_millis(500),
-            };
-
-            let mut cache = TelemetryCache::new(&settings);
-            assert!(cache.insert_with_ttl("foo".into(), 17.into(), 1, ttl).await);
-            assert!(cache.insert_with_ttl("bar".into(), "otis".into(), 1, ttl).await);
-            assert_ok!(cache.wait().await);
-
-            assert_eq!(cache.seen(), maplit::hashset!["foo".into(), "bar".into()]);
-            assert_eq!(
-                cache.get_telemetry(),
-                Telemetry::from(maplit::hashmap! {
-                    "foo".into() => TelemetryValue::Integer(17),
-                    "bar".into() => TelemetryValue::Text("otis".into()),
-                })
-            );
-
-            assert_ok!(cache.clear());
-            assert_ok!(cache.wait().await);
-
-            assert!(cache.seen().is_empty());
-            assert!(cache.get_telemetry().is_empty());
-
-            assert!(
-                cache
-                    .insert_with_ttl("zed".into(), TelemetryValue::Seq(vec![17.into()]), 1, ttl)
-                    .await
-            );
-            assert_ok!(cache.wait().await);
-
-            assert_eq!(cache.seen(), maplit::hashset!["zed".into()]);
-            assert_eq!(
-                cache.get_telemetry(),
-                Telemetry::from(maplit::hashmap! {
-                    "zed".into() => TelemetryValue::Seq(vec![TelemetryValue::Integer(17)]),
-                })
-            )
-        });
-    }
-
-    #[test]
-    fn test_cache_settings_serde_tokens() {
-        let settings = TelemetryCacheSettings::default();
-        assert_tokens(
-            &settings,
-            &vec![
-                Token::Struct { name: "TelemetryCacheSettings", len: 5 },
-                Token::Str("ttl_secs"),
-                Token::U64(300),
-                Token::Str("nr_counters"),
-                Token::U64(1_000),
-                Token::Str("max_cost"),
-                Token::I64(100),
-                Token::Str("incremental_item_cost"),
-                Token::I64(1),
-                Token::Str("cleanup_interval_millis"),
-                Token::U64(5000),
-                Token::StructEnd,
-            ],
-        )
     }
 }

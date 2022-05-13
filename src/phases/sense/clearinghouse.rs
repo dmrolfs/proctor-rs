@@ -2,6 +2,8 @@ pub mod agent;
 mod cache;
 pub mod protocol;
 pub mod subscription;
+#[cfg(test)]
+mod tests;
 
 use std::collections::HashSet;
 use std::fmt::{self, Debug};
@@ -109,12 +111,7 @@ impl Clearinghouse {
                 for (k, v) in d {
                     let cache_insert = self
                         .cache
-                        .try_insert_with_ttl(
-                            k.clone(),
-                            v,
-                            self.cache_settings.incremental_item_cost,
-                            self.cache_settings.ttl,
-                        )
+                        .try_insert(k.clone(), v, self.cache_settings.incremental_item_cost)
                         .await
                         .map(|added| {
                             if added {
@@ -477,7 +474,7 @@ impl stage::WithApi for Clearinghouse {
 // // Unit Tests ///////////////////////////////////////
 //
 #[cfg(test)]
-mod tests {
+mod clearinghouse_tests {
     use std::collections::HashMap;
     use std::convert::TryFrom;
     use std::convert::TryInto;
@@ -497,6 +494,7 @@ mod tests {
     use crate::elements::telemetry::{TableType, ToTelemetry};
     use crate::graph::stage::{self, ActorSourceCmd, Stage, WithApi};
     use crate::graph::{Connect, Outlet, SinkShape, SourceShape, PORT_DATA};
+    use crate::phases::sense::clearinghouse::cache::CacheTtl;
     use crate::phases::sense::SubscriptionChannel;
 
     static ID_GENERATOR: Lazy<CorrelationGenerator> =
@@ -846,7 +844,10 @@ mod tests {
         let _main_span_guard = main_span.enter();
 
         let settings = TelemetryCacheSettings {
-            ttl: Duration::from_secs(60),
+            ttl: CacheTtl {
+                default_ttl: Duration::from_secs(60),
+                ..CacheTtl::default()
+            },
             nr_counters: 1_000,
             max_cost: 1e6 as i64,
             incremental_item_cost: 1,
@@ -956,12 +957,7 @@ mod tests {
                 for (k, v) in DB_ROWS[row].iter() {
                     assert!(
                         c.cache
-                            .insert_with_ttl(
-                                k.clone(),
-                                v.clone(),
-                                c.cache_settings.incremental_item_cost,
-                                c.cache_settings.ttl
-                            )
+                            .insert(k.clone(), v.clone(), c.cache_settings.incremental_item_cost)
                             .await
                     );
                 }
@@ -1043,7 +1039,10 @@ mod tests {
         let _main_span_guard = main_span.enter();
 
         let cache_settings = TelemetryCacheSettings {
-            ttl: Duration::from_secs(1),
+            ttl: CacheTtl {
+                default_ttl: Duration::from_secs(1),
+                ..CacheTtl::default()
+            },
             nr_counters: 1000,
             max_cost: 100,
             incremental_item_cost: 1,
