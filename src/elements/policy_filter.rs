@@ -294,7 +294,7 @@ where
         level = "trace",
         name = "policy_filter handle item",
         skip(oso, outlet, tx, policy),
-        fields(stage=%name, correlation=?item.correlation())
+        fields(stage=%name)
     )]
     async fn handle_item(
         name: &str, item: T, context: &C, policy: &P, oso: &Oso, outlet: &Outlet<PolicyOutcome<T, C>>,
@@ -307,7 +307,10 @@ where
 
         match query_result {
             Ok(result) if result.passed => {
-                tracing::info!(?result, "item passed {name} policy review - sending via outlet.");
+                tracing::info!(
+                    correlation=?item.correlation(), ?result,
+                    "item passed {name} policy review - sending via outlet."
+                );
                 outlet
                     .send(PolicyOutcome::new(item.clone(), context.clone(), result.clone()))
                     .await?;
@@ -316,14 +319,17 @@ where
             },
 
             Ok(result) => {
-                tracing::info!(?policy, ?result, "item failed {name} policy review - skipping.");
+                tracing::info!(
+                    correlation=?item.correlation(), ?policy, ?result,
+                    "item failed {name} policy review - skipping."
+                );
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item, Some(result)), tx)?;
                 Ok(())
             },
 
             Err(err) => {
                 tracing::error!(
-                    error=?err, ?policy,
+                    correlation=?item.correlation(), error=?err, ?policy,
                     "error in {name} policy review (possible error in policy definition) - skipping item."
                 );
                 Self::publish_event(PolicyFilterEvent::ItemBlocked(item, None), tx)?;
@@ -341,7 +347,7 @@ where
     fn handle_item_before_context(
         item: T, tx: &broadcast::Sender<Arc<PolicyFilterEvent<T, C>>>,
     ) -> Result<(), PolicyError> {
-        tracing::info!(?item, "dropping item received before policy context set.");
+        tracing::info!(correlation=?item.correlation(), ?item, "dropping item received before policy context set.");
         Self::publish_event(PolicyFilterEvent::ItemBlocked(item, None), tx)?;
         Ok(())
     }

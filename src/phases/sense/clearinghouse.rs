@@ -11,7 +11,7 @@ use std::fmt::{self, Debug};
 pub use agent::*;
 use async_trait::async_trait;
 use cache::TelemetryCache;
-pub use cache::{TelemetryCacheSettings, CacheTtl};
+pub use cache::{CacheTtl, TelemetryCacheSettings};
 use cast_trait_object::dyn_upcast;
 use futures::future::FutureExt;
 use once_cell::sync::Lazy;
