@@ -57,9 +57,21 @@ impl CacheTtl {
     /// Returns the time to live for a given field considering the corresponding specification.
     pub fn for_field(&self, field: impl AsRef<str>) -> Option<Duration> {
         if self.never_expire.contains(field.as_ref()) {
+            tracing::debug!(field=%field.as_ref(), "Clearinghouse field {} never expires", field.as_ref());
             None
         } else {
-            self.ttl_overrides.get(field.as_ref()).copied().or(Some(self.default_ttl))
+            self.ttl_overrides
+                .get(field.as_ref())
+                .copied()
+                .map(|ttl| {
+                    tracing::debug!(
+                        field=%field.as_ref(),
+                        override_ttl=?ttl,
+                        "Clearinghouse field {} ovverride to expire in {} seconds", field.as_ref(), ttl.as_secs()
+                    );
+                    ttl
+                })
+                .or(Some(self.default_ttl))
         }
     }
 }
