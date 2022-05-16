@@ -7,9 +7,10 @@ use dashmap::DashSet;
 use serde::de::MapAccess;
 use serde::{de, ser::SerializeMap, Deserialize, Deserializer, Serialize, Serializer};
 use stretto::CacheError;
+
 use crate::elements::{Telemetry, TelemetryValue};
 
-type Cache = stretto::Cache<String, TelemetryValue>;
+type Cache = stretto::AsyncCache<String, TelemetryValue>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -235,8 +236,8 @@ impl TelemetryCache {
     #[tracing::instrument(level = "trace")]
     pub async fn insert(&mut self, key: String, val: TelemetryValue, cost: i64) -> bool {
         let result = match self.ttl.for_field(&key) {
-            Some(ttl) => self.cache.insert_with_ttl(key.clone(), val, cost, ttl),
-            None => self.cache.insert(key.clone(), val, cost),
+            Some(ttl) => self.cache.insert_with_ttl(key.clone(), val, cost, ttl).await,
+            None => self.cache.insert(key.clone(), val, cost).await,
         };
 
         if result {
@@ -250,8 +251,8 @@ impl TelemetryCache {
     #[tracing::instrument(level = "trace")]
     pub async fn try_insert(&mut self, key: String, val: TelemetryValue, cost: i64) -> Result<bool, CacheError> {
         let result = match self.ttl.for_field(&key) {
-            Some(ttl) => self.cache.try_insert_with_ttl(key.clone(), val, cost, ttl),
-            None => self.cache.try_insert(key.clone(), val, cost),
+            Some(ttl) => self.cache.try_insert_with_ttl(key.clone(), val, cost, ttl).await,
+            None => self.cache.try_insert(key.clone(), val, cost).await,
         };
 
         if let Ok(true) = result {
@@ -263,7 +264,7 @@ impl TelemetryCache {
 
     #[tracing::instrument(level = "trace")]
     pub async fn insert_with_ttl(&mut self, key: String, val: TelemetryValue, cost: i64, ttl: Duration) -> bool {
-        let result = self.cache.insert_with_ttl(key.clone(), val, cost, ttl);
+        let result = self.cache.insert_with_ttl(key.clone(), val, cost, ttl).await;
 
         if result {
             self.seen.insert(key);
@@ -276,7 +277,7 @@ impl TelemetryCache {
     pub async fn try_insert_with_ttl(
         &mut self, key: String, val: TelemetryValue, cost: i64, ttl: Duration,
     ) -> Result<bool, CacheError> {
-        let result = self.cache.try_insert_with_ttl(key.clone(), val, cost, ttl);
+        let result = self.cache.try_insert_with_ttl(key.clone(), val, cost, ttl).await;
 
         if let Ok(true) = result {
             self.seen.insert(key);
@@ -287,7 +288,7 @@ impl TelemetryCache {
 
     #[tracing::instrument(level = "trace")]
     pub async fn insert_if_present(&mut self, key: String, val: TelemetryValue, cost: i64) -> bool {
-        let result = self.cache.insert_if_present(key.clone(), val, cost);
+        let result = self.cache.insert_if_present(key.clone(), val, cost).await;
 
         if result {
             self.seen.insert(key);
@@ -300,7 +301,7 @@ impl TelemetryCache {
     pub async fn try_insert_if_present(
         &mut self, key: String, val: TelemetryValue, cost: i64,
     ) -> Result<bool, CacheError> {
-        let result = self.cache.try_insert_if_present(key.clone(), val, cost);
+        let result = self.cache.try_insert_if_present(key.clone(), val, cost).await;
 
         if let Ok(true) = result {
             self.seen.insert(key);
@@ -311,7 +312,7 @@ impl TelemetryCache {
 
     #[tracing::instrument(level = "trace")]
     pub async fn wait(&self) -> Result<(), CacheError> {
-        let result = self.cache.wait();
+        let result = self.cache.wait().await;
         tracing::debug!(
             wait=?result,
             cost_added=?self.cache.metrics.get_cost_added(),

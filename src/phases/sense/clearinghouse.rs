@@ -5,7 +5,7 @@ pub mod subscription;
 #[cfg(test)]
 mod tests;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Debug};
 
 pub use agent::*;
@@ -22,7 +22,7 @@ use stretto::CacheError;
 pub use subscription::*;
 use tokio::sync::mpsc;
 
-use crate::elements::{Telemetry, Timestamp};
+use crate::elements::{Telemetry, TelemetryValue, Timestamp};
 use crate::error::{ProctorError, SenseError};
 use crate::graph::stage::Stage;
 use crate::graph::{stage, Inlet, OutletsShape, Port, SinkShape, UniformFanOutShape};
@@ -339,6 +339,15 @@ impl Clearinghouse {
 
     #[tracing::instrument(level = "info", skip(self))]
     async fn clear_cache(&mut self) -> Result<(), CacheError> {
+        // gather permanent telemetry for re-application
+        let permanent: HashMap<String, Option<TelemetryValue>> = self
+            .cache_settings
+            .ttl
+            .never_expire
+            .iter()
+            .map(|field| (field.clone(), self.cache.get(field).map(|v| v.value().clone())))
+            .collect();
+
         // clear doesn't work now, but hopefully soon!
         let clear_ack = match self.cache.clear() {
             Ok(()) => self.cache.wait().await,
@@ -352,6 +361,19 @@ impl Clearinghouse {
         }
 
         self.cache = TelemetryCache::new(&self.cache_settings);
+
+        // re-apply permanent telemetry
+        let permanent_rep = format!("{:?}", permanent);
+        for (field, value) in permanent {
+            if let Some(val) = value {
+                tracing::debug!(permanent=%permanent_rep, "re-applying permanent telemetry: {field} = {val}.");
+                let _ = self
+                    .cache
+                    .try_insert(field, val, self.cache_settings.incremental_item_cost)
+                    .await?;
+            }
+        }
+
         Ok(())
     }
 }
