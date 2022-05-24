@@ -37,7 +37,7 @@ pub trait ContinueTicking: Send {
     fn next(&mut self) -> bool;
 }
 
-#[derive(fmt::Debug, Clone, Copy, PartialEq)]
+#[derive(fmt::Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Constraint {
     None,
     ByCount {

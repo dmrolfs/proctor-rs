@@ -20,7 +20,7 @@ pub type SeqValue = Vec<TelemetryValue>;
 
 pub type TableType = HashMap<String, TelemetryValue>;
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TableValue(pub Box<TableType>);
 // pub type Table = Box<HashMap<String, TelemetryValue>>; // to shrink TelemetryValue size
 
@@ -214,8 +214,6 @@ impl PartialEq for TelemetryValue {
         }
     }
 }
-
-impl Eq for TelemetryValue {}
 
 impl PartialOrd for TelemetryValue {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -1056,7 +1054,7 @@ impl<T: Ord + From<TelemetryValue>> TryFrom<&TelemetryValue> for BinaryHeap<T> {
     }
 }
 
-impl<'de> Serialize for TelemetryValue {
+impl Serialize for TelemetryValue {
     #[tracing::instrument(level = "trace", skip(serializer))]
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {

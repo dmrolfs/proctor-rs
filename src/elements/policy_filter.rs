@@ -497,7 +497,7 @@ mod tests {
         }
     }
 
-    #[derive(PolarClass, Label, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[derive(PolarClass, Label, Debug, Clone, PartialEq, Serialize, Deserialize)]
     struct TestContext {
         pub correlation_id: Id<Self>,
 

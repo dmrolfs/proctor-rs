@@ -287,7 +287,7 @@ impl<'a, T: AppData> MergeN<T> {
 
         if let Some(item) = value {
             let span = tracing::trace_span!("3.send item via outlet", ?item);
-            let _ = outlet.send(item).instrument(span).await?;
+            outlet.send(item).instrument(span).await?;
         }
 
         tracing::trace!(nr_remaining=%remaining_inlets.len(), %is_active, "after send");

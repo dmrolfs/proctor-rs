@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use statrs::statistics::Statistics;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Anomaly {
     Low,
     High,
