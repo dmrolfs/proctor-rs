@@ -6,7 +6,7 @@ use serde::Serialize;
 
 use super::cache::TelemetryCache;
 use crate::elements::telemetry::UpdateMetricsFn;
-use crate::elements::Telemetry;
+use crate::elements::{Telemetry, TelemetryValue};
 use crate::error::SenseError;
 use crate::graph::{Connect, Inlet, Outlet, Port, PORT_DATA};
 
@@ -202,16 +202,18 @@ impl TelemetrySubscription {
         }
     }
 
-    pub fn trim_to_subscription(&self, database: &Telemetry) -> Result<(Telemetry, HashSet<String>), SenseError> {
-        let mut db = database.clone();
-
+    pub fn trim_to_subscription<I>(&self, database: I) -> Result<(Telemetry, HashSet<String>), SenseError>
+    where
+        I: Iterator<Item = (String, TelemetryValue)>,
+    {
         match self {
-            Self::All { .. } => Ok((db, HashSet::default())),
+            Self::All { .. } => Ok((database.collect(), HashSet::default())),
             Self::Explicit { required_fields, optional_fields, .. } => {
+                let mut db = Telemetry::new();
                 let mut missing = HashSet::default();
-                for (key, _value) in database.iter() {
-                    if !required_fields.contains(key) && !optional_fields.contains(key) {
-                        let _ = db.remove(key);
+                for (key, value) in database {
+                    if required_fields.contains(&key) || optional_fields.contains(&key) {
+                        let _ = db.insert(key, value);
                     }
                 }
 

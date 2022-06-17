@@ -1,6 +1,6 @@
 [package]
 name = "proctor"
-version = "0.17.0"
+version = "0.17.1"
 authors = ["Damon Rolfs <drolfs@gmail.com>"]
 edition = "2021"
 repository = "https://github.com/dmrolfs/proctor-rs"
@@ -48,6 +48,7 @@ frunk = "0"
 futures = "0"
 futures-util = "0"
 handlebars = "4"
+itertools = "0"
 maplit = "1"
 num_cpus = "1"
 num-traits = "0"

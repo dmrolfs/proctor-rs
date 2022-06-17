@@ -1,8 +1,9 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 use tokio::sync::{mpsc, oneshot};
 
 use super::{Telemetry, TelemetrySubscription};
+use crate::elements::TelemetryValue;
 use crate::error::SenseError;
 use crate::graph::Inlet;
 use crate::Ack;
@@ -80,7 +81,7 @@ impl ClearinghouseCmd {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClearinghouseSnapshot {
-    pub telemetry: Telemetry,
+    pub telemetry: BTreeMap<String, TelemetryValue>,
     pub missing: HashSet<String>,
     pub subscriptions: Vec<TelemetrySubscription>,
 }
@@ -110,11 +111,7 @@ impl serde::Serialize for ClearinghouseSnapshot {
             .subscriptions
             .iter()
             .map(|subscription| match subscription {
-                TelemetrySubscription::All { name, .. } => Subscription {
-                    name,
-                    required: None,
-                    optional: None,
-                }, // (name, None, None),
+                TelemetrySubscription::All { name, .. } => Subscription { name, required: None, optional: None }, // (name, None, None),
                 TelemetrySubscription::Explicit { name, required_fields, optional_fields, .. } => {
                     Subscription {
                         name,

@@ -374,8 +374,8 @@ mod tests {
         |  ],
         |  "template_data": {
         |    "basis": "eligibility_basis",
-        |    "max_healthy_lag": 133,
-        |    "min_healthy_lag": 0,
+        |    "max_healthy_lag": 133.0,
+        |    "min_healthy_lag": 0.0,
         |    "foo": "bar"
         |  }
         |}"##
