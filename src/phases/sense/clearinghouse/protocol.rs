@@ -1,9 +1,8 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 
 use tokio::sync::{mpsc, oneshot};
 
 use super::{Telemetry, TelemetrySubscription};
-use crate::elements::TelemetryValue;
 use crate::error::SenseError;
 use crate::graph::Inlet;
 use crate::Ack;
@@ -81,7 +80,7 @@ impl ClearinghouseCmd {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClearinghouseSnapshot {
-    pub telemetry: BTreeMap<String, TelemetryValue>,
+    pub telemetry: Telemetry,
     pub missing: HashSet<String>,
     pub subscriptions: Vec<TelemetrySubscription>,
 }

@@ -5,7 +5,7 @@ pub mod subscription;
 #[cfg(test)]
 mod tests;
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Debug};
 
 pub use agent::*;
@@ -14,7 +14,6 @@ use cache::TelemetryCache;
 pub use cache::{CacheTtl, TelemetryCacheSettings};
 use cast_trait_object::dyn_upcast;
 use futures::future::FutureExt;
-use itertools::Itertools;
 use once_cell::sync::Lazy;
 use pretty_snowflake::Id;
 use prometheus::{IntCounterVec, IntGauge, Opts};
@@ -260,17 +259,13 @@ impl Clearinghouse {
     ) -> Result<bool, SenseError> {
         match command {
             ClearinghouseCmd::GetSnapshot { name, tx } => {
-                fn to_sorted_map(t: Telemetry) -> BTreeMap<String, TelemetryValue> {
-                    t.into_iter().sorted_by(|(lhs, _), (rhs, _)| lhs.cmp(rhs)).collect()
-                }
-
                 let telemetry = self.cache.get_telemetry();
 
                 let snapshot = match name {
                     None => {
                         tracing::trace!("no subscription specified - responding with clearinghouse snapshot.");
                         ClearinghouseSnapshot {
-                            telemetry: to_sorted_map(telemetry),
+                            telemetry,
                             missing: HashSet::default(),
                             subscriptions: self.subscriptions.clone(),
                         }
@@ -286,7 +281,7 @@ impl Clearinghouse {
                             );
 
                             ClearinghouseSnapshot {
-                                telemetry: to_sorted_map(db),
+                                telemetry: db,
                                 missing,
                                 subscriptions: vec![sub.clone()],
                             }
@@ -295,7 +290,7 @@ impl Clearinghouse {
                         None => {
                             tracing::debug!(requested_subscription=%name, "subscription not found - returning clearinghouse snapshot.");
                             ClearinghouseSnapshot {
-                                telemetry: to_sorted_map(telemetry),
+                                telemetry,
                                 missing: HashSet::default(),
                                 subscriptions: self.subscriptions.clone(),
                             }
