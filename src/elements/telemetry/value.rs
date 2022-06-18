@@ -1205,7 +1205,10 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
             #[inline]
             #[tracing::instrument(level = "trace")]
             fn visit_string<E>(self, value: String) -> Result<Self::Value, E> {
-                Ok(TelemetryValue::Text(value))
+                match value.as_str() {
+                    "NaN" => Ok(TelemetryValue::Float(f64::NAN)), // consider setting to TV::Unit
+                    _ => Ok(TelemetryValue::Text(value)),
+                }
             }
 
             fn visit_bytes<E>(self, _value: &[u8]) -> Result<Self::Value, E>
@@ -1384,6 +1387,24 @@ mod tests {
     #[derive(Debug, Label, Clone, Serialize, Deserialize)]
     struct Bar {
         correlation_id: Id<Bar>,
+    }
+
+    #[test]
+    fn test_deser_nan_value() {
+        #[derive(Debug, PartialEq, Serialize, Deserialize)]
+        struct Foo {
+            value: TelemetryValue,
+        }
+
+        let data = serde_json::json!({ "value": "NaN" });
+        let actual: Foo = assert_ok!(serde_json::from_value(data));
+        assert_matches!(actual.value, TelemetryValue::Float(_));
+        let actual_value = if let TelemetryValue::Float(av) = actual.value {
+            av
+        } else {
+            panic!("expected float value");
+        };
+        assert!(actual_value.is_nan());
     }
 
     #[test]
