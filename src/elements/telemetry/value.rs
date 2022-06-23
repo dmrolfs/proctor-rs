@@ -1206,7 +1206,7 @@ impl<'de> de::Deserialize<'de> for TelemetryValue {
             #[tracing::instrument(level = "trace")]
             fn visit_string<E>(self, value: String) -> Result<Self::Value, E> {
                 match value.as_str() {
-                    "NaN" => Ok(TelemetryValue::Float(f64::NAN)), // consider setting to TV::Unit
+                    "NaN" => Ok(TelemetryValue::Unit),
                     _ => Ok(TelemetryValue::Text(value)),
                 }
             }
@@ -1398,13 +1398,8 @@ mod tests {
 
         let data = serde_json::json!({ "value": "NaN" });
         let actual: Foo = assert_ok!(serde_json::from_value(data));
-        assert_matches!(actual.value, TelemetryValue::Float(_));
-        let actual_value = if let TelemetryValue::Float(av) = actual.value {
-            av
-        } else {
-            panic!("expected float value");
-        };
-        assert!(actual_value.is_nan());
+        assert_matches!(actual.value, TelemetryValue::Unit);
+        assert_eq!(actual, Foo { value: TelemetryValue::Unit, });
     }
 
     #[test]

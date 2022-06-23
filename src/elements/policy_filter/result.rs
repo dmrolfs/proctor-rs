@@ -33,9 +33,7 @@ impl QueryResult {
             for key in result_set.keys() {
                 let value = result_set.get_typed(key);
                 match value? {
-                    TelemetryValue::Unit => {
-                        tracing::debug!("Unit value bound to key[{}] - skipping.", key);
-                    },
+                    TelemetryValue::Unit => tracing::debug!("Unit value bound to key[{}] - skipping.", key),
                     val => {
                         if let Some(values) = bindings.get_mut(key) {
                             values.push(val);
