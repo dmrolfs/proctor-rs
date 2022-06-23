@@ -23,6 +23,7 @@ pub mod phases;
 pub mod serde;
 pub mod tracing;
 
+use crate::elements::Timestamp;
 pub use app_data::AppData;
 pub use elements::ProctorContext;
 pub use graph::track_errors;
@@ -37,6 +38,10 @@ pub type Ack = ();
 pub trait Correlation {
     type Correlated: Sized;
     fn correlation(&self) -> &Id<Self::Correlated>;
+}
+
+pub trait ReceivedAt {
+    fn recv_timestamp(&self) -> Timestamp;
 }
 
 /// An allocation-optimized string.
