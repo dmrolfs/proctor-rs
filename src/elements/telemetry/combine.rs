@@ -158,6 +158,51 @@ impl DoTelemetryCombination for Sum {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct Product;
+
+impl TelemetryCombinator for Product {
+    fn combine(&self, items: Vec<TV>) -> Result<Option<TV>, TelemetryError> {
+        self.do_combine(items)
+    }
+}
+
+impl DoTelemetryCombination for Product {
+    fn label(&self) -> String {
+        "product".to_string()
+    }
+
+    fn combo_bool_fn(&self) -> Box<dyn FnMut(bool, bool) -> Result<bool, TelemetryError>> {
+        Box::new(|acc, next| Ok(acc && next))
+    }
+
+    fn combo_i64_fn(&self) -> Box<dyn FnMut(i64, i64) -> Result<i64, TelemetryError>> {
+        Box::new(|acc, next| Ok(acc * next))
+    }
+
+    fn combo_f64_fn(&self) -> Box<dyn FnMut(f64, f64) -> Result<f64, TelemetryError>> {
+        Box::new(|acc, next| Ok(acc * next))
+    }
+
+    fn combo_string_fn(&self) -> Box<dyn FnMut(String, String) -> Result<String, TelemetryError>> {
+        let label = self.label();
+        Box::new(move |_, _| {
+            Err(TelemetryError::NotSupported(format!(
+                "{label} combination not supported for string telemetry values"
+            )))
+        })
+    }
+
+    fn combo_seq_fn(&self) -> Box<dyn FnMut(SeqValue, SeqValue) -> Result<SeqValue, TelemetryError>> {
+        let label = self.label();
+        Box::new(move |_, _| {
+            Err(TelemetryError::NotSupported(format!(
+                "{label} combination not supported for seq telemetry values"
+            )))
+        })
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Average;
 
 impl TelemetryCombinator for Average {

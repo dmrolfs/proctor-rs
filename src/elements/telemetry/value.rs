@@ -1399,7 +1399,7 @@ mod tests {
         let data = serde_json::json!({ "value": "NaN" });
         let actual: Foo = assert_ok!(serde_json::from_value(data));
         assert_matches!(actual.value, TelemetryValue::Unit);
-        assert_eq!(actual, Foo { value: TelemetryValue::Unit, });
+        assert_eq!(actual, Foo { value: TelemetryValue::Unit });
     }
 
     #[test]
