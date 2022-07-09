@@ -228,7 +228,7 @@ impl TelemetryCache {
             .set_metrics(true)
             .set_cleanup_duration(cache_settings.cleanup_interval)
             .set_ignore_internal_cost(true)
-            .finalize()
+            .finalize(tokio::spawn)
             .expect("failed creating clearinghouse cache")
     }
 
@@ -322,8 +322,8 @@ impl TelemetryCache {
         result
     }
 
-    pub fn clear(&self) -> Result<(), CacheError> {
-        let result = self.cache.clear();
+    pub async fn clear(&self) -> Result<(), CacheError> {
+        let result = self.cache.clear().await;
         if result.is_ok() {
             self.seen.clear();
         }

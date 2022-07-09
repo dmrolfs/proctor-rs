@@ -348,8 +348,8 @@ impl Clearinghouse {
             .map(|field| (field.clone(), self.cache.get(field).map(|v| v.value().clone())))
             .collect();
 
-        // clear doesn't work now, but hopefully soon!
-        let clear_ack = match self.cache.clear() {
+        //todo: now that stretto resolved [issue](https://github.com/al8n/stretto/issues/18) update to clean up
+        let clear_ack = match self.cache.clear().await {
             Ok(()) => self.cache.wait().await,
             err => err,
         };

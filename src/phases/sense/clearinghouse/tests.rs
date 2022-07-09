@@ -22,7 +22,7 @@ mod cache {
             let cache = AsyncCache::builder(1000, 100)
                 .set_metrics(true)
                 .set_ignore_internal_cost(true)
-                .finalize()
+                .finalize(tokio::spawn)
                 .expect("failed creating cache");
 
             assert!(cache.insert_with_ttl("foo".to_string(), 17.to_string(), 1, ttl).await);
@@ -32,7 +32,7 @@ mod cache {
             assert_eq!(assert_some!(cache.get(&"foo".to_string())).value(), &17.to_string());
             assert_eq!(assert_some!(cache.get(&"bar".to_string())).value(), &"otis".to_string());
 
-            assert_ok!(cache.clear());
+            assert_ok!(cache.clear().await);
             assert_ok!(cache.wait().await);
 
             assert_none!(cache.get(&"foo".to_string()));
@@ -78,7 +78,7 @@ mod cache {
                 })
             );
 
-            assert_ok!(cache.clear());
+            assert_ok!(cache.clear().await);
             assert_ok!(cache.wait().await);
 
             assert!(cache.seen().is_empty());
