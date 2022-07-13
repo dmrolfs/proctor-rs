@@ -24,7 +24,8 @@ pub static GRAPH_ERRORS: Lazy<IntCounterVec> = Lazy::new(|| {
         Opts::new(
             "proctor_graph_errors",
             "Number of recoverable errors occurring in graph processing",
-        ),
+        )
+        .const_labels(crate::metrics::CONST_LABELS.clone()),
         &["stage", "error_type"],
     )
     .expect("failed creating proctor_graph_errors metric")

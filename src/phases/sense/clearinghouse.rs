@@ -29,16 +29,20 @@ use crate::graph::{stage, Inlet, OutletsShape, Port, SinkShape, UniformFanOutSha
 use crate::{ProctorIdGenerator, ProctorResult};
 
 pub(crate) static SUBSCRIPTIONS_GAUGE: Lazy<IntGauge> = Lazy::new(|| {
-    IntGauge::new(
-        "clearinghouse_subscriptions",
-        "Number of active data subscriptions to the telemetry clearinghouse.",
+    IntGauge::with_opts(
+        Opts::new(
+            "clearinghouse_subscriptions",
+            "Number of active data subscriptions to the telemetry clearinghouse.",
+        )
+        .const_labels(crate::metrics::CONST_LABELS.clone()),
     )
     .expect("failed creating clearinghouse_subscriptions metric")
 });
 
 pub(crate) static PUBLICATIONS: Lazy<IntCounterVec> = Lazy::new(|| {
     IntCounterVec::new(
-        Opts::new("clearinghouse_publications", "Count of subscription publications"),
+        Opts::new("clearinghouse_publications", "Count of subscription publications")
+            .const_labels(crate::metrics::CONST_LABELS.clone()),
         &["subscription"],
     )
     .expect("failed creating clearninghouse_publications metric")

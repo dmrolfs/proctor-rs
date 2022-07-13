@@ -1,6 +1,6 @@
 [package]
 name = "proctor"
-version = "0.17.3"
+version = "0.17.4"
 authors = ["Damon Rolfs <drolfs@gmail.com>"]
 edition = "2021"
 repository = "https://github.com/dmrolfs/proctor-rs"
@@ -66,6 +66,7 @@ reqwest-retry = "0"
 ron = "0"
 serde = "1"
 serde_json = "1"
+serde_yaml = "0"
 statrs = "0"
 stretto = { version = "0", features = ["async"] }
 tempfile = "3"
@@ -80,6 +81,7 @@ tracing-subscriber = { version = "0", features = ["env-filter", "json"] }
 trim-margin = "0"
 url = "2"
 validator = { version = "0", features = ["derive"] }
+
 
 [dev-dependencies]
 claim = "0.5.0"

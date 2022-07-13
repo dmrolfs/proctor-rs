@@ -1,9 +1,37 @@
+use once_cell::sync::Lazy;
 use prometheus::Registry;
+use std::collections::HashMap;
+use std::path::Path;
 
 use crate::elements::policy_filter;
-use crate::error::ProctorError;
+use crate::error::{MetricsError, ProctorError};
 use crate::graph;
 use crate::phases::sense::clearinghouse;
+
+pub const CONST_LABELS_PATH: &str = "./resources/metrics_const_labels.yaml";
+
+pub static CONST_LABELS: Lazy<HashMap<String, String>> = Lazy::new(|| {
+    let labels_path = std::path::PathBuf::from(CONST_LABELS_PATH);
+    match load_const_labels(labels_path) {
+        Ok(labels) => labels,
+        Err(_err) => HashMap::default(), //panic!("failed to load metrics const_labels: {:?}", err),
+    }
+});
+
+pub fn load_const_labels(labels: impl AsRef<Path>) -> Result<HashMap<String, String>, MetricsError> {
+    let labels_path = labels.as_ref();
+    let labels_file = std::fs::File::open(labels_path)?;
+    let extension = labels_path.extension().map(|ext| ext.to_string_lossy()); //.as_ref().map(|ext| ext.to_string());
+
+    let const_labels = match extension.as_deref() {
+        None | Some("yaml") => serde_yaml::from_reader(labels_file)?,
+        Some("json") => serde_json::from_reader(labels_file)?,
+        Some("ron") => ron::de::from_reader(labels_file)?,
+        Some(unknown) => Err(MetricsError::UnknownFormat(unknown.to_string()))?,
+    };
+
+    Ok(const_labels)
+}
 
 #[tracing::instrument(level = "trace")]
 pub fn register_proctor_metrics(registry: &Registry) -> Result<(), ProctorError> {

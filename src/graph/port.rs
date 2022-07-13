@@ -16,7 +16,8 @@ pub static STAGE_INGRESS_COUNTS: Lazy<IntCounterVec> = Lazy::new(|| {
         Opts::new(
             "proctor_stage_ingress_counts",
             "Number of items entering a stage via an Inlet",
-        ),
+        )
+        .const_labels(crate::metrics::CONST_LABELS.clone()),
         &["stage", "port"],
     )
     .expect("failed creating proctor_stage_ingress_counts metric")
@@ -27,7 +28,8 @@ pub static STAGE_EGRESS_COUNTS: Lazy<IntCounterVec> = Lazy::new(|| {
         Opts::new(
             "proctor_stage_egress_counts",
             "Number of items exiting a stage via an Outlet",
-        ),
+        )
+        .const_labels(crate::metrics::CONST_LABELS.clone()),
         &["stage", "port"],
     )
     .expect("failed creating proctor_stage_ingress_counts metric")

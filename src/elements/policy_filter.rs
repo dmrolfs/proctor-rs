@@ -35,7 +35,8 @@ pub(crate) static POLICY_FILTER_EVAL_TIME: Lazy<HistogramVec> = Lazy::new(|| {
         HistogramOpts::new(
             "policy_filter_eval_time",
             "Time spent in PolicyFilter policy evaluation in seconds",
-        ),
+        )
+        .const_labels(crate::metrics::CONST_LABELS.clone()),
         &["stage"],
     )
     .expect("failed creating policy_filter_eval_time metric")
