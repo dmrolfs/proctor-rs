@@ -8,14 +8,15 @@ use crate::error::{MetricsError, ProctorError};
 use crate::graph;
 use crate::phases::sense::clearinghouse;
 
-pub const CONST_LABELS_PATH: &str = "./resources/metrics_const_labels.yaml";
+pub const ENV_VAR_CONST_LABELS_PATH: &str = "METRICS_CONST_LABELS";
 
 pub static CONST_LABELS: Lazy<HashMap<String, String>> = Lazy::new(|| {
-    let labels_path = std::path::PathBuf::from(CONST_LABELS_PATH);
-    match load_const_labels(labels_path) {
-        Ok(labels) => labels,
-        Err(_err) => HashMap::default(), //panic!("failed to load metrics const_labels: {:?}", err),
-    }
+    std::env::var(ENV_VAR_CONST_LABELS_PATH)
+        .map(|labels_path| {
+            load_const_labels(labels_path.as_str())
+                .unwrap_or_else(|_| panic!("failed proctor metrics const_labels loading from {labels_path}"))
+        })
+        .unwrap_or_else(|_| HashMap::default())
 });
 
 pub fn load_const_labels(labels: impl AsRef<Path>) -> Result<HashMap<String, String>, MetricsError> {
