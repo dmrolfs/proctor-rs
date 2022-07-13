@@ -1,4 +1,5 @@
 use once_cell::sync::Lazy;
+use path_absolutize::*;
 use prometheus::Registry;
 use std::collections::HashMap;
 use std::path::Path;
@@ -13,8 +14,11 @@ pub const ENV_VAR_CONST_LABELS_PATH: &str = "METRICS_CONST_LABELS";
 pub static CONST_LABELS: Lazy<HashMap<String, String>> = Lazy::new(|| {
     std::env::var(ENV_VAR_CONST_LABELS_PATH)
         .map(|labels_path| {
-            load_const_labels(labels_path.as_str())
-                .unwrap_or_else(|_| panic!("failed proctor metrics const_labels loading from {labels_path}"))
+            let absolute_labels_path = Path::new(&labels_path)
+                .absolutize()
+                .unwrap_or_else(|err| panic!("Failed to absolutize path {}: {:?}", labels_path, err));
+            load_const_labels(absolute_labels_path.as_ref())
+                .unwrap_or_else(|_| panic!("failed proctor metrics const_labels loading from {absolute_labels_path:?}"))
         })
         .unwrap_or_else(|_| HashMap::default())
 });
@@ -22,7 +26,7 @@ pub static CONST_LABELS: Lazy<HashMap<String, String>> = Lazy::new(|| {
 pub fn load_const_labels(labels: impl AsRef<Path>) -> Result<HashMap<String, String>, MetricsError> {
     let labels_path = labels.as_ref();
     let labels_file = std::fs::File::open(labels_path)?;
-    let extension = labels_path.extension().map(|ext| ext.to_string_lossy()); //.as_ref().map(|ext| ext.to_string());
+    let extension = labels_path.extension().map(|ext| ext.to_string_lossy());
 
     let const_labels = match extension.as_deref() {
         None | Some("yaml") => serde_yaml::from_reader(labels_file)?,
