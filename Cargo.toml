@@ -1,6 +1,6 @@
 [package]
 name = "proctor"
-version = "0.17.4"
+version = "0.17.5"
 authors = ["Damon Rolfs <drolfs@gmail.com>"]
 edition = "2021"
 repository = "https://github.com/dmrolfs/proctor-rs"

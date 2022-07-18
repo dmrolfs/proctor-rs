@@ -1,6 +1,9 @@
 use std::fmt::{self, Debug};
+use std::iter::Sum;
+use std::ops::{Add, Div, Sub};
 
 use approx::{AbsDiffEq, RelativeEq};
+use frunk::{Monoid, Semigroup};
 use oso::PolarClass;
 use serde::{Deserialize, Serialize};
 
@@ -10,6 +13,8 @@ use super::TelemetryValue;
 pub struct RecordsPerSecond(f64);
 
 impl RecordsPerSecond {
+    pub const ZERO: Self = Self(0.0);
+
     pub const fn new(recs_per_sec: f64) -> Self {
         Self(recs_per_sec)
     }
@@ -56,6 +61,52 @@ impl From<&RecordsPerSecond> for f64 {
 impl From<RecordsPerSecond> for TelemetryValue {
     fn from(that: RecordsPerSecond) -> Self {
         Self::Float(that.0)
+    }
+}
+
+impl Add for RecordsPerSecond {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 + rhs.0)
+    }
+}
+
+impl Sub for RecordsPerSecond {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self(self.0 - rhs.0)
+    }
+}
+
+impl Div for RecordsPerSecond {
+    type Output = f64;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        self.0 / rhs.0
+    }
+}
+
+impl Sum for RecordsPerSecond {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        let mut total = Self::empty();
+        for item in iter {
+            total = Self::combine(&total, &item);
+        }
+        total
+    }
+}
+
+impl Monoid for RecordsPerSecond {
+    fn empty() -> Self {
+        Self::ZERO
+    }
+}
+
+impl Semigroup for RecordsPerSecond {
+    fn combine(&self, other: &Self) -> Self {
+        *self + *other
     }
 }
 
