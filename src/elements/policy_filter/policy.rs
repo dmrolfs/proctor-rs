@@ -67,7 +67,7 @@ pub trait QueryPolicy: Debug + Send + Sync {
     }
 
     #[tracing::instrument(level = "debug", skip(engine))]
-    fn load_policy_engine(&mut self, engine: &mut oso::Oso) -> Result<(), PolicyError> {
+    fn load_policy_engine(&self, engine: &mut oso::Oso) -> Result<(), PolicyError> {
         engine.clear_rules()?;
         let source_paths = self.render_policy_sources()?;
         engine.load_files(source_paths)?;
