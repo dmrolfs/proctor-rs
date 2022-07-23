@@ -2,8 +2,7 @@ use std::fmt::Debug;
 use std::io::Write;
 use std::path::PathBuf;
 
-use either::Either;
-use either::Either::{Left, Right};
+use either::Either::{self, Left, Right};
 use once_cell::sync::Lazy;
 use oso::{ToPolar, ToPolarList};
 use serde::de::DeserializeOwned;
@@ -164,8 +163,8 @@ static APP_TEMPDIR: Lazy<tempfile::TempDir> = Lazy::new(|| {
 #[tracing::instrument(level = "trace", skip(name), fields(policy_name=name))]
 fn policy_source_path_for(name: &str, policy: Either<PathBuf, &str>) -> Result<PolicySourcePath, PolicyError> {
     match policy {
-        Either::Left(path) => Ok(PolicySourcePath::File(path)),
-        Either::Right(rep) => {
+        Left(path) => Ok(PolicySourcePath::File(path)),
+        Right(rep) => {
             let mut tmp = tempfile::Builder::new()
                 .prefix(format!("policy_{}_", name).as_str())
                 .rand_bytes(4)
@@ -178,5 +177,161 @@ fn policy_source_path_for(name: &str, policy: Either<PathBuf, &str>) -> Result<P
 
             Ok(PolicySourcePath::String(tmp))
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use claim::*;
+    use pretty_assertions::assert_eq;
+    use serde::{Deserialize, Serialize};
+    use std::collections::HashMap;
+    use trim_margin::MarginTrimmable;
+
+    static TEMPLATES: Lazy<Vec<PolicySource>> = Lazy::new(|| {
+        let first = r##"|
+            |# define eligibile rule in eligibility polar basis file.
+            |
+            |deploying(_, context) if context.cluster.is_deploying;
+            |
+            |{{#if cooling_secs}}
+            |in_cooling_period(_, context) if context.cluster.last_deployment_within_seconds({{cooling_secs}});
+            |{{else}}
+            |in_cooling_period(_, _) if false;
+            |{{/if}}
+            |
+            |{{#if stable_secs}}
+            |recent_failure(_, context) if context.job.last_failure_within_seconds({{stable_secs}});
+            |{{else}}
+            |recent_failure(_, _) if false;
+            |{{/if}}
+            |
+            |# Do not scale during multi region failure
+            |# Are there job failures
+            |# Do not scale while there are current operations; e.g., Cancel, Upgrade, MultiRegion Failover.
+            |# license considerations; e.g., Do not autoscale freemium pipelines
+            |
+            |{{> (lookup this "basis")}}
+            |"##;
+
+        let second = r##"|
+            |eligible(item, context, reason) if not ineligible(item, context, root_reason) and reason = root_reason;
+            |
+            |ineligible(item, _context, reason) if item.cluster.nr_active_jobs == 0 and reason = "no_active_jobs";
+            |ineligible(_item, context, reason) if context.cluster.is_rescaling and reason = "rescaling";
+            |ineligible(item, context, reason) if deploying(item, context) and reason = "deploying";
+            |ineligible(item, context, reason) if recent_failure(item, context) and reason = "recent_failure";
+            |ineligible(item, context, reason) if in_cooling_period(item, context) and reason = "cooling_period";
+            |"##;
+
+        vec![
+            assert_ok!(PolicySource::from_template_string("common", first)),
+            assert_ok!(PolicySource::from_template_string("common_basis", second)),
+        ]
+    });
+
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[serde(default)]
+    pub struct TemplateData {
+        pub basis: String,
+
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub cooling_secs: Option<u32>,
+
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub stable_secs: Option<u32>,
+
+        #[serde(flatten, skip_serializing_if = "HashMap::is_empty")]
+        pub custom: HashMap<String, String>,
+    }
+
+    impl Default for TemplateData {
+        fn default() -> Self {
+            Self {
+                basis: "common_basis".to_string(),
+                cooling_secs: None,
+                stable_secs: None,
+                custom: HashMap::default(),
+            }
+        }
+    }
+
+    #[test]
+    fn test_render_with_template_data() {
+        Lazy::force(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_render_with_template_data");
+        let _main_span_guard = main_span.enter();
+
+        let data = TemplateData {
+            cooling_secs: Some(300),
+            stable_secs: Some(900),
+            ..TemplateData::default()
+        };
+
+        let templates = TEMPLATES.clone();
+        let actual = assert_ok!(render_template_policy(&templates, "common", Some(data).as_ref()));
+        assert_eq!(
+            actual,
+            r##"|
+            |# define eligibile rule in eligibility polar basis file.
+            |
+            |deploying(_, context) if context.cluster.is_deploying;
+            |
+            |in_cooling_period(_, context) if context.cluster.last_deployment_within_seconds(300);
+            |
+            |recent_failure(_, context) if context.job.last_failure_within_seconds(900);
+            |
+            |# Do not scale during multi region failure
+            |# Are there job failures
+            |# Do not scale while there are current operations; e.g., Cancel, Upgrade, MultiRegion Failover.
+            |# license considerations; e.g., Do not autoscale freemium pipelines
+            |
+            |
+            |eligible(item, context, reason) if not ineligible(item, context, root_reason) and reason = root_reason;
+            |
+            |ineligible(item, _context, reason) if item.cluster.nr_active_jobs == 0 and reason = "no_active_jobs";
+            |ineligible(_item, context, reason) if context.cluster.is_rescaling and reason = "rescaling";
+            |ineligible(item, context, reason) if deploying(item, context) and reason = "deploying";
+            |ineligible(item, context, reason) if recent_failure(item, context) and reason = "recent_failure";
+            |ineligible(item, context, reason) if in_cooling_period(item, context) and reason = "cooling_period";
+            |"##
+            .trim_margin()
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_render_without_template_data() {
+        Lazy::force(&crate::tracing::TEST_TRACING);
+        let main_span = tracing::info_span!("test_render_without_template_data");
+        let _main_span_guard = main_span.enter();
+
+        let templates = TEMPLATES.clone();
+        let actual = assert_ok!(render_template_policy(
+            &templates,
+            "common",
+            Option::<&TemplateData>::None
+        ));
+        assert_eq!(
+            actual,
+            r##"|
+            |# define eligibile rule in eligibility polar basis file.
+            |
+            |deploying(_, context) if context.cluster.is_deploying;
+            |
+            |in_cooling_period(_, _) if false;
+            |
+            |recent_failure(_, _) if false;
+            |
+            |# Do not scale during multi region failure
+            |# Are there job failures
+            |# Do not scale while there are current operations; e.g., Cancel, Upgrade, MultiRegion Failover.
+            |# license considerations; e.g., Do not autoscale freemium pipelines
+            |
+            |"##
+            .trim_margin()
+            .unwrap()
+        );
     }
 }
