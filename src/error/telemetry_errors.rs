@@ -35,6 +35,9 @@ pub enum TelemetryError {
     #[error("failed to parse value from telemetry data: {0}")]
     ValueParse(#[source] anyhow::Error),
 
+    #[error("conversion from {from} to {to} is not supported")]
+    UnsupportedConversion { from: TelemetryType, to: TelemetryType },
+
     #[error("type not support {0}")]
     NotSupported(String),
 }
@@ -53,6 +56,7 @@ impl MetricLabel for TelemetryError {
             Self::Reader(_) => Left("reader".into()),
             Self::ConvertInfallible(_) => Left("convert_infallible".into()),
             Self::ValueParse(_) => Left("value_parse".into()),
+            Self::UnsupportedConversion { .. } => Left("unsupported_conversion".into()),
             Self::NotSupported(_) => Left("not_supported".into()),
         }
     }

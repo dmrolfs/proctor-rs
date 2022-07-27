@@ -67,11 +67,7 @@ impl TelemetryType {
             // },
             (tv, Self::Seq) if tv.as_telemetry_type() != Self::Table => Ok(V::Seq(vec![telemetry])),
 
-            (from, to) => Err(TelemetryError::NotSupported(format!(
-                "telemetry conversion from {} to {} is not supported",
-                from.as_telemetry_type(),
-                to
-            ))),
+            (from, to) => Err(TelemetryError::UnsupportedConversion { from: from.as_telemetry_type(), to: *to }),
         }
     }
 }
