@@ -1,5 +1,6 @@
 use either::{Either, Left, Right};
 use thiserror::Error;
+use validator::ValidationErrors;
 
 use super::{MetricLabel, PortError, TelemetryError};
 
@@ -38,6 +39,9 @@ pub enum PolicyError {
     #[error("failed to publish policy event: {0}")]
     Publish(#[source] anyhow::Error),
 
+    #[error("failed validationL {0}")]
+    Validate(#[from] ValidationErrors),
+
     #[error("policy error : {0}")]
     Other(#[from] anyhow::Error),
 }
@@ -57,6 +61,7 @@ impl MetricLabel for PolicyError {
             Self::Telemetry(e) => Right(Box::new(e)),
             Self::Api(..) => Left("api".into()),
             Self::Publish(_) => Left("publish".into()),
+            Self::Validate(_) => Left("validation".into()),
             Self::Other(_) => Left("other".into()),
         }
     }
