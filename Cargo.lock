@@ -2166,7 +2166,7 @@ dependencies = [
 
 [[package]]
 name = "proctor"
-version = "0.17.7"
+version = "0.17.9"
 dependencies = [
  "anyhow",
  "approx",

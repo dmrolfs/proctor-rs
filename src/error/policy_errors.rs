@@ -40,7 +40,7 @@ pub enum PolicyError {
     Publish(#[source] anyhow::Error),
 
     #[error("failed validationL {0}")]
-    Validate(#[from] ValidationErrors),
+    Validation(#[from] ValidationErrors),
 
     #[error("policy error : {0}")]
     Other(#[from] anyhow::Error),
@@ -61,7 +61,7 @@ impl MetricLabel for PolicyError {
             Self::Telemetry(e) => Right(Box::new(e)),
             Self::Api(..) => Left("api".into()),
             Self::Publish(_) => Left("publish".into()),
-            Self::Validate(_) => Left("validation".into()),
+            Self::Validation(_) => Left("validation".into()),
             Self::Other(_) => Left("other".into()),
         }
     }
