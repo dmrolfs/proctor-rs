@@ -138,7 +138,7 @@ impl DoTelemetryCombination for Sum {
     }
 
     fn combo_i64_fn(&self) -> Box<dyn FnMut(i64, i64) -> Result<i64, TelemetryError>> {
-        Box::new(|acc, next| Ok(acc + next))
+        Box::new(|acc, next| Ok(acc.saturating_add(next)))
     }
 
     fn combo_f64_fn(&self) -> Box<dyn FnMut(f64, f64) -> Result<f64, TelemetryError>> {
@@ -176,7 +176,7 @@ impl DoTelemetryCombination for Product {
     }
 
     fn combo_i64_fn(&self) -> Box<dyn FnMut(i64, i64) -> Result<i64, TelemetryError>> {
-        Box::new(|acc, next| Ok(acc * next))
+        Box::new(|acc, next| Ok(acc.saturating_mul(next)))
     }
 
     fn combo_f64_fn(&self) -> Box<dyn FnMut(f64, f64) -> Result<f64, TelemetryError>> {
@@ -238,7 +238,7 @@ impl DoTelemetryCombination for Average {
                 count += 1;
             }
 
-            sum += next;
+            sum = sum.saturating_add(next);
             count += 1;
 
             tracing::debug!(%count, %sum, "combined step");
