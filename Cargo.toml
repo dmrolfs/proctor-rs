@@ -1,6 +1,6 @@
 [package]
 name = "proctor"
-version = "0.17.10"
+version = "0.17.11"
 authors = ["Damon Rolfs <drolfs@gmail.com>"]
 edition = "2021"
 repository = "https://github.com/dmrolfs/proctor-rs"
@@ -64,7 +64,7 @@ regex = "1"
 reqwest = { version = "0", features = ["blocking", "json"] }
 reqwest-middleware = "0"
 reqwest-retry = "0"
-ron = "0"
+ron = "0.7"
 serde = "1"
 serde_json = "1"
 serde_yaml = "0"

@@ -31,7 +31,7 @@ pub fn load_const_labels(labels: impl AsRef<Path>) -> Result<HashMap<String, Str
     let const_labels = match extension.as_deref() {
         None | Some("yaml") => serde_yaml::from_reader(labels_file)?,
         Some("json") => serde_json::from_reader(labels_file)?,
-        Some("ron") => ron::de::from_reader(labels_file)?,
+        Some("ron") => ron::de::from_reader(labels_file).map_err(|err| MetricsError::Ron(err))?,
         Some(unknown) => Err(MetricsError::UnknownFormat(unknown.to_string()))?,
     };
 
