@@ -14,7 +14,7 @@ pub enum MetricsError {
     Json(#[from] serde_json::Error),
 
     #[error("failed to parse ron: {0}")]
-    Ron(#[from] ron::Error),
+    Ron(#[from] ron::error::SpannedError),
 
     #[error("unknown metric const_labels format: {0}")]
     UnknownFormat(String),

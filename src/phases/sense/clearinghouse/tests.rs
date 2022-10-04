@@ -185,13 +185,12 @@ mod cache {
 
         let actual = assert_ok!(serde_yaml::to_string(&settings));
         let expected = r##"
-        |---
         |ttl:
         |  default_ttl_secs: 300
         |  ttl_overrides:
         |    zed: 17
         |  never_expire:
-        |    - foo
+        |  - foo
         |nr_counters: 1000
         |max_cost: 100
         |incremental_item_cost: 1
