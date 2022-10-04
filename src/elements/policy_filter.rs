@@ -188,6 +188,7 @@ where
     async fn do_check(&self) -> Result<(), PortError> {
         self.inlet.check_attachment().await?;
         self.outlet.check_attachment().await?;
+        self.context_inlet.check_attachment().await?;
         Ok(())
     }
 
@@ -254,6 +255,7 @@ where
         tracing::trace!("closing policy_filter ports");
         self.inlet.close().await;
         self.outlet.close().await;
+        self.context_inlet.close().await;
         Ok(())
     }
 }
