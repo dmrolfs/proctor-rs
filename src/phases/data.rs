@@ -1,6 +1,6 @@
 use crate::elements::telemetry::TableType;
 use crate::phases::sense::CorrelationGenerator;
-use crate::{Correlation, ProctorContext, Timestamp};
+use crate::{Correlation, ProctorContext, ReceivedAt, Timestamp};
 use async_trait::async_trait;
 use once_cell::sync::Lazy;
 use pretty_snowflake::{AlphabetCodec, Id, IdPrettifier, Label, MachineNode};
@@ -119,6 +119,15 @@ where
 
     fn correlation(&self) -> &Id<Self::Correlated> {
         self.metadata.correlation()
+    }
+}
+
+impl<T> ReceivedAt for DataSet<T>
+where
+    T: Label,
+{
+    fn recv_timestamp(&self) -> Timestamp {
+        self.metadata.recv_timestamp()
     }
 }
 
@@ -458,6 +467,15 @@ where
     }
 }
 
+impl<T> ReceivedAt for MetaData<T>
+where
+    T: Label,
+{
+    fn recv_timestamp(&self) -> Timestamp {
+        self.recv_timestamp
+    }
+}
+
 impl<T> MetaData<T>
 where
     T: Label,
@@ -471,10 +489,6 @@ impl<T> MetaData<T>
 where
     T: Label,
 {
-    pub const fn recv_timestamp(&self) -> Timestamp {
-        self.recv_timestamp
-    }
-
     pub const fn from_parts(correlation_id: Id<T>, recv_timestamp: Timestamp) -> Self {
         Self { correlation_id, recv_timestamp }
     }
