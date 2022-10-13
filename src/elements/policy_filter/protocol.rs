@@ -1,3 +1,4 @@
+use pretty_snowflake::{Label, MakeLabeling};
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -84,4 +85,12 @@ pub enum PolicyFilterEvent<T, C> {
     ContextChanged(Option<C>),
     ItemPassed(T, QueryResult),
     ItemBlocked(T, Option<QueryResult>),
+}
+
+impl<T, C> Label for PolicyFilterEvent<T, C> {
+    type Labeler = MakeLabeling<Self>;
+
+    fn labeler() -> Self::Labeler {
+        MakeLabeling::default()
+    }
 }
