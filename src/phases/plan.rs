@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
+use pretty_snowflake::{Label, MakeLabeling};
 use tokio::sync::broadcast;
 use tracing::Instrument;
 
@@ -20,6 +21,17 @@ pub enum PlanEvent<P: Planning + ?Sized> {
     DecisionPlanned(P::Decision, P::Out),
     DecisionIgnored(P::Decision),
     ContextChanged(P::Context),
+}
+
+impl<P> Label for PlanEvent<P>
+where
+    P: Planning,
+{
+    type Labeler = MakeLabeling<Self>;
+
+    fn labeler() -> Self::Labeler {
+        MakeLabeling::default()
+    }
 }
 
 #[async_trait]
