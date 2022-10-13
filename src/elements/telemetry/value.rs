@@ -7,7 +7,7 @@ use std::ops::{Deref, DerefMut};
 
 use config::Value as ConfigValue;
 use oso::{FromPolar, PolarValue, ResultSet, ToPolar};
-use pretty_snowflake::{Id, Label, Labeling};
+use pretty_snowflake::{Id, Label, Labeling, MakeLabeling};
 use serde::de::{EnumAccess, Error};
 use serde::ser::{SerializeMap, SerializeSeq};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
@@ -63,11 +63,20 @@ impl fmt::Display for TableValue {
     }
 }
 
+impl Label for TableValue {
+    type Labeler = MakeLabeling<Self>;
+
+    fn labeler() -> Self::Labeler {
+        MakeLabeling::<Self>::default()
+    }
+}
+
 impl From<TableValue> for TableType {
     fn from(table: TableValue) -> Self {
         *table.0
     }
 }
+
 impl From<TableType> for TableValue {
     fn from(that: TableType) -> Self {
         Self::from(that)
@@ -134,6 +143,14 @@ impl fmt::Display for TelemetryValue {
             Self::Table(vs) => write!(f, "{}", vs),
             Self::Unit => write!(f, "()"),
         }
+    }
+}
+
+impl Label for TelemetryValue {
+    type Labeler = MakeLabeling<Self>;
+
+    fn labeler() -> Self::Labeler {
+        MakeLabeling::default()
     }
 }
 

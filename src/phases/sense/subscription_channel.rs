@@ -2,6 +2,7 @@ use std::fmt::{self, Debug};
 
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
+use pretty_snowflake::Label;
 use serde::de::DeserializeOwned;
 
 use crate::elements::{self, FromTelemetryShape, Telemetry};
@@ -9,20 +10,27 @@ use crate::error::SenseError;
 use crate::graph::stage::Stage;
 use crate::graph::{Inlet, Outlet, Port, SourceShape, PORT_DATA};
 use crate::phases::sense::{ClearinghouseSubscriptionAgent, TelemetrySubscription};
+use crate::phases::DataSet;
 use crate::{AppData, ProctorResult};
 
 // todo: consider refactor all of these builder functions into a typed subscription channel builder.
 
 /// Subscription Source stage that can be used to adapt subscribed telemetry data into a
 /// typed inlet.
-pub struct SubscriptionChannel<T> {
+pub struct SubscriptionChannel<T>
+where
+    T: Label,
+{
     name: String,
-    pub subscription_receiver: Inlet<Telemetry>,
+    pub subscription_receiver: Inlet<DataSet<Telemetry>>,
     inner_stage: Option<FromTelemetryShape<T>>,
-    outlet: Outlet<T>,
+    outlet: Outlet<DataSet<T>>,
 }
 
-impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
+impl<T> SubscriptionChannel<T>
+where
+    T: AppData + Label + DeserializeOwned,
+{
     #[tracing::instrument(level = "trace", skip(agent))]
     pub async fn connect_subscription<A>(subscription: TelemetrySubscription, agent: &mut A) -> Result<Self, SenseError>
     where
@@ -53,7 +61,10 @@ impl SubscriptionChannel<Telemetry> {
     }
 }
 
-impl<T: AppData + DeserializeOwned> SubscriptionChannel<T> {
+impl<T> SubscriptionChannel<T>
+where
+    T: AppData + Label + DeserializeOwned,
+{
     #[tracing::instrument(level = "trace", name = "subscription_channel_new", skip(name))]
     pub async fn new(name: &str) -> Result<Self, SenseError> {
         let inner_stage = elements::make_from_telemetry(name, true).await;
@@ -88,7 +99,10 @@ impl SubscriptionChannel<Telemetry> {
     }
 }
 
-impl<T: Debug> Debug for SubscriptionChannel<T> {
+impl<T> Debug for SubscriptionChannel<T>
+where
+    T: Debug + Label,
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SubscriptionChannel")
             .field("name", &self.name)
@@ -99,8 +113,11 @@ impl<T: Debug> Debug for SubscriptionChannel<T> {
     }
 }
 
-impl<T> SourceShape for SubscriptionChannel<T> {
-    type Out = T;
+impl<T> SourceShape for SubscriptionChannel<T>
+where
+    T: Label,
+{
+    type Out = DataSet<T>;
 
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()
@@ -109,7 +126,10 @@ impl<T> SourceShape for SubscriptionChannel<T> {
 
 #[dyn_upcast]
 #[async_trait]
-impl<T: AppData> Stage for SubscriptionChannel<T> {
+impl<T> Stage for SubscriptionChannel<T>
+where
+    T: AppData + Label,
+{
     fn name(&self) -> &str {
         &self.name
     }
@@ -133,7 +153,10 @@ impl<T: AppData> Stage for SubscriptionChannel<T> {
     }
 }
 
-impl<T: AppData> SubscriptionChannel<T> {
+impl<T> SubscriptionChannel<T>
+where
+    T: AppData + Label,
+{
     async fn do_check(&self) -> Result<(), SenseError> {
         self.subscription_receiver.check_attachment().await?;
         self.outlet.check_attachment().await?;

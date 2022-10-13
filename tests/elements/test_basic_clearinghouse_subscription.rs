@@ -3,14 +3,16 @@ use std::convert::TryFrom;
 use std::path::PathBuf;
 
 use pretty_assertions::assert_eq;
+use pretty_snowflake::Label;
 use proctor::elements::Telemetry;
 use proctor::error::TelemetryError;
 use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use proctor::phases::sense::clearinghouse::TelemetryCacheSettings;
 use proctor::phases::sense::{self, Sense, SensorSetting};
+use proctor::phases::DataSet;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Label, PartialEq, Serialize, Deserialize)]
 struct Data {
     #[serde(default)]
     pub pos: Option<i64>,
@@ -108,13 +110,16 @@ async fn test_scenario(focus: HashSet<String>) -> anyhow::Result<(i64, i64)> {
     let cvs_stage = cvs_source.stage.take().unwrap();
 
     let collect = Sense::single_node_builder("collect", vec![cvs_stage], &TelemetryCacheSettings::default())
+        .await
         .build_for_out_requirements(focus, HashSet::default())
         .await?;
 
-    let mut pos_stats = stage::Fold::<_, Data, (i64, i64)>::new("pos_stats", (0, 0), move |(count, sum), data| {
-        let pos = data.pos.unwrap_or(0);
-        (count + 1, sum + pos)
-    });
+    let mut pos_stats =
+        stage::Fold::<_, DataSet<Data>, (i64, i64)>::new("pos_stats", (0, 0), move |(count, sum), data| {
+            let data = data.into_inner();
+            let pos = data.pos.unwrap_or(0);
+            (count + 1, sum + pos)
+        });
     let rx_pos_stats = pos_stats.take_final_rx().unwrap();
 
     (collect.outlet(), pos_stats.inlet()).connect().await;

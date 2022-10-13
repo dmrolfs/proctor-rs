@@ -37,7 +37,7 @@ where
         P: 'static + QueryPolicy<Item = In, Context = C, TemplateData = D>,
     {
         let name = format!("{name}_carry_policy_outcome");
-        let identity: stage::Identity<PolicyOutcome<In, C>> = stage::Identity::new(
+        let identity = stage::Identity::new(
             name.to_string(),
             Inlet::new(name.clone(), PORT_DATA),
             Outlet::new(name.clone(), PORT_DATA),

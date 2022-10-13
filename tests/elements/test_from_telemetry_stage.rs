@@ -6,9 +6,11 @@ use chrono::{DateTime, Utc};
 use claim::*;
 use once_cell::sync::Lazy;
 use pretty_assertions::assert_eq;
+use pretty_snowflake::{Label, MakeLabeling};
 use proctor::elements;
-use proctor::graph::{stage, Connect, Graph, SinkShape};
+use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use proctor::phases::sense::{make_telemetry_cvs_sensor, SensorSetting};
+use proctor::phases::DataSet;
 use serde::{Deserialize, Serialize};
 use serde_test::{assert_tokens, Token};
 
@@ -45,55 +47,13 @@ impl Default for Data {
     }
 }
 
-// impl Into<Telemetry> for Data {
-//     fn into(self) -> Telemetry {
-//         let mut telemetry = Telemetry::default();
-//         let t_last_failure = self.last_failure.into();
-//         let t_is_deploying = self.is_deploying.into();
-//         let t_last_deployment = self.last_deployment.into();
-//         tracing::warn!(
-//             ?t_last_failure,
-//             ?t_is_deploying,
-//             ?t_last_deployment,
-//             "DMR: converting data to telemetry."
-//         );
-//         telemetry.insert("task.last_failure".to_string(), t_last_failure);
-//         telemetry.insert("cluster.is_deploying".to_string(), t_is_deploying);
-//         telemetry.insert("cluster.last_deployment".to_string(), t_last_deployment);
-//         telemetry
-//     }
-// }
-//
-// impl TryFrom<Telemetry> for Data {
-//     type Error = TelemetryError;
-//
-//     fn try_from(telemetry: Telemetry) -> Result<Self, Self::Error> {
-//         let last_failure: Option<DateTime<Utc>> = telemetry
-//             .get("task.last_failure")
-//             .map(|val| DateTime::<Utc>::try_from(val.clone()))
-//             .transpose()?;
-//
-//         let is_deploying = telemetry
-//             .get("cluster.is_deploying")
-//             .map(|val| bool::try_from(val.clone()))
-//             .transpose()?
-//             .unwrap_or(false);
-//
-//         let last_deployment = telemetry
-//             .get("cluster.last_deployment")
-//             .map(|val| DateTime::<Utc>::try_from(val.clone()))
-//             .transpose()?
-//             .unwrap_or(*DEFAULT_LAST_DEPLOYMENT);
-//
-//         tracing::warn!(
-//             ?last_failure,
-//             ?is_deploying,
-//             ?last_deployment,
-//             "DMR: converting from telemetry into Data."
-//         );
-//         Ok(Self { last_failure, is_deploying, last_deployment })
-//     }
-// }
+impl Label for Data {
+    type Labeler = MakeLabeling<Self>;
+
+    fn labeler() -> Self::Labeler {
+        MakeLabeling::default()
+    }
+}
 
 static NOW: Lazy<DateTime<Utc>> = Lazy::new(|| Utc::now());
 static NOW_REP: Lazy<String> = Lazy::new(|| format!("{}", NOW.format("%+")));
@@ -134,21 +94,24 @@ async fn test_make_from_telemetry_stage() -> Result<()> {
     let setting = SensorSetting::Csv { path };
 
     let mut source = assert_ok!(make_telemetry_cvs_sensor::<Data, _>("local", &setting));
+    let add_metadata = stage::AndThen::new("add_metadata", |telemetry| DataSet::new(telemetry));
     let convert = elements::make_from_telemetry("convert".into(), true).await;
 
-    let mut sink = stage::Fold::<_, Data, Vec<Data>>::new("sink", Vec::default(), |mut acc, item| {
-        acc.push(item);
+    let mut sink = stage::Fold::<_, DataSet<Data>, Vec<Data>>::new("sink", Vec::default(), |mut acc, item| {
+        acc.push(item.into_inner());
         acc
     });
 
     let rx_acc = assert_some!(sink.take_final_rx());
 
     let source_stage = assert_some!(source.stage.take());
-    (source_stage.outlet(), convert.inlet()).connect().await;
+    (source_stage.outlet(), add_metadata.inlet()).connect().await;
+    (add_metadata.outlet(), convert.inlet()).connect().await;
     (convert.outlet(), sink.inlet()).connect().await;
 
     let mut g = Graph::default();
     g.push_back(source_stage.dyn_upcast()).await;
+    g.push_back(Box::new(add_metadata)).await;
     g.push_back(convert.dyn_upcast()).await;
     g.push_back(Box::new(sink)).await;
 

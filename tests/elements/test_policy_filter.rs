@@ -105,6 +105,7 @@ impl Correlation for TestContext {
 
 #[async_trait]
 impl proctor::ProctorContext for TestContext {
+    type ContextData = Self;
     type Error = PolicyError;
 
     fn custom(&self) -> telemetry::TableType {

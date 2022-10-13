@@ -521,6 +521,7 @@ mod tests {
 
     #[async_trait]
     impl ProctorContext for TestContext {
+        type ContextData = Self;
         type Error = PolicyError;
 
         fn custom(&self) -> telemetry::TableType {

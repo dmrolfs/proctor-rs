@@ -2,13 +2,13 @@ use std::fmt::{self, Debug};
 
 use async_trait::async_trait;
 use cast_trait_object::dyn_upcast;
-use pretty_snowflake::{AlphabetCodec, IdPrettifier, MachineNode};
+use pretty_snowflake::{AlphabetCodec, IdPrettifier, Label, MachineNode};
 
 use crate::elements::Telemetry;
 use crate::error::SenseError;
 use crate::graph::stage::{SourceStage, Stage, WithApi};
 use crate::graph::{Outlet, Port, SourceShape};
-use crate::{AppData, ProctorResult};
+use crate::{AppData, ProctorIdGenerator, ProctorResult};
 
 pub mod builder;
 pub mod clearinghouse;
@@ -16,17 +16,19 @@ pub mod sensor;
 pub mod settings;
 pub mod subscription_channel;
 
+use crate::phases::DataSet;
 pub use builder::SenseBuilder;
 pub use clearinghouse::{
     Clearinghouse, ClearinghouseApi, ClearinghouseCmd, ClearinghouseSnapshot, ClearinghouseSubscriptionAgent,
-    CorrelationGenerator, SubscriptionRequirements, TelemetrySubscription, SUBSCRIPTION_CORRELATION,
-    SUBSCRIPTION_TIMESTAMP,
+    SubscriptionRequirements, TelemetrySubscription, SUBSCRIPTION_CORRELATION, SUBSCRIPTION_TIMESTAMP,
 };
 pub use sensor::{make_telemetry_cvs_sensor, make_telemetry_rest_api_sensor, TelemetrySensor};
 pub use settings::{HttpQuery, SensorSetting};
 pub use subscription_channel::SubscriptionChannel;
 
 use crate::phases::sense::clearinghouse::TelemetryCacheSettings;
+
+pub type CorrelationGenerator = ProctorIdGenerator<Telemetry>;
 
 // todo: implement
 // pub type CollectApi = mpsc::UnboundedSender<CollectCmd>;
@@ -51,34 +53,43 @@ use crate::phases::sense::clearinghouse::TelemetryCacheSettings;
 //     DataPublished,
 // }
 
-pub struct Sense<Out> {
+pub struct Sense<Out>
+where
+    Out: Label,
+{
     name: String,
-    inner: Box<dyn SourceStage<Out>>,
-    outlet: Outlet<Out>,
+    inner: Box<dyn SourceStage<DataSet<Out>>>,
+    outlet: Outlet<DataSet<Out>>,
     pub tx_clearinghouse_api: ClearinghouseApi,
     // todo: tx_api: CollectApi,
     // todo: tx_monitor: CollectMonitor,
 }
 
-impl<Out> Sense<Out> {
+impl<Out> Sense<Out>
+where
+    Out: Label,
+{
     #[tracing::instrument(level = "trace", skip(name, sources))]
-    pub fn builder(
-        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
-        cache_settings: &TelemetryCacheSettings, machine_node: MachineNode,
+    pub async fn builder(
+        name: &str, sources: Vec<Box<dyn SourceStage<Telemetry>>>, cache_settings: &TelemetryCacheSettings,
+        machine_node: MachineNode,
     ) -> SenseBuilder<Out> {
         let id_generator = CorrelationGenerator::distributed(machine_node, IdPrettifier::<AlphabetCodec>::default());
-        SenseBuilder::new(name, sources, cache_settings, id_generator)
+        SenseBuilder::new(name, sources, cache_settings, id_generator).await
     }
 
     #[tracing::instrument(level = "trace", skip(name, sources))]
-    pub fn single_node_builder(
-        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>, cache_settings: &TelemetryCacheSettings,
+    pub async fn single_node_builder(
+        name: &str, sources: Vec<Box<dyn SourceStage<Telemetry>>>, cache_settings: &TelemetryCacheSettings,
     ) -> SenseBuilder<Out> {
-        Self::builder(name, sources, cache_settings, MachineNode::default())
+        Self::builder(name, sources, cache_settings, MachineNode::default()).await
     }
 }
 
-impl<Out> Debug for Sense<Out> {
+impl<Out> Debug for Sense<Out>
+where
+    Out: Label,
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Collect")
             .field("name", &self.name)
@@ -88,15 +99,21 @@ impl<Out> Debug for Sense<Out> {
     }
 }
 
-impl<Out> SourceShape for Sense<Out> {
-    type Out = Out;
+impl<Out> SourceShape for Sense<Out>
+where
+    Out: Label,
+{
+    type Out = DataSet<Out>;
 
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()
     }
 }
 
-impl<Out> WithApi for Sense<Out> {
+impl<Out> WithApi for Sense<Out>
+where
+    Out: Label,
+{
     type Sender = ClearinghouseApi;
 
     fn tx_api(&self) -> Self::Sender {
@@ -106,7 +123,10 @@ impl<Out> WithApi for Sense<Out> {
 
 #[dyn_upcast]
 #[async_trait]
-impl<Out: AppData> Stage for Sense<Out> {
+impl<Out> Stage for Sense<Out>
+where
+    Out: AppData + Label,
+{
     fn name(&self) -> &str {
         &self.name
     }
@@ -130,7 +150,10 @@ impl<Out: AppData> Stage for Sense<Out> {
     }
 }
 
-impl<Out: AppData> Sense<Out> {
+impl<Out> Sense<Out>
+where
+    Out: AppData + Label,
+{
     async fn do_check(&self) -> Result<(), SenseError> {
         self.inner.check().await.map_err(|err| SenseError::Stage(err.into()))?;
         self.outlet.check_attachment().await?;

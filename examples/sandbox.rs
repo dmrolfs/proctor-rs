@@ -4,11 +4,12 @@ use std::path::PathBuf;
 
 use ::serde::{Deserialize, Serialize};
 use anyhow::Result;
-use proctor::elements::{self, Telemetry};
+use proctor::elements::Telemetry;
 use proctor::error::TelemetryError;
 use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use proctor::phases::sense::clearinghouse::TelemetryCacheSettings;
 use proctor::phases::sense::{self, Sense, SensorSetting};
+use proctor::phases::DataSet;
 use proctor::tracing::{get_subscriber, init_subscriber};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -72,11 +73,13 @@ async fn main() -> Result<()> {
 
     let pos_stats_fields = maplit::hashset! { POS_FIELD.to_string() };
     let collect = Sense::single_node_builder("collect", vec![cvs_stage], &TelemetryCacheSettings::default())
+        .await
         .build_for_telemetry_out(pos_stats_fields.clone(), HashSet::<String>::default())
         .await?;
 
     let mut pos_stats =
-        stage::Fold::<_, elements::Telemetry, (usize, usize)>::new("pos_stats", (0, 0), move |(count, sum), data| {
+        stage::Fold::<_, DataSet<Telemetry>, (usize, usize)>::new("pos_stats", (0, 0), move |(count, sum), data| {
+            let data = data.into_inner();
             let delivered = data.keys().cloned().collect::<HashSet<_>>();
             let allowed = &pos_stats_fields;
             let unexpected = delivered.difference(allowed).collect::<HashSet<_>>();

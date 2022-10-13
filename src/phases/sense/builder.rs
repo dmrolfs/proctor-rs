@@ -4,6 +4,7 @@ use std::marker::PhantomData;
 
 use async_trait::async_trait;
 use cast_trait_object::DynCastExt;
+use pretty_snowflake::Label;
 use serde::de::DeserializeOwned;
 
 use super::{Clearinghouse, Sense, SubscriptionChannel, SubscriptionRequirements};
@@ -14,6 +15,7 @@ use crate::graph::stage::{self, SourceStage, Stage, WithApi};
 use crate::graph::{Connect, Graph, Inlet, SinkShape, SourceShape, UniformFanInShape};
 use crate::phases::sense::clearinghouse::TelemetryCacheSettings;
 use crate::phases::sense::{ClearinghouseSubscriptionAgent, CorrelationGenerator, TelemetrySubscription};
+use crate::phases::DataSet;
 use crate::AppData;
 
 #[derive(Debug)]
@@ -28,7 +30,7 @@ pub struct SenseBuilder<Out> {
 #[async_trait]
 impl<Out: Send> ClearinghouseSubscriptionAgent for SenseBuilder<Out> {
     async fn subscribe(
-        &mut self, subscription: TelemetrySubscription, receiver: Inlet<Telemetry>,
+        &mut self, subscription: TelemetrySubscription, receiver: Inlet<DataSet<Telemetry>>,
     ) -> Result<(), SenseError> {
         self.clearinghouse.subscribe(subscription, &receiver).await;
         Ok(())
@@ -37,15 +39,15 @@ impl<Out: Send> ClearinghouseSubscriptionAgent for SenseBuilder<Out> {
 
 impl<Out> SenseBuilder<Out> {
     #[tracing::instrument(level = "trace", skip(name, sources))]
-    pub fn new(
-        name: impl Into<String>, sources: Vec<Box<dyn SourceStage<Telemetry>>>,
-        cache_settings: &TelemetryCacheSettings, correlation_generator: CorrelationGenerator,
+    pub async fn new(
+        name: &str, sources: Vec<Box<dyn SourceStage<Telemetry>>>, cache_settings: &TelemetryCacheSettings,
+        correlation_generator: CorrelationGenerator,
     ) -> Self {
         let name = name.into();
         let nr_sources = sources.len();
         let merge = stage::MergeN::new(format!("{}_source_merge_{}", name, nr_sources), nr_sources);
-        let clearinghouse =
-            Clearinghouse::new(format!("{}_clearinghouse", name), cache_settings, correlation_generator);
+        crate::phases::data::set_sensor_data_id_generator(correlation_generator).await;
+        let clearinghouse = Clearinghouse::new(format!("{}_clearinghouse", name), cache_settings);
 
         Self {
             name,
@@ -59,7 +61,7 @@ impl<Out> SenseBuilder<Out> {
 
 impl<Out> SenseBuilder<Out>
 where
-    Out: AppData + SubscriptionRequirements + DeserializeOwned,
+    Out: AppData + Label + SubscriptionRequirements + DeserializeOwned,
 {
     #[tracing::instrument(level = "trace", skip(), fields(nr_sources = % self.sources.len()))]
     pub async fn build_for_out(self) -> Result<Sense<Out>, SenseError> {
@@ -131,7 +133,7 @@ impl SenseBuilder<Telemetry> {
 
 impl<Out> SenseBuilder<Out>
 where
-    Out: AppData + DeserializeOwned,
+    Out: AppData + Label + DeserializeOwned,
 {
     #[tracing::instrument(level="trace", fields(nr_sources=%self.sources.len()))]
     pub async fn build_for_out_subscription(
@@ -182,7 +184,7 @@ where
 
 impl<Out> SenseBuilder<Out>
 where
-    Out: AppData,
+    Out: AppData + Label,
 {
     #[tracing::instrument(level = "trace")]
     async fn finish(self, out_channel: SubscriptionChannel<Out>) -> Result<Sense<Out>, SenseError> {
@@ -230,7 +232,7 @@ where
 
         let composite_name = format!("{}_composite_source", self.name);
         let composite = stage::CompositeSource::new(&composite_name, g, outlet).await;
-        let inner: Box<dyn SourceStage<Out>> = Box::new(composite);
+        let inner: Box<dyn SourceStage<DataSet<Out>>> = Box::new(composite);
         let outlet = inner.outlet();
 
         Ok(Sense {

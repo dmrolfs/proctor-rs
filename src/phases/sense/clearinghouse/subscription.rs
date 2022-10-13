@@ -9,6 +9,7 @@ use crate::elements::telemetry::UpdateMetricsFn;
 use crate::elements::{Telemetry, TelemetryValue};
 use crate::error::SenseError;
 use crate::graph::{Connect, Inlet, Outlet, Port, PORT_DATA};
+use crate::phases::DataSet;
 
 // todo: refactor to based on something like Json Schema
 pub trait SubscriptionRequirements {
@@ -24,7 +25,7 @@ pub enum TelemetrySubscription {
     All {
         name: String,
         #[serde(skip)]
-        outlet_to_subscription: Outlet<Telemetry>,
+        outlet_to_subscription: Outlet<DataSet<Telemetry>>,
         #[serde(skip)]
         update_metrics: Option<Arc<UpdateMetricsFn>>,
     },
@@ -33,7 +34,7 @@ pub enum TelemetrySubscription {
         required_fields: HashSet<String>,
         optional_fields: HashSet<String>,
         #[serde(skip)]
-        outlet_to_subscription: Outlet<Telemetry>,
+        outlet_to_subscription: Outlet<DataSet<Telemetry>>,
         #[serde(skip)]
         update_metrics: Option<Arc<UpdateMetricsFn>>,
     },
@@ -180,7 +181,7 @@ impl TelemetrySubscription {
         }
     }
 
-    pub fn outlet_to_subscription(&self) -> Outlet<Telemetry> {
+    pub fn outlet_to_subscription(&self) -> Outlet<DataSet<Telemetry>> {
         match self {
             Self::All { outlet_to_subscription, .. } => outlet_to_subscription.clone(),
             Self::Explicit { outlet_to_subscription, .. } => outlet_to_subscription.clone(),
@@ -242,7 +243,7 @@ impl TelemetrySubscription {
                 // let all_telemetry = Telemetry::from_iter(all.into_iter());
                 Some(cache.get_telemetry())
             },
-            Self::Explicit { required_fields, optional_fields, .. } => {
+            Self::Explicit { name, required_fields, optional_fields, .. } => {
                 let mut ready = Vec::new();
                 let mut unfilled = Vec::new();
 
@@ -254,23 +255,25 @@ impl TelemetrySubscription {
                 }
 
                 if unfilled.is_empty() {
+                    if !optional_fields.is_empty() {
+                        tracing::trace!("Subscription({name}) looking for optional fields: {optional_fields:?}.");
+                    }
                     for optional in optional_fields.iter() {
-                        tracing::trace!(?optional, "looking for optional.");
                         if let Some(value) = cache.get(optional) {
                             ready.push((optional.clone(), value.value().clone()))
                         }
                     }
                 }
 
-                tracing::trace!(?ready, ?unfilled, subscription=?self, "fulfilling required and optional fields.");
                 if ready.is_empty() || !unfilled.is_empty() {
-                    tracing::info!(
+                    tracing::debug!(
                         subscription=?self, seen=?cache.seen(), unfilled_fields=?unfilled, ready_fields=?ready,
-                        "unsatisfied subscription - not publishing."
+                        "unsatisfied Subscription({name}) - not publishing."
                     );
 
                     None
                 } else {
+                    tracing::debug!(?ready, ?unfilled, subscription=?self, "Subscription({name}) found required and optional fields.");
                     Some(Telemetry::from_iter(ready.into_iter()))
                 }
             },
@@ -289,12 +292,12 @@ impl TelemetrySubscription {
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub async fn connect_to_receiver(&self, receiver: &Inlet<Telemetry>) {
+    pub async fn connect_to_receiver(&self, receiver: &Inlet<DataSet<Telemetry>>) {
         let outlet = self.outlet_to_subscription();
         (&outlet, receiver).connect().await;
     }
 
-    pub async fn send(&self, telemetry: Telemetry) -> Result<(), SenseError> {
+    pub async fn send(&self, telemetry: DataSet<Telemetry>) -> Result<(), SenseError> {
         self.outlet_to_subscription().send(telemetry).await?;
         Ok(())
     }

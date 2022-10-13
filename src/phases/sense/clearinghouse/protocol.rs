@@ -5,6 +5,7 @@ use tokio::sync::{mpsc, oneshot};
 use super::{Telemetry, TelemetrySubscription};
 use crate::error::SenseError;
 use crate::graph::Inlet;
+use crate::phases::DataSet;
 use crate::Ack;
 
 pub type ClearinghouseApi = mpsc::UnboundedSender<ClearinghouseCmd>;
@@ -13,7 +14,7 @@ pub type ClearinghouseApi = mpsc::UnboundedSender<ClearinghouseCmd>;
 pub enum ClearinghouseCmd {
     Subscribe {
         subscription: Box<TelemetrySubscription>,
-        receiver: Inlet<Telemetry>,
+        receiver: Inlet<DataSet<Telemetry>>,
         tx: oneshot::Sender<Ack>,
     },
     Unsubscribe {
@@ -33,7 +34,7 @@ impl ClearinghouseCmd {
     const STAGE_NAME: &'static str = "clearinghouse";
 
     pub async fn subscribe(
-        api: &ClearinghouseApi, subscription: TelemetrySubscription, receiver: Inlet<Telemetry>,
+        api: &ClearinghouseApi, subscription: TelemetrySubscription, receiver: Inlet<DataSet<Telemetry>>,
     ) -> Result<Ack, SenseError> {
         let (tx, rx) = oneshot::channel();
         api.send(Self::Subscribe { subscription: Box::new(subscription), receiver, tx })
@@ -110,10 +111,14 @@ impl serde::Serialize for ClearinghouseSnapshot {
             .subscriptions
             .iter()
             .map(|subscription| match subscription {
-                TelemetrySubscription::All { name, .. } => Subscription { name, required: None, optional: None }, // (name, None, None),
+                TelemetrySubscription::All { name, .. } => Subscription {
+                    name: name.as_str(),
+                    required: None,
+                    optional: None,
+                }, // (name, None, None),
                 TelemetrySubscription::Explicit { name, required_fields, optional_fields, .. } => {
                     Subscription {
-                        name,
+                        name: name.as_str(),
                         required: Some(required_fields.clone()),
                         optional: Some(optional_fields.clone()),
                     }

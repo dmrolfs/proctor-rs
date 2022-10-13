@@ -1,6 +1,6 @@
 [package]
 name = "proctor"
-version = "0.17.12"
+version = "0.20.0"
 authors = ["Damon Rolfs <drolfs@gmail.com>"]
 edition = "2021"
 repository = "https://github.com/dmrolfs/proctor-rs"
@@ -34,6 +34,8 @@ anyhow = "1"
 approx = "0"
 async-stream = "0"
 async-trait = "0"
+strum = "0.24.1"
+strum_macros = "0.24.3"
 cast_trait_object = "0"
 chrono = "0"
 clap = "4"

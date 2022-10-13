@@ -1,30 +1,42 @@
+use pretty_snowflake::Label;
 use serde::de::DeserializeOwned;
 
 use super::Telemetry;
 use crate::error::ProctorError;
 use crate::graph::stage::{self, Stage};
 use crate::graph::{self, Graph, SinkShape, SourceShape, ThroughShape};
+use crate::phases::DataSet;
 use crate::AppData;
 
 pub type FromTelemetryShape<Out> = Box<dyn FromTelemetryStage<Out>>;
 
-pub trait FromTelemetryStage<Out>: Stage + ThroughShape<In = Telemetry, Out = Out> + 'static {}
+pub trait FromTelemetryStage<Out>: Stage + ThroughShape<In = DataSet<Telemetry>, Out = DataSet<Out>> + 'static
+where
+    Out: Label,
+{
+}
 
-impl<Out, T> FromTelemetryStage<Out> for T where T: Stage + ThroughShape<In = Telemetry, Out = Out> + 'static {}
+impl<Out, T> FromTelemetryStage<Out> for T
+where
+    T: Stage + ThroughShape<In = DataSet<Telemetry>, Out = DataSet<Out>> + 'static,
+    Out: Label,
+{
+}
 
 #[tracing::instrument(level = "trace", skip(name))]
 pub async fn make_from_telemetry<Out>(name: &str, log_conversion_failure: bool) -> FromTelemetryShape<Out>
 where
-    Out: AppData + DeserializeOwned,
+    Out: AppData + Label + DeserializeOwned,
 {
     let name_2 = name.to_string();
     let err_name = name.to_string();
-    let from_telemetry =
-        stage::FilterMap::<_, Telemetry, Out>::new(format!("{}_from_telemetry", name), move |telemetry| {
+    let from_telemetry = stage::FilterMap::<_, DataSet<Telemetry>, DataSet<Out>>::new(
+        format!("{}_from_telemetry", name),
+        move |telemetry| {
             let span = tracing::trace_span!("converting telemetry into data item", ?telemetry);
             let _ = span.enter();
 
-            match telemetry.try_into() {
+            match telemetry.map(|t| t.try_into()).transpose() {
                 Ok(converted) => {
                     tracing::trace!(?converted, "data item derived from telemetry.");
                     Some(converted)
@@ -38,7 +50,8 @@ where
                     None
                 },
             }
-        });
+        },
+    );
 
     let cg_inlet = from_telemetry.inlet().clone();
     let cg_outlet = from_telemetry.outlet().clone();
