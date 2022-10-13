@@ -102,7 +102,7 @@ impl serde::Serialize for ClearinghouseSnapshot {
 
         let mut state = serializer.serialize_struct("ClearinghouseSnapshot", 3)?;
 
-        let telemetry = (&self.telemetry).iter().collect::<std::collections::HashMap<_, _>>();
+        let telemetry = self.telemetry.iter().collect::<std::collections::HashMap<_, _>>();
         state.serialize_field("telemetry", &telemetry)?;
 
         state.serialize_field("missing", &self.missing)?;

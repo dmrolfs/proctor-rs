@@ -2,8 +2,9 @@ use crate::elements::telemetry::TableType;
 use crate::phases::sense::CorrelationGenerator;
 use crate::{Correlation, ProctorContext, ReceivedAt, Timestamp};
 use async_trait::async_trait;
+use frunk::{Monoid, Semigroup};
 use once_cell::sync::Lazy;
-use pretty_snowflake::{AlphabetCodec, Id, IdPrettifier, Label, MachineNode};
+use pretty_snowflake::{AlphabetCodec, Id, IdPrettifier, Label, Labeling, MachineNode};
 use serde::ser::SerializeStruct;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp::Ordering;
@@ -139,6 +140,30 @@ where
 
     fn labeler() -> Self::Labeler {
         <T as Label>::labeler()
+    }
+}
+
+impl<T> Monoid for DataSet<T>
+where
+    T: Monoid + Label + Send,
+{
+    fn empty() -> Self {
+        Self::from_parts(
+            MetaData::from_parts(
+                Id::direct(<Self as Label>::labeler().label(), 0, "<undefined>"),
+                Timestamp::ZERO,
+            ),
+            <T as Monoid>::empty(),
+        )
+    }
+}
+
+impl<T> Semigroup for DataSet<T>
+where
+    T: Semigroup + Label + Send,
+{
+    fn combine(&self, other: &Self) -> Self {
+        Self::from_parts(self.metadata().clone(), self.data.combine(&other.data))
     }
 }
 
