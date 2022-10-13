@@ -295,9 +295,9 @@ where
 #[async_trait]
 impl<C> ProctorContext for DataSet<C>
 where
-    C: ProctorContext + PartialEq,
+    C: Label + ProctorContext + PartialEq,
 {
-    type ContextData = Self;
+    type ContextData = <C as ProctorContext>::ContextData;
     type Error = <C as ProctorContext>::Error;
 
     fn custom(&self) -> TableType {
