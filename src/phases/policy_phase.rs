@@ -13,6 +13,7 @@ use crate::elements::{
 use crate::error::{PolicyError, ProctorError};
 use crate::graph::stage::{Stage, ThroughStage, WithApi, WithMonitor};
 use crate::graph::{stage, Connect, Graph, Inlet, Outlet, Port, SinkShape, SourceShape, PORT_DATA};
+use crate::phases::DataSet;
 use crate::{AppData, Correlation, ProctorContext, ProctorResult};
 
 pub struct PolicyPhase<In, Out, C, D> {
@@ -22,7 +23,7 @@ pub struct PolicyPhase<In, Out, C, D> {
     inlet: Inlet<In>,
     outlet: Outlet<Out>,
     tx_policy_api: PolicyFilterApi<C, D>,
-    tx_policy_monitor: broadcast::Sender<Arc<PolicyFilterEvent<In, C>>>,
+    tx_policy_monitor: broadcast::Sender<Arc<DataSet<PolicyFilterEvent<In, C>>>>,
 }
 
 impl<In, C, D> PolicyPhase<In, PolicyOutcome<In, C>, C, D>

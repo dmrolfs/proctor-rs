@@ -28,6 +28,7 @@ use crate::error::{PolicyError, PortError};
 use crate::graph::stage::{self, Stage};
 use crate::graph::{Inlet, Outlet, Port, PORT_CONTEXT, PORT_DATA};
 use crate::graph::{SinkShape, SourceShape};
+use crate::phases::DataSet;
 use crate::{track_errors, AppData, Correlation, ProctorContext, ProctorResult};
 
 pub(crate) static POLICY_FILTER_EVAL_TIME: Lazy<HistogramVec> = Lazy::new(|| {
@@ -75,8 +76,8 @@ where
     inlet: Inlet<T>,
     outlet: Outlet<PolicyOutcome<T, C>>,
     tx_api: PolicyFilterApi<C, D>,
-    rx_api: mpsc::UnboundedReceiver<PolicyFilterCmd<C, D>>,
-    pub tx_monitor: broadcast::Sender<Arc<PolicyFilterEvent<T, C>>>,
+    rx_api: mpsc::UnboundedReceiver<DataSet<PolicyFilterCmd<C, D>>>,
+    pub tx_monitor: broadcast::Sender<Arc<DataSet<PolicyFilterEvent<T, C>>>>,
 }
 
 impl<T, C, A, P, D> PolicyFilter<T, C, A, P, D>
@@ -214,7 +215,7 @@ where
 
                         match context.lock().await.as_ref() {
                             Some(ctx) => Self::handle_item(&name, item, ctx, policy, &oso, outlet, tx_monitor).await?,
-                            None => Self::handle_item_before_context(item, tx_monitor)?,
+                            None => Self::handle_item_before_context(item, tx_monitor).await?,
                         }
                     },
                     None => {
@@ -286,7 +287,7 @@ where
 
     #[tracing::instrument(level = "trace", skip(tx))]
     fn publish_event(
-        event: PolicyFilterEvent<T, C>, tx: &broadcast::Sender<Arc<PolicyFilterEvent<T, C>>>,
+        event: DataSet<PolicyFilterEvent<T, C>>, tx: &broadcast::Sender<Arc<DataSet<PolicyFilterEvent<T, C>>>>,
     ) -> Result<(), PolicyError> {
         let nr_notified = tx.send(Arc::new(event)).map_err(|err| PolicyError::Publish(err.into()))?;
         tracing::trace!(%nr_notified, "notifying subscribers of policy filter event.");
@@ -301,7 +302,7 @@ where
     )]
     async fn handle_item(
         name: &str, item: T, context: &C, policy: &P, oso: &Oso, outlet: &Outlet<PolicyOutcome<T, C>>,
-        tx: &broadcast::Sender<Arc<PolicyFilterEvent<T, C>>>,
+        tx: &broadcast::Sender<Arc<DataSet<PolicyFilterEvent<T, C>>>>,
     ) -> Result<(), PolicyError> {
         let _timer = start_policy_timer(name);
 
@@ -317,7 +318,7 @@ where
                 outlet
                     .send(PolicyOutcome::new(item.clone(), context.clone(), result.clone()))
                     .await?;
-                Self::publish_event(PolicyFilterEvent::ItemPassed(item, result), tx)?;
+                Self::publish_event(DataSet::new(PolicyFilterEvent::ItemPassed(item, result)).await, tx)?;
                 Ok(())
             },
 
@@ -326,7 +327,10 @@ where
                     correlation=?item.correlation(), ?policy, ?result,
                     "item failed {name} policy review - skipping."
                 );
-                Self::publish_event(PolicyFilterEvent::ItemBlocked(item, Some(result)), tx)?;
+                Self::publish_event(
+                    DataSet::new(PolicyFilterEvent::ItemBlocked(item, Some(result))).await,
+                    tx,
+                )?;
                 Ok(())
             },
 
@@ -335,7 +339,7 @@ where
                     correlation=?item.correlation(), error=?err, ?policy,
                     "error in {name} policy review (possible error in policy definition) - skipping item."
                 );
-                Self::publish_event(PolicyFilterEvent::ItemBlocked(item, None), tx)?;
+                Self::publish_event(DataSet::new(PolicyFilterEvent::ItemBlocked(item, None)).await, tx)?;
                 Err(err)
             },
         }
@@ -347,33 +351,34 @@ where
         skip(tx),
         fields()
     )]
-    fn handle_item_before_context(
-        item: T, tx: &broadcast::Sender<Arc<PolicyFilterEvent<T, C>>>,
+    async fn handle_item_before_context(
+        item: T, tx: &broadcast::Sender<Arc<DataSet<PolicyFilterEvent<T, C>>>>,
     ) -> Result<(), PolicyError> {
         tracing::info!(correlation=?item.correlation(), ?item, "dropping item received before policy context set.");
-        Self::publish_event(PolicyFilterEvent::ItemBlocked(item, None), tx)?;
+        Self::publish_event(DataSet::new(PolicyFilterEvent::ItemBlocked(item, None)).await, tx)?;
         Ok(())
     }
 
     #[tracing::instrument(level = "trace", name = "policy_filter handle context", skip(context, tx), fields())]
     async fn handle_context(
-        context: Arc<Mutex<Option<C>>>, recv_context: C, tx: &broadcast::Sender<Arc<PolicyFilterEvent<T, C>>>,
+        context: Arc<Mutex<Option<C>>>, recv_context: C, tx: &broadcast::Sender<Arc<DataSet<PolicyFilterEvent<T, C>>>>,
     ) -> Result<(), PolicyError> {
         tracing::trace!(recv_context=?recv_context, "handling policy context update...");
         let mut ctx = context.lock().await;
         *ctx = Some(recv_context);
 
-        Self::publish_event(PolicyFilterEvent::ContextChanged(ctx.clone()), tx)?;
+        Self::publish_event(DataSet::new(PolicyFilterEvent::ContextChanged(ctx.clone())).await, tx)?;
         Ok(())
     }
 
     #[tracing::instrument(level = "trace", name = "policy_filter handle command", skip(oso, policy,), fields())]
     async fn handle_command(
-        command: PolicyFilterCmd<C, D>, oso: &mut Oso, name: &str, policy: &mut P, context: Arc<Mutex<Option<C>>>,
+        command: DataSet<PolicyFilterCmd<C, D>>, oso: &mut Oso, name: &str, policy: &mut P,
+        context: Arc<Mutex<Option<C>>>,
     ) -> bool {
         tracing::trace!(?command, ?context, "handling policy filter command...");
 
-        match command {
+        match command.into_inner() {
             PolicyFilterCmd::Inspect(tx) => {
                 let detail = PolicyFilterDetail {
                     name: name.to_string(),
