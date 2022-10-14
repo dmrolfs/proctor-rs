@@ -10,11 +10,12 @@ use tracing::Instrument;
 use crate::error::PlanError;
 use crate::graph::stage::{Stage, WithMonitor};
 use crate::graph::{stage, Inlet, Outlet, Port, SinkShape, SourceShape, PORT_CONTEXT, PORT_DATA};
+use crate::phases::DataSet;
 use crate::{AppData, Correlation, ProctorResult};
 
 // pub type Event<P> = PlanEvent<<P as Planning>::Context, <P as Planning>::Decision, <P as
 // Planning>::Out>;
-pub type PlanMonitor<P> = broadcast::Receiver<Arc<PlanEvent<P>>>;
+pub type PlanMonitor<P> = broadcast::Receiver<Arc<DataSet<PlanEvent<P>>>>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PlanEvent<P: Planning + ?Sized> {
@@ -35,7 +36,7 @@ where
 }
 
 #[async_trait]
-pub trait Planning: Debug + Send + Sync {
+pub trait Planning: Debug + Send + Sync + Sized {
     type Observation: AppData + Clone;
     type Decision: AppData + Correlation + Clone;
     type Context: AppData + Correlation + Clone;
@@ -47,7 +48,7 @@ pub trait Planning: Debug + Send + Sync {
 
     /// Patch planning context with populated properties of incoming context records. Optional
     /// fields that are None may be ignored.
-    async fn patch_context(&mut self, context: Self::Context) -> Result<Option<PlanEvent<Self>>, PlanError>;
+    async fn patch_context(&mut self, context: Self::Context) -> Result<Option<DataSet<PlanEvent<Self>>>, PlanError>;
 
     async fn handle_decision(&mut self, decision: Self::Decision) -> Result<Option<Self::Out>, PlanError>;
 
@@ -61,7 +62,7 @@ pub struct Plan<P: Planning> {
     decision_inlet: Inlet<P::Decision>,
     context_inlet: Inlet<P::Context>,
     outlet: Outlet<P::Out>,
-    pub tx_monitor: broadcast::Sender<Arc<PlanEvent<P>>>,
+    pub tx_monitor: broadcast::Sender<Arc<DataSet<PlanEvent<P>>>>,
 }
 
 impl<P: Planning> Plan<P> {
@@ -196,7 +197,7 @@ impl<P: Planning> Plan<P> {
                         None => PlanEvent::DecisionIgnored(decision),
                     };
 
-                    Self::publish_event(tx_monitor, event);
+                    Self::publish_event(tx_monitor, DataSet::new(event).await);
                 },
 
                 else => break,
@@ -207,7 +208,7 @@ impl<P: Planning> Plan<P> {
     }
 
     #[tracing::instrument(level = "trace", skip(tx_monitor))]
-    fn publish_event(tx_monitor: &broadcast::Sender<Arc<PlanEvent<P>>>, event: PlanEvent<P>) {
+    fn publish_event(tx_monitor: &broadcast::Sender<Arc<DataSet<PlanEvent<P>>>>, event: DataSet<PlanEvent<P>>) {
         match tx_monitor.send(Arc::new(event)) {
             Ok(nr_subsribers) => tracing::debug!(%nr_subsribers, "published event to subscribers"),
             Err(err) => {
