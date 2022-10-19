@@ -6,12 +6,11 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 
 use crate::elements::{PolicySource, QueryResult};
 use crate::error::PolicyError;
-use crate::phases::DataSet;
 use crate::Ack;
 
-pub type PolicyFilterApi<C, D> = mpsc::UnboundedSender<DataSet<PolicyFilterCmd<C, D>>>;
-pub type PolicyFilterApiReceiver<C, D> = mpsc::UnboundedReceiver<DataSet<PolicyFilterCmd<C, D>>>;
-pub type PolicyFilterMonitor<T, C> = broadcast::Receiver<Arc<DataSet<PolicyFilterEvent<T, C>>>>;
+pub type PolicyFilterApi<C, D> = mpsc::UnboundedSender<PolicyFilterCmd<C, D>>;
+pub type PolicyFilterApiReceiver<C, D> = mpsc::UnboundedReceiver<PolicyFilterCmd<C, D>>;
+pub type PolicyFilterMonitor<T, C> = broadcast::Receiver<Arc<PolicyFilterEvent<T, C>>>;
 
 #[derive(Debug)]
 pub enum PolicyFilterCmd<C, D> {
@@ -47,7 +46,7 @@ impl<C, D> PolicyFilterCmd<C, D> {
         D: Debug + Send + Sync + 'static,
     {
         let (tx, rx) = oneshot::channel();
-        api.send(DataSet::new(Self::ReplacePolicies { new_policies, new_template_data, tx }).await)
+        api.send(Self::ReplacePolicies { new_policies, new_template_data, tx })
             .map_err(|err| PolicyError::Api(Self::STAGE_NAME.to_string(), err.into()))?;
 
         rx.await
@@ -62,7 +61,7 @@ impl<C, D> PolicyFilterCmd<C, D> {
         D: Debug + Send + Sync + 'static,
     {
         let (tx, rx) = oneshot::channel();
-        api.send(DataSet::new(Self::AppendPolicy { additional_policy, new_template_data, tx }).await)
+        api.send(Self::AppendPolicy { additional_policy, new_template_data, tx })
             .map_err(|err| PolicyError::Api(Self::STAGE_NAME.to_string(), err.into()))?;
 
         rx.await
@@ -75,7 +74,7 @@ impl<C, D> PolicyFilterCmd<C, D> {
         D: Debug + Send + Sync + 'static,
     {
         let (tx, rx) = oneshot::channel();
-        api.send(DataSet::new(Self::Inspect(tx)).await)
+        api.send(Self::Inspect(tx))
             .map_err(|err| PolicyError::Api(Self::STAGE_NAME.to_string(), err.into()))?;
         rx.await
             .map_err(|err| PolicyError::Api(Self::STAGE_NAME.to_string(), err.into()))

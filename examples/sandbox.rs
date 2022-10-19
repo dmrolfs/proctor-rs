@@ -9,8 +9,8 @@ use proctor::error::TelemetryError;
 use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use proctor::phases::sense::clearinghouse::TelemetryCacheSettings;
 use proctor::phases::sense::{self, Sense, SensorSetting};
-use proctor::phases::DataSet;
 use proctor::tracing::{get_subscriber, init_subscriber};
+use proctor::DataSet;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Data {

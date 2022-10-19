@@ -15,6 +15,7 @@ rust_2018_idioms
 extern crate static_assertions;
 
 pub mod app_data;
+pub mod data_set;
 pub mod elements;
 pub mod error;
 pub mod graph;
@@ -25,6 +26,7 @@ pub mod tracing;
 
 use crate::elements::Timestamp;
 pub use app_data::AppData;
+pub use data_set::{DataSet, IntoDataSet, IntoPhaseData, MetaData};
 pub use elements::ProctorContext;
 pub use graph::track_errors;
 use pretty_snowflake::{Id, LabeledRealtimeIdGenerator};
@@ -36,12 +38,18 @@ pub type ProctorIdGenerator<T> = LabeledRealtimeIdGenerator<T>;
 pub type Ack = ();
 
 pub trait Correlation {
-    type Correlated: Sized;
+    type Correlated: Sized + Sync;
     fn correlation(&self) -> &Id<Self::Correlated>;
 }
 
 pub trait ReceivedAt {
     fn recv_timestamp(&self) -> Timestamp;
+}
+
+impl<T> ReceivedAt for (T, Timestamp) {
+    fn recv_timestamp(&self) -> Timestamp {
+        self.1
+    }
 }
 
 /// An allocation-optimized string.

@@ -107,6 +107,7 @@ impl From<Telemetry> for TelemetryValue {
 impl std::ops::Deref for Telemetry {
     type Target = TableType;
 
+    #[allow(clippy::explicit_auto_deref)]
     fn deref(&self) -> &Self::Target {
         if let TelemetryValue::Table(ref inner) = self.0 {
             &*inner.0
@@ -117,6 +118,7 @@ impl std::ops::Deref for Telemetry {
 }
 
 impl std::ops::DerefMut for Telemetry {
+    #[allow(clippy::explicit_auto_deref)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         if let TelemetryValue::Table(ref mut inner) = self.0 {
             &mut *inner.0

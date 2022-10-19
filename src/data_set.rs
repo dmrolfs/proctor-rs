@@ -1,5 +1,6 @@
 use crate::elements::telemetry::TableType;
 use crate::phases::sense::CorrelationGenerator;
+use crate::AppData;
 use crate::{Correlation, ProctorContext, ReceivedAt, Timestamp};
 use async_trait::async_trait;
 use frunk::{Monoid, Semigroup};
@@ -8,18 +9,16 @@ use pretty_snowflake::{AlphabetCodec, Id, IdPrettifier, Label, Labeling, Machine
 use serde::ser::SerializeStruct;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp::Ordering;
-use std::collections::HashSet;
 use std::fmt;
+use std::future::Future;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use strum_macros::AsRefStr;
 use tokio::sync::Mutex;
 
-use super::sense::SubscriptionRequirements;
-
 static ID_GENERATOR: Lazy<Mutex<Option<CorrelationGenerator>>> = Lazy::new(|| Mutex::new(None));
 
-pub async fn set_sensor_data_id_generator(gen: CorrelationGenerator) {
+pub async fn set_correlation_generator(gen: CorrelationGenerator) {
     let mut correlation_generator = ID_GENERATOR.lock().await;
     *correlation_generator = Some(gen);
 }
@@ -42,6 +41,12 @@ async fn gen_correlation_id<T: Label>() -> Id<T> {
     gen.next_id().relabel()
 }
 
+pub trait IntoDataSet {
+    type Data: AppData + Label;
+
+    fn into_dataset(self) -> DataSet<Self::Data>;
+}
+
 /// A Springline sensor data set.
 #[derive(Debug, Clone)]
 pub struct DataSet<T>
@@ -57,11 +62,121 @@ where
     T: Label + Send,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "({})[{} @ {}]",
-            self.data, self.metadata.correlation_id, self.metadata.recv_timestamp
-        )
+        write!(f, "({})[{}]", self.data, self.metadata)
+    }
+}
+
+impl<T> IntoDataSet for DataSet<T>
+where
+    T: AppData + Label,
+{
+    type Data = T;
+
+    fn into_dataset(self) -> DataSet<Self::Data> {
+        self
+    }
+}
+
+#[async_trait]
+pub trait IntoPhaseData<T>
+where
+    T: Label,
+{
+    /// Wrap the data item in a PhaseData wrapper
+    async fn into_phase_data(self) -> DataSet<T>;
+}
+
+impl<T> DataSet<T>
+where
+    T: Label + Send,
+{
+    /// Create a new sensor data set.
+    pub async fn new(data: T) -> Self {
+        Self { metadata: MetaData::new().await, data }
+    }
+
+    // pub fn clone_metadata_for<U>(&self, data: U) -> DataSet<U>
+    // where
+    //     U: Label + Send,
+    // {
+    //     DataSet { metadata: self.metadata.clone().relabel(), data }
+    // }
+
+    /// Get a reference to the sensor data metadata.
+    pub const fn metadata(&self) -> &MetaData<T> {
+        &self.metadata
+    }
+
+    /// Consumes self, returning the data item
+    #[allow(clippy::missing_const_for_fn)]
+    #[inline]
+    pub fn into_inner(self) -> T {
+        self.data
+    }
+
+    #[allow(clippy::missing_const_for_fn)]
+    #[inline]
+    pub fn into_parts(self) -> (MetaData<T>, T) {
+        (self.metadata, self.data)
+    }
+
+    #[inline]
+    pub const fn from_parts(metadata: MetaData<T>, data: T) -> Self {
+        Self { metadata, data }
+    }
+
+    // pub fn translate_metadata<U>(metadata: &MetaData<U>, data: T) -> Self
+    // where
+    //     U: Label,
+    // {
+    //     Self { metadata: metadata.clone().relabel(), data }
+    // }
+
+    pub fn adopt_metadata<U>(&mut self, new_metadata: MetaData<U>) -> MetaData<T>
+    where
+        U: Label,
+    {
+        let old_metadata = self.metadata.clone();
+        self.metadata = new_metadata.relabel();
+        old_metadata
+    }
+
+    pub fn map<F, U>(self, f: F) -> DataSet<U>
+    where
+        U: Label + Send,
+        F: FnOnce(T) -> U,
+    {
+        let metadata = self.metadata.clone().relabel();
+        DataSet { metadata, data: f(self.data) }
+    }
+
+    //todo: maybe offer ref mapping via DataSetRef type?
+    // pub fn as_mapped<F, U>(&self, f: F) -> DataSet<&U>
+    // where
+    //     U: Label + Send + Sync,
+    //     F: FnOnce(&Self) -> &U,
+    // {
+    //     let metadata = self.metadata.clone().relabel();
+    //     DataSet { metadata, data: f(&self.data) }
+    // }
+
+    pub fn flat_map<F, U>(self, f: F) -> DataSet<U>
+    where
+        U: Label + Send,
+        F: FnOnce(Self) -> U,
+    {
+        let metadata = self.metadata.clone().relabel();
+        DataSet { metadata, data: f(self) }
+    }
+
+    pub async fn and_then<Op, Fut, U>(self, f: Op) -> DataSet<U>
+    where
+        U: Label + Send,
+        Fut: Future<Output = U> + Send,
+        Op: FnOnce(T) -> Fut + Send,
+    {
+        let metadata = self.metadata.clone().relabel();
+        DataSet { metadata, data: f(self.data).await }
     }
 }
 
@@ -114,7 +229,7 @@ where
 
 impl<T> Correlation for DataSet<T>
 where
-    T: Label,
+    T: Label + Sync,
 {
     type Correlated = T;
 
@@ -150,7 +265,7 @@ where
     fn empty() -> Self {
         Self::from_parts(
             MetaData::from_parts(
-                Id::direct(<Self as Label>::labeler().label(), 0, "<undefined>"),
+                Id::<T>::direct(<Self as Label>::labeler().label(), 0, "<undefined>"),
                 Timestamp::ZERO,
             ),
             <T as Monoid>::empty(),
@@ -185,57 +300,6 @@ where
     }
 }
 
-#[async_trait]
-pub trait IntoPhaseData<T>
-where
-    T: Label,
-{
-    /// Wrap the data item in a PhaseData wrapper
-    async fn into_phase_data(self) -> DataSet<T>;
-}
-
-impl<T> DataSet<T>
-where
-    T: Label + Send,
-{
-    /// Create a new sensor data set.
-    pub async fn new(data: T) -> Self {
-        Self { metadata: MetaData::new().await, data }
-    }
-}
-
-impl<T> DataSet<T>
-where
-    T: Label + Send,
-{
-    /// Get a reference to the sensor data metadata.
-    pub const fn metadata(&self) -> &MetaData<T> {
-        &self.metadata
-    }
-
-    /// Consumes self, returning the data item
-    pub fn into_inner(self) -> T {
-        self.data
-    }
-
-    pub fn into_parts(self) -> (MetaData<T>, T) {
-        (self.metadata, self.data)
-    }
-
-    pub const fn from_parts(metadata: MetaData<T>, data: T) -> Self {
-        Self { metadata, data }
-    }
-
-    pub fn map<F, U>(self, f: F) -> DataSet<U>
-    where
-        U: Label + Send,
-        F: FnOnce(T) -> U,
-    {
-        let data = f(self.data);
-        DataSet { metadata: self.metadata.relabel(), data }
-    }
-}
-
 impl<T> DataSet<Option<T>>
 where
     T: Label + Send,
@@ -245,7 +309,7 @@ where
     /// # Examples
     ///
     /// ```rust
-    /// use proctor::phases::DataSet;
+    /// use proctor::DataSet;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -272,7 +336,8 @@ where
     /// # Examples
     ///
     /// ```rust
-    /// use proctor::phases::DataSet;
+    /// use proctor::DataSet;
+    ///
     /// #[derive(Debug, Eq, PartialEq)]
     /// struct SomeErr;
     ///
@@ -302,19 +367,6 @@ where
 
     fn custom(&self) -> TableType {
         self.data.custom()
-    }
-}
-
-impl<C> SubscriptionRequirements for DataSet<C>
-where
-    C: Label + SubscriptionRequirements,
-{
-    fn required_fields() -> HashSet<String> {
-        <C as SubscriptionRequirements>::required_fields()
-    }
-
-    fn optional_fields() -> HashSet<String> {
-        <C as SubscriptionRequirements>::optional_fields()
     }
 }
 
@@ -481,9 +533,18 @@ where
     }
 }
 
+impl<T: fmt::Display> fmt::Display for MetaData<T>
+where
+    T: Label + Send,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} @ {}", self.correlation_id, self.recv_timestamp)
+    }
+}
+
 impl<T> Correlation for MetaData<T>
 where
-    T: Label,
+    T: Label + Sync,
 {
     type Correlated = T;
 
@@ -514,6 +575,11 @@ impl<T> MetaData<T>
 where
     T: Label,
 {
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn into_parts(self) -> (Id<T>, Timestamp) {
+        (self.correlation_id, self.recv_timestamp)
+    }
+
     pub const fn from_parts(correlation_id: Id<T>, recv_timestamp: Timestamp) -> Self {
         Self { correlation_id, recv_timestamp }
     }
@@ -571,5 +637,62 @@ where
 {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.correlation_id.hash(state)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[derive(Debug, Clone, Label, PartialEq)]
+    struct TestData(i32);
+
+    #[derive(Debug, Label, PartialEq)]
+    struct TestContainer(TestData);
+
+    #[derive(Debug, Label, PartialEq)]
+    struct TestDataSetContainer(DataSet<TestData>);
+
+    #[test]
+    fn test_data_set_map() {
+        let data = TestData(13);
+
+        let metadata = MetaData::from_parts(
+            Id::direct(<TestData as Label>::labeler().label(), 0, "zero"),
+            Timestamp::now(),
+        );
+        let dataset = DataSet::from_parts(metadata.clone(), data);
+        let expected = TestContainer(dataset.clone().into_inner());
+        let actual = dataset.map(TestContainer);
+
+        assert_eq!(actual.metadata().correlation().num(), metadata.correlation().num());
+        assert_eq!(
+            actual.metadata().correlation().pretty(),
+            metadata.correlation().pretty()
+        );
+        assert_eq!(actual.metadata().recv_timestamp(), metadata.recv_timestamp());
+        assert_eq!(actual.as_ref(), &expected);
+    }
+
+    #[test]
+    fn test_data_set_flat_map() {
+        let data = TestData(13);
+
+        let metadata = MetaData::from_parts(
+            Id::direct(<TestData as Label>::labeler().label(), 0, "zero"),
+            Timestamp::now(),
+        );
+        let dataset = DataSet::from_parts(metadata.clone(), data);
+        let expected = TestDataSetContainer(dataset.clone());
+        let actual = dataset.flat_map(TestDataSetContainer);
+
+        assert_eq!(actual.metadata().correlation().num(), metadata.correlation().num());
+        assert_eq!(
+            actual.metadata().correlation().pretty(),
+            metadata.correlation().pretty()
+        );
+        assert_eq!(actual.metadata().recv_timestamp(), metadata.recv_timestamp());
+        assert_eq!(actual.as_ref(), &expected);
     }
 }

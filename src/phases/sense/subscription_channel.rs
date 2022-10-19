@@ -10,8 +10,7 @@ use crate::error::SenseError;
 use crate::graph::stage::Stage;
 use crate::graph::{Inlet, Outlet, Port, SourceShape, PORT_DATA};
 use crate::phases::sense::{ClearinghouseSubscriptionAgent, TelemetrySubscription};
-use crate::phases::DataSet;
-use crate::{AppData, ProctorResult};
+use crate::{AppData, DataSet, ProctorResult};
 
 // todo: consider refactor all of these builder functions into a typed subscription channel builder.
 

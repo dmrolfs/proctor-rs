@@ -4,7 +4,7 @@ use super::subscription::TelemetrySubscription;
 use crate::elements::Telemetry;
 use crate::error::SenseError;
 use crate::graph::Inlet;
-use crate::phases::DataSet;
+use crate::DataSet;
 
 #[async_trait]
 pub trait ClearinghouseSubscriptionAgent: Send {

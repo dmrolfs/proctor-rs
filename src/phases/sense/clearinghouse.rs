@@ -25,8 +25,7 @@ use crate::elements::{Telemetry, TelemetryValue};
 use crate::error::{ProctorError, SenseError};
 use crate::graph::stage::Stage;
 use crate::graph::{stage, Inlet, OutletsShape, Port, SinkShape, UniformFanOutShape};
-use crate::phases::DataSet;
-use crate::ProctorResult;
+use crate::{DataSet, ProctorResult};
 
 pub(crate) static SUBSCRIPTIONS_GAUGE: Lazy<IntGauge> = Lazy::new(|| {
     IntGauge::with_opts(
@@ -613,7 +612,7 @@ mod clearinghouse_tests {
 
         let sub1_inlet = Inlet::new("sub1", PORT_DATA);
         block_on(async {
-            crate::phases::data::set_sensor_data_id_generator(ID_GENERATOR.clone()).await;
+            crate::data_set::set_correlation_generator(ID_GENERATOR.clone()).await;
             let mut clearinghouse = Clearinghouse::new("test", &TelemetryCacheSettings::default());
             // assert!(clearinghouse.cache.is_empty());
             assert!(clearinghouse.subscriptions.is_empty());
@@ -650,7 +649,7 @@ mod clearinghouse_tests {
                 .collect();
             let mut tick = stage::Tick::new("tick", Duration::from_nanos(0), Duration::from_millis(5), data);
             let tx_tick_api = tick.tx_api();
-            crate::phases::data::set_sensor_data_id_generator(ID_GENERATOR.clone()).await;
+            crate::data_set::set_correlation_generator(ID_GENERATOR.clone()).await;
             let mut clearinghouse = Clearinghouse::new("test-clearinghouse", &TelemetryCacheSettings::default());
             let tx_api = clearinghouse.tx_api();
             (tick.outlet(), clearinghouse.inlet()).connect().await;
@@ -725,7 +724,7 @@ mod clearinghouse_tests {
                 .collect();
             let mut tick = stage::Tick::new("tick", Duration::from_nanos(0), Duration::from_millis(5), data);
             let tx_tick_api = tick.tx_api();
-            crate::phases::data::set_sensor_data_id_generator(ID_GENERATOR.clone()).await;
+            crate::data_set::set_correlation_generator(ID_GENERATOR.clone()).await;
             let mut clearinghouse = Clearinghouse::new("test-clearinghouse", &TelemetryCacheSettings::default());
             let tx_api = clearinghouse.tx_api();
             (tick.outlet(), clearinghouse.inlet()).connect().await;
@@ -917,7 +916,7 @@ mod clearinghouse_tests {
                 sub_receivers.push((s, receiver));
             }
 
-            crate::phases::data::set_sensor_data_id_generator(ID_GENERATOR.clone()).await;
+            crate::data_set::set_correlation_generator(ID_GENERATOR.clone()).await;
 
             for row in 0..DB_ROWS.len() {
                 let mut c = Clearinghouse::new(format!("test-{row}"), &TelemetryCacheSettings::default());
@@ -1017,7 +1016,7 @@ mod clearinghouse_tests {
             let source = stage::ActorSource::new("source");
             let tx_source = source.tx_api();
 
-            crate::phases::data::set_sensor_data_id_generator(ID_GENERATOR.clone()).await;
+            crate::data_set::set_correlation_generator(ID_GENERATOR.clone()).await;
 
             let mut clearinghouse = Clearinghouse::new("clearinghouse", &cache_settings);
             let tx_clearinghouse = clearinghouse.tx_api();
@@ -1056,7 +1055,26 @@ mod clearinghouse_tests {
                 .await
             );
 
-            let actual = assert_ok!(rx_sink.try_recv());
+            let mut pushed = false;
+            let mut actual: Result<DataSet<TableType>, TryRecvError> = Err(TryRecvError::Empty);
+            for _ in 0..3 {
+                match rx_sink.try_recv() {
+                    Ok(a) => {
+                        pushed = true;
+                        actual = Ok(a);
+                        break;
+                    },
+                    Err(TryRecvError::Empty) => {
+                        tokio::time::sleep(Duration::from_millis(25)).await;
+                    },
+                    Err(e) => {
+                        actual = Err(e);
+                        break;
+                    },
+                }
+            }
+            assert!(pushed);
+            let actual = assert_ok!(actual);
             assert_eq!(
                 without_auto_fields(&Telemetry::from(actual)),
                 without_auto_fields(&Telemetry::from(maplit::hashmap! {

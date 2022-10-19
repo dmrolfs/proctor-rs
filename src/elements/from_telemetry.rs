@@ -5,8 +5,8 @@ use super::Telemetry;
 use crate::error::ProctorError;
 use crate::graph::stage::{self, Stage};
 use crate::graph::{self, Graph, SinkShape, SourceShape, ThroughShape};
-use crate::phases::DataSet;
 use crate::AppData;
+use crate::DataSet;
 
 pub type FromTelemetryShape<Out> = Box<dyn FromTelemetryStage<Out>>;
 

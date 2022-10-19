@@ -15,8 +15,7 @@ use crate::graph::stage::{self, SourceStage, Stage, WithApi};
 use crate::graph::{Connect, Graph, Inlet, SinkShape, SourceShape, UniformFanInShape};
 use crate::phases::sense::clearinghouse::TelemetryCacheSettings;
 use crate::phases::sense::{ClearinghouseSubscriptionAgent, CorrelationGenerator, TelemetrySubscription};
-use crate::phases::DataSet;
-use crate::AppData;
+use crate::{AppData, DataSet};
 
 #[derive(Debug)]
 pub struct SenseBuilder<Out> {
@@ -46,7 +45,7 @@ impl<Out> SenseBuilder<Out> {
         let name = name.into();
         let nr_sources = sources.len();
         let merge = stage::MergeN::new(format!("{}_source_merge_{}", name, nr_sources), nr_sources);
-        crate::phases::data::set_sensor_data_id_generator(correlation_generator).await;
+        crate::data_set::set_correlation_generator(correlation_generator).await;
         let clearinghouse = Clearinghouse::new(format!("{}_clearinghouse", name), cache_settings);
 
         Self {

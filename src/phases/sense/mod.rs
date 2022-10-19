@@ -16,7 +16,7 @@ pub mod sensor;
 pub mod settings;
 pub mod subscription_channel;
 
-use crate::phases::DataSet;
+use crate::DataSet;
 pub use builder::SenseBuilder;
 pub use clearinghouse::{
     Clearinghouse, ClearinghouseApi, ClearinghouseCmd, ClearinghouseSnapshot, ClearinghouseSubscriptionAgent,

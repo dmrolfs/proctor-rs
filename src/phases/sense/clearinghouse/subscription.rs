@@ -1,7 +1,9 @@
+use pretty_snowflake::Label;
 use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
+use crate::DataSet;
 use serde::Serialize;
 
 use super::cache::TelemetryCache;
@@ -9,7 +11,6 @@ use crate::elements::telemetry::UpdateMetricsFn;
 use crate::elements::{Telemetry, TelemetryValue};
 use crate::error::SenseError;
 use crate::graph::{Connect, Inlet, Outlet, Port, PORT_DATA};
-use crate::phases::DataSet;
 
 // todo: refactor to based on something like Json Schema
 pub trait SubscriptionRequirements {
@@ -17,6 +18,19 @@ pub trait SubscriptionRequirements {
 
     fn optional_fields() -> HashSet<String> {
         HashSet::default()
+    }
+}
+
+impl<C> SubscriptionRequirements for DataSet<C>
+where
+    C: Label + SubscriptionRequirements,
+{
+    fn required_fields() -> HashSet<String> {
+        <C as SubscriptionRequirements>::required_fields()
+    }
+
+    fn optional_fields() -> HashSet<String> {
+        <C as SubscriptionRequirements>::optional_fields()
     }
 }
 

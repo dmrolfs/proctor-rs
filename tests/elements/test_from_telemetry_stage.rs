@@ -10,7 +10,7 @@ use pretty_snowflake::{Label, MakeLabeling};
 use proctor::elements;
 use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use proctor::phases::sense::{make_telemetry_cvs_sensor, SensorSetting};
-use proctor::phases::DataSet;
+use proctor::DataSet;
 use serde::{Deserialize, Serialize};
 use serde_test::{assert_tokens, Token};
 
