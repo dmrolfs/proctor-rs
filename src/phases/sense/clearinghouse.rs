@@ -614,7 +614,6 @@ mod clearinghouse_tests {
         block_on(async {
             crate::envelope::set_correlation_generator(ID_GENERATOR.clone());
             let mut clearinghouse = Clearinghouse::new("test", &TelemetryCacheSettings::default());
-            // assert!(clearinghouse.cache.is_empty());
             assert!(clearinghouse.subscriptions.is_empty());
             assert_eq!(clearinghouse.name, "test");
             assert!(!clearinghouse.inlet.is_attached().await);

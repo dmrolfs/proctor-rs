@@ -50,12 +50,6 @@ mod cache {
     fn test_cache_add_after_clear() {
         let ttl = Duration::from_secs(60);
         block_on(async {
-            // let cache = AsyncCache::builder(1000, 100)
-            //     .set_metrics(true)
-            //     .set_ignore_internal_cost(true)
-            //     .finalize()
-            //     .expect("failed creating clearinghouse cache");
-
             let settings = TelemetryCacheSettings {
                 ttl: CacheTtl { default_ttl: ttl, ..CacheTtl::default() },
                 nr_counters: 1_000,

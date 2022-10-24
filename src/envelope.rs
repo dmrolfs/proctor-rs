@@ -135,16 +135,6 @@ where
         Envelope { metadata, content: f(self.content) }
     }
 
-    //todo: maybe offer ref mapping via DataSetRef type?
-    // pub fn as_mapped<F, U>(&self, f: F) -> DataSet<&U>
-    // where
-    //     U: Label + Send + Sync,
-    //     F: FnOnce(&Self) -> &U,
-    // {
-    //     let metadata = self.metadata.clone().relabel();
-    //     DataSet { metadata, data: f(&self.data) }
-    // }
-
     pub fn flat_map<F, U>(self, f: F) -> Envelope<U>
     where
         U: Label + Send,
