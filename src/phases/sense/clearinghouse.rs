@@ -25,7 +25,7 @@ use crate::elements::{Telemetry, TelemetryValue};
 use crate::error::{ProctorError, SenseError};
 use crate::graph::stage::Stage;
 use crate::graph::{stage, Inlet, OutletsShape, Port, SinkShape, UniformFanOutShape};
-use crate::{DataSet, ProctorResult};
+use crate::{Env, ProctorResult};
 
 pub(crate) static SUBSCRIPTIONS_GAUGE: Lazy<IntGauge> = Lazy::new(|| {
     IntGauge::with_opts(
@@ -93,7 +93,7 @@ impl Clearinghouse {
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub async fn subscribe(&mut self, subscription: TelemetrySubscription, receiver: &Inlet<DataSet<Telemetry>>) {
+    pub async fn subscribe(&mut self, subscription: TelemetrySubscription, receiver: &Inlet<Env<Telemetry>>) {
         tracing::info!(stage=%self.name, ?subscription, "adding clearinghouse subscription.");
         subscription.connect_to_receiver(receiver).await;
         self.subscriptions.push(subscription);
@@ -150,10 +150,10 @@ impl Clearinghouse {
             .filter(|s| {
                 let is_interested = s.any_interest(pushed.iter());
                 tracing::debug!(
-                    "is Subscription({}) interested in pushed fields:{:?} => {}",
+                    pushed_fields=?pushed,
+                    "is Subscription({}) {} interested in pushed fields.",
                     s.name(),
-                    pushed,
-                    is_interested
+                    if is_interested { "IS" } else { "IS NOT"},
                 );
                 is_interested
             })
@@ -192,7 +192,7 @@ impl Clearinghouse {
         for (s, f) in subscribed {
             tracing::debug!(fulfillment=?f, "sending data update via Subscription({}).", s.name());
             s.update_metrics(&f);
-            let sensor_data = DataSet::new(f).await;
+            let sensor_data = Env::new(f);
             let send_status = s.send(sensor_data).map(move |send_status| {
                 track_publications(s.name());
                 (s, send_status)
@@ -382,7 +382,7 @@ impl SinkShape for Clearinghouse {
 }
 
 impl UniformFanOutShape for Clearinghouse {
-    type Out = DataSet<Telemetry>;
+    type Out = Env<Telemetry>;
 
     fn outlets(&self) -> OutletsShape<Self::Out> {
         self.subscriptions.iter().map(|s| s.outlet_to_subscription()).collect()
@@ -612,7 +612,7 @@ mod clearinghouse_tests {
 
         let sub1_inlet = Inlet::new("sub1", PORT_DATA);
         block_on(async {
-            crate::data_set::set_correlation_generator(ID_GENERATOR.clone()).await;
+            crate::envelope::set_correlation_generator(ID_GENERATOR.clone());
             let mut clearinghouse = Clearinghouse::new("test", &TelemetryCacheSettings::default());
             // assert!(clearinghouse.cache.is_empty());
             assert!(clearinghouse.subscriptions.is_empty());
@@ -649,7 +649,7 @@ mod clearinghouse_tests {
                 .collect();
             let mut tick = stage::Tick::new("tick", Duration::from_nanos(0), Duration::from_millis(5), data);
             let tx_tick_api = tick.tx_api();
-            crate::data_set::set_correlation_generator(ID_GENERATOR.clone()).await;
+            crate::envelope::set_correlation_generator(ID_GENERATOR.clone());
             let mut clearinghouse = Clearinghouse::new("test-clearinghouse", &TelemetryCacheSettings::default());
             let tx_api = clearinghouse.tx_api();
             (tick.outlet(), clearinghouse.inlet()).connect().await;
@@ -724,7 +724,7 @@ mod clearinghouse_tests {
                 .collect();
             let mut tick = stage::Tick::new("tick", Duration::from_nanos(0), Duration::from_millis(5), data);
             let tx_tick_api = tick.tx_api();
-            crate::data_set::set_correlation_generator(ID_GENERATOR.clone()).await;
+            crate::envelope::set_correlation_generator(ID_GENERATOR.clone());
             let mut clearinghouse = Clearinghouse::new("test-clearinghouse", &TelemetryCacheSettings::default());
             let tx_api = clearinghouse.tx_api();
             (tick.outlet(), clearinghouse.inlet()).connect().await;
@@ -911,12 +911,12 @@ mod clearinghouse_tests {
             let mut sub_receivers = Vec::with_capacity(subscriptions.len());
             for s in SUBSCRIPTIONS.iter().skip(nr_skip).take(nr_take) {
                 // todo expand test to remove this line
-                let receiver: Inlet<DataSet<Telemetry>> = Inlet::new(s.name(), PORT_DATA);
+                let receiver: Inlet<Env<Telemetry>> = Inlet::new(s.name(), PORT_DATA);
                 (&s.outlet_to_subscription(), &receiver).connect().await;
                 sub_receivers.push((s, receiver));
             }
 
-            crate::data_set::set_correlation_generator(ID_GENERATOR.clone()).await;
+            crate::envelope::set_correlation_generator(ID_GENERATOR.clone());
 
             for row in 0..DB_ROWS.len() {
                 let mut c = Clearinghouse::new(format!("test-{row}"), &TelemetryCacheSettings::default());
@@ -947,7 +947,7 @@ mod clearinghouse_tests {
                     let sub_name = sub.name();
                     tracing::info!(%sub_name, "test iteration");
                     let expected = &all_expected[sub_name][row];
-                    let actual: Option<DataSet<Telemetry>> = receiver.recv().await;
+                    let actual: Option<Env<Telemetry>> = receiver.recv().await;
                     tracing::info!(%sub_name, ?actual, ?expected, "asserting scenario");
 
                     match (actual, expected) {
@@ -1016,7 +1016,7 @@ mod clearinghouse_tests {
             let source = stage::ActorSource::new("source");
             let tx_source = source.tx_api();
 
-            crate::data_set::set_correlation_generator(ID_GENERATOR.clone()).await;
+            crate::envelope::set_correlation_generator(ID_GENERATOR.clone());
 
             let mut clearinghouse = Clearinghouse::new("clearinghouse", &cache_settings);
             let tx_clearinghouse = clearinghouse.tx_api();
@@ -1056,7 +1056,7 @@ mod clearinghouse_tests {
             );
 
             let mut pushed = false;
-            let mut actual: Result<DataSet<TableType>, TryRecvError> = Err(TryRecvError::Empty);
+            let mut actual: Result<Env<TableType>, TryRecvError> = Err(TryRecvError::Empty);
             for _ in 0..3 {
                 match rx_sink.try_recv() {
                     Ok(a) => {

@@ -28,7 +28,7 @@ use proctor::phases::sense::{
     self, CorrelationGenerator, SubscriptionRequirements, TelemetrySubscription, SUBSCRIPTION_CORRELATION,
     SUBSCRIPTION_TIMESTAMP,
 };
-use proctor::{AppData, DataSet, ProctorContext};
+use proctor::{AppData, Env, ProctorContext};
 use serde_test::{assert_tokens, Token};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -232,7 +232,7 @@ fn test_context_serde() {
 
 fn make_test_policy<T>(
     settings: &PolicySettings<PolicyData>,
-) -> impl Policy<DataSet<T>, DataSet<TestPolicyPhaseContext>, (T, TestPolicyPhaseContext), TemplateData = PolicyData>
+) -> impl Policy<Env<T>, Env<TestPolicyPhaseContext>, (T, TestPolicyPhaseContext), TemplateData = PolicyData>
 where
     T: AppData + Label + ToPolar + Serialize + DeserializeOwned,
 {
@@ -275,7 +275,7 @@ impl<T> PolicySubscription for TestPolicyA<T>
 where
     T: AppData + Label + oso::ToPolar,
 {
-    type Requirements = DataSet<TestPolicyPhaseContext>;
+    type Requirements = Env<TestPolicyPhaseContext>;
 
     fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
         tracing::warn!(
@@ -300,8 +300,8 @@ where
     T: Label,
 {
     type Args = (T, TestPolicyPhaseContext);
-    type Context = DataSet<TestPolicyPhaseContext>;
-    type Item = DataSet<T>;
+    type Context = Env<TestPolicyPhaseContext>;
+    type Item = Env<T>;
     type TemplateData = PolicyData;
 
     fn base_template_name() -> &'static str {
@@ -366,10 +366,10 @@ where
     pub tx_data_source_api: stage::ActorSourceApi<Telemetry>,
     pub tx_context_source_api: stage::ActorSourceApi<Telemetry>,
     pub tx_clearinghouse_api: sense::ClearinghouseApi,
-    pub tx_eligibility_api: elements::PolicyFilterApi<DataSet<C>, D>,
-    pub rx_eligibility_monitor: elements::PolicyFilterMonitor<DataSet<T>, DataSet<C>>,
-    pub tx_sink_api: stage::FoldApi<Vec<PolicyOutcome<DataSet<T>, DataSet<C>>>>,
-    pub rx_sink: Option<oneshot::Receiver<Vec<PolicyOutcome<DataSet<T>, DataSet<C>>>>>,
+    pub tx_eligibility_api: elements::PolicyFilterApi<Env<C>, D>,
+    pub rx_eligibility_monitor: elements::PolicyFilterMonitor<Env<T>, Env<C>>,
+    pub tx_sink_api: stage::FoldApi<Vec<PolicyOutcome<Env<T>, Env<C>>>>,
+    pub rx_sink: Option<oneshot::Receiver<Vec<PolicyOutcome<Env<T>, Env<C>>>>>,
 }
 
 impl<T, C, D> TestFlow<T, C, D>
@@ -380,9 +380,7 @@ where
 {
     pub async fn new<P>(telemetry_subscription: TelemetrySubscription, policy: P) -> anyhow::Result<Self>
     where
-        P: Policy<DataSet<T>, DataSet<C>, (T, C)>
-            + QueryPolicy<Item = DataSet<T>, Context = DataSet<C>, TemplateData = D>
-            + 'static,
+        P: Policy<Env<T>, Env<C>, (T, C)> + QueryPolicy<Item = Env<T>, Context = Env<C>, TemplateData = D> + 'static,
     {
         let telemetry_source = stage::ActorSource::<Telemetry>::new("telemetry_source");
         let tx_data_source_api = telemetry_source.tx_api();
@@ -393,7 +391,7 @@ where
         let merge = stage::MergeN::new("source_merge", 2);
 
         let id_generator = PrettyIdGenerator::single_node(IdPrettifier::<AlphabetCodec>::default());
-        proctor::data_set::set_correlation_generator(id_generator.clone()).await;
+        proctor::envelope::set_correlation_generator(id_generator.clone());
         let mut clearinghouse = sense::Clearinghouse::new("clearinghouse", &TelemetryCacheSettings::default());
         let tx_clearinghouse_api = clearinghouse.tx_api();
 
@@ -408,11 +406,10 @@ where
         let tx_eligibility_api = eligibility.tx_api();
         let rx_eligibility_monitor = eligibility.rx_monitor();
 
-        let mut sink =
-            stage::Fold::<_, PolicyOutcome<DataSet<T>, DataSet<C>>, _>::new("sink", Vec::new(), |mut acc, item| {
-                acc.push(item);
-                acc
-            });
+        let mut sink = stage::Fold::<_, PolicyOutcome<Env<T>, Env<C>>, _>::new("sink", Vec::new(), |mut acc, item| {
+            acc.push(item);
+            acc
+        });
         let tx_sink_api = sink.tx_api();
         let rx_sink = sink.take_final_rx();
 
@@ -489,21 +486,17 @@ where
 
     #[allow(dead_code)]
     pub async fn tell_policy(
-        &self,
-        command_rx: (
-            elements::PolicyFilterCmd<DataSet<C>, D>,
-            oneshot::Receiver<proctor::Ack>,
-        ),
+        &self, command_rx: (elements::PolicyFilterCmd<Env<C>, D>, oneshot::Receiver<proctor::Ack>),
     ) -> anyhow::Result<proctor::Ack> {
         self.tx_eligibility_api.send(command_rx.0)?;
         command_rx.1.await.map_err(|err| err.into())
     }
 
-    pub async fn recv_policy_event(&mut self) -> anyhow::Result<Arc<PolicyFilterEvent<DataSet<T>, DataSet<C>>>> {
+    pub async fn recv_policy_event(&mut self) -> anyhow::Result<Arc<PolicyFilterEvent<Env<T>, Env<C>>>> {
         self.rx_eligibility_monitor.recv().await.map_err(|err| err.into())
     }
 
-    pub async fn inspect_policy_context(&self) -> anyhow::Result<elements::PolicyFilterDetail<DataSet<C>, D>> {
+    pub async fn inspect_policy_context(&self) -> anyhow::Result<elements::PolicyFilterDetail<Env<C>, D>> {
         elements::PolicyFilterCmd::inspect(&self.tx_eligibility_api)
             .await
             .map(|d| {
@@ -513,7 +506,7 @@ where
             .map_err(|err| err.into())
     }
 
-    pub async fn inspect_sink(&self) -> anyhow::Result<Vec<PolicyOutcome<DataSet<T>, DataSet<C>>>> {
+    pub async fn inspect_sink(&self) -> anyhow::Result<Vec<PolicyOutcome<Env<T>, Env<C>>>> {
         stage::FoldCmd::get_accumulation(&self.tx_sink_api)
             .await
             .map(|a| {
@@ -525,8 +518,7 @@ where
 
     #[tracing::instrument(level = "info", skip(self, check_size))]
     pub async fn check_sink_accumulation(
-        &self, label: &str, timeout: Duration,
-        mut check_size: impl FnMut(Vec<PolicyOutcome<DataSet<T>, DataSet<C>>>) -> bool,
+        &self, label: &str, timeout: Duration, mut check_size: impl FnMut(Vec<PolicyOutcome<Env<T>, Env<C>>>) -> bool,
     ) -> anyhow::Result<bool> {
         use std::time::Instant;
         let deadline = Instant::now() + timeout;
@@ -565,7 +557,7 @@ where
     }
 
     #[tracing::instrument(level = "warn", skip(self))]
-    pub async fn close(mut self) -> anyhow::Result<Vec<PolicyOutcome<DataSet<T>, DataSet<C>>>> {
+    pub async fn close(mut self) -> anyhow::Result<Vec<PolicyOutcome<Env<T>, Env<C>>>> {
         assert_ok!(stage::ActorSourceCmd::stop(&self.tx_data_source_api).await);
         assert_ok!(stage::ActorSourceCmd::stop(&self.tx_context_source_api).await);
         assert_ok!(self.graph_handle.await);
@@ -766,13 +758,13 @@ async fn test_eligibility_happy_context() -> anyhow::Result<()> {
         actual,
         vec![
             PolicyOutcome::new(
-                DataSet::new(MeasurementData { measurement: std::f64::consts::PI }).await,
-                DataSet::new(context.clone()).await,
+                Env::new(MeasurementData { measurement: std::f64::consts::PI }),
+                Env::new(context.clone()),
                 QueryResult::passed_without_bindings()
             ),
             PolicyOutcome::new(
-                DataSet::new(MeasurementData { measurement: std::f64::consts::TAU },).await,
-                DataSet::new(context.clone()).await,
+                Env::new(MeasurementData { measurement: std::f64::consts::TAU },),
+                Env::new(context.clone()),
                 QueryResult::passed_without_bindings()
             ),
         ]
@@ -878,7 +870,7 @@ impl TestPolicyB {
 }
 
 impl PolicySubscription for TestPolicyB {
-    type Requirements = DataSet<TestPolicyPhaseContext>;
+    type Requirements = Env<TestPolicyPhaseContext>;
 
     fn do_extend_subscription(&self, subscription: TelemetrySubscription) -> TelemetrySubscription {
         subscription.with_optional_fields(self.subscription_extension.clone())
@@ -887,8 +879,8 @@ impl PolicySubscription for TestPolicyB {
 
 impl QueryPolicy for TestPolicyB {
     type Args = (TestItem, TestPolicyPhaseContext);
-    type Context = DataSet<TestPolicyPhaseContext>;
-    type Item = DataSet<TestItem>;
+    type Context = Env<TestPolicyPhaseContext>;
+    type Item = Env<TestItem>;
     type TemplateData = HashMap<String, String>;
 
     fn base_template_name() -> &'static str {
@@ -1022,18 +1014,15 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
     tracing::info!(?event, "E.1: policy event received.");
     assert_eq!(
         event,
-        &elements::PolicyFilterEvent::ContextChanged(Some(
-            DataSet::new(TestPolicyPhaseContext {
-                task_status: TestTaskStatus { last_failure: None },
-                cluster_status: TestClusterStatus {
-                    location_code: 33,
-                    is_deploying: false,
-                    last_deployment: DT_1.clone(),
-                },
-                custom: TableValue::new(),
-            })
-            .await
-        ))
+        &elements::PolicyFilterEvent::ContextChanged(Some(Env::new(TestPolicyPhaseContext {
+            task_status: TestTaskStatus { last_failure: None },
+            cluster_status: TestClusterStatus {
+                location_code: 33,
+                is_deploying: false,
+                last_deployment: DT_1.clone(),
+            },
+            custom: TableValue::new(),
+        })))
     );
     claim::assert_matches!(event, &elements::PolicyFilterEvent::ContextChanged(_));
     tracing::warn!(?event, "F: environment changed confirmed");
@@ -1048,7 +1037,7 @@ async fn test_eligibility_w_pass_and_blocks() -> anyhow::Result<()> {
             .await?
     );
 
-    let actual: Vec<PolicyOutcome<DataSet<TestItem>, DataSet<TestPolicyPhaseContext>>> = flow.close().await?;
+    let actual: Vec<PolicyOutcome<Env<TestItem>, Env<TestPolicyPhaseContext>>> = flow.close().await?;
 
     tracing::warn!(?actual, "08. Verify final accumulation...");
     let actual_vals: Vec<(f64, i32)> = actual
@@ -1275,18 +1264,18 @@ async fn test_eligibility_replace_policy() -> anyhow::Result<()> {
         actual,
         vec![
             PolicyOutcome::new(
-                DataSet::new(TestItem::new(std::f64::consts::PI, 1, too_old_ts)).await,
-                DataSet::new(TestPolicyPhaseContext { ..context.clone() }).await,
+                Env::new(TestItem::new(std::f64::consts::PI, 1, too_old_ts)),
+                Env::new(TestPolicyPhaseContext { ..context.clone() }),
                 QueryResult::passed_without_bindings()
             ),
             PolicyOutcome::new(
-                DataSet::new(TestItem::new(17.327, 2, good_ts)).await,
-                DataSet::new(TestPolicyPhaseContext { ..context.clone() }).await,
+                Env::new(TestItem::new(17.327, 2, good_ts)),
+                Env::new(TestPolicyPhaseContext { ..context.clone() }),
                 QueryResult::passed_without_bindings()
             ),
             PolicyOutcome::new(
-                DataSet::new(TestItem::new(17.327, 2, good_ts)).await,
-                DataSet::new(TestPolicyPhaseContext { ..context.clone() }).await,
+                Env::new(TestItem::new(17.327, 2, good_ts)),
+                Env::new(TestPolicyPhaseContext { ..context.clone() }),
                 QueryResult::passed_without_bindings()
             ),
         ]

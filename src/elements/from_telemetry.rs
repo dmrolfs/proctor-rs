@@ -5,12 +5,11 @@ use super::Telemetry;
 use crate::error::ProctorError;
 use crate::graph::stage::{self, Stage};
 use crate::graph::{self, Graph, SinkShape, SourceShape, ThroughShape};
-use crate::AppData;
-use crate::DataSet;
+use crate::{AppData, Env};
 
 pub type FromTelemetryShape<Out> = Box<dyn FromTelemetryStage<Out>>;
 
-pub trait FromTelemetryStage<Out>: Stage + ThroughShape<In = DataSet<Telemetry>, Out = DataSet<Out>> + 'static
+pub trait FromTelemetryStage<Out>: Stage + ThroughShape<In = Env<Telemetry>, Out = Env<Out>> + 'static
 where
     Out: Label,
 {
@@ -18,7 +17,7 @@ where
 
 impl<Out, T> FromTelemetryStage<Out> for T
 where
-    T: Stage + ThroughShape<In = DataSet<Telemetry>, Out = DataSet<Out>> + 'static,
+    T: Stage + ThroughShape<In = Env<Telemetry>, Out = Env<Out>> + 'static,
     Out: Label,
 {
 }
@@ -30,9 +29,8 @@ where
 {
     let name_2 = name.to_string();
     let err_name = name.to_string();
-    let from_telemetry = stage::FilterMap::<_, DataSet<Telemetry>, DataSet<Out>>::new(
-        format!("{}_from_telemetry", name),
-        move |telemetry| {
+    let from_telemetry =
+        stage::FilterMap::<_, Env<Telemetry>, Env<Out>>::new(format!("{}_from_telemetry", name), move |telemetry| {
             let span = tracing::trace_span!("converting telemetry into data item", ?telemetry);
             let _ = span.enter();
 
@@ -50,8 +48,7 @@ where
                     None
                 },
             }
-        },
-    );
+        });
 
     let cg_inlet = from_telemetry.inlet().clone();
     let cg_outlet = from_telemetry.outlet().clone();

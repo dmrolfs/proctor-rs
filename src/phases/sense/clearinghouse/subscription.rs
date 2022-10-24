@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
-use crate::DataSet;
+use crate::Env;
 use serde::Serialize;
 
 use super::cache::TelemetryCache;
@@ -21,7 +21,7 @@ pub trait SubscriptionRequirements {
     }
 }
 
-impl<C> SubscriptionRequirements for DataSet<C>
+impl<C> SubscriptionRequirements for Env<C>
 where
     C: Label + SubscriptionRequirements,
 {
@@ -39,7 +39,7 @@ pub enum TelemetrySubscription {
     All {
         name: String,
         #[serde(skip)]
-        outlet_to_subscription: Outlet<DataSet<Telemetry>>,
+        outlet_to_subscription: Outlet<Env<Telemetry>>,
         #[serde(skip)]
         update_metrics: Option<Arc<UpdateMetricsFn>>,
     },
@@ -48,7 +48,7 @@ pub enum TelemetrySubscription {
         required_fields: HashSet<String>,
         optional_fields: HashSet<String>,
         #[serde(skip)]
-        outlet_to_subscription: Outlet<DataSet<Telemetry>>,
+        outlet_to_subscription: Outlet<Env<Telemetry>>,
         #[serde(skip)]
         update_metrics: Option<Arc<UpdateMetricsFn>>,
     },
@@ -195,7 +195,7 @@ impl TelemetrySubscription {
         }
     }
 
-    pub fn outlet_to_subscription(&self) -> Outlet<DataSet<Telemetry>> {
+    pub fn outlet_to_subscription(&self) -> Outlet<Env<Telemetry>> {
         match self {
             Self::All { outlet_to_subscription, .. } => outlet_to_subscription.clone(),
             Self::Explicit { outlet_to_subscription, .. } => outlet_to_subscription.clone(),
@@ -306,12 +306,12 @@ impl TelemetrySubscription {
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub async fn connect_to_receiver(&self, receiver: &Inlet<DataSet<Telemetry>>) {
+    pub async fn connect_to_receiver(&self, receiver: &Inlet<Env<Telemetry>>) {
         let outlet = self.outlet_to_subscription();
         (&outlet, receiver).connect().await;
     }
 
-    pub async fn send(&self, telemetry: DataSet<Telemetry>) -> Result<(), SenseError> {
+    pub async fn send(&self, telemetry: Env<Telemetry>) -> Result<(), SenseError> {
         self.outlet_to_subscription().send(telemetry).await?;
         Ok(())
     }

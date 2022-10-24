@@ -15,7 +15,7 @@ use crate::graph::stage::{self, SourceStage, Stage, WithApi};
 use crate::graph::{Connect, Graph, Inlet, SinkShape, SourceShape, UniformFanInShape};
 use crate::phases::sense::clearinghouse::TelemetryCacheSettings;
 use crate::phases::sense::{ClearinghouseSubscriptionAgent, CorrelationGenerator, TelemetrySubscription};
-use crate::{AppData, DataSet};
+use crate::{AppData, Env};
 
 #[derive(Debug)]
 pub struct SenseBuilder<Out> {
@@ -29,7 +29,7 @@ pub struct SenseBuilder<Out> {
 #[async_trait]
 impl<Out: Send> ClearinghouseSubscriptionAgent for SenseBuilder<Out> {
     async fn subscribe(
-        &mut self, subscription: TelemetrySubscription, receiver: Inlet<DataSet<Telemetry>>,
+        &mut self, subscription: TelemetrySubscription, receiver: Inlet<Env<Telemetry>>,
     ) -> Result<(), SenseError> {
         self.clearinghouse.subscribe(subscription, &receiver).await;
         Ok(())
@@ -38,14 +38,14 @@ impl<Out: Send> ClearinghouseSubscriptionAgent for SenseBuilder<Out> {
 
 impl<Out> SenseBuilder<Out> {
     #[tracing::instrument(level = "trace", skip(name, sources))]
-    pub async fn new(
+    pub fn new(
         name: &str, sources: Vec<Box<dyn SourceStage<Telemetry>>>, cache_settings: &TelemetryCacheSettings,
         correlation_generator: CorrelationGenerator,
     ) -> Self {
         let name = name.into();
         let nr_sources = sources.len();
         let merge = stage::MergeN::new(format!("{}_source_merge_{}", name, nr_sources), nr_sources);
-        crate::data_set::set_correlation_generator(correlation_generator).await;
+        crate::envelope::set_correlation_generator(correlation_generator);
         let clearinghouse = Clearinghouse::new(format!("{}_clearinghouse", name), cache_settings);
 
         Self {
@@ -231,7 +231,7 @@ where
 
         let composite_name = format!("{}_composite_source", self.name);
         let composite = stage::CompositeSource::new(&composite_name, g, outlet).await;
-        let inner: Box<dyn SourceStage<DataSet<Out>>> = Box::new(composite);
+        let inner: Box<dyn SourceStage<Env<Out>>> = Box::new(composite);
         let outlet = inner.outlet();
 
         Ok(Sense {

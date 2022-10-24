@@ -10,7 +10,7 @@ use pretty_snowflake::{Label, MakeLabeling};
 use proctor::elements;
 use proctor::graph::{stage, Connect, Graph, SinkShape, SourceShape};
 use proctor::phases::sense::{make_telemetry_cvs_sensor, SensorSetting};
-use proctor::DataSet;
+use proctor::Env;
 use serde::{Deserialize, Serialize};
 use serde_test::{assert_tokens, Token};
 
@@ -94,10 +94,10 @@ async fn test_make_from_telemetry_stage() -> Result<()> {
     let setting = SensorSetting::Csv { path };
 
     let mut source = assert_ok!(make_telemetry_cvs_sensor::<Data, _>("local", &setting));
-    let add_metadata = stage::AndThen::new("add_metadata", |telemetry| DataSet::new(telemetry));
+    let add_metadata = stage::Map::new("add_metadata", |telemetry| Env::new(telemetry));
     let convert = elements::make_from_telemetry("convert".into(), true).await;
 
-    let mut sink = stage::Fold::<_, DataSet<Data>, Vec<Data>>::new("sink", Vec::default(), |mut acc, item| {
+    let mut sink = stage::Fold::<_, Env<Data>, Vec<Data>>::new("sink", Vec::default(), |mut acc, item| {
         acc.push(item.into_inner());
         acc
     });

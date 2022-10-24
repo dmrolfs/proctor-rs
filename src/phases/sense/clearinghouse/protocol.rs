@@ -5,7 +5,7 @@ use tokio::sync::{mpsc, oneshot};
 use super::{Telemetry, TelemetrySubscription};
 use crate::error::SenseError;
 use crate::graph::Inlet;
-use crate::{Ack, DataSet};
+use crate::{Ack, Env};
 
 pub type ClearinghouseApi = mpsc::UnboundedSender<ClearinghouseCmd>;
 
@@ -13,7 +13,7 @@ pub type ClearinghouseApi = mpsc::UnboundedSender<ClearinghouseCmd>;
 pub enum ClearinghouseCmd {
     Subscribe {
         subscription: Box<TelemetrySubscription>,
-        receiver: Inlet<DataSet<Telemetry>>,
+        receiver: Inlet<Env<Telemetry>>,
         tx: oneshot::Sender<Ack>,
     },
     Unsubscribe {
@@ -33,7 +33,7 @@ impl ClearinghouseCmd {
     const STAGE_NAME: &'static str = "clearinghouse";
 
     pub async fn subscribe(
-        api: &ClearinghouseApi, subscription: TelemetrySubscription, receiver: Inlet<DataSet<Telemetry>>,
+        api: &ClearinghouseApi, subscription: TelemetrySubscription, receiver: Inlet<Env<Telemetry>>,
     ) -> Result<Ack, SenseError> {
         let (tx, rx) = oneshot::channel();
         api.send(Self::Subscribe { subscription: Box::new(subscription), receiver, tx })

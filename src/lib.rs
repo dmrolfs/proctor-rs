@@ -14,9 +14,12 @@ rust_2018_idioms
 #[macro_use]
 extern crate static_assertions;
 
+use crate::elements::Timestamp;
+use pretty_snowflake::{Id, LabeledRealtimeIdGenerator};
+
 pub mod app_data;
-pub mod data_set;
 pub mod elements;
+pub mod envelope;
 pub mod error;
 pub mod graph;
 pub mod metrics;
@@ -24,18 +27,16 @@ pub mod phases;
 pub mod serde;
 pub mod tracing;
 
-use crate::elements::Timestamp;
 pub use app_data::AppData;
-pub use data_set::{DataSet, IntoDataSet, IntoPhaseData, MetaData};
 pub use elements::ProctorContext;
+pub use envelope::{Envelope, IntoEnvelope, MetaData};
 pub use graph::track_errors;
-use pretty_snowflake::{Id, LabeledRealtimeIdGenerator};
 
 pub type ProctorResult<T> = Result<T, error::ProctorError>;
-
 pub type ProctorIdGenerator<T> = LabeledRealtimeIdGenerator<T>;
 
 pub type Ack = ();
+pub type Env<T> = Envelope<T>;
 
 pub trait Correlation {
     type Correlated: Sized + Sync;

@@ -16,7 +16,7 @@ pub mod sensor;
 pub mod settings;
 pub mod subscription_channel;
 
-use crate::DataSet;
+use crate::Env;
 pub use builder::SenseBuilder;
 pub use clearinghouse::{
     Clearinghouse, ClearinghouseApi, ClearinghouseCmd, ClearinghouseSnapshot, ClearinghouseSubscriptionAgent,
@@ -58,8 +58,8 @@ where
     Out: Label,
 {
     name: String,
-    inner: Box<dyn SourceStage<DataSet<Out>>>,
-    outlet: Outlet<DataSet<Out>>,
+    inner: Box<dyn SourceStage<Env<Out>>>,
+    outlet: Outlet<Env<Out>>,
     pub tx_clearinghouse_api: ClearinghouseApi,
     // todo: tx_api: CollectApi,
     // todo: tx_monitor: CollectMonitor,
@@ -70,19 +70,19 @@ where
     Out: Label,
 {
     #[tracing::instrument(level = "trace", skip(name, sources))]
-    pub async fn builder(
+    pub fn builder(
         name: &str, sources: Vec<Box<dyn SourceStage<Telemetry>>>, cache_settings: &TelemetryCacheSettings,
         machine_node: MachineNode,
     ) -> SenseBuilder<Out> {
         let id_generator = CorrelationGenerator::distributed(machine_node, IdPrettifier::<AlphabetCodec>::default());
-        SenseBuilder::new(name, sources, cache_settings, id_generator).await
+        SenseBuilder::new(name, sources, cache_settings, id_generator)
     }
 
     #[tracing::instrument(level = "trace", skip(name, sources))]
-    pub async fn single_node_builder(
+    pub fn single_node_builder(
         name: &str, sources: Vec<Box<dyn SourceStage<Telemetry>>>, cache_settings: &TelemetryCacheSettings,
     ) -> SenseBuilder<Out> {
-        Self::builder(name, sources, cache_settings, MachineNode::default()).await
+        Self::builder(name, sources, cache_settings, MachineNode::default())
     }
 }
 
@@ -103,7 +103,7 @@ impl<Out> SourceShape for Sense<Out>
 where
     Out: Label,
 {
-    type Out = DataSet<Out>;
+    type Out = Env<Out>;
 
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()

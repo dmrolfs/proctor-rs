@@ -10,7 +10,7 @@ use crate::error::SenseError;
 use crate::graph::stage::Stage;
 use crate::graph::{Inlet, Outlet, Port, SourceShape, PORT_DATA};
 use crate::phases::sense::{ClearinghouseSubscriptionAgent, TelemetrySubscription};
-use crate::{AppData, DataSet, ProctorResult};
+use crate::{AppData, Env, ProctorResult};
 
 // todo: consider refactor all of these builder functions into a typed subscription channel builder.
 
@@ -21,9 +21,9 @@ where
     T: Label,
 {
     name: String,
-    pub subscription_receiver: Inlet<DataSet<Telemetry>>,
+    pub subscription_receiver: Inlet<Env<Telemetry>>,
     inner_stage: Option<FromTelemetryShape<T>>,
-    outlet: Outlet<DataSet<T>>,
+    outlet: Outlet<Env<T>>,
 }
 
 impl<T> SubscriptionChannel<T>
@@ -116,7 +116,7 @@ impl<T> SourceShape for SubscriptionChannel<T>
 where
     T: Label,
 {
-    type Out = DataSet<T>;
+    type Out = Env<T>;
 
     fn outlet(&self) -> Outlet<Self::Out> {
         self.outlet.clone()

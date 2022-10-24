@@ -58,7 +58,7 @@ once_cell = "1"
 oso = "0"
 path-absolutize = "3"
 polar-core = "0"
-pretty-snowflake = { git = "https://github.com/dmrolfs/pretty-snowflake-rs" }
+pretty-snowflake = { version = ">=1.5", git = "https://github.com/dmrolfs/pretty-snowflake-rs" }
 proctor_derive = { path = "proctor_derive" }
 prometheus = { version = "0", features = ["process"] }
 prometheus-static-metric = "0"

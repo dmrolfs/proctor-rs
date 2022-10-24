@@ -350,7 +350,7 @@ where
     async fn handle_item_before_context(
         item: T, tx: &broadcast::Sender<Arc<PolicyFilterEvent<T, C>>>,
     ) -> Result<(), PolicyError> {
-        tracing::info!(correlation=?item.correlation(), ?item, "dropping item received before policy context set.");
+        tracing::warn!(correlation=?item.correlation(), ?item, "dropping item received before policy context set.");
         Self::publish_event(PolicyFilterEvent::ItemBlocked(item, None), tx)?;
         Ok(())
     }
