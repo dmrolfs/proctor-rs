@@ -171,6 +171,15 @@ where
     }
 }
 
+impl<T> std::ops::DerefMut for Envelope<T>
+where
+    T: Label,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.content
+    }
+}
+
 impl<T> AsRef<T> for Envelope<T>
 where
     T: Label,
