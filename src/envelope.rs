@@ -44,6 +44,7 @@ pub trait IntoEnvelope {
     type Content: AppData + Label;
 
     fn into_envelope(self) -> Envelope<Self::Content>;
+    fn metadata(&self) -> MetaData<Self::Content>;
 }
 
 /// A metadata wrapper for a data set
@@ -82,6 +83,10 @@ where
 
     fn into_envelope(self) -> Envelope<Self::Content> {
         self
+    }
+
+    fn metadata(&self) -> MetaData<Self::Content> {
+        self.metadata.clone()
     }
 }
 
