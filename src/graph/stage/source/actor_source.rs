@@ -84,7 +84,7 @@ impl<T: AppData> Stage for ActorSource<T> {
         while let Some(command) = self.rx_api.recv().await {
             let _timer = stage::start_stage_eval_time(&self.name);
 
-            tracing::trace!(?command, "handling command");
+            tracing::debug!(?command, "handling command");
             match command {
                 ActorSourceCmd::Push { item, tx } => {
                     let span = tracing::trace_span!("actor sourcing item", ?item);
