@@ -1,13 +1,14 @@
-use std::fmt::{self, Debug};
-use std::iter::Sum;
-use std::ops::{Add, Div, Sub};
-
+use super::{TelemetryValue, Timestamp};
 use approx::{AbsDiffEq, RelativeEq};
 use frunk::{Monoid, Semigroup};
 use oso::PolarClass;
 use serde::{Deserialize, Serialize};
+use std::fmt::{self, Debug};
+use std::iter::Sum;
+use std::ops::{Add, Div, Sub};
 
-use super::TelemetryValue;
+#[derive(PolarClass, Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+pub struct RatePoint(pub Timestamp, pub RecordsPerSecond);
 
 #[derive(PolarClass, Debug, Copy, Clone, Default, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct RecordsPerSecond(f64);
