@@ -1,16 +1,15 @@
-use std::fmt::{self, Debug};
-use std::sync::Arc;
-
-use async_trait::async_trait;
-use cast_trait_object::dyn_upcast;
-use pretty_snowflake::{Label, MakeLabeling};
-use tokio::sync::broadcast;
-use tracing::Instrument;
-
+use crate::elements::RatePoint;
 use crate::error::PlanError;
 use crate::graph::stage::{Stage, WithMonitor};
 use crate::graph::{stage, Inlet, Outlet, Port, SinkShape, SourceShape, PORT_CONTEXT, PORT_DATA};
 use crate::{AppData, ProctorResult};
+use async_trait::async_trait;
+use cast_trait_object::dyn_upcast;
+use pretty_snowflake::{Label, MakeLabeling};
+use std::fmt::{self, Debug};
+use std::sync::Arc;
+use tokio::sync::broadcast;
+use tracing::Instrument;
 
 // pub type Event<P> = PlanEvent<<P as Planning>::Context, <P as Planning>::Decision, <P as
 // Planning>::Out>;
@@ -18,7 +17,11 @@ pub type PlanMonitor<P> = broadcast::Receiver<Arc<PlanEvent<P>>>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PlanEvent<P: Planning + ?Sized> {
-    DecisionPlanned(P::Decision, P::Out),
+    DecisionPlanned {
+        decision: P::Decision,
+        plan: P::Out,
+        workload_forecast: RatePoint,
+    },
     DecisionIgnored(P::Decision),
     ContextChanged(P::Context),
 }
