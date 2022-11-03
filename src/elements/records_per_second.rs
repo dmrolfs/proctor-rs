@@ -10,6 +10,12 @@ use std::ops::{Add, Div, Sub};
 #[derive(PolarClass, Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct RatePoint(pub Timestamp, pub RecordsPerSecond);
 
+impl fmt::Display for RatePoint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({}, {})", self.0, self.1)
+    }
+}
+
 #[derive(PolarClass, Debug, Copy, Clone, Default, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct RecordsPerSecond(f64);
 
